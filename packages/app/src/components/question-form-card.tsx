@@ -8,6 +8,7 @@ import {
   type PressableStateCallbackType,
 } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { useTranslation } from "react-i18next";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { Check, CircleHelp, X } from "lucide-react-native";
 import type { PendingPermission } from "@/types/shared";
@@ -156,6 +157,7 @@ function QuestionOtherInput({
 
 export function QuestionFormCard({ permission, onRespond, isResponding }: QuestionFormCardProps) {
   const { theme } = useUnistyles();
+  const { t } = useTranslation();
   const isMobile = useIsCompactFormFactor();
   const questions = parseQuestionFormQuestions(permission.request.input);
 
@@ -238,9 +240,9 @@ export function QuestionFormCard({ permission, onRespond, isResponding }: Questi
     }
     onRespond({
       behavior: "deny",
-      message: "用户已关闭",
+      message: t("workspace.questionFormUserClosed"),
     });
-  }, [questions, onRespond, otherTexts, permission.request.input, selections]);
+  }, [questions, onRespond, otherTexts, permission.request.input, selections, t]);
 
   const dismissButtonStyle = useCallback(
     ({ pressed, hovered }: PressableStateCallbackType & { hovered?: boolean }) => [
@@ -366,7 +368,7 @@ export function QuestionFormCard({ permission, onRespond, isResponding }: Questi
           ) : (
             <View style={styles.actionContent}>
               <Check size={14} color={submitActionTextColor} />
-              <Text style={submitActionTextStyle}>提交</Text>
+              <Text style={submitActionTextStyle}>{t("workspace.questionFormSubmit")}</Text>
             </View>
           )}
         </Pressable>

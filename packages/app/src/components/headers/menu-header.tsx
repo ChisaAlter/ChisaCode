@@ -1,6 +1,6 @@
 import { useCallback, useMemo, type ReactNode } from "react";
 import { View, type StyleProp, type ViewStyle } from "react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { PanelLeft } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { ScreenHeader } from "./screen-header";
@@ -9,6 +9,7 @@ import { HeaderToggleButton } from "./header-toggle-button";
 import { selectIsAgentListOpen, usePanelStore } from "@/stores/panel-store";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { getShortcutOs } from "@/utils/shortcut-platform";
+import { ICON_SIZE, type Theme } from "@/styles/theme";
 
 interface MenuHeaderProps {
   title?: string;
@@ -42,13 +43,26 @@ function MobileMenuIcon({ color }: { color: string }) {
   );
 }
 
+// The toggle glyphs take their theme color through a `color` prop (a non-style
+// prop for lucide icons), so wrap both renderers with `withUnistyles` and feed
+// the theme-reactive color through `uniProps`. `iconSize` is the static
+// `ICON_SIZE` constant, imported directly instead of read from a hook.
+const ThemedPanelLeft = withUnistyles(PanelLeft);
+const ThemedMobileMenuIcon = withUnistyles(MobileMenuIcon);
+
+const foregroundMutedColorMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+});
+const foregroundColorMapping = (theme: Theme) => ({
+  color: theme.colors.foreground,
+});
+
 export function SidebarMenuToggle({
   style,
   tooltipSide = "right",
   testID = "menu-button",
   nativeID = "menu-button",
 }: SidebarMenuToggleProps = {}) {
-  const { theme } = useUnistyles();
   const isMobile = useIsCompactFormFactor();
   const isOpen = usePanelStore((state) => selectIsAgentListOpen(state, { isCompact: isMobile }));
   const toggleAgentListForLayout = usePanelStore((state) => state.toggleAgentListForLayout);
@@ -57,8 +71,10 @@ export function SidebarMenuToggle({
     [],
   );
 
-  const menuIconColor =
-    !isMobile && isOpen ? theme.colors.foreground : theme.colors.foregroundMuted;
+  let menuIconColorMapping = foregroundMutedColorMapping;
+  if (!isMobile && isOpen) {
+    menuIconColorMapping = foregroundColorMapping;
+  }
 
   const handlePress = useCallback(() => {
     toggleAgentListForLayout({ isCompact: isMobile });
@@ -88,9 +104,9 @@ export function SidebarMenuToggle({
       accessibilityState={accessibilityState}
     >
       {isMobile ? (
-        <MobileMenuIcon color={menuIconColor} />
+        <ThemedMobileMenuIcon uniProps={menuIconColorMapping} />
       ) : (
-        <PanelLeft size={theme.iconSize.md} color={menuIconColor} />
+        <ThemedPanelLeft size={ICON_SIZE.md} uniProps={menuIconColorMapping} />
       )}
     </HeaderToggleButton>
   );

@@ -43,6 +43,16 @@ export interface WorkspaceVisibleTabWindow {
   hiddenCount: number;
 }
 
+/**
+ * Soft compact: hide the mobile tab strip until there are at least two tabs.
+ * Matches design language §6.7 (0–1 tab → no tab wall).
+ * @param tabCount Number of workspace tabs in the switcher model
+ * @returns Whether the compact tab switcher row should mount
+ */
+export function shouldShowMobileWorkspaceTabSwitcher(tabCount: number): boolean {
+  return tabCount >= 2;
+}
+
 function clamp(value: number, min: number, max: number): number {
   if (value < min) {
     return min;

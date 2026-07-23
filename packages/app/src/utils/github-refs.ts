@@ -1,13 +1,16 @@
 import { parseGitHubRemoteUrl } from "@chisacode/protocol/git-remote";
 
+/** The kind of GitHub reference: a pull request or an issue. */
 export type GithubRefKind = "pull" | "issues";
 
+/** A normalized GitHub remote identity (owner/repo on github.com). */
 export interface GithubRemote {
   owner: string;
   repo: string;
   host: "github.com";
 }
 
+/** A parsed GitHub PR/issue reference extracted from text, scoped to a remote. */
 export interface GithubRef {
   kind: GithubRefKind;
   number: number;
@@ -26,6 +29,11 @@ interface ParsedGithubUrl {
 const GITHUB_REF_URL_PATTERN =
   /https?:\/\/github\.com\/([^/\s<>)\]]+)\/([^/\s<>)\]]+)\/(pull|issues)\/(\d+)(?:[/?#][^\s<>)\]]*)?/giu;
 
+/**
+ * Normalizes a raw Git remote URL into a GitHub remote identity.
+ * @param remoteUrl The raw remote URL (e.g. `https://github.com/owner/repo.git`)
+ * @returns The normalized remote, or null if the URL is not a GitHub remote
+ */
 export function normalizeGithubRemote(remoteUrl: string | null | undefined): GithubRemote | null {
   const trimmed = remoteUrl?.trim();
   if (!trimmed) {
@@ -44,6 +52,12 @@ export function normalizeGithubRemote(remoteUrl: string | null | undefined): Git
   };
 }
 
+/**
+ * Parses the first GitHub PR/issue reference from text, scoped to a remote URL.
+ * @param text The text to search for GitHub URLs
+ * @param remoteUrl The remote URL to scope references to
+ * @returns The first matching reference, or null if none found
+ */
 export function parseGithubRef(
   text: string | null | undefined,
   remoteUrl: string | null | undefined,
@@ -51,6 +65,13 @@ export function parseGithubRef(
   return extractGithubRefs(text, remoteUrl)[0] ?? null;
 }
 
+/**
+ * Extracts all GitHub PR/issue references from text, scoped to a remote URL.
+ * References are deduplicated by kind+number.
+ * @param text The text to search for GitHub URLs
+ * @param remoteUrl The remote URL to scope references to
+ * @returns An array of deduplicated GitHub references
+ */
 export function extractGithubRefs(
   text: string | null | undefined,
   remoteUrl: string | null | undefined,

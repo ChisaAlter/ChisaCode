@@ -18,15 +18,38 @@ import {
   Settings,
   TerminalSquare,
 } from "lucide-react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useCommandCenter } from "@/hooks/use-command-center";
 import type { AggregatedAgent } from "@/hooks/use-aggregated-agents";
 import { formatTimeAgo } from "@/utils/time";
 import { shortenPath } from "@/utils/shorten-path";
 import { AgentStatusDot } from "@/components/agent-status-dot";
 import { Shortcut } from "@/components/ui/shortcut";
+import type { Theme } from "@/styles/theme";
 
 import { useTranslation } from "react-i18next";
+
+// Lucide icons only accept `color` (a non-style prop), so wrap each one with
+// `withUnistyles` and feed the theme-reactive color through `uniProps`. Only the
+// icon node re-renders on theme changes — the surrounding row tree does not.
+const ThemedPlus = withUnistyles(Plus);
+const ThemedSettings = withUnistyles(Settings);
+const ThemedHome = withUnistyles(Home);
+const ThemedMessagesSquare = withUnistyles(MessagesSquare);
+const ThemedGitCompare = withUnistyles(GitCompare);
+const ThemedPanelRight = withUnistyles(PanelRight);
+const ThemedTerminalSquare = withUnistyles(TerminalSquare);
+const ThemedBot = withUnistyles(Bot);
+// `TextInput.placeholderTextColor` is a non-style prop Unistyles does not track
+// via the `style` prop, so wrap TextInput and map it through `uniProps`.
+const ThemedTextInput = withUnistyles(TextInput);
+
+const foregroundMutedColorMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+});
+const placeholderTextColorMapping = (theme: Theme) => ({
+  placeholderTextColor: theme.colors.foregroundMuted,
+});
 
 function agentKey(agent: Pick<AggregatedAgent, "serverId" | "id">): string {
   return `${agent.serverId}:${agent.id}`;
@@ -121,39 +144,38 @@ function CommandCenterActionRow({
   rowRefs,
   onSelect,
 }: CommandCenterActionRowProps) {
-  const { theme } = useUnistyles();
   const handlePress = useCallback(() => onSelect(item), [onSelect, item]);
   const action = item.action;
   let actionIcon: React.ReactNode = null;
   if (action.icon === "plus") {
-    actionIcon = <Plus size={16} strokeWidth={2.4} color={theme.colors.foregroundMuted} />;
+    actionIcon = <ThemedPlus size={16} strokeWidth={2.4} uniProps={foregroundMutedColorMapping} />;
   } else if (action.icon === "settings") {
-    actionIcon = <Settings size={16} strokeWidth={2.2} color={theme.colors.foregroundMuted} />;
+    actionIcon = (
+      <ThemedSettings size={16} strokeWidth={2.2} uniProps={foregroundMutedColorMapping} />
+    );
   } else if (action.icon === "home") {
-    actionIcon = <Home size={16} strokeWidth={2.2} color={theme.colors.foregroundMuted} />;
+    actionIcon = <ThemedHome size={16} strokeWidth={2.2} uniProps={foregroundMutedColorMapping} />;
   } else if (action.icon === "sessions") {
     actionIcon = (
-      <MessagesSquare size={16} strokeWidth={2.2} color={theme.colors.foregroundMuted} />
+      <ThemedMessagesSquare size={16} strokeWidth={2.2} uniProps={foregroundMutedColorMapping} />
     );
   } else if (action.icon === "changes") {
-    actionIcon = <GitCompare size={16} strokeWidth={2.2} color={theme.colors.foregroundMuted} />;
+    actionIcon = (
+      <ThemedGitCompare size={16} strokeWidth={2.2} uniProps={foregroundMutedColorMapping} />
+    );
   } else if (action.icon === "environment") {
-    actionIcon = <PanelRight size={16} strokeWidth={2.2} color={theme.colors.foregroundMuted} />;
+    actionIcon = (
+      <ThemedPanelRight size={16} strokeWidth={2.2} uniProps={foregroundMutedColorMapping} />
+    );
   } else if (action.icon === "terminal") {
     actionIcon = (
-      <TerminalSquare size={16} strokeWidth={2.2} color={theme.colors.foregroundMuted} />
+      <ThemedTerminalSquare size={16} strokeWidth={2.2} uniProps={foregroundMutedColorMapping} />
     );
   } else if (action.icon === "agent") {
-    actionIcon = <Bot size={16} strokeWidth={2.2} color={theme.colors.foregroundMuted} />;
+    actionIcon = <ThemedBot size={16} strokeWidth={2.2} uniProps={foregroundMutedColorMapping} />;
   }
-  const titleStyle = useMemo(
-    () => [styles.title, { color: theme.colors.foreground }],
-    [theme.colors.foreground],
-  );
-  const subtitleStyle = useMemo(
-    () => [styles.subtitle, { color: theme.colors.foregroundMuted }],
-    [theme.colors.foregroundMuted],
-  );
+  const titleStyle = useMemo(() => [styles.title, active && styles.titleActive], [active]);
+  const subtitleStyle = useMemo(() => [styles.subtitle], []);
   const iconSlotStyle = useMemo(() => [styles.iconSlot, active && styles.iconSlotActive], [active]);
   const accessibilityLabel = action.subtitle ? `${action.title}, ${action.subtitle}` : action.title;
   return (
@@ -227,16 +249,9 @@ interface CommandCenterAgentRowContentProps {
 }
 
 function CommandCenterAgentRowContent({ agent }: CommandCenterAgentRowContentProps) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
-  const titleStyle = useMemo(
-    () => [styles.title, { color: theme.colors.foreground }],
-    [theme.colors.foreground],
-  );
-  const subtitleStyle = useMemo(
-    () => [styles.subtitle, { color: theme.colors.foregroundMuted }],
-    [theme.colors.foregroundMuted],
-  );
+  const titleStyle = useMemo(() => [styles.title], []);
+  const subtitleStyle = useMemo(() => [styles.subtitle], []);
   return (
     <View style={styles.rowContent}>
       <View style={styles.rowMain}>
@@ -305,7 +320,6 @@ function AgentItemsSection({
 }
 
 export function CommandCenter() {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const { open, inputRef, query, setQuery, activeIndex, items, handleClose, handleSelectItem } =
     useCommandCenter();
@@ -354,30 +368,8 @@ export function CommandCenter() {
   const actionItems = useMemo(() => items.filter((item) => item.kind === "action"), [items]);
   const agentItems = useMemo(() => items.filter((item) => item.kind === "agent"), [items]);
 
-  const panelStyle = useMemo(
-    () => [styles.panel, { backgroundColor: theme.colors.surface0 }],
-    [theme.colors.surface0],
-  );
-  const headerStyle = useMemo(
-    () => [styles.header, { borderBottomColor: theme.colors.secondary }],
-    [theme.colors.secondary],
-  );
-  const inputStyle = useMemo(
-    () => [styles.input, { color: theme.colors.foreground }],
-    [theme.colors.foreground],
-  );
-  const emptyTextStyle = useMemo(
-    () => [styles.emptyText, { color: theme.colors.foregroundMuted }],
-    [theme.colors.foregroundMuted],
-  );
-  const sectionLabelStyle = useMemo(
-    () => [styles.sectionLabel, { color: theme.colors.foregroundMuted }],
-    [theme.colors.foregroundMuted],
-  );
-  const sectionDividerStyle = useMemo(
-    () => [styles.sectionDivider, { backgroundColor: theme.colors.border }],
-    [theme.colors.border],
-  );
+  const sectionLabelStyle = useMemo(() => [styles.sectionLabel], []);
+  const sectionDividerStyle = useMemo(() => [styles.sectionDivider], []);
 
   // On mobile native, the command center modal renders but has no trigger yet
   // (keyboard shortcuts are disabled on compact/mobile). A UI trigger button
@@ -389,17 +381,17 @@ export function CommandCenter() {
       <View style={styles.overlay}>
         <Pressable style={styles.backdrop} onPress={handleClose} />
 
-        <View testID="command-center-panel" style={panelStyle}>
-          <View style={headerStyle}>
-            <TextInput
+        <View testID="command-center-panel" style={styles.panel}>
+          <View style={styles.header}>
+            <ThemedTextInput
               testID="command-center-input"
               ref={inputRef}
               value={query}
               onChangeText={setQuery}
               placeholder={t("commandCenter.placeholder")}
-              placeholderTextColor={theme.colors.foregroundMuted}
+              uniProps={placeholderTextColorMapping}
               accessibilityLabel={t("commandCenter.searchLabel")}
-              style={inputStyle}
+              style={styles.input}
               autoCapitalize="none"
               autoCorrect={false}
               autoFocus
@@ -414,7 +406,7 @@ export function CommandCenter() {
             showsVerticalScrollIndicator={false}
           >
             {items.length === 0 ? (
-              <Text style={emptyTextStyle}>{t("commandCenter.noMatches")}</Text>
+              <Text style={styles.emptyText}>{t("commandCenter.noMatches")}</Text>
             ) : (
               <>
                 {actionItems.length > 0 ? (
@@ -490,6 +482,7 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: 14.5,
     lineHeight: 22,
     paddingVertical: theme.spacing[1],
+    color: theme.colors.foreground,
     outlineStyle: "none",
   } as object,
   results: {
@@ -506,11 +499,13 @@ const styles = StyleSheet.create((theme) => ({
     paddingBottom: theme.spacing[2],
     fontSize: 12.5,
     lineHeight: 16,
+    color: theme.colors.foregroundMuted,
   },
   sectionDivider: {
     height: 1,
     marginTop: theme.spacing[2],
     marginBottom: theme.spacing[2],
+    backgroundColor: theme.colors.border,
   },
   // Soft menu-hint row: quiet r10.
   row: {
@@ -565,10 +560,18 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: 12.5,
     fontWeight: "500",
     lineHeight: 16,
+    color: theme.colors.foreground,
+  },
+  // Active (selected) command row title. Kept distinct from `title` so the
+  // non-active rows keep the base foreground color and only the active row
+  // can opt into a stronger treatment if one is added later.
+  titleActive: {
+    color: theme.colors.foreground,
   },
   subtitle: {
     fontSize: 12.5,
     lineHeight: 16,
+    color: theme.colors.foregroundMuted,
   },
   // Soft menu empty: 12.5 muted.
   emptyText: {
@@ -576,5 +579,6 @@ const styles = StyleSheet.create((theme) => ({
     paddingVertical: theme.spacing[4],
     fontSize: 12.5,
     lineHeight: 16,
+    color: theme.colors.foregroundMuted,
   },
 }));

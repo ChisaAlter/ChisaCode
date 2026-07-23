@@ -3,7 +3,21 @@ const HTML_TAG_PATTERN =
   /<\s*(?:!doctype|html|head|body|main|section|article|div|span|p|h[1-6]|canvas|svg|form|fieldset|label|input|select|option|textarea|button|table|thead|tbody|tr|td|th|ul|ol|li|img|picture|style|script)\b/i;
 const FULL_HTML_DOCUMENT_PATTERN = /^\s*(?:<!doctype\s+html[^>]*>\s*)?<html[\s>]/i;
 
-const GENERATIVE_UI_CSP = [
+const GENERATIVE_UI_CSP_BASE = [
+  "default-src 'none'",
+  "img-src data: blob:",
+  "media-src data: blob:",
+  "font-src data:",
+  "style-src 'unsafe-inline'",
+  "script-src 'none'",
+  "connect-src 'none'",
+  "frame-src 'none'",
+  "object-src 'none'",
+  "base-uri 'none'",
+  "form-action 'none'",
+].join("; ");
+
+const GENERATIVE_UI_CSP_ALLOW_SCRIPTS = [
   "default-src 'none'",
   "img-src data: blob:",
   "media-src data: blob:",
@@ -17,7 +31,16 @@ const GENERATIVE_UI_CSP = [
   "form-action 'none'",
 ].join("; ");
 
-const CSP_META = `<meta http-equiv="Content-Security-Policy" content="${GENERATIVE_UI_CSP}" />`;
+interface BuildGenerativeHtmlDocumentOptions {
+  /** When true, allow inline `<script>` from AI-generated HTML. Defaults to
+   *  false (script-src 'none') to prevent injection from model output. */
+  allowScripts?: boolean;
+}
+
+function resolveCspMeta(allowScripts: boolean): string {
+  const csp = allowScripts ? GENERATIVE_UI_CSP_ALLOW_SCRIPTS : GENERATIVE_UI_CSP_BASE;
+  return `<meta http-equiv="Content-Security-Policy" content="${csp}" />`;
+}
 
 interface GenerativeHtmlFence {
   html: string;
@@ -47,17 +70,22 @@ export function getGenerativeHtmlFence(
   };
 }
 
-export function buildGenerativeHtmlDocument(html: string): string {
+export function buildGenerativeHtmlDocument(
+  html: string,
+  options?: BuildGenerativeHtmlDocumentOptions,
+): string {
+  const allowScripts = Boolean(options?.allowScripts);
   const trimmed = trimFenceContent(html);
   if (FULL_HTML_DOCUMENT_PATTERN.test(trimmed)) {
-    return injectCspMeta(trimmed);
+    return injectCspMeta(trimmed, allowScripts);
   }
 
+  const cspMeta = resolveCspMeta(allowScripts);
   return `<!doctype html>
 <html>
   <head>
     <meta charset="utf-8" />
-    ${CSP_META}
+    ${cspMeta}
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <style>
       html, body {
@@ -149,16 +177,17 @@ export function getGenerativeUiFence(
   }
 }
 
-function injectCspMeta(html: string): string {
+function injectCspMeta(html: string, allowScripts: boolean): string {
   if (/http-equiv=["']Content-Security-Policy["']/i.test(html)) {
     return html;
   }
 
+  const cspMeta = resolveCspMeta(allowScripts);
   const headMatch = /<head\b[^>]*>/i.exec(html);
   if (!headMatch) {
-    return `${CSP_META}\n${html}`;
+    return `${cspMeta}\n${html}`;
   }
 
   const insertAt = headMatch.index + headMatch[0].length;
-  return `${html.slice(0, insertAt)}${CSP_META}${html.slice(insertAt)}`;
+  return `${html.slice(0, insertAt)}${cspMeta}${html.slice(insertAt)}`;
 }

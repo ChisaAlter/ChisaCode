@@ -280,7 +280,9 @@ export function createVoiceRuntime(deps: VoiceRuntimeDeps): VoiceRuntime {
       size: bytes.byteLength,
       type: mimeType,
       async arrayBuffer() {
-        return Uint8Array.from(bytes).buffer;
+        // Copy the bytes' exact range so non-zero byteOffset Buffers (from Node
+        // `Buffer.from`) do not prepend garbage. Returns a fresh ArrayBuffer.
+        return new Uint8Array(bytes).slice().buffer;
       },
     };
   }

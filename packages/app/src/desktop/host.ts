@@ -130,6 +130,14 @@ export function getDesktopHost(): DesktopHostBridge | null {
   return getElectronHost();
 }
 
+/**
+ * Reports whether the desktop bridge host is currently available (the preload
+ * injected `window.chisacodeDesktop`). This is a readiness gate, not an
+ * environment detector — use `getIsElectron()` from `@/constants/platform` when
+ * you only need to know whether the app is running inside Electron regardless
+ * of bridge availability. The two are intentionally separate: bridge readiness
+ * can lag environment detection during startup.
+ */
 export function isElectronRuntime(): boolean {
   return getDesktopHost() !== null;
 }

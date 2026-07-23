@@ -1,12 +1,4 @@
-import {
-  memo,
-  useCallback,
-  useMemo,
-  useRef,
-  useState,
-  type ComponentType,
-  type ReactElement,
-} from "react";
+import { memo, useCallback, useMemo, useRef, useState, type ReactElement } from "react";
 import {
   Pressable,
   Text,
@@ -15,7 +7,7 @@ import {
   type StyleProp,
   type TextStyle,
 } from "react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
 import { useShallow } from "zustand/shallow";
 import { useStoreWithEqualityFn } from "zustand/traditional";
@@ -45,6 +37,7 @@ import {
   getModeVisuals,
   type AgentProviderDefinition,
 } from "@chisacode/protocol/provider-manifest";
+import { ICON_SIZE, type Theme } from "@/styles/theme";
 
 export type AgentModeControlPlacement = "toolbar" | "footer";
 
@@ -52,18 +45,37 @@ function shouldRenderForPlacement(placement: AgentModeControlPlacement, isCompac
   return placement === "footer" ? isCompact : !isCompact;
 }
 
-interface ModeIconProps {
-  size?: number;
-  color?: string;
-}
+// Lucide icons only accept `color` (a non-style prop), so wrap each one with
+// `withUnistyles` and feed the theme-reactive color through `uniProps`. Icon
+// sizes are static (`ICON_SIZE`), imported directly from the theme module.
+// Only the icon node re-renders on theme changes. See docs/unistyles.md.
+const ThemedBot = withUnistyles(Bot);
+const ThemedShieldCheck = withUnistyles(ShieldCheck);
+const ThemedShieldAlert = withUnistyles(ShieldAlert);
+const ThemedShieldOff = withUnistyles(ShieldOff);
+const ThemedShieldQuestionMark = withUnistyles(ShieldQuestionMark);
+const ThemedChevronDown = withUnistyles(ChevronDown);
 
-const MODE_ICONS: Record<string, ComponentType<ModeIconProps>> = {
-  Bot,
-  ShieldCheck,
-  ShieldAlert,
-  ShieldOff,
-  ShieldQuestionMark,
+const MODE_ICONS: Record<string, typeof ThemedBot> = {
+  Bot: ThemedBot,
+  ShieldCheck: ThemedShieldCheck,
+  ShieldAlert: ThemedShieldAlert,
+  ShieldOff: ThemedShieldOff,
+  ShieldQuestionMark: ThemedShieldQuestionMark,
 };
+
+type IconColorMapping = (theme: Theme) => { color: string };
+
+const foregroundColorMapping: IconColorMapping = (theme) => ({
+  color: theme.colors.foreground,
+});
+const foregroundMutedColorMapping: IconColorMapping = (theme) => ({
+  color: theme.colors.foregroundMuted,
+});
+// Full-access mode: orange icon/label accent.
+const fullAccessColorMapping: IconColorMapping = (theme) => ({
+  color: theme.colors.palette.orange[600],
+});
 
 interface ModeComboboxOptionProps {
   option: ComboboxOption;
@@ -72,7 +84,7 @@ interface ModeComboboxOptionProps {
   onPress: () => void;
   provider: string;
   providerDefinitions: AgentProviderDefinition[];
-  iconColor: string;
+  iconColorMapping: IconColorMapping;
   labelStyle?: StyleProp<TextStyle>;
 }
 
@@ -83,14 +95,14 @@ function ModeComboboxOption({
   onPress,
   provider,
   providerDefinitions,
-  iconColor,
+  iconColorMapping,
   labelStyle,
 }: ModeComboboxOptionProps) {
   const visuals = getModeVisuals(provider, option.id, providerDefinitions);
   const IconComponent = visuals?.icon ? MODE_ICONS[visuals.icon] : undefined;
   const leadingSlot = useMemo(
-    () => (IconComponent ? <IconComponent size={16} color={iconColor} /> : null),
-    [IconComponent, iconColor],
+    () => (IconComponent ? <IconComponent size={16} uniProps={iconColorMapping} /> : null),
+    [IconComponent, iconColorMapping],
   );
   return (
     <ComboboxItem
@@ -127,7 +139,6 @@ function AgentModeControlView({
   isCompact,
   disabled = false,
 }: AgentModeControlViewProps) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const anchorRef = useRef<View>(null);
   const [open, setOpen] = useState(false);
@@ -143,10 +154,13 @@ function AgentModeControlView({
     : undefined;
   const Icon = visuals?.icon ? MODE_ICONS[visuals.icon] : undefined;
   const isFullAccessMode = selectedMode?.id === "full-access";
-  const fullAccessColor = theme.colors.palette.orange[600];
-  const iconColor = isFullAccessMode ? fullAccessColor : theme.colors.foregroundMuted;
+  // Select between mapping functions with if-else (oxlint rejects nested
+  // ternaries). Full-access mode accents the trigger icons in orange.
+  let triggerIconColorMapping = foregroundMutedColorMapping;
+  if (isFullAccessMode) {
+    triggerIconColorMapping = fullAccessColorMapping;
+  }
   const selectedModeLabel = selectedMode ? formatAgentModeLabel(selectedMode) : "";
-  const fullAccessLabelStyle = useMemo(() => ({ color: fullAccessColor }), [fullAccessColor]);
 
   const allOptions = useMemo<ComboboxOption[]>(
     () => modeOptions.map((m) => ({ id: m.id, label: formatAgentModeLabel(m) })),
@@ -178,19 +192,30 @@ function AgentModeControlView({
       selected: boolean;
       active: boolean;
       onPress: () => void;
-    }): ReactElement => (
-      <ModeComboboxOption
-        option={args.option}
-        selected={args.selected}
-        active={args.active}
-        onPress={args.onPress}
-        provider={provider}
-        providerDefinitions={providerDefinitions}
-        iconColor={args.option.id === "full-access" ? fullAccessColor : theme.colors.foreground}
-        labelStyle={args.option.id === "full-access" ? fullAccessLabelStyle : undefined}
-      />
-    ),
-    [fullAccessColor, fullAccessLabelStyle, provider, providerDefinitions, theme.colors.foreground],
+    }): ReactElement => {
+      // Full-access options use the orange accent for both icon and label;
+      // other options use the default foreground icon color. if-else selects
+      // between mapping functions (oxlint rejects nested ternaries).
+      let optionIconColorMapping = foregroundColorMapping;
+      let optionLabelStyle: StyleProp<TextStyle> | undefined;
+      if (args.option.id === "full-access") {
+        optionIconColorMapping = fullAccessColorMapping;
+        optionLabelStyle = styles.fullAccessLabel;
+      }
+      return (
+        <ModeComboboxOption
+          option={args.option}
+          selected={args.selected}
+          active={args.active}
+          onPress={args.onPress}
+          provider={provider}
+          providerDefinitions={providerDefinitions}
+          iconColorMapping={optionIconColorMapping}
+          labelStyle={optionLabelStyle}
+        />
+      );
+    },
+    [provider, providerDefinitions],
   );
 
   const pressableStyle = useCallback(
@@ -205,8 +230,8 @@ function AgentModeControlView({
   );
 
   const labelStyle = useMemo(
-    () => [styles.chipLabel, isFullAccessMode && { color: fullAccessColor }],
-    [fullAccessColor, isFullAccessMode],
+    () => [styles.chipLabel, isFullAccessMode && styles.fullAccessLabel],
+    [isFullAccessMode],
   );
 
   const sheetHeader = useMemo<SheetHeader>(
@@ -237,9 +262,9 @@ function AgentModeControlView({
         })}
         testID="mode-control"
       >
-        {Icon ? <Icon size={theme.iconSize.md} color={iconColor} /> : null}
+        {Icon ? <Icon size={ICON_SIZE.md} uniProps={triggerIconColorMapping} /> : null}
         <Text style={labelStyle}>{selectedModeLabel}</Text>
-        <ChevronDown size={theme.iconSize.sm} color={iconColor} />
+        <ThemedChevronDown size={ICON_SIZE.sm} uniProps={triggerIconColorMapping} />
       </Pressable>
       <Combobox
         options={options}
@@ -396,5 +421,9 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: 12.5,
     lineHeight: WORKBENCH_META_LINE_HEIGHT,
     fontWeight: theme.fontWeight.normal,
+  },
+  fullAccessLabel: {
+    color: theme.colors.palette.orange[600],
+    fontWeight: theme.fontWeight.medium,
   },
 }));

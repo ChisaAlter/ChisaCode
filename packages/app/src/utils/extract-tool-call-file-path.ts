@@ -45,7 +45,9 @@ function extractFromShellCommand(command: string): string | null {
     const prev = tokens[tokens.length - 2];
     if (!prev.startsWith("-")) {
       const prevPrev = tokens[tokens.length - 3];
-      if (!prevPrev || !SHORT_FLAG_PATTERN.test(prevPrev)) {
+      // Accept both short (-x) and long (--verbose) flag forms as the
+      // terminator that lets the middle token separate from the path.
+      if (!prevPrev || (!SHORT_FLAG_PATTERN.test(prevPrev) && !prevPrev.startsWith("--"))) {
         return null;
       }
     }

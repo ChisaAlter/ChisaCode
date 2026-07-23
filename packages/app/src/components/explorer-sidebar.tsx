@@ -16,9 +16,11 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { X } from "lucide-react-native";
 import { GitHubIcon } from "@/components/icons/github-icon";
+import type { Theme } from "@/styles/theme";
+import { SPACING } from "@/styles/theme";
 import { PrPane } from "@/git/pr-pane";
 import { usePrPaneData } from "@/hooks/use-pr-pane-data";
 import {
@@ -53,6 +55,19 @@ const DESKTOP_SIDEBAR_ANIMATION_CONFIG = {
 };
 function logExplorerSidebar(_event: string, _details: Record<string, unknown>): void {}
 
+// Icons take `color` as a non-style prop, so wrap each one with `withUnistyles`
+// and feed the theme-reactive color through `uniProps`. Only the icon node
+// re-renders on theme changes; the surrounding tree does not.
+const ThemedX = withUnistyles(X);
+const ThemedGitHubIcon = withUnistyles(GitHubIcon);
+
+const foregroundMutedColorMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+});
+const foregroundColorMapping = (theme: Theme) => ({
+  color: theme.colors.foreground,
+});
+
 interface ExplorerSidebarProps {
   serverId: string;
   workspaceId?: string | null;
@@ -68,7 +83,6 @@ export function ExplorerSidebar({
   isGit,
   onOpenFile,
 }: ExplorerSidebarProps) {
-  const { theme } = useUnistyles();
   const { t: sidebarT } = useTranslation();
   const isScreenFocused = useIsFocused();
   const insets = useSafeAreaInsets();
@@ -295,24 +309,20 @@ export function ExplorerSidebar({
     () => [explorerStaticStyles.backdrop, backdropAnimatedStyle],
     [backdropAnimatedStyle],
   );
+  // The theme background is painted by `styles.mobileSidebarBackground` on a
+  // plain child View: the Animated.View itself must stay free of Unistyles
+  // dynamic styles (see the crash note above `explorerStaticStyles`).
   const mobileSidebarStyle = useMemo(
     () => [
       explorerStaticStyles.mobileSidebar,
       {
         width: mobileSidebarWidth,
         paddingTop: insets.top,
-        backgroundColor: theme.colors.surfaceSidebar,
       },
       sidebarAnimatedStyle,
       mobileKeyboardInsetStyle,
     ],
-    [
-      mobileSidebarWidth,
-      insets.top,
-      theme.colors.surfaceSidebar,
-      sidebarAnimatedStyle,
-      mobileKeyboardInsetStyle,
-    ],
+    [mobileSidebarWidth, insets.top, sidebarAnimatedStyle, mobileKeyboardInsetStyle],
   );
   // Soft topbar owns the first 48px of the center column. Explorer is a sibling overlay
   // on threePaneRow and would cover top-tools if it starts at top:0 — match environment panel inset.
@@ -364,6 +374,7 @@ export function ExplorerSidebar({
 
         <GestureDetector gesture={closeGesture} touchAction="pan-y">
           <Animated.View style={mobileSidebarStyle} pointerEvents="auto">
+            <View style={styles.mobileSidebarBackground} pointerEvents="none" />
             <SidebarContent
               activeTab={explorerTab}
               onTabPress={handleTabPress}
@@ -483,7 +494,6 @@ function ExplorerSidebarTabs({
   prTabLabel: string;
   onTabPress: (tab: ExplorerTab) => void;
 }) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const tabsContainerStyle = useMemo(
     () => [styles.tabsContainer, !isMobile && styles.desktopTabsContainer],
@@ -519,9 +529,9 @@ function ExplorerSidebarTabs({
           onTabPress={onTabPress}
           testID="explorer-tab-pr"
         >
-          <GitHubIcon
+          <ThemedGitHubIcon
             size={13}
-            color={resolvedTab === "pr" ? theme.colors.foreground : theme.colors.foregroundMuted}
+            uniProps={resolvedTab === "pr" ? foregroundColorMapping : foregroundMutedColorMapping}
           />
         </ExplorerTabButton>
       )}
@@ -541,7 +551,6 @@ function SidebarContent({
   isOpen,
   onOpenFile,
 }: SidebarContentProps) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const padding = useWindowControlsPadding("explorerSidebar");
   const canQueryPullRequest = isGit && Boolean(workspaceRoot);
@@ -563,11 +572,11 @@ function SidebarContent({
       styles.header,
       !isMobile && styles.desktopHeader,
       {
-        marginTop: theme.spacing[2],
+        marginTop: SPACING[2],
         paddingRight: padding.right,
       },
     ],
-    [isMobile, padding.right, theme.spacing],
+    [isMobile, padding.right],
   );
   const closeButtonStyle = useMemo(
     () => [styles.closeButton, !isMobile && styles.desktopCloseButton],
@@ -602,7 +611,7 @@ function SidebarContent({
             onPress={onClose}
             style={closeButtonStyle}
           >
-            <X size={isMobile ? 18 : 16} color={theme.colors.foregroundMuted} />
+            <ThemedX size={isMobile ? 18 : 16} uniProps={foregroundMutedColorMapping} />
           </Pressable>
         </View>
       </View>
@@ -689,6 +698,14 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
     minHeight: 0,
     overflow: "hidden",
+  },
+  mobileSidebarBackground: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: theme.colors.surfaceSidebar,
   },
   // Soft nav header: sit on --nav, no grey island wash.
   header: {

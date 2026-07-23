@@ -9,12 +9,14 @@ interface OsNotificationPayload {
   data?: Record<string, unknown>;
 }
 
+/** The detail payload carried by the web notification click event */
 export interface WebNotificationClickDetail {
   data?: Record<string, unknown>;
 }
 
 interface WebNotificationInstance {
   addEventListener: (type: "click", listener: (event: Event) => void) => void;
+  removeEventListener?: (type: "click", listener: (event: Event) => void) => void;
 }
 
 export const WEB_NOTIFICATION_CLICK_EVENT = "chisacode:web-notification-click";
@@ -90,6 +92,10 @@ async function ensureNotificationPermission(): Promise<boolean> {
   return result;
 }
 
+/**
+ * Requests web notification permission if needed, deduplicating concurrent requests; native platforms return false
+ * @returns True when notifications are permitted, false otherwise
+ */
 export async function ensureOsNotificationPermission(): Promise<boolean> {
   if (isNative) {
     return false;
@@ -160,14 +166,24 @@ function attachWebClickHandler(
   notification: WebNotificationInstance,
   data: Record<string, unknown> | undefined,
 ): void {
-  notification.addEventListener("click", () => {
+  const onClick = () => {
     const handledByApp = dispatchWebNotificationClick({ data });
     if (!handledByApp) {
       fallbackNavigateToNotificationTarget(data);
     }
-  });
+    // Remove the listener after dispatch so the click closure is not retained
+    // for the notification's lifetime.
+    notification.removeEventListener?.("click", onClick);
+  };
+  notification.addEventListener("click", onClick);
 }
 
+/**
+ * Delivers a local OS notification through the best available channel for the platform: the Android native module,
+ * the desktop host bridge, or the web Notification API (requesting permission first and wiring click routing)
+ * @param payload The notification title, optional body, and optional routing data
+ * @returns True when the notification was handed to a platform channel, false otherwise
+ */
 export async function sendOsNotification(payload: OsNotificationPayload): Promise<boolean> {
   // Android: use expo module for local notifications
   if (isAndroid) {

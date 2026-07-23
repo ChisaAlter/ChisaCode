@@ -2,14 +2,23 @@ import { useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { Text, View } from "react-native";
 import { Bot, ChevronDown, TriangleAlert } from "lucide-react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import type { AgentPreset } from "@chisacode/protocol/agent-presets";
+import type { Theme } from "@/styles/theme";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+
+const ThemedBot = withUnistyles(Bot);
+const ThemedChevronDown = withUnistyles(ChevronDown);
+const ThemedTriangleAlert = withUnistyles(TriangleAlert);
+
+const foregroundMutedColorMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+});
 
 interface PresetMenuItemProps {
   preset: AgentPreset;
@@ -51,7 +60,6 @@ export function AssistantPresetPicker({
   onSelect,
 }: AssistantPresetPickerProps) {
   const { t } = useTranslation();
-  const { theme } = useUnistyles();
   const selectedPreset = useMemo(
     () => presets.find((preset) => preset.id === selectedPresetId) ?? null,
     [presets, selectedPresetId],
@@ -70,11 +78,11 @@ export function AssistantPresetPicker({
           testID="assistant-preset-picker"
           style={styles.trigger}
         >
-          <Bot size={16} color={theme.colors.foregroundMuted} />
+          <ThemedBot size={16} uniProps={foregroundMutedColorMapping} />
           <Text style={styles.triggerText} numberOfLines={1}>
             {triggerLabel}
           </Text>
-          <ChevronDown size={16} color={theme.colors.foregroundMuted} />
+          <ThemedChevronDown size={16} uniProps={foregroundMutedColorMapping} />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" minWidth={280} maxWidth={420} scrollable maxHeight={360}>
           <DropdownMenuItem selected={selectedPresetId === null} onSelect={handleClear}>
@@ -99,7 +107,7 @@ export function AssistantPresetPicker({
           ) : null}
           {warningText ? (
             <View style={styles.warningRow}>
-              <TriangleAlert size={14} color={theme.colors.foregroundMuted} />
+              <ThemedTriangleAlert size={14} uniProps={foregroundMutedColorMapping} />
               <Text style={styles.warningText}>{warningText}</Text>
             </View>
           ) : null}

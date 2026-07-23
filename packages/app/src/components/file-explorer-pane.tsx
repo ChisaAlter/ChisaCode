@@ -48,12 +48,6 @@ import { useWebScrollViewScrollbar } from "@/components/use-web-scrollbar";
 import { isWeb } from "@/constants/platform";
 import { ErrorBoundary, SectionErrorFallback } from "@/components/error-boundary";
 
-const SORT_OPTIONS: { value: SortOption; label: string }[] = [
-  { value: "name", label: "名称" },
-  { value: "modified", label: "修改时间" },
-  { value: "size", label: "大小" },
-];
-
 const INDENT_PER_LEVEL = 16;
 
 function formatFileSize({ size }: { size: number }): string {
@@ -238,6 +232,15 @@ export function FileExplorerPane({
   const isMobile = useIsCompactFormFactor();
   const showDesktopWebScrollbar = isWeb && !isMobile;
 
+  const SORT_OPTIONS = useMemo(
+    () => [
+      { value: "name" as const, label: paneT("fileExplorer.sortName") },
+      { value: "modified" as const, label: paneT("fileExplorer.sortModified") },
+      { value: "size" as const, label: paneT("fileExplorer.sortSize") },
+    ],
+    [paneT],
+  );
+
   const daemons = useHosts();
   const daemonProfile = useMemo(
     () => daemons.find((daemon) => daemon.serverId === serverId),
@@ -385,7 +388,7 @@ export function FileExplorerPane({
     const currentIndex = SORT_OPTIONS.findIndex((opt) => opt.value === sortOption);
     const nextIndex = (currentIndex + 1) % SORT_OPTIONS.length;
     setSortOption(SORT_OPTIONS[nextIndex].value);
-  }, [sortOption, setSortOption]);
+  }, [SORT_OPTIONS, sortOption, setSortOption]);
 
   const refreshExplorer = useCallback(
     () =>
@@ -406,7 +409,11 @@ export function FileExplorerPane({
     void refetchExplorer();
   }, [refetchExplorer]);
 
-  const currentSortLabel = resolveCurrentSortLabel(sortOption);
+  const currentSortLabel = useMemo(
+    () =>
+      SORT_OPTIONS.find((opt) => opt.value === sortOption)?.label ?? paneT("fileExplorer.sortName"),
+    [SORT_OPTIONS, sortOption, paneT],
+  );
 
   const treeRows = useMemo(
     () => resolveTreeRows({ directories, expandedPaths, sortOption }),
@@ -476,7 +483,7 @@ export function FileExplorerPane({
   if (!hasWorkspaceScope) {
     return (
       <View style={styles.centerState}>
-        <Text style={styles.errorText}>工作区不可用</Text>
+        <Text style={styles.errorText}>{paneT("fileExplorer.workspaceUnavailable")}</Text>
       </View>
     );
   }
@@ -555,11 +562,11 @@ function FileExplorerPaneContent(props: FileExplorerPaneContentProps) {
         <View style={styles.errorActions}>
           {showBackFromError ? (
             <Pressable style={styles.retryButton} onPress={handleBackFromError}>
-              <Text style={styles.retryButtonText}>返回</Text>
+              <Text style={styles.retryButtonText}>{t("fileExplorer.back")}</Text>
             </Pressable>
           ) : null}
           <Pressable style={styles.retryButton} onPress={handleRetry}>
-            <Text style={styles.retryButtonText}>重试</Text>
+            <Text style={styles.retryButtonText}>{t("common.retry")}</Text>
           </Pressable>
         </View>
       </View>
@@ -578,7 +585,7 @@ function FileExplorerPaneContent(props: FileExplorerPaneContentProps) {
   if (treeRows.length === 0) {
     return (
       <View style={styles.centerState}>
-        <Text style={styles.emptyText}>没有文件</Text>
+        <Text style={styles.emptyText}>{t("fileExplorer.noFiles")}</Text>
       </View>
     );
   }
@@ -728,10 +735,6 @@ function resolveShowInitialLoading({
   return Boolean(
     isExplorerLoading && pendingRequest?.mode === "list" && pendingRequest?.path === ".",
   );
-}
-
-function resolveCurrentSortLabel(sortOption: SortOption): string {
-  return SORT_OPTIONS.find((opt) => opt.value === sortOption)?.label ?? "Name";
 }
 
 function resolveTreeRows({

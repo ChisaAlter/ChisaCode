@@ -1,7 +1,7 @@
 import { Gift } from "lucide-react-native";
 import { type ReactNode, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { useUnistyles } from "react-native-unistyles";
+import { withUnistyles } from "react-native-unistyles";
 import {
   type SidebarCalloutAction,
   SidebarCalloutDescriptionText,
@@ -15,6 +15,14 @@ import {
 import { useDesktopAppUpdater } from "@/desktop/updates/use-desktop-app-updater";
 import { useStableEvent } from "@/hooks/use-stable-event";
 import { openExternalUrl } from "@/utils/open-external-url";
+import { ICON_SIZE, type Theme } from "@/styles/theme";
+
+const ThemedGift = withUnistyles(Gift);
+
+const giftIconMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+  size: ICON_SIZE.sm,
+});
 
 const CHECK_INTERVAL_MS = 30 * 60 * 1000;
 const CHANGELOG_URL = "https://chisacode.sh/changelog";
@@ -47,7 +55,6 @@ function materializeActions(
 
 export function UpdateCalloutSource() {
   const callouts = useSidebarCallouts();
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const {
     isDesktopApp,
@@ -117,9 +124,7 @@ export function UpdateCalloutSource() {
       priority: descriptor.priority,
       title: descriptor.title,
       description: renderBody(descriptor.body, copy),
-      icon: descriptor.showGiftIcon ? (
-        <Gift size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
-      ) : undefined,
+      icon: descriptor.showGiftIcon ? <ThemedGift uniProps={giftIconMapping} /> : undefined,
       variant: descriptor.variant,
       actions: materializeActions(descriptor.actions, {
         changelog: openChangelog,
@@ -139,8 +144,6 @@ export function UpdateCalloutSource() {
     retry,
     status,
     t,
-    theme.colors.foregroundMuted,
-    theme.iconSize.sm,
   ]);
 
   return null;

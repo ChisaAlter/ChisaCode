@@ -1,26 +1,34 @@
 import React, { memo, useEffect, useState } from "react";
 import { Text, View } from "react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { SyncedLoader } from "@/components/synced-loader";
+import type { Theme } from "@/styles/theme";
 import { formatDuration } from "@/utils/time";
 
 const STREAM_METADATA_FONT_SIZE = 13;
+
+// `SyncedLoader.color` is a non-style prop, so wrap it with `withUnistyles` and
+// feed the theme-reactive color through `uniProps`. Only the loader leaf
+// re-renders on theme changes. See docs/unistyles.md.
+const ThemedSyncedLoader = withUnistyles(SyncedLoader);
+
+const loaderColorMapping = (theme: Theme) => ({
+  color:
+    theme.colorScheme === "light"
+      ? theme.colors.palette.amber[700]
+      : theme.colors.palette.amber[500],
+});
 
 export const RunningTurnFooter = memo(function RunningTurnFooter({
   inFlightTurnStartedAt,
 }: {
   inFlightTurnStartedAt: Date | null;
 }) {
-  const { theme } = useUnistyles();
-  const loaderColor =
-    theme.colorScheme === "light"
-      ? theme.colors.palette.amber[700]
-      : theme.colors.palette.amber[500];
   return (
     <View style={stylesheet.turnFooterSlot} testID="turn-working-indicator">
       <View style={stylesheet.turnFooterContent}>
         <View style={stylesheet.workingIcon} testID="turn-working-pixel-loader">
-          <SyncedLoader size={14} color={loaderColor} />
+          <ThemedSyncedLoader size={14} uniProps={loaderColorMapping} />
         </View>
         {inFlightTurnStartedAt ? (
           <RunningElapsed startedAt={inFlightTurnStartedAt} testID="turn-working-elapsed" />

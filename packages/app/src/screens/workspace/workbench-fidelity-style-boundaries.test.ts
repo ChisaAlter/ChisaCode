@@ -39,14 +39,16 @@ describe("workbench fidelity style boundaries", () => {
     expect(tabsSource).toContain('agent: "✦"');
     expect(tabsSource).toContain('terminal: "▸"');
     expect(tabsSource).toContain('browser: "◎"');
-    expect(headerSource).toContain(">✦</Text>");
+    // Soft topbar title is plain session label (no icon chip in header).
+    expect(headerSource).toContain("function DesktopWorkspaceHeaderTitle");
+    expect(headerSource).toContain('testID="workspace-header-title"');
   });
 
   it("keeps Agent panel wrappers transparent above the Liquid Glass workspace canvas", () => {
     const source = readSource("../../panels/agent-panel.tsx");
 
     expect(source).toContain('from "@/styles/workbench-surface-roles"');
-    expect(source.match(/resolveThemeWorkbenchSurfaceRoles\(theme\)\.content/g)).toHaveLength(3);
+    expect(source.match(/resolveThemeWorkbenchSurfaceRoles\(theme\)\.content/g)).toHaveLength(4);
     expect(source).not.toContain("backgroundColor: theme.colors.surfaceWorkspace");
   });
 
@@ -61,8 +63,39 @@ describe("workbench fidelity style boundaries", () => {
     expect(source).not.toContain("contentCentered");
     expect(source).not.toContain("ImportSessionCard");
     expect(source).not.toContain("styles.importCard");
+    // Soft Home host owns horizontal inset on all form factors (no double dock pad).
+    expect(source).toContain("inputAreaStyle={softHomeComposerInputAreaStyle}");
     // Shared Soft Home shell owns optical vertical placement.
     expect(softHomeSource).toContain("softHomeTopInset");
+    expect(softHomeSource).toContain("resolveSoftHomeTopInset");
     expect(softHomeSource).toContain("useWindowDimensions");
+    // Compact Soft Home keeps a mini hero (not bottom-sheet-only dock).
+    expect(softHomeSource).toContain("softHomeTitleCompact");
+    expect(softHomeSource).toContain("<SoftHomeHero");
+    expect(softHomeSource).toContain("compact={compact}");
+  });
+
+  it("shares Soft composer card elevation with native platforms", () => {
+    const inputSource = readSource("../../composer/input/input.tsx");
+    const layoutSource = readSource("../../composer/draft/soft-home-layout.ts");
+
+    expect(layoutSource).toContain("function resolveSoftComposerCardElevation");
+    expect(inputSource).toContain("resolveSoftComposerCardElevation");
+    expect(layoutSource).toContain("elevation: 3");
+  });
+
+  it("hides the Soft compact tab wall until at least two tabs exist", () => {
+    const source = readSource("./workspace-center-column.tsx");
+
+    expect(source).toContain("shouldShowMobileWorkspaceTabSwitcher");
+    expect(source).toContain("shouldShowMobileWorkspaceTabSwitcher(mobileTabSwitcher.tabs.length)");
+  });
+
+  it("uses Soft soft-pill branch ctx on the compact session header", () => {
+    const source = readSource("./workspace-header.tsx");
+
+    expect(source).toContain('testID="workspace-header-title"');
+    expect(source).toContain('presentation="soft-pill"');
+    expect(source).toContain("compactHeaderTitleRow");
   });
 });

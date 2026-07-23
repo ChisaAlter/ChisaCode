@@ -34,6 +34,7 @@ import {
   WorkspaceDesktopSoftTopbar,
 } from "@/screens/workspace/workspace-header";
 import { WorkspaceEnvironmentPanelRail } from "@/screens/workspace/workspace-environment-panel";
+import { shouldShowMobileWorkspaceTabSwitcher } from "@/screens/workspace/workspace-tab-layout";
 import { supportsDesktopPaneSplits } from "@/constants/layout";
 import { getIsElectron, isWeb } from "@/constants/platform";
 
@@ -412,7 +413,7 @@ export function WorkspaceCenterColumn({
         />
       ) : null}
 
-      {isMobile ? (
+      {isMobile && shouldShowMobileWorkspaceTabSwitcher(mobileTabSwitcher.tabs.length) ? (
         <MobileWorkspaceTabSwitcher
           {...mobileTabSwitcher}
           activeTabKey={activeTabDescriptor?.tabId ?? ""}

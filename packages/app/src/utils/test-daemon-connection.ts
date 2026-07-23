@@ -13,6 +13,7 @@ import {
   createDesktopLocalDaemonTransportFactory,
 } from "@/desktop/daemon/desktop-daemon-transport";
 
+/** Minimal client surface needed to probe a daemon connection: connect, close, and read server info. */
 export interface DaemonProbeClient {
   readonly lastError: string | null;
   connect(): Promise<void>;
@@ -25,6 +26,7 @@ interface LocalTransportUrlInput {
   transportPath: string;
 }
 
+/** Injectable dependencies used to build a daemon client config and create probe clients, primarily for testing. */
 export interface DaemonConnectionDependencies<TClient extends DaemonProbeClient> {
   getClientId(): Promise<string>;
   resolveAppVersion(): string | null;
@@ -82,6 +84,7 @@ function isIncorrectPasswordFailure(input: {
   );
 }
 
+/** Error raised when a daemon connection probe fails, carrying the raw failure reason and last client error. */
 export class DaemonConnectionTestError extends Error {
   reason: string | null;
   lastError: string | null;
@@ -94,6 +97,14 @@ export class DaemonConnectionTestError extends Error {
   }
 }
 
+/**
+ * Builds the daemon client config for probing a host connection.
+ * @param connection The host connection describing transport type, endpoint, and credentials
+ * @param serverId The server id, required only for relay connections
+ * @param deps Injectable dependencies for client id, app version, and local transport resolution
+ * @returns The daemon client config ready for connectAndProbe
+ * @throws When probing a relay connection without a serverId
+ */
 export async function buildClientConfig(
   connection: HostConnection,
   serverId?: string,
@@ -149,6 +160,14 @@ export async function buildClientConfig(
   };
 }
 
+/**
+ * Creates a client, connects, and waits for the daemon's server info message within a timeout.
+ * @param config The daemon client config to connect with
+ * @param timeoutMs Maximum time to wait for the handshake in milliseconds
+ * @param deps Injectable client factory, primarily for testing
+ * @returns The connected client together with the reported server id and hostname
+ * @throws DaemonConnectionTestError when the connection times out, fails, or yields no server info
+ */
 export function connectAndProbe(
   config: DaemonClientConfig,
   timeoutMs: number,
@@ -228,6 +247,14 @@ function resolveTimeout(connection: HostConnection, options?: ProbeOptions): num
   return connection.type === "relay" ? 10_000 : 6_000;
 }
 
+/**
+ * Probes a host connection end to end: builds the client config, connects, and reads server info.
+ * @param connection The host connection to probe
+ * @param options Optional server id (required for relay) and timeout override
+ * @param deps Injectable dependencies for config building and client creation
+ * @returns The connected client together with the reported server id and hostname
+ * @throws DaemonConnectionTestError when the probe fails, or Error when a relay probe lacks a serverId
+ */
 export function connectToDaemon(
   connection: HostConnection,
   options?: ProbeOptions,

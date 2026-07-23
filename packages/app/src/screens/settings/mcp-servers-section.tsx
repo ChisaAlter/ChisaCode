@@ -113,8 +113,8 @@ function statusLabel(status: AgentMcpServerStatus): string {
   }
 }
 
-function configSummary(server: AgentMcpServerPayload): string {
-  if (server.source === "system") return "系统内置";
+function configSummary(server: AgentMcpServerPayload, t: (key: string) => string): string {
+  if (server.source === "system") return t("mcpServers.systemSource");
   if (server.config.type === "stdio") return `stdio · ${server.config.command}`;
   return `${server.config.type.toUpperCase()} · ${server.config.url}`;
 }
@@ -139,21 +139,26 @@ function serverMatchesQuery(server: AgentMcpServerPayload, query: string): boole
   return haystack.includes(needle);
 }
 
-function parseRecordJson(value: string, fieldName: string): Record<string, string> | undefined {
+function parseRecordJson(
+  value: string,
+  fieldName: string,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): Record<string, string> | undefined {
   const trimmed = value.trim();
   if (!trimmed) return undefined;
   let parsed: unknown;
   try {
     parsed = JSON.parse(trimmed);
   } catch {
-    throw new Error(`${fieldName} 必须是 JSON 对象`);
+    throw new Error(t("mcpServers.fieldMustBeJsonObject", { field: fieldName }));
   }
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new Error(`${fieldName} 必须是 JSON 对象`);
+    throw new Error(t("mcpServers.fieldMustBeJsonObject", { field: fieldName }));
   }
   const record: Record<string, string> = {};
   for (const [key, rawValue] of Object.entries(parsed)) {
-    if (typeof rawValue !== "string") throw new Error(`${fieldName} 的值必须是字符串`);
+    if (typeof rawValue !== "string")
+      throw new Error(t("mcpServers.fieldValueMustBeString", { field: fieldName }));
     record[key] = rawValue;
   }
   return record;
@@ -212,21 +217,24 @@ function formTitle(form: ServerFormState | null, t: (key: string) => string): st
   return t("settings.mcpServers.createUrlTitle");
 }
 
-function serverFromForm(form: ServerFormState): ManagedMcpServerConfig {
+function serverFromForm(
+  form: ServerFormState,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): ManagedMcpServerConfig {
   const name = form.name.trim();
-  if (!name) throw new Error("请输入服务器名称");
+  if (!name) throw new Error(t("mcpServers.enterServerName"));
   const base = {
     name,
     ...(form.label.trim() ? { label: form.label.trim() } : {}),
     ...(form.description.trim() ? { description: form.description.trim() } : {}),
   };
   if (form.mode === "stdio") {
-    if (!form.command.trim()) throw new Error("请输入 stdio command");
+    if (!form.command.trim()) throw new Error(t("mcpServers.enterStdioCommand"));
     const args = form.argsText
       .split(/\r?\n/u)
       .map((arg) => arg.trim())
       .filter(Boolean);
-    const env = parseRecordJson(form.envText, "环境变量");
+    const env = parseRecordJson(form.envText, t("mcpServers.envVariables"), t);
     return {
       ...base,
       config: {
@@ -237,8 +245,8 @@ function serverFromForm(form: ServerFormState): ManagedMcpServerConfig {
       },
     };
   }
-  if (!form.url.trim()) throw new Error("请输入 URL");
-  const headers = parseRecordJson(form.headersText, "请求头");
+  if (!form.url.trim()) throw new Error(t("mcpServers.enterUrl"));
+  const headers = parseRecordJson(form.headersText, t("mcpServers.headers"), t);
   return {
     ...base,
     config: {
@@ -303,7 +311,7 @@ function McpServerRow({
     <View style={rowStyle}>
       <View style={settingsStyles.rowContent}>
         <Text style={settingsStyles.rowTitle}>{server.label || server.name}</Text>
-        <Text style={settingsStyles.rowHint}>{configSummary(server)}</Text>
+        <Text style={settingsStyles.rowHint}>{configSummary(server, t)}</Text>
         {server.description ? (
           <Text style={settingsStyles.rowHint}>{server.description}</Text>
         ) : null}
@@ -589,7 +597,7 @@ export function McpServersSection({ serverId }: McpServersSectionProps) {
     if (!client || !form) return;
     setIsLoading(true);
     try {
-      const server = serverFromForm(form);
+      const server = serverFromForm(form, t);
       const response = await client.upsertAgentMcpServer({
         server,
         ...(form.originalName ? { originalName: form.originalName } : {}),

@@ -2,12 +2,14 @@ import { MAX_CONTENT_WIDTH } from "@/constants/layout";
 import { resolveAssistantImageSource } from "@/utils/assistant-image-source";
 import { createImageSourceCacheKey } from "@/attachments/utils";
 
+/** Cached dimensions and aspect ratio of an assistant-rendered image. */
 export interface AssistantImageMetadata {
   width: number;
   height: number;
   aspectRatio: number;
 }
 
+/** Load state of an assistant image, derived from the presence of cached metadata. */
 export type AssistantImageLoadState =
   | { status: "loading" }
   | { status: "ready"; aspectRatio: number }
@@ -111,6 +113,11 @@ function getAssistantImageMetadataKeys(input: {
   return [...new Set(keys)];
 }
 
+/**
+ * Looks up cached dimensions for an assistant image.
+ * @param input The image source plus optional workspace root and server id used to resolve file-backed sources
+ * @returns The cached metadata, or null when the image has not been measured yet
+ */
 export function getAssistantImageMetadata(input: {
   source: string;
   workspaceRoot?: string;
@@ -131,6 +138,11 @@ export function getAssistantImageMetadata(input: {
   return null;
 }
 
+/**
+ * Derives the image load state from cached metadata.
+ * @param metadata The cached image metadata, or null when not yet measured
+ * @returns The loading state, or the ready state carrying the aspect ratio
+ */
 export function getAssistantImageLoadStateFromMetadata(
   metadata: AssistantImageMetadata | null,
 ): AssistantImageLoadState {
@@ -140,6 +152,12 @@ export function getAssistantImageLoadStateFromMetadata(
   return { status: "ready", aspectRatio: metadata.aspectRatio };
 }
 
+/**
+ * Caches measured dimensions for an assistant image under all of its lookup keys.
+ * @param input The image source plus optional workspace root and server id used to resolve file-backed sources
+ * @param dimensions The measured image width and height in pixels
+ * @returns The stored metadata, or null when the dimensions are not positive finite numbers
+ */
 export function setAssistantImageMetadata(
   input: {
     source: string;
@@ -171,6 +189,11 @@ export function setAssistantImageMetadata(
   return metadata;
 }
 
+/**
+ * Extracts image source URLs from assistant markdown.
+ * @param markdown The assistant message markdown to scan
+ * @returns The normalized image sources in document order
+ */
 export function extractAssistantImageSources(markdown: string): string[] {
   const shouldCacheParse = !/data:image\//i.test(markdown);
   const cachedParse = shouldCacheParse ? assistantImageParseCache.get(markdown) : undefined;
@@ -191,6 +214,11 @@ export function extractAssistantImageSources(markdown: string): string[] {
   return parsed.sources;
 }
 
+/**
+ * Estimates the rendered height of an assistant message from cached image metadata.
+ * @param markdown The assistant message markdown to estimate
+ * @returns The estimated height in pixels, or null when no images have known dimensions
+ */
 export function estimateAssistantMessageHeightFromCache(markdown: string): number | null {
   const parsed = assistantImageParseCache.get(markdown) ?? parseAssistantImageMarkdown(markdown);
   if (parsed.sources.length === 0) {
@@ -223,6 +251,9 @@ export function estimateAssistantMessageHeightFromCache(markdown: string): numbe
   return Math.max(ASSISTANT_MESSAGE_MIN_HEIGHT, estimatedHeight);
 }
 
+/**
+ * Clears both the image metadata cache and the markdown parse cache.
+ */
 export function clearAssistantImageMetadataCache(): void {
   assistantImageMetadataCache.clear();
   assistantImageParseCache.clear();

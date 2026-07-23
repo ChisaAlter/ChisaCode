@@ -1,5 +1,6 @@
 import type { AggregatedAgent } from "@/hooks/use-aggregated-agents";
 
+/** A group of agent sessions shown under one workspace heading in the sidebar. */
 export interface SidebarSessionGroup {
   key: string;
   label: string;
@@ -9,8 +10,15 @@ export interface SidebarSessionGroup {
   newestActivityAt: Date;
 }
 
+/** Group key reserved for the synthetic pinned-agents group in the sidebar. */
 export const PINNED_SIDEBAR_SESSION_GROUP_KEY = "__pinned__";
 
+/**
+ * Reconciles a persisted ordering against the keys that currently exist.
+ * @param storedOrder The previously persisted key order
+ * @param currentKeys The keys that exist now
+ * @returns The stored order filtered to existing keys, with new keys appended
+ */
 export function reconcileSidebarSessionOrder(
   storedOrder: readonly string[],
   currentKeys: readonly string[],
@@ -43,6 +51,12 @@ function orderItemsByKeys<T>(
   return ordered;
 }
 
+/**
+ * Applies a stable, user-controlled order to sidebar groups and their agents, keeping pinned groups first.
+ * @param groups The session groups to order
+ * @param input The persisted group order, per-group agent order, and optionally pinned group keys
+ * @returns A new array of groups with stable ordering applied to both groups and agents
+ */
 export function applyStableSidebarSessionOrder<T extends SidebarSessionGroup>(
   groups: T[],
   input: {
@@ -102,6 +116,11 @@ function trimTrailingSeparators(value: string): string {
   return value.slice(0, end);
 }
 
+/**
+ * Normalizes an agent working directory into a stable group key.
+ * @param cwd The agent working directory
+ * @returns A lowercased, separator-normalized key, or "__unknown__" when the cwd is blank
+ */
 export function normalizeAgentCwdGroupKey(cwd: string | null | undefined): string {
   const trimmed = cwd?.trim() ?? "";
   if (!trimmed) {
@@ -111,6 +130,12 @@ export function normalizeAgentCwdGroupKey(cwd: string | null | undefined): strin
   return trimTrailingSeparators(normalizedSeparators).toLocaleLowerCase();
 }
 
+/**
+ * Derives a human-readable group label from an agent working directory.
+ * @param cwd The agent working directory
+ * @param fallbackLabel The label to use when the cwd is blank
+ * @returns The last path segment, or the fallback label when the cwd is blank
+ */
 export function getAgentCwdGroupLabel(
   cwd: string | null | undefined,
   fallbackLabel = "Unknown workspace",
@@ -182,6 +207,12 @@ function compareAgentsByActivityDescending(left: AggregatedAgent, right: Aggrega
   return compareActivityDatesDescending(left.lastActivityAt, right.lastActivityAt);
 }
 
+/**
+ * Groups agents into sidebar session sections keyed by workspace, with pinned agents lifted into a leading group.
+ * @param agents The agents to group
+ * @param options Optional labels for unknown/pinned groups and a pinned-agent predicate
+ * @returns The session groups sorted by most recent activity, with the pinned group first when present
+ */
 export function groupAgentsForSidebar(
   agents: AggregatedAgent[],
   options?: {

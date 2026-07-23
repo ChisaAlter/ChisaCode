@@ -28,6 +28,12 @@ import {
   useActiveWorkspaceSelection,
 } from "@/stores/navigation-active-workspace-store";
 
+/** Cached promise for the command-center preload module so repeated toggles
+ *  do not re-evaluate the dynamic import. */
+let commandCenterModulePromise: Promise<
+  typeof import("@/desktop/electron/command-center-window-controls")
+> | null = null;
+
 export function useKeyboardShortcuts({
   enabled,
   isMobile,
@@ -115,15 +121,26 @@ export function useKeyboardShortcuts({
           callbacksByName[action.name]?.();
           return true;
         case "command-center-toggle": {
+          // Cache the dynamically imported module so repeated toggles do not
+          // re-evaluate the import, and surface preload failures instead of
+          // silently no-op-ing.
+          if (!commandCenterModulePromise) {
+            commandCenterModulePromise =
+              import("@/desktop/electron/command-center-window-controls");
+          }
           if (action.nextOpen) {
             captureCommandCenterFocusRestore(event);
-            void import("@/desktop/electron/command-center-window-controls").then(
-              ({ openCommandCenter }) => openCommandCenter(),
-            );
+            void commandCenterModulePromise
+              .then(({ openCommandCenter }) => openCommandCenter())
+              .catch((error) => {
+                console.error("[KeyboardShortcuts] command-center open failed", error);
+              });
           } else {
-            void import("@/desktop/electron/command-center-window-controls").then(
-              ({ closeCommandCenter }) => closeCommandCenter(),
-            );
+            void commandCenterModulePromise
+              .then(({ closeCommandCenter }) => closeCommandCenter())
+              .catch((error) => {
+                console.error("[KeyboardShortcuts] command-center close failed", error);
+              });
           }
           return true;
         }
@@ -233,7 +250,12 @@ export function useKeyboardShortcuts({
     };
 
     const handleBlurOrHide = () => {
-      resetModifiers();
+      // Only reset modifiers when the page is actually hidden, not on every
+      // window blur (focusing an iframe/devtools fires blur and would clear an
+      // in-progress modifier chord while the page is still visible).
+      if (document.visibilityState === "hidden") {
+        resetModifiers();
+      }
     };
 
     window.addEventListener("keydown", handleKeyDown, true);

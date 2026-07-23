@@ -1,3 +1,4 @@
+/** Result of scoring a query against text. Lower tier = better match. */
 export interface MatchScore {
   tier: number;
   offset: number;
@@ -52,6 +53,13 @@ function scoreSubsequenceMatch(query: string, text: string): MatchScore | null {
   return { tier: 5, offset: firstIndex, spread: lastIndex - firstIndex + 1 };
 }
 
+/**
+ * Scores how well `query` matches `text`, preferring exact, boundary-aligned,
+ * and prefix matches over fuzzy subsequence matches.
+ * @param query The search query (case-insensitive)
+ * @param text The text to search within
+ * @returns A match score, or null if no match is found
+ */
 export function scoreMatch(query: string, text: string): MatchScore | null {
   if (!query) return { tier: 0, offset: 0 };
   const q = query.toLowerCase();
@@ -61,12 +69,26 @@ export function scoreMatch(query: string, text: string): MatchScore | null {
   return scoreSubstringMatch(q, t) ?? scoreSubsequenceMatch(q, t);
 }
 
+/**
+ * Compares two match scores for sorting (ascending: better match first).
+ * @param a First match score
+ * @param b Second match score
+ * @returns Negative if `a` is better, positive if `b` is better, 0 if equal
+ */
 export function compareMatchScores(a: MatchScore, b: MatchScore): number {
   if (a.tier !== b.tier) return a.tier - b.tier;
   if (a.offset !== b.offset) return a.offset - b.offset;
   return (a.spread ?? 0) - (b.spread ?? 0);
 }
 
+/**
+ * Scores a multi-token query against multiple text fields, aggregating the
+ * best per-token match across all fields. Returns null if any token fails to
+ * match any field.
+ * @param query The whitespace-separated search query
+ * @param fields The text fields to search across
+ * @returns An aggregate match score, or null if any token is unmatched
+ */
 export function scoreTextFields(query: string, fields: string[]): MatchScore | null {
   const tokens = query
     .trim()

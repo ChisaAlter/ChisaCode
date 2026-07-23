@@ -1,3 +1,6 @@
+// Intentional module public surface: aggregates the review domain's store
+// and surface API. Not a convenience barrel — consumers depend on this as the
+// canonical import boundary for review state and inline thread rendering.
 export {
   buildReviewAttachmentSnapshot,
   buildReviewDraftKey,

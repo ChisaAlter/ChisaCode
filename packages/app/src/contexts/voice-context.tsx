@@ -2,6 +2,7 @@ import {
   createContext,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useSyncExternalStore,
   type ReactNode,
@@ -62,17 +63,18 @@ export function useVoiceOptional(): VoiceContextValue | null {
     runtime ? runtime.getSnapshot.bind(runtime) : getEmptySnapshot,
   );
 
-  if (!runtime) {
-    return null;
-  }
-
-  return {
-    ...snapshot,
-    startVoice: runtime.startVoice.bind(runtime),
-    stopVoice: runtime.stopVoice.bind(runtime),
-    isVoiceModeForAgent: runtime.isVoiceModeForAgent.bind(runtime),
-    toggleMute: runtime.toggleMute.bind(runtime),
-  };
+  return useMemo(() => {
+    if (!runtime) {
+      return null;
+    }
+    return {
+      ...snapshot,
+      startVoice: runtime.startVoice.bind(runtime),
+      stopVoice: runtime.stopVoice.bind(runtime),
+      isVoiceModeForAgent: runtime.isVoiceModeForAgent.bind(runtime),
+      toggleMute: runtime.toggleMute.bind(runtime),
+    };
+  }, [snapshot, runtime]);
 }
 
 export function useVoiceTelemetry() {

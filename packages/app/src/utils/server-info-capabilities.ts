@@ -1,6 +1,7 @@
 import type { ServerCapabilityState } from "@chisacode/protocol/messages";
 import type { DaemonServerInfo } from "@/stores/session-store";
 
+/** Selects which voice capability to inspect: dictation-only or full voice mode */
 export type VoiceReadinessMode = "dictation" | "voice";
 
 export function getServerCapabilities(params: {
@@ -13,6 +14,11 @@ export function getServerCapabilities(params: {
   return capabilities;
 }
 
+/**
+ * Reads the readiness state for a voice capability from server info
+ * @param params The server info to inspect and the voice mode to check
+ * @returns The capability state, or null when the server reports no voice capabilities
+ */
 export function getVoiceReadinessState(params: {
   serverInfo: DaemonServerInfo | null | undefined;
   mode: VoiceReadinessMode;
@@ -28,6 +34,11 @@ export function getVoiceReadinessState(params: {
   return voice.voice;
 }
 
+/**
+ * Resolves the user-facing reason a voice capability is unavailable
+ * @param params The server info to inspect and the voice mode to check
+ * @returns The trimmed unavailability reason, or null when the capability is enabled or no reason is given
+ */
 export function resolveVoiceUnavailableMessage(params: {
   serverInfo: DaemonServerInfo | null | undefined;
   mode: VoiceReadinessMode;

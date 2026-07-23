@@ -3,16 +3,19 @@ import type { DaemonStartResult } from "@/runtime/daemon-start-service";
 import type { Href } from "expo-router";
 import { buildHostRootRoute, mapPathnameToServer } from "@/utils/host-routes";
 
+/** Minimal store surface required to boot the host runtime. */
 export interface HostRuntimeBootstrapStore {
   boot: () => void;
 }
 
+/** Minimal daemon start service surface required by the host runtime bootstrap. */
 export interface HostRuntimeBootstrapDaemonStartService {
   start: () => Promise<DaemonStartResult>;
 }
 
 type HostRuntimeBootstrapStartGate = boolean | (() => boolean | Promise<boolean>);
 
+/** Inputs required to boot the host runtime and conditionally start the desktop daemon. */
 export interface StartHostRuntimeBootstrapInput {
   store: HostRuntimeBootstrapStore;
   daemonStartService: HostRuntimeBootstrapDaemonStartService;
@@ -20,6 +23,10 @@ export interface StartHostRuntimeBootstrapInput {
   onGateError?: (message: string) => void;
 }
 
+/**
+ * Boots the host runtime store and starts the desktop daemon when the gate allows it.
+ * @param input The store, daemon start service, start gate, and optional gate error handler
+ */
 export function startHostRuntimeBootstrap(input: StartHostRuntimeBootstrapInput): void {
   input.store.boot();
   startDaemonIfGateAllows({
@@ -29,6 +36,10 @@ export function startHostRuntimeBootstrap(input: StartHostRuntimeBootstrapInput)
   });
 }
 
+/**
+ * Starts the desktop daemon when the gate resolves to true, reporting gate evaluation errors.
+ * @param input The daemon start service, start gate, and optional gate error handler
+ */
 export function startDaemonIfGateAllows(input: {
   daemonStartService: HostRuntimeBootstrapDaemonStartService;
   shouldStartDaemon: HostRuntimeBootstrapStartGate;
@@ -56,8 +67,10 @@ export function startDaemonIfGateAllows(input: {
     });
 }
 
+/** Route shown when no host is available to redirect to at startup. */
 export const WELCOME_ROUTE: Href = "/welcome";
 
+/** Inputs describing startup navigation state used to decide the initial redirect. */
 export interface ResolveStartupRedirectInput {
   pathname: string;
   anyOnlineHostServerId: string | null;
@@ -68,6 +81,7 @@ export interface ResolveStartupRedirectInput {
   hasGivenUpWaitingForHost: boolean;
 }
 
+/** Inputs describing the active host and known hosts used to decide a fallback redirect. */
 export interface ResolveActiveHostRedirectInput {
   pathname: string;
   activeServerId: string | null;
@@ -78,6 +92,11 @@ function isIndexPathname(pathname: string) {
   return pathname === "/" || pathname === "";
 }
 
+/**
+ * Resolves the persisted workspace selection that startup should restore, if it is ready to use.
+ * @param input The startup navigation state
+ * @returns The workspace selection to restore, or null when startup should not restore one
+ */
 export function resolveStartupWorkspaceSelection(
   input: ResolveStartupRedirectInput,
 ): ActiveWorkspaceSelection | null {
@@ -99,6 +118,11 @@ export function resolveStartupWorkspaceSelection(
   return input.workspaceSelection;
 }
 
+/**
+ * Decides which route the index page should redirect to at startup.
+ * @param input The startup navigation state
+ * @returns The route to redirect to, or null when no redirect should happen yet
+ */
 export function resolveStartupRedirectRoute(input: ResolveStartupRedirectInput): Href | null {
   if (!isIndexPathname(input.pathname)) {
     return null;
@@ -124,6 +148,11 @@ export function resolveStartupRedirectRoute(input: ResolveStartupRedirectInput):
   return null;
 }
 
+/**
+ * Decides a fallback route when the active host is no longer among the known hosts.
+ * @param input The active server id, known host server ids, and current pathname
+ * @returns The equivalent route on a fallback host, the welcome route, or null when no redirect is needed
+ */
 export function resolveActiveHostRedirectRoute(input: ResolveActiveHostRedirectInput): Href | null {
   if (!input.activeServerId) {
     return null;

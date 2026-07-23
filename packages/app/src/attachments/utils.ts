@@ -1,10 +1,16 @@
 import { generateMessageId } from "@/types/stream";
 import { isAbsolutePath } from "@/utils/path";
 
+/** Generates a unique attachment identifier prefixed with `att_`. */
 export function generateAttachmentId(): string {
   return `att_${generateMessageId()}`;
 }
 
+/**
+ * Normalizes a MIME type string, defaulting to `image/jpeg` when empty or missing.
+ * @param input The raw MIME type string
+ * @returns The normalized MIME type
+ */
 export function normalizeMimeType(input: string | undefined | null): string {
   if (!input) {
     return "image/jpeg";
@@ -13,6 +19,12 @@ export function normalizeMimeType(input: string | undefined | null): string {
   return trimmed.length > 0 ? trimmed : "image/jpeg";
 }
 
+/**
+ * Parses a `data:` URL into its MIME type and base64 payload.
+ * @param dataUrl The data URL to parse
+ * @returns The parsed MIME type and base64 string
+ * @throws {Error} If the URL is not a valid base64-encoded data URL
+ */
 export function parseDataUrl(dataUrl: string): { mimeType: string; base64: string } {
   const match = /^data:([^,]*),([\s\S]+)$/i.exec(dataUrl.trim());
   if (!match) {
@@ -43,6 +55,11 @@ function hashString(value: string): string {
   return (hash >>> 0).toString(36);
 }
 
+/**
+ * Parses an image `data:` URL into MIME type, base64 payload, and a stable cache key.
+ * @param uri The data URL to parse
+ * @returns The parsed image data, or null if the URI is not an image data URL
+ */
 export function parseImageDataUrl(
   uri: string,
 ): { mimeType: string; base64: string; cacheKey: string } | null {
@@ -117,6 +134,12 @@ export async function blobToBase64(blob: Blob): Promise<string> {
   });
 }
 
+/**
+ * Converts a local filesystem path to a `file://` URI, percent-encoding the path body.
+ * Handles POSIX absolute paths, UNC paths (`\\server\share`), and Windows drive paths.
+ * @param path The filesystem path to convert
+ * @returns The `file://` URI, or the original path if it is not absolute
+ */
 export function pathToFileUri(path: string): string {
   if (path.startsWith("file://")) {
     return path;
@@ -127,17 +150,22 @@ export function pathToFileUri(path: string): string {
   }
 
   if (path.startsWith("/")) {
-    return `file://${path}`;
+    return `file://${encodeURI(path)}`;
   }
 
   // UNC paths: \\server\share -> file://server/share
   if (path.startsWith("\\\\")) {
-    return `file:${path.replace(/\\/g, "/")}`;
+    return `file:${encodeURI(path.replace(/\\/g, "/"))}`;
   }
 
-  return `file:///${path.replace(/\\/g, "/")}`;
+  return `file:///${encodeURI(path.replace(/\\/g, "/"))}`;
 }
 
+/**
+ * Converts a `file://` URI back to a filesystem path, percent-decoding the result.
+ * @param uri The `file://` URI to convert
+ * @returns The decoded filesystem path, or the original URI if it is not a `file://` URI
+ */
 export function fileUriToPath(uri: string): string {
   if (!uri.startsWith("file://")) {
     return uri;

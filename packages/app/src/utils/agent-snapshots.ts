@@ -2,6 +2,12 @@ import type { AgentSnapshotPayload } from "@chisacode/protocol/messages";
 import type { AgentPermissionRequest } from "@chisacode/protocol/agent-types";
 import { readAgentRelation } from "@chisacode/protocol/agent-labels";
 
+/**
+ * Derives a stable cache key for a pending permission request scoped to an agent.
+ * @param agentId The agent identifier owning the permission request
+ * @param request The permission request to key
+ * @returns A string key of the form `agentId:fallbackId`
+ */
 export function derivePendingPermissionKey(
   agentId: string,
   request: AgentPermissionRequest,
@@ -16,6 +22,13 @@ export function derivePendingPermissionKey(
   return `${agentId}:${fallbackId}`;
 }
 
+/**
+ * Normalizes a protocol agent snapshot payload into the app-side agent state shape,
+ * parsing timestamps, resolving the agent relation/parent, and defaulting optional fields.
+ * @param snapshot The raw protocol snapshot payload
+ * @param serverId The server identifier the snapshot belongs to
+ * @returns The normalized agent state object
+ */
 export function normalizeAgentSnapshot(snapshot: AgentSnapshotPayload, serverId: string) {
   const createdAt = new Date(snapshot.createdAt);
   const updatedAt = new Date(snapshot.updatedAt);

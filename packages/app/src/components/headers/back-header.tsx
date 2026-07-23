@@ -1,11 +1,21 @@
 import { useCallback, type ReactNode } from "react";
 import { Pressable } from "react-native";
 import { router } from "expo-router";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { ArrowLeft } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { ScreenHeader } from "./screen-header";
 import { ScreenTitle } from "./screen-title";
+import { ICON_SIZE, type Theme } from "@/styles/theme";
+
+// Lucide icons take `color` as a non-style prop, so wrap with `withUnistyles`
+// and feed the theme-reactive color through `uniProps`. `iconSize` is the
+// static `ICON_SIZE` constant, imported directly instead of read from a hook.
+const ThemedArrowLeft = withUnistyles(ArrowLeft);
+
+const foregroundMutedColorMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+});
 
 interface BackHeaderProps {
   title?: string;
@@ -19,7 +29,6 @@ function goBack(): void {
 }
 
 export function BackHeader({ title, titleAccessory, rightContent, onBack }: BackHeaderProps) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const handleBack = useCallback(() => {
     if (onBack) {
@@ -39,7 +48,7 @@ export function BackHeader({ title, titleAccessory, rightContent, onBack }: Back
             accessibilityRole="button"
             accessibilityLabel={t("common.back")}
           >
-            <ArrowLeft size={theme.iconSize.lg} color={theme.colors.foregroundMuted} />
+            <ThemedArrowLeft size={ICON_SIZE.lg} uniProps={foregroundMutedColorMapping} />
           </Pressable>
           {title && <ScreenTitle>{title}</ScreenTitle>}
           {titleAccessory}

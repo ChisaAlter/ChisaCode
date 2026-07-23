@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { Check, Folder, FolderPlus, FolderX, Search } from "lucide-react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { useKeyboardShortcutsStore } from "@/stores/keyboard-shortcuts-store";
 import { shortenPath } from "@/utils/shorten-path";
@@ -110,6 +111,7 @@ function ProjectPickerActionRow({
 
 export function ProjectPickerModal() {
   const { theme } = useUnistyles();
+  const { t } = useTranslation();
   const serverId = useActiveServerId();
 
   const open = useKeyboardShortcutsStore((s) => s.projectPickerOpen);
@@ -300,7 +302,7 @@ export function ProjectPickerModal() {
                 ref={inputRef}
                 value={query}
                 onChangeText={handleChangeQuery}
-                placeholder="搜索项目"
+                placeholder={t("workspace.projectPickerSearchPlaceholder")}
                 placeholderTextColor={theme.colors.foregroundMuted}
                 style={inputStyle}
                 autoCapitalize="none"
@@ -319,9 +321,11 @@ export function ProjectPickerModal() {
             keyboardShouldPersistTaps="always"
             showsVerticalScrollIndicator={false}
           >
-            {isSubmitting ? <Text style={emptyTextStyle}>正在打开项目...</Text> : null}
+            {isSubmitting ? (
+              <Text style={emptyTextStyle}>{t("workspace.projectPickerOpening")}</Text>
+            ) : null}
             {!isSubmitting && options.length === 0 && !query.trim() ? (
-              <Text style={emptyTextStyle}>没有最近项目</Text>
+              <Text style={emptyTextStyle}>{t("workspace.projectPickerNoRecent")}</Text>
             ) : null}
             {!isSubmitting && !(options.length === 0 && !query.trim()) ? (
               <>
@@ -340,14 +344,14 @@ export function ProjectPickerModal() {
             {isLocalDaemon ? (
               <ProjectPickerActionRow
                 testID="project-picker-add-project"
-                label="添加新项目"
+                label={t("workspace.projectPickerAddNew")}
                 icon="add"
                 onPress={handleAddProject}
               />
             ) : null}
             <ProjectPickerActionRow
               testID="project-picker-no-project"
-              label="不使用项目"
+              label={t("workspace.projectPickerNone")}
               icon="none"
               onPress={handleClose}
             />

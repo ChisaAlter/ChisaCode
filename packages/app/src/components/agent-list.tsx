@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useCallback, useMemo, useState, type ReactElement } from "react";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { isWeb } from "@/constants/platform";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { AgentStatusIndicator } from "@/components/ui/agent-status-indicator";
@@ -24,6 +24,24 @@ import { navigateToAgent } from "@/utils/navigate-to-agent";
 import { useArchiveAgent } from "@/hooks/use-archive-agent";
 import { useTranslation } from "react-i18next";
 import { rememberArchivedAgentDetail } from "@/utils/agent-history-navigation";
+import { FONT_SIZE, ICON_SIZE, SPACING, type Theme } from "@/styles/theme";
+
+// Lucide icons only accept `color` (a non-style prop), so wrap each one with
+// `withUnistyles` and feed the theme-reactive color through `uniProps`. Only the
+// icon node re-renders on theme changes — the surrounding row tree does not.
+const ThemedArchive = withUnistyles(Archive);
+// `RefreshControl.tintColor`/`colors` are non-style props Unistyles does not
+// track via the `style` prop, so wrap RefreshControl and map them through
+// `uniProps`.
+const ThemedRefreshControl = withUnistyles(RefreshControl);
+
+const foregroundMutedColorMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+});
+const refreshControlColorMapping = (theme: Theme) => ({
+  tintColor: theme.colors.foregroundMuted,
+  colors: [theme.colors.foregroundMuted],
+});
 
 interface AgentListProps {
   agents: AggregatedAgent[];
@@ -135,7 +153,6 @@ function SessionRow({
   onPress: (agent: AggregatedAgent) => void;
   onLongPress: (agent: AggregatedAgent) => void;
 }) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const timeAgo = formatTimeAgo(agent.lastActivityAt);
   const agentKey = `${agent.serverId}:${agent.id}`;
@@ -145,6 +162,10 @@ function SessionRow({
   });
   const projectPath = shortenPath(agent.cwd);
   const ProviderIcon = getProviderIcon(agent.provider);
+  // Provider icons are dynamic per row; wrap with `withUnistyles` so the
+  // theme-reactive `color` flows through `uniProps` without a `useUnistyles`
+  // hook call.
+  const ThemedProviderIcon = useMemo(() => withUnistyles(ProviderIcon), [ProviderIcon]);
 
   const pressableStyle = useCallback(
     ({ pressed, hovered = false }: PressableStateCallbackType & { hovered?: boolean }) => [
@@ -165,8 +186,8 @@ function SessionRow({
   );
 
   const archivedIcon = useMemo(
-    () => <Archive size={theme.fontSize.xs} color={theme.colors.foregroundMuted} />,
-    [theme.fontSize.xs, theme.colors.foregroundMuted],
+    () => <ThemedArchive size={FONT_SIZE.xs} uniProps={foregroundMutedColorMapping} />,
+    [],
   );
 
   return (
@@ -179,7 +200,7 @@ function SessionRow({
       <View style={styles.rowContent}>
         <View style={styles.rowTitleRow}>
           <View style={styles.providerIconWrap}>
-            <ProviderIcon size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
+            <ThemedProviderIcon size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
           </View>
           <Text style={sessionTitleStyle} numberOfLines={1}>
             {agent.title || t("session.newSession")}
@@ -260,7 +281,6 @@ export function AgentList({
   listFooterComponent,
   showAttentionIndicator = true,
 }: AgentListProps) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const [actionAgent, setActionAgent] = useState<AggregatedAgent | null>(null);
@@ -379,13 +399,9 @@ export function AgentList({
 
   const keyExtractor = useCallback((item: FlatListItem) => item.key, []);
 
-  const refreshColors = useMemo(
-    () => [theme.colors.foregroundMuted],
-    [theme.colors.foregroundMuted],
-  );
   const sheetContainerStyle = useMemo(
-    () => [styles.sheetContainer, { paddingBottom: Math.max(insets.bottom, theme.spacing[6]) }],
-    [insets.bottom, theme.spacing],
+    () => [styles.sheetContainer, { paddingBottom: Math.max(insets.bottom, SPACING[6]) }],
+    [insets.bottom],
   );
   const sheetArchiveTextStyle = useMemo(
     () => [styles.sheetArchiveText, isActionDaemonUnavailable && styles.sheetArchiveTextDisabled],
@@ -395,14 +411,13 @@ export function AgentList({
   const refreshControl = useMemo(
     () =>
       onRefresh ? (
-        <RefreshControl
+        <ThemedRefreshControl
           refreshing={isRefreshing}
           onRefresh={onRefresh}
-          tintColor={theme.colors.foregroundMuted}
-          colors={refreshColors}
+          uniProps={refreshControlColorMapping}
         />
       ) : undefined,
-    [onRefresh, isRefreshing, theme.colors.foregroundMuted, refreshColors],
+    [onRefresh, isRefreshing],
   );
 
   return (

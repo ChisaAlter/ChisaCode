@@ -54,7 +54,8 @@ export function BranchSwitcher({
   });
 
   const titleContent = isSoftPill ? (
-    <Text style={styles.softPillText} numberOfLines={1} testID="workspace-header-title">
+    // Soft ctx pill labels the branch only — session title owns workspace-header-title.
+    <Text style={styles.softPillText} numberOfLines={1} testID="workspace-header-branch-label">
       {title}
     </Text>
   ) : (

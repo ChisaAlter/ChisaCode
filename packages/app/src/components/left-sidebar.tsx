@@ -1289,6 +1289,7 @@ function DesktopSidebar({
   const sidebarWidth = usePanelStore((state) => state.sidebarWidth);
   const setSidebarWidth = usePanelStore((state) => state.setSidebarWidth);
   const closeDesktopAgentList = usePanelStore((state) => state.closeDesktopAgentList);
+  const { t } = useTranslation();
   const { width: viewportWidth } = useWindowDimensions();
   const desktopSidebarResizeState = useMemo(
     () =>
@@ -1417,7 +1418,7 @@ function DesktopSidebar({
           <View
             style={resizeHandleStyle}
             accessibilityRole="adjustable"
-            accessibilityLabel="拖拽调整侧边栏宽度"
+            accessibilityLabel={t("sidebar.dragResizeWidth")}
           />
         </GestureDetector>
       </View>
@@ -1490,7 +1491,7 @@ const styles = StyleSheet.create((theme) => ({
     flexWrap: "wrap",
     gap: 6,
   },
-  // Soft .qb: h34 r10 shell wash, 12px text-2.
+  // Soft .qb: h34 r10 shell wash, 12px text-2 (HTML .qb).
   mobileQuickActionButton: {
     minHeight: 34,
     height: 34,
@@ -1498,7 +1499,7 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     justifyContent: "center",
     gap: 4,
-    paddingHorizontal: theme.spacing[2],
+    paddingHorizontal: 10,
     borderRadius: 10,
     borderWidth: theme.borderWidth[1],
     borderColor: theme.colors.border,
@@ -1512,10 +1513,11 @@ const styles = StyleSheet.create((theme) => ({
     borderColor: "transparent",
     backgroundColor: theme.colors.surface3,
   },
+  // Soft .quick-grid secondary: two columns with shared gap 6.
   mobileQuickActionSecondaryButton: {
     flexGrow: 1,
-    flexBasis: 0,
-    minWidth: 64,
+    flexBasis: "48%",
+    minWidth: 0,
   },
   mobileQuickActionButtonHovered: {
     backgroundColor: theme.colors.surface1,
@@ -1527,13 +1529,13 @@ const styles = StyleSheet.create((theme) => ({
     minWidth: 0,
     flexShrink: 1,
     color: theme.colors.foregroundMuted,
-    fontSize: 12.5,
+    fontSize: 12,
     lineHeight: 16,
     fontWeight: theme.fontWeight.normal,
   },
   // Soft .qb.primary label weight.
   mobileQuickActionPrimaryText: {
-    fontSize: 12.5,
+    fontSize: 12,
     lineHeight: 16,
     fontWeight: theme.fontWeight.medium,
     color: theme.colors.foreground,

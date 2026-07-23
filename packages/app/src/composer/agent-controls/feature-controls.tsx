@@ -2,7 +2,7 @@ import { useCallback, useMemo } from "react";
 import { Pressable, Text, View, type PressableStateCallbackType } from "react-native";
 import { useTranslation } from "react-i18next";
 import { ChevronDown, ListTodo, Settings2, ShieldCheck, Zap } from "lucide-react-native";
-import { useUnistyles } from "react-native-unistyles";
+import { withUnistyles } from "react-native-unistyles";
 import type { AgentFeature } from "@chisacode/protocol/agent-types";
 
 import {
@@ -19,6 +19,7 @@ import {
   type FeatureControlSelector,
 } from "@/composer/agent-controls/feature-control-model";
 import { getFeatureHighlightColor, getFeatureTooltip } from "@/composer/agent-controls/utils";
+import { ICON_SIZE, type Theme } from "@/styles/theme";
 
 interface FeatureItemProps {
   feature: AgentFeature;
@@ -28,39 +29,58 @@ interface FeatureItemProps {
   onSetFeature?: (featureId: string, value: unknown) => void;
 }
 
-const FEATURE_ICONS: Record<string, typeof Zap> = {
-  "list-todo": ListTodo,
-  "shield-check": ShieldCheck,
-  zap: Zap,
+// Lucide icons only accept `color` (a non-style prop), so wrap each one with
+// `withUnistyles` and feed the theme-reactive color through `uniProps`. Icon
+// sizes are static (`ICON_SIZE`), imported directly from the theme module.
+// Only the icon node re-renders on theme changes. See docs/unistyles.md.
+const ThemedChevronDown = withUnistyles(ChevronDown);
+const ThemedListTodo = withUnistyles(ListTodo);
+const ThemedSettings2 = withUnistyles(Settings2);
+const ThemedShieldCheck = withUnistyles(ShieldCheck);
+const ThemedZap = withUnistyles(Zap);
+
+const FEATURE_ICONS: Record<string, typeof ThemedZap> = {
+  "list-todo": ThemedListTodo,
+  "shield-check": ThemedShieldCheck,
+  zap: ThemedZap,
 };
 
 function getFeatureIcon(icon?: string) {
-  return (icon && FEATURE_ICONS[icon]) || Settings2;
+  return (icon && FEATURE_ICONS[icon]) || ThemedSettings2;
 }
 
-function getFeatureIconColor(
-  featureId: string,
-  enabled: boolean,
-  palette: {
-    blue: { 400: string };
-    green: { 400: string };
-    yellow: { 400: string };
-  },
-  foregroundMuted: string,
-): string {
+type IconColorMapping = (theme: Theme) => { color: string };
+
+const foregroundMutedColorMapping: IconColorMapping = (theme) => ({
+  color: theme.colors.foregroundMuted,
+});
+const featureHighlightBlueColorMapping: IconColorMapping = (theme) => ({
+  color: theme.colors.palette.blue[400],
+});
+const featureHighlightGreenColorMapping: IconColorMapping = (theme) => ({
+  color: theme.colors.palette.green[400],
+});
+const featureHighlightYellowColorMapping: IconColorMapping = (theme) => ({
+  color: theme.colors.palette.yellow[400],
+});
+
+// Enabled feature icons use the feature highlight color; disabled/default icons
+// fall back to foregroundMuted. Selects between mapping functions (no nested
+// ternaries — oxlint rejects them). See docs/unistyles.md.
+function getFeatureIconColorMapping(featureId: string, enabled: boolean): IconColorMapping {
   if (!enabled) {
-    return foregroundMuted;
+    return foregroundMutedColorMapping;
   }
 
   switch (getFeatureHighlightColor(featureId)) {
     case "blue":
-      return palette.blue[400];
+      return featureHighlightBlueColorMapping;
     case "green":
-      return palette.green[400];
+      return featureHighlightGreenColorMapping;
     case "yellow":
-      return palette.yellow[400];
+      return featureHighlightYellowColorMapping;
     default:
-      return foregroundMuted;
+      return foregroundMutedColorMapping;
   }
 }
 
@@ -100,7 +120,6 @@ export function DesktopFeatureItem({
   handleOpenChange,
   onSetFeature,
 }: FeatureItemProps) {
-  const { theme } = useUnistyles();
   const { featureSelector, handleFeatureOpenChange, handleSelectOption, handleTogglePress } =
     useFeatureItemActions({ feature, handleOpenChange, onSetFeature });
   const tooltip = getFeatureTooltip(feature);
@@ -139,13 +158,8 @@ export function DesktopFeatureItem({
             testID={`agent-feature-${feature.id}`}
           >
             <FeatureIcon
-              size={theme.iconSize.md}
-              color={getFeatureIconColor(
-                feature.id,
-                feature.value,
-                theme.colors.palette,
-                theme.colors.foregroundMuted,
-              )}
+              size={ICON_SIZE.md}
+              uniProps={getFeatureIconColorMapping(feature.id, feature.value)}
             />
           </Pressable>
         </TooltipTrigger>
@@ -169,9 +183,9 @@ export function DesktopFeatureItem({
               accessibilityLabel={tooltip}
               testID={`agent-feature-${feature.id}`}
             >
-              <FeatureIcon size={theme.iconSize.md} color={theme.colors.foregroundMuted} />
+              <FeatureIcon size={ICON_SIZE.md} uniProps={foregroundMutedColorMapping} />
               <Text style={styles.modeBadgeText}>{resolveFeatureDisplayLabel(feature)}</Text>
-              <ChevronDown size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
+              <ThemedChevronDown size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
             </DropdownMenuTrigger>
           </TooltipTrigger>
           <TooltipContent side="top" align="center" offset={8}>
@@ -202,7 +216,6 @@ export function SheetFeatureItem({
   handleOpenChange,
   onSetFeature,
 }: FeatureItemProps) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const { featureSelector, handleFeatureOpenChange, handleSelectOption, handleTogglePress } =
     useFeatureItemActions({ feature, handleOpenChange, onSetFeature });
@@ -230,13 +243,8 @@ export function SheetFeatureItem({
           testID={`agent-feature-${feature.id}`}
         >
           <FeatureIcon
-            size={theme.iconSize.md}
-            color={getFeatureIconColor(
-              feature.id,
-              feature.value,
-              theme.colors.palette,
-              theme.colors.foregroundMuted,
-            )}
+            size={ICON_SIZE.md}
+            uniProps={getFeatureIconColorMapping(feature.id, feature.value)}
           />
           <Text style={styles.sheetSelectText}>{feature.label}</Text>
           <Text style={styles.modeBadgeText}>
@@ -262,7 +270,7 @@ export function SheetFeatureItem({
             testID={`agent-feature-${feature.id}`}
           >
             <Text style={styles.sheetSelectText}>{resolveFeatureDisplayLabel(feature)}</Text>
-            <ChevronDown size={theme.iconSize.md} color={theme.colors.foregroundMuted} />
+            <ThemedChevronDown size={ICON_SIZE.md} uniProps={foregroundMutedColorMapping} />
           </DropdownMenuTrigger>
           <DropdownMenuContent side="top" align="start">
             {feature.options.map((option) => (

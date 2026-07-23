@@ -492,14 +492,14 @@ function areServerCapabilitiesEqual(
   current: ServerCapabilities | undefined,
   next: ServerCapabilities | undefined,
 ): boolean {
-  return JSON.stringify(current ?? null) === JSON.stringify(next ?? null);
+  return equal(current, next);
 }
 
 function areServerInfoFeaturesEqual(
   current: ServerInfoStatusPayload["features"] | undefined,
   next: ServerInfoStatusPayload["features"] | undefined,
 ): boolean {
-  return JSON.stringify(current ?? null) === JSON.stringify(next ?? null);
+  return equal(current, next);
 }
 
 function isSessionServerInfoUnchanged(input: {

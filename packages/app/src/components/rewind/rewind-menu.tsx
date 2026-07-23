@@ -2,6 +2,7 @@ import { memo, useCallback, useMemo, useState, type ReactElement } from "react";
 import { Text, View } from "react-native";
 import { FileText, Layers, MessageSquare, Undo2 } from "lucide-react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { useTranslation } from "react-i18next";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -42,6 +43,7 @@ export const RewindMenu = memo(function RewindMenu({
   testID = "rewind-menu",
 }: RewindMenuProps) {
   const { theme } = useUnistyles();
+  const { t } = useTranslation();
   const items = useRewindCapabilities(capabilities);
   const [isOpen, setIsOpen] = useState(false);
   const [pendingMode, setPendingMode] = useState<RewindMode | null>(null);
@@ -79,10 +81,10 @@ export const RewindMenu = memo(function RewindMenu({
   const tooltipContent = useMemo(
     () => (
       <TooltipContent side="top" align="center" offset={8}>
-        <Text style={styles.tooltipText}>回退到此消息</Text>
+        <Text style={styles.tooltipText}>{t("review.rewindToMessage")}</Text>
       </TooltipContent>
     ),
-    [],
+    [t],
   );
 
   if (items.length === 0) {
@@ -95,7 +97,7 @@ export const RewindMenu = memo(function RewindMenu({
         <TooltipTrigger asChild>
           <View style={styles.triggerSlot} collapsable={false}>
             <DropdownMenuTrigger
-              accessibilityLabel="回退到此消息"
+              accessibilityLabel={t("review.rewindToMessage")}
               accessibilityRole="button"
               disabled={isLocked}
               style={triggerStyle}
@@ -114,7 +116,7 @@ export const RewindMenu = memo(function RewindMenu({
       </Tooltip>
       <DropdownMenuContent align="end" minWidth={220} side="bottom" testID={`${testID}-content`}>
         <View style={styles.warningHeader}>
-          <Text style={styles.warningText}>此操作无法撤销</Text>
+          <Text style={styles.warningText}>{t("review.rewindWarning")}</Text>
         </View>
         <DropdownMenuSeparator />
         {items.map((item) => (

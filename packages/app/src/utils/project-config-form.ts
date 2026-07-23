@@ -5,6 +5,7 @@ import type {
   ChisaCodeScriptEntryRaw,
 } from "@chisacode/protocol/messages";
 
+/** Records whether a lifecycle field was originally a string, an array, or absent in the raw config */
 export type LifecycleOriginalKind = "string" | "array" | "missing";
 
 export const METADATA_PROMPT_KEYS = [
@@ -13,8 +14,10 @@ export const METADATA_PROMPT_KEYS = [
   "commitMessage",
   "pullRequest",
 ] as const;
+/** A metadata generation prompt field that can be edited in the project config form */
 export type MetadataPromptKey = (typeof METADATA_PROMPT_KEYS)[number];
 
+/** Editable form state for a single script entry in the project config */
 export interface ProjectScriptDraft {
   id: string;
   name: string;
@@ -25,6 +28,7 @@ export interface ProjectScriptDraft {
   rawEntry: ChisaCodeScriptEntryRaw;
 }
 
+/** Editable form state for the whole project config, preserving original value shapes for round-tripping */
 export interface ProjectConfigDraft {
   setupText: string;
   setupOriginalKind: LifecycleOriginalKind;
@@ -112,6 +116,11 @@ function emptyMetadataPrompts(): Record<MetadataPromptKey, string> {
   };
 }
 
+/**
+ * Converts a raw project config into editable form draft state, remembering original value kinds
+ * @param config The raw project config to convert, if any
+ * @returns The draft state populated from the config
+ */
 export function configToDraft(config: ChisaCodeConfigRaw | null | undefined): ProjectConfigDraft {
   const worktree = config?.worktree ?? {};
   const setup = projectLifecycle(worktree.setup);
@@ -157,6 +166,11 @@ interface ApplyDraftInput {
   base: ChisaCodeConfigRaw | null | undefined;
 }
 
+/**
+ * Merges edited draft state back into a raw project config, preserving untouched fields and original value kinds
+ * @param input The draft to apply and the base config it was derived from
+ * @returns The merged raw config with empty sections removed
+ */
 export function applyDraftToConfig(input: ApplyDraftInput): ChisaCodeConfigRaw {
   const baseConfig = input.base ?? {};
   const baseWorktree = baseConfig.worktree ?? {};

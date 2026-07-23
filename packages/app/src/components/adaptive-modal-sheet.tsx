@@ -3,7 +3,8 @@ import type { ReactNode, Ref } from "react";
 import { createPortal } from "react-dom";
 import { Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import type { TextInputProps } from "react-native";
-import { StyleSheet, useUnistyles, withUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import type { Theme } from "@/styles/theme";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { getOverlayRoot, OVERLAY_Z } from "../lib/overlay-root";
 import {
@@ -242,23 +243,51 @@ const styles = StyleSheet.create((theme) => ({
   adaptiveInputPlaceholder: {
     color: theme.colors.foregroundMuted,
   },
+  // SheetBackground: theme-reactive surface + top radii (moved out of useUnistyles).
+  sheetBackground: {
+    backgroundColor: theme.colors.surface0,
+    borderTopLeftRadius: theme.borderRadius.xl,
+    borderTopRightRadius: theme.borderRadius.xl,
+  },
+  // SheetHeaderView title color (moved out of useUnistyles-driven titleStyle memo).
+  headerTitle: {
+    color: theme.colors.foreground,
+  },
+  // AdaptiveModalSheet bottom-sheet handle indicator color (moved out of useUnistyles).
+  sheetHandleIndicator: {
+    backgroundColor: theme.colors.foregroundFaint,
+  },
 }));
+
+// Icon color/size mappings for withUnistyles-wrapped lucide icons. These keep
+// theme-reactive icon props (color, size) off the useUnistyles() hook so only
+// the leaf icon re-renders on theme change. See docs/unistyles.md "Wrap the
+// icon with withUnistyles instead".
+const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
+const foregroundMutedColorMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+});
+const searchHeaderColorMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+  size: theme.iconSize.md,
+});
+const searchInlineColorMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+  size: theme.iconSize.sm,
+});
+type IconColorMapping = (theme: Theme) => { color: string; size?: number };
+
+const ThemedArrowLeft = withUnistyles(ArrowLeft);
+const ThemedX = withUnistyles(X);
+const ThemedSearch = withUnistyles(Search);
 
 const SEARCH_INPUT_STYLE = [styles.searchInput, isWeb && { outlineStyle: "none" }];
 
 function SheetBackground({ style }: BottomSheetBackgroundProps) {
-  const { theme } = useUnistyles();
-  const combinedStyle = useMemo(
-    () => [
-      style,
-      {
-        backgroundColor: theme.colors.surface0,
-        borderTopLeftRadius: theme.borderRadius.xl,
-        borderTopRightRadius: theme.borderRadius.xl,
-      },
-    ],
-    [style, theme.colors.surface0, theme.borderRadius.xl],
-  );
+  // Theme-reactive surface + top radii live in the StyleSheet.create factory
+  // (styles.sheetBackground); the incoming `style` prop is layered first to
+  // preserve the original [style, { backgroundColor, borderTop*Radius }] order.
+  const combinedStyle = useMemo(() => [style, styles.sheetBackground], [style]);
   return <View style={combinedStyle} />;
 }
 
@@ -322,12 +351,10 @@ export function SheetHeaderView({
   showCloseButton?: boolean;
   testID?: string;
 }) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
-  const titleStyle = useMemo(
-    () => [styles.title, { color: theme.colors.foreground }],
-    [theme.colors.foreground],
-  );
+  // Title color is theme-reactive via the StyleSheet.create factory; combined
+  // with the static title typography from the same factory.
+  const titleStyle = useMemo(() => [styles.title, styles.headerTitle], []);
   const back = header.back;
   const handleBackPress = back?.onPress;
   const search = header.search;
@@ -351,9 +378,13 @@ export function SheetHeaderView({
             testID="sheet-header-back"
           >
             {({ pressed }) => (
-              <ArrowLeft
+              <ThemedArrowLeft
                 size={18}
-                color={pressed ? theme.colors.foreground : theme.colors.foregroundMuted}
+                uniProps={
+                  (pressed
+                    ? foregroundColorMapping
+                    : foregroundMutedColorMapping) as IconColorMapping
+                }
               />
             )}
           </Pressable>
@@ -373,9 +404,13 @@ export function SheetHeaderView({
             onPress={onClose}
           >
             {({ pressed }) => (
-              <X
+              <ThemedX
                 size={16}
-                color={pressed ? theme.colors.foreground : theme.colors.foregroundMuted}
+                uniProps={
+                  (pressed
+                    ? foregroundColorMapping
+                    : foregroundMutedColorMapping) as IconColorMapping
+                }
               />
             )}
           </Pressable>
@@ -383,7 +418,7 @@ export function SheetHeaderView({
       </View>
       {search ? (
         <View style={styles.searchRow}>
-          <Search size={theme.iconSize.md} color={theme.colors.foregroundMuted} />
+          <ThemedSearch uniProps={searchHeaderColorMapping} />
           <AdaptiveTextInput
             // @ts-expect-error - outlineStyle is web-only
             style={SEARCH_INPUT_STYLE}
@@ -402,7 +437,6 @@ export function SheetHeaderView({
 }
 
 export function InlineHeaderView({ header }: { header: SheetHeader }) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const back = header.back;
   const handleBackPress = back?.onPress;
@@ -422,9 +456,13 @@ export function InlineHeaderView({ header }: { header: SheetHeader }) {
               testID="sheet-header-back"
             >
               {({ pressed }) => (
-                <ArrowLeft
+                <ThemedArrowLeft
                   size={16}
-                  color={pressed ? theme.colors.foreground : theme.colors.foregroundMuted}
+                  uniProps={
+                    (pressed
+                      ? foregroundColorMapping
+                      : foregroundMutedColorMapping) as IconColorMapping
+                  }
                 />
               )}
             </Pressable>
@@ -438,7 +476,7 @@ export function InlineHeaderView({ header }: { header: SheetHeader }) {
       ) : null}
       {header.search ? (
         <View style={styles.inlineSearchRow}>
-          <Search size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
+          <ThemedSearch uniProps={searchInlineColorMapping} />
           <AdaptiveTextInput
             // @ts-expect-error - outlineStyle is web-only
             style={SEARCH_INPUT_STYLE}
@@ -487,14 +525,12 @@ export function AdaptiveModalSheet({
   onFilesDropped,
   scrollable = true,
 }: AdaptiveModalSheetProps) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const isMobile = useIsCompactFormFactor();
   const resolvedSnapPoints = useMemo(() => snapPoints ?? ["65%", "90%"], [snapPoints]);
-  const handleIndicatorStyle = useMemo(
-    () => ({ backgroundColor: theme.colors.foregroundFaint }),
-    [theme.colors.foregroundFaint],
-  );
+  // handleIndicatorStyle is a bottom-sheet library prop carrying a themed
+  // style object; the theme-reactive color lives in the StyleSheet.create
+  // factory (styles.sheetHandleIndicator) instead of a useUnistyles read.
   const { sheetRef, handleSheetChange, handleSheetDismiss } = useIsolatedBottomSheetVisibility({
     visible,
     isEnabled: isMobile,
@@ -538,7 +574,7 @@ export function AdaptiveModalSheet({
         backdropComponent={renderBackdrop}
         enablePanDownToClose
         backgroundComponent={SheetBackground}
-        handleIndicatorStyle={handleIndicatorStyle}
+        handleIndicatorStyle={styles.sheetHandleIndicator}
         keyboardBehavior="extend"
         keyboardBlurBehavior="restore"
         accessible={false}

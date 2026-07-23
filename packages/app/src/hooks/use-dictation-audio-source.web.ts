@@ -461,6 +461,13 @@ export function useDictationAudioSource(config: DictationAudioSourceConfig): Dic
     };
   }, [stop]);
 
+  // Keep the latest volume in a ref so the returned audio source object can
+  // stay referentially stable (deps: start/stop only) while still exposing the
+  // current volume. This prevents volume ticks from cascading identity churn
+  // into every downstream callback that depends on `audio`.
+  const volumeRef = useRef(volume);
+  volumeRef.current = volume;
+
   return useMemo(
     () => ({
       start: async () => {
@@ -473,8 +480,10 @@ export function useDictationAudioSource(config: DictationAudioSourceConfig): Dic
         }
       },
       stop,
-      volume,
+      get volume() {
+        return volumeRef.current;
+      },
     }),
-    [start, stop, volume],
+    [start, stop],
   );
 }

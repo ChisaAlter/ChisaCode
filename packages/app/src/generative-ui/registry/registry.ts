@@ -63,7 +63,7 @@ class GenerativeUiRegistry {
   validateProps(componentId: string, rawProps: Record<string, unknown>): Record<string, unknown> {
     const entry = this.components.get(componentId);
     if (!entry) {
-      throw new GenerativeUiError(`未知组件: ${componentId}`, "COMPONENT_NOT_FOUND", {
+      throw new GenerativeUiError(`未知组件: ${componentId.slice(0, 128)}`, "COMPONENT_NOT_FOUND", {
         componentId,
       });
     }
@@ -71,7 +71,7 @@ class GenerativeUiRegistry {
     const result = entry.propsSchema.safeParse(merged);
     if (!result.success) {
       throw new GenerativeUiError(
-        `属性校验失败 ${componentId}: ${result.error.message}`,
+        `属性校验失败 ${componentId.slice(0, 128)}: ${result.error.message.slice(0, 128)}`,
         "PROPS_VALIDATION",
         { componentId, issues: result.error.issues },
       );

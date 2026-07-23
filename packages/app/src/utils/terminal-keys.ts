@@ -1,3 +1,4 @@
+/** Modifier keys pressed on the on-screen toolbar that should be applied to the next terminal keystroke. */
 export interface PendingTerminalModifiers {
   ctrl: boolean;
   shift: boolean;
@@ -50,6 +51,11 @@ export function isTerminalModifierDomKey(rawKey: string): boolean {
   return MODIFIER_DOM_KEYS.has(rawKey);
 }
 
+/**
+ * Normalizes a DOM KeyboardEvent key value into a terminal-supported key name.
+ * @param rawKey The raw KeyboardEvent.key value
+ * @returns The normalized key name, or null when the key is unsupported or non-printable
+ */
 export function normalizeDomTerminalKey(rawKey: string): string | null {
   if (!rawKey) {
     return null;
@@ -71,6 +77,11 @@ export function normalizeDomTerminalKey(rawKey: string): string | null {
   return null;
 }
 
+/**
+ * Normalizes a key name for transport to the daemon, lowercasing single characters.
+ * @param key The normalized terminal key name
+ * @returns The key value to send over the terminal transport
+ */
 export function normalizeTerminalTransportKey(key: string): string {
   if (key.length === 1) {
     return key.toLowerCase();
@@ -90,6 +101,11 @@ interface AppleHandheldDetectionInput {
 
 // iPadOS 13+ WKWebView reports navigator.platform="MacIntel" and a Mac UA string. Distinguish
 // iPad/iPhone from real macOS via maxTouchPoints, which is 0 on macOS and >1 on iPadOS/iOS.
+/**
+ * Detects iPhone and iPad devices, including iPadOS devices that report a Mac platform.
+ * @param input The navigator userAgent, platform, and maxTouchPoints values
+ * @returns True when the device is an iPad, iPhone, or iPod
+ */
 export function isAppleHandheldPlatform(input: AppleHandheldDetectionInput): boolean {
   const userAgent = input.userAgent ?? "";
   const platform = input.platform ?? "";
@@ -103,6 +119,11 @@ export function isAppleHandheldPlatform(input: AppleHandheldDetectionInput): boo
   return false;
 }
 
+/**
+ * Decides whether a DOM key event must be intercepted and forwarded manually instead of letting xterm.js handle it.
+ * @param args The key event fields, pending toolbar modifiers, and platform flags
+ * @returns True when the event should be intercepted
+ */
 export function shouldInterceptDomTerminalKey(args: {
   key: string;
   ctrlKey: boolean;
@@ -135,6 +156,11 @@ export function shouldInterceptDomTerminalKey(args: {
   return false;
 }
 
+/**
+ * Combines the modifiers from a DOM key event with the pending toolbar modifiers.
+ * @param args The pending toolbar modifiers and the key event modifier flags
+ * @returns The effective modifier state for the keystroke
+ */
 export function mergeTerminalModifiers(args: {
   pendingModifiers: PendingTerminalModifiers;
   ctrlKey: boolean;
@@ -156,6 +182,11 @@ export function mergeTerminalModifiers(args: {
   };
 }
 
+/**
+ * Maps a single-character terminal data payload to a key name for modifier fallback handling.
+ * @param data The raw terminal data, expected to be a single character
+ * @returns The mapped key name, or null when the data is not a mappable single character
+ */
 export function mapTerminalDataToKey(data: string): string | null {
   if (!data || data.length !== 1) {
     return null;
@@ -183,6 +214,11 @@ export function mapTerminalDataToKey(data: string): string | null {
   return null;
 }
 
+/**
+ * Decides how terminal data should be sent when toolbar modifiers are pending.
+ * @param args The raw terminal data and the pending toolbar modifiers
+ * @returns A key-mode result to send as a modified key, or a raw-mode result to pass through unchanged
+ */
 export function resolvePendingModifierDataInput(args: {
   data: string;
   pendingModifiers: PendingTerminalModifiers;

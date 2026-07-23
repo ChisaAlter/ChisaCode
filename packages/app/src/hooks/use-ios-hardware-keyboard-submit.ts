@@ -23,7 +23,12 @@ export function useIosHardwareKeyboardSubmit(input: UseIosHardwareKeyboardSubmit
   }
   const controller = controllerRef.current;
 
-  controller.setOnSubmit(input.onSubmit);
+  // Keep the controller's onSubmit callback fresh via an effect rather than
+  // mutating during render (render-phase side effects break purity and can
+  // dispatch the previous handler in Strict Mode's double render).
+  useEffect(() => {
+    controller.setOnSubmit(input.onSubmit);
+  }, [controller, input.onSubmit]);
 
   useEffect(() => {
     if (!input.isEnabled) {

@@ -11,8 +11,9 @@ import {
   type NativeScrollEvent,
   type PressableStateCallbackType,
 } from "react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useIsCompactFormFactor } from "@/constants/layout";
+import { BORDER_WIDTH, LINE_HEIGHT, SPACING, type Theme } from "@/styles/theme";
 import {
   Archive,
   ArrowDownUp,
@@ -23,6 +24,19 @@ import {
   RefreshCcw,
   Upload,
 } from "lucide-react-native";
+
+const ThemedArchive = withUnistyles(Archive);
+const ThemedArrowDownUp = withUnistyles(ArrowDownUp);
+const ThemedDownload = withUnistyles(Download);
+const ThemedGitBranch = withUnistyles(GitBranch);
+const ThemedGitCommitHorizontal = withUnistyles(GitCommitHorizontal);
+const ThemedGitMerge = withUnistyles(GitMerge);
+const ThemedRefreshCcw = withUnistyles(RefreshCcw);
+const ThemedUpload = withUnistyles(Upload);
+
+const foregroundMutedColorMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+});
 import { useCheckoutDiffQuery, type ParsedDiffFile } from "@/git/use-diff-query";
 import { useCheckoutStatusQuery } from "@/git/use-status-query";
 import { useCheckoutPrStatusQuery } from "@/git/use-pr-status-query";
@@ -31,7 +45,9 @@ import { shouldAnchorHeaderBeforeCollapse } from "@/git/diff-scroll";
 import { buildSplitDiffRows } from "@/utils/diff-layout";
 
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
-import { GitHubIcon } from "@/components/icons/github-icon";
+import { GitHubIcon as GitHubIconBase } from "@/components/icons/github-icon";
+
+const GitHubIcon = withUnistyles(GitHubIconBase);
 import { ErrorBoundary, SectionErrorFallback } from "@/components/error-boundary";
 import { useWebScrollViewScrollbar } from "@/components/use-web-scrollbar";
 import { GitActionsSplitButton } from "@/git/actions-split-button";
@@ -314,7 +330,6 @@ export function GitDiffPane({
   hideHeaderRow,
   enabled,
 }: GitDiffPaneProps) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const isMobile = useIsCompactFormFactor();
   const showDesktopWebScrollbar = isWeb && !isMobile;
@@ -493,9 +508,9 @@ export function GitDiffPane({
   const bodyHeightByKeyRef = useRef<Record<string, number>>({});
   const defaultHeaderHeightRef = useRef<number>(44);
   const [heightVersion, setHeightVersion] = useState(0);
-  const diffBodyLineHeight = theme.lineHeight.diff;
-  const diffBodyChromeHeight = theme.borderWidth[1] * 2;
-  const statusBodyHeightEstimate = diffBodyChromeHeight + theme.spacing[4] * 2 + diffBodyLineHeight;
+  const diffBodyLineHeight = LINE_HEIGHT.diff;
+  const diffBodyChromeHeight = BORDER_WIDTH[1] * 2;
+  const statusBodyHeightEstimate = diffBodyChromeHeight + SPACING[4] * 2 + diffBodyLineHeight;
   const { flatItems, stickyHeaderIndices } = useMemo(() => {
     const items: DiffPaneFlatItem[] = [];
     const stickyIndices: number[] = [];
@@ -774,23 +789,22 @@ export function GitDiffPane({
     pullRequestLabel: reviewSummaryModel.pullRequestLabel,
   });
   const baseRefLabel = useMemo(() => computeBaseRefLabel(baseRef), [baseRef]);
-  const iconColor = theme.colors.foregroundMuted;
   const gitActionsIcons = useMemo(
     () => ({
-      commit: <GitCommitHorizontal size={16} color={iconColor} />,
-      pull: <Download size={16} color={iconColor} />,
-      push: <Upload size={16} color={iconColor} />,
-      pullAndPush: <ArrowDownUp size={16} color={iconColor} />,
-      viewPr: <GitHubIcon size={16} color={iconColor} />,
-      createPr: <GitHubIcon size={16} color={iconColor} />,
-      mergePrSquash: <GitHubIcon size={16} color={iconColor} />,
-      mergePrMerge: <GitHubIcon size={16} color={iconColor} />,
-      mergePrRebase: <GitHubIcon size={16} color={iconColor} />,
-      merge: <GitMerge size={16} color={iconColor} />,
-      mergeFromBase: <RefreshCcw size={16} color={iconColor} />,
-      archive: <Archive size={16} color={iconColor} />,
+      commit: <ThemedGitCommitHorizontal size={16} uniProps={foregroundMutedColorMapping} />,
+      pull: <ThemedDownload size={16} uniProps={foregroundMutedColorMapping} />,
+      push: <ThemedUpload size={16} uniProps={foregroundMutedColorMapping} />,
+      pullAndPush: <ThemedArrowDownUp size={16} uniProps={foregroundMutedColorMapping} />,
+      viewPr: <GitHubIcon size={16} uniProps={foregroundMutedColorMapping} />,
+      createPr: <GitHubIcon size={16} uniProps={foregroundMutedColorMapping} />,
+      mergePrSquash: <GitHubIcon size={16} uniProps={foregroundMutedColorMapping} />,
+      mergePrMerge: <GitHubIcon size={16} uniProps={foregroundMutedColorMapping} />,
+      mergePrRebase: <GitHubIcon size={16} uniProps={foregroundMutedColorMapping} />,
+      merge: <ThemedGitMerge size={16} uniProps={foregroundMutedColorMapping} />,
+      mergeFromBase: <ThemedRefreshCcw size={16} uniProps={foregroundMutedColorMapping} />,
+      archive: <ThemedArchive size={16} uniProps={foregroundMutedColorMapping} />,
     }),
-    [iconColor],
+    [],
   );
   const { gitActions, branchLabel } = useGitActions({ serverId, cwd, icons: gitActionsIcons });
   const committedDiffDescription = useMemo(
@@ -829,7 +843,6 @@ export function GitDiffPane({
       handleDiffListScroll={handleDiffListScroll}
       onContentSizeChange={scrollbar.onContentSizeChange}
       showDesktopWebScrollbar={showDesktopWebScrollbar}
-      foregroundMutedColor={theme.colors.foregroundMuted}
     />
   );
 
@@ -851,7 +864,7 @@ export function GitDiffPane({
         {!hideHeaderRow ? (
           <View style={styles.header} testID="changes-header">
             <View style={styles.headerLeft}>
-              <GitBranch size={16} color={theme.colors.foregroundMuted} />
+              <ThemedGitBranch size={16} uniProps={foregroundMutedColorMapping} />
               <Text style={styles.branchLabel} testID="changes-branch" numberOfLines={1}>
                 {branchLabel}
               </Text>

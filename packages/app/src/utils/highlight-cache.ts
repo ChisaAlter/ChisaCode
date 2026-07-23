@@ -5,11 +5,13 @@ import { highlightCode, type HighlightToken } from "@chisacode/highlight";
 // (Edit diff / Write / Read). Colors are applied at render time, so the cache
 // key is just (extension, code) and one entry serves both light and dark.
 
+/** A highlight token paired with a stable render key */
 export interface KeyedToken {
   key: string;
   token: HighlightToken;
 }
 
+/** A line of highlight tokens paired with a stable render key */
 export interface KeyedLine {
   key: string;
   tokens: KeyedToken[];
@@ -44,9 +46,13 @@ class LRUCache<K, V> {
 
 const tokenizationCache = new LRUCache<string, HighlightToken[][]>(200);
 
-// Tokenize `code` to per-line tokens, cached. Returns null when the language is
-// unsupported, the input is over the size cap, or parsing throws — callers then
-// render plain text.
+/**
+ * Tokenizes code into per-line highlight tokens, cached by extension and content. Returns null when the language is
+ * unsupported, the input is over the size cap, or parsing throws — callers then render plain text
+ * @param code The source code to tokenize
+ * @param ext The file extension used to select the grammar, or null to skip highlighting
+ * @returns The per-line tokens, or null when highlighting is unavailable
+ */
 export function tokenizeToLines(code: string, ext: string | null): HighlightToken[][] | null {
   if (!ext) return null;
   if (code.length > MAX_HIGHLIGHT_CHARS) return null;
@@ -73,13 +79,23 @@ function toKeyedLine(tokens: HighlightToken[], lineIndex: number): KeyedLine {
   };
 }
 
+/**
+ * Tokenizes code and wraps each line and token with a stable render key for list rendering
+ * @param code The source code to tokenize
+ * @param ext The file extension used to select the grammar, or null to skip highlighting
+ * @returns The keyed lines, or null when highlighting is unavailable
+ */
 export function highlightToKeyedLines(code: string, ext: string | null): KeyedLine[] | null {
   const lines = tokenizeToLines(code, ext);
   return lines ? lines.map(toKeyedLine) : null;
 }
 
-// Extension for grammar selection from a file path. We only need the suffix —
-// absolute vs relative paths are equivalent here.
+/**
+ * Extracts the lowercase file extension for grammar selection from a file path. Only the suffix is needed, so
+ * absolute and relative paths are equivalent here
+ * @param filePath The file path to inspect
+ * @returns The extension without a leading dot, or null when the path has none
+ */
 export function extensionFromPath(filePath: string | null | undefined): string | null {
   if (!filePath) return null;
   const name = filePath.split(/[\\/]/).pop() ?? filePath;

@@ -7,25 +7,44 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Folder } from "lucide-react-native";
 import { BranchSwitcher } from "@/components/branch-switcher";
 import { ComposerImportPill } from "@/composer/draft/import-pill";
+import {
+  resolveSoftComposerCardElevation,
+  resolveSoftHomeTopInset,
+} from "@/composer/draft/soft-home-layout";
 import { WORKBENCH_ASSISTANT_MESSAGE_MAX_WIDTH } from "@/constants/layout";
-import { isWeb } from "@/constants/platform";
 import { shortenPath } from "@/utils/shorten-path";
+
+export {
+  resolveSoftComposerCardElevation,
+  resolveSoftHomeTopInset,
+} from "@/composer/draft/soft-home-layout";
 
 export interface SoftHomeHeroProps {
   formErrorMessage?: string | null;
+  /** Compact Soft Home: shorter title stack for phone height. */
+  compact?: boolean;
 }
 
 /**
  * Soft Home hero: kicker + title + subtitle only (no segment / prompt chips).
  */
-export function SoftHomeHero({ formErrorMessage = null }: SoftHomeHeroProps) {
+export function SoftHomeHero({ formErrorMessage = null, compact = false }: SoftHomeHeroProps) {
   const { t } = useTranslation();
 
   return (
-    <View style={styles.softHomeHero} testID="soft-home-hero">
-      <Text style={styles.softHomeEyebrow}>{t("workspace.softHomeEyebrow")}</Text>
-      <Text style={styles.softHomeTitle}>{t("workspace.softHomeTitle")}</Text>
-      <Text style={styles.softHomeSubtitle}>{t("workspace.softHomeSubtitle")}</Text>
+    <View
+      style={compact ? styles.softHomeHeroCompact : styles.softHomeHero}
+      testID="soft-home-hero"
+    >
+      <Text style={compact ? styles.softHomeEyebrowCompact : styles.softHomeEyebrow}>
+        {t("workspace.softHomeEyebrow")}
+      </Text>
+      <Text style={compact ? styles.softHomeTitleCompact : styles.softHomeTitle}>
+        {t("workspace.softHomeTitle")}
+      </Text>
+      {compact ? null : (
+        <Text style={styles.softHomeSubtitle}>{t("workspace.softHomeSubtitle")}</Text>
+      )}
       {formErrorMessage ? (
         <View style={styles.errorContainer}>
           <Text style={styles.errorText}>{formErrorMessage}</Text>
@@ -127,7 +146,9 @@ export interface SoftHomeEmptyProps {
    * Content above the pen-bar (path/branch/import). Prefer SoftHomeContextRow.
    */
   contextSlot?: ReactNode;
-  /** When true, skip optical top inset (mobile new-workspace bottom sheet feel). */
+  /**
+   * Compact Soft Home: tighter optical inset + mini hero (not a bottom-sheet-only dock).
+   */
   compact?: boolean;
   children: ReactNode;
 }
@@ -147,23 +168,19 @@ export function SoftHomeEmpty({
   const { height: windowHeight } = useWindowDimensions();
 
   // Optical vertical placement from window height — does not depend on flex free space.
-  const softHomeTopInset = useMemo(() => {
-    if (compact) {
-      return 0;
-    }
-    return Math.min(180, Math.max(56, Math.round(windowHeight * 0.18)));
-  }, [compact, windowHeight]);
+  const softHomeTopInset = useMemo(
+    () => resolveSoftHomeTopInset(windowHeight, compact),
+    [compact, windowHeight],
+  );
 
   const containerStyle = useMemo(
     () => [
       styles.container,
       compact ? styles.containerCompact : null,
-      compact
-        ? { paddingBottom: Math.max(insets.bottom, 16) }
-        : {
-            paddingTop: softHomeTopInset,
-            paddingBottom: Math.max(insets.bottom, 40),
-          },
+      {
+        paddingTop: softHomeTopInset,
+        paddingBottom: Math.max(insets.bottom, compact ? 16 : 40),
+      },
     ],
     [compact, insets.bottom, softHomeTopInset],
   );
@@ -178,7 +195,7 @@ export function SoftHomeEmpty({
   return (
     <View style={containerStyle} testID="soft-home-empty">
       <View style={styles.softHomeInner}>
-        {!compact ? <SoftHomeHero formErrorMessage={formErrorMessage} /> : null}
+        <SoftHomeHero formErrorMessage={formErrorMessage} compact={compact} />
         {composerKeyboardStyle ? (
           <ReanimatedAnimated.View style={composerKeyboardStyle}>
             {composerShell}
@@ -193,12 +210,7 @@ export function SoftHomeEmpty({
 
 export const softHomeComposerInputWrapperStyle = {
   borderRadius: 18,
-  ...(isWeb
-    ? {
-        // Soft docked pen-bar: short contact shadow (no long 36px trail).
-        boxShadow: "0 1px 2px rgba(20, 23, 31, 0.04), 0 4px 12px rgba(20, 23, 31, 0.06)",
-      }
-    : {}),
+  ...resolveSoftComposerCardElevation(),
 } as const;
 
 /** Soft Home: zero Composer dock horizontal padding so path/import share pen-bar width. */
@@ -221,8 +233,10 @@ const styles = StyleSheet.create((theme) => ({
     // Match session host inset so Soft Home pen-bar width tracks the chat dock.
     paddingHorizontal: 20,
   },
+  // Compact Soft Home keeps a single host inset; composer dock padding is zeroed.
   containerCompact: {
-    justifyContent: "flex-end",
+    paddingHorizontal: 12,
+    justifyContent: "flex-start",
   },
   softHomeInner: {
     width: "100%",
@@ -236,9 +250,20 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     gap: theme.spacing[1.5],
   },
+  softHomeHeroCompact: {
+    width: "100%",
+    alignItems: "center",
+    gap: theme.spacing[1],
+  },
   softHomeEyebrow: {
     color: theme.colors.foregroundMuted,
     fontSize: 12.5,
+    lineHeight: 16,
+    textAlign: "center",
+  },
+  softHomeEyebrowCompact: {
+    color: theme.colors.foregroundMuted,
+    fontSize: 12,
     lineHeight: 16,
     textAlign: "center",
   },
@@ -249,6 +274,14 @@ const styles = StyleSheet.create((theme) => ({
     letterSpacing: -0.8,
     textAlign: "center",
     lineHeight: 42,
+  },
+  softHomeTitleCompact: {
+    color: theme.colors.foreground,
+    fontSize: 24,
+    fontWeight: theme.fontWeight.bold,
+    letterSpacing: -0.4,
+    textAlign: "center",
+    lineHeight: 30,
   },
   softHomeSubtitle: {
     color: theme.colors.foreground,

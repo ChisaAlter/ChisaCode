@@ -19,6 +19,11 @@ interface WorkspaceTerminalSessionRecord {
 
 const sessionsByScopeKey = new Map<string, WorkspaceTerminalSessionRecord>();
 const refCountByScopeKey = new Map<string, number>();
+/** Pending teardown timers keyed by scopeKey; cancelled if a retain arrives
+ *  before the grace period elapses, so Strict Mode's dev-only unmount/remount
+ *  cycle does not destroy scrollback snapshots between mounts. */
+const pendingTeardownByScopeKey = new Map<string, ReturnType<typeof setTimeout>>();
+const RELEASE_GRACE_MS = 5_000;
 
 function createSnapshots(input: {
   snapshotByTerminalId: Map<string, TerminalState>;
@@ -43,6 +48,14 @@ function createSnapshots(input: {
 }
 
 export function getWorkspaceTerminalSession(input: { scopeKey: string }): WorkspaceTerminalSession {
+  // If a teardown is pending for this scope, cancel it — a consumer is
+  // re-adopting the session before the grace period elapsed.
+  const pendingTeardown = pendingTeardownByScopeKey.get(input.scopeKey);
+  if (pendingTeardown) {
+    clearTimeout(pendingTeardown);
+    pendingTeardownByScopeKey.delete(input.scopeKey);
+  }
+
   const existing = sessionsByScopeKey.get(input.scopeKey);
   if (existing) {
     return existing.session;
@@ -64,6 +77,12 @@ export function getWorkspaceTerminalSession(input: { scopeKey: string }): Worksp
 }
 
 export function retainWorkspaceTerminalSession(input: { scopeKey: string }): void {
+  // Cancel any pending teardown — a new retention revives the session.
+  const pendingTeardown = pendingTeardownByScopeKey.get(input.scopeKey);
+  if (pendingTeardown) {
+    clearTimeout(pendingTeardown);
+    pendingTeardownByScopeKey.delete(input.scopeKey);
+  }
   const current = refCountByScopeKey.get(input.scopeKey) ?? 0;
   refCountByScopeKey.set(input.scopeKey, current + 1);
 }
@@ -75,5 +94,18 @@ export function releaseWorkspaceTerminalSession(input: { scopeKey: string }): vo
     return;
   }
   refCountByScopeKey.delete(input.scopeKey);
-  sessionsByScopeKey.delete(input.scopeKey);
+  // Defer session teardown so a rapid re-mount (e.g. Strict Mode dev
+  // mount→unmount→mount, or fast tab switches) reuses the existing snapshots
+  // instead of losing scrollback to an immediate delete.
+  const existingTimer = pendingTeardownByScopeKey.get(input.scopeKey);
+  if (existingTimer) {
+    clearTimeout(existingTimer);
+  }
+  pendingTeardownByScopeKey.set(
+    input.scopeKey,
+    setTimeout(() => {
+      pendingTeardownByScopeKey.delete(input.scopeKey);
+      sessionsByScopeKey.delete(input.scopeKey);
+    }, RELEASE_GRACE_MS),
+  );
 }

@@ -20,10 +20,20 @@ function layoutStoreDeps() {
   };
 }
 
+/**
+ * Opens (or focuses) the target workspace tab using the workspace layout store, pinning agents on request
+ * @param input The workspace, tab target, and pin option to prepare
+ * @returns The host workspace route for the prepared tab
+ */
 export function prepareWorkspaceTab(input: PrepareWorkspaceTabInput): string {
   return prepareWorkspaceTabPure(input, layoutStoreDeps());
 }
 
+/**
+ * Prepares the target workspace tab via the layout store and navigates to its workspace route
+ * @param input The workspace, tab target, and current route used for navigation
+ * @returns The host workspace route that was navigated to
+ */
 export function navigateToPreparedWorkspaceTab(input: NavigateToPreparedWorkspaceTabInput): string {
   return navigateToPreparedWorkspaceTabPure(input, {
     ...layoutStoreDeps(),

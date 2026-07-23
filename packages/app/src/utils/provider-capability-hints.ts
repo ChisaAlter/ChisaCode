@@ -1,3 +1,4 @@
+/** Identifies a product capability that may vary by agent provider */
 export type ProviderCapabilityHintId =
   | "resume"
   | "permissions"
@@ -6,17 +7,20 @@ export type ProviderCapabilityHintId =
   | "mcp"
   | "headless";
 
+/** A single capability hint paired with its support flag for a provider */
 export interface ProviderCapabilityHint {
   id: ProviderCapabilityHintId;
   supported: boolean;
 }
 
+/** Aggregate counts describing how many capability hints are supported */
 export interface ProviderCapabilityHintSummary {
   supportedCount: number;
   unsupportedCount: number;
   totalCount: number;
 }
 
+/** Localized labels and formatters used to render a capability hint summary */
 export interface ProviderCapabilityHintSummaryLabels {
   title: string;
   supportedLabel: string;
@@ -97,6 +101,11 @@ function matchesProviderAlias(tokens: readonly string[], alias: string): boolean
   return false;
 }
 
+/**
+ * Resolves the capability hints for a provider, applying known per-provider overrides on top of the defaults
+ * @param provider Provider id or display name to match against known aliases
+ * @returns The capability hint list with per-capability support flags
+ */
 export function getProviderCapabilityHints(provider: string | null | undefined) {
   const providerHintKey = resolveProviderHintKey(provider);
   const overrides = providerHintKey ? PROVIDER_HINT_OVERRIDES[providerHintKey] : {};
@@ -106,6 +115,11 @@ export function getProviderCapabilityHints(provider: string | null | undefined) 
   }));
 }
 
+/**
+ * Counts supported and unsupported hints in a capability hint list
+ * @param hints The capability hints to summarize
+ * @returns The supported, unsupported, and total hint counts
+ */
 export function summarizeProviderCapabilityHints(
   hints: readonly ProviderCapabilityHint[],
 ): ProviderCapabilityHintSummary {
@@ -122,6 +136,12 @@ export function summarizeProviderCapabilityHints(
   };
 }
 
+/**
+ * Builds a human-readable summary label listing supported and limited capabilities
+ * @param hints The capability hints to describe
+ * @param labels Localized labels and formatters used to compose the summary text
+ * @returns The composed summary label
+ */
 export function buildProviderCapabilityHintSummaryLabel(
   hints: readonly ProviderCapabilityHint[],
   labels: ProviderCapabilityHintSummaryLabels,

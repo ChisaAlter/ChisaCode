@@ -1093,8 +1093,8 @@
       <header class="page-head">
         <h1>ChisaCode · Soft Surfaces（按代码真实能力）</h1>
         <p>
-          视觉仍是 Soft Workbench；信息架构与入口对齐仓库实现，不臆造底栏三 Tab 或删掉真实 footer 按钮。
-          源：<code>left-sidebar.tsx</code>、<code>settings-screen.tsx</code>、
+          视觉仍是 Soft Workbench；信息架构与入口对齐仓库实现，不臆造底栏三 Tab 或删掉真实 footer
+          按钮。 源：<code>left-sidebar.tsx</code>、<code>settings-screen.tsx</code>、
           <code>workspace-header.tsx</code>、<code>mobile-sidebar-quick-actions.ts</code>、
           <code>sessions-screen.tsx</code>。
         </p>
@@ -1110,7 +1110,9 @@
       <div class="tabs" role="tablist">
         <button type="button" data-s="desk-session" aria-selected="true">桌面 · 使用中</button>
         <button type="button" data-s="desk-settings" aria-selected="false">桌面 · 设置</button>
-        <button type="button" data-s="m-workspace" aria-selected="false">手机 · 会话（抽屉）</button>
+        <button type="button" data-s="m-workspace" aria-selected="false">
+          手机 · 会话（抽屉）
+        </button>
         <button type="button" data-s="m-sessions" aria-selected="false">手机 · 所有会话</button>
         <button type="button" data-s="m-settings" aria-selected="false">手机 · 设置</button>
       </div>
@@ -1187,7 +1189,12 @@
                 <div class="top-tools">
                   <button class="icon-btn" type="button" title="文件浏览器 explorer">▤</button>
                   <button class="icon-btn" type="button" title="环境面板 environment">⎇</button>
-                  <button class="icon-btn" type="button" id="desk-more" title="更多 workspace.actions">
+                  <button
+                    class="icon-btn"
+                    type="button"
+                    id="desk-more"
+                    title="更多 workspace.actions"
+                  >
                     ⋯
                   </button>
                 </div>
@@ -1223,9 +1230,7 @@
                     <div class="user-b">一切基于代码和功能本身。</div>
                   </div>
                   <article class="a">
-                    <p>
-                      Footer 三个图标必须在：打开项目、主页、设置。主 CTA 仍只有「新对话」。
-                    </p>
+                    <p>Footer 三个图标必须在：打开项目、主页、设置。主 CTA 仍只有「新对话」。</p>
                   </article>
                 </div>
               </div>
@@ -1282,7 +1287,8 @@
                 <div class="set-col">
                   <p class="lead">
                     分区 ID 来自 <code>settings-screen.tsx</code> 的
-                    <code>SIDEBAR_SECTION_ITEMS</code>。主机/项目另有独立路由（settings/hosts、projects）。
+                    <code>SIDEBAR_SECTION_ITEMS</code
+                    >。主机/项目另有独立路由（settings/hosts、projects）。
                   </p>
                   <div class="card">
                     <div class="row">
@@ -1344,7 +1350,9 @@
               <div class="st"><span>9:41</span><span>5G ▮▮▮</span></div>
               <div class="m-app">
                 <div class="m-header">
-                  <button class="icon-btn" type="button" id="open-drawer" title="打开侧栏">☰</button>
+                  <button class="icon-btn" type="button" id="open-drawer" title="打开侧栏">
+                    ☰
+                  </button>
                   <div class="mid">
                     <div class="t">工作台布局重构方向</div>
                     <div class="s">ChisaCode · cn-main</div>
@@ -1476,12 +1484,23 @@
                   <button
                     class="new-btn"
                     type="button"
-                    style="margin-top: 4px; background: var(--surface); border: 1px solid var(--border)"
+                    style="
+                      margin-top: 4px;
+                      background: var(--surface);
+                      border: 1px solid var(--border);
+                    "
                   >
                     <span class="plus">＋</span>
                     打开项目 / 新对话
                   </button>
-                  <p style="font-size: 11.5px; color: var(--faint); margin-top: 10px; line-height: 1.45">
+                  <p
+                    style="
+                      font-size: 11.5px;
+                      color: var(--faint);
+                      margin-top: 10px;
+                      line-height: 1.45;
+                    "
+                  >
                     路由：<code>/h/[serverId]/sessions</code>。返回可到 open-project。列表组件
                     AgentList，可加载更多。
                   </p>
@@ -1504,8 +1523,8 @@
                 </div>
                 <div class="m-set-scroll">
                   <p class="lead" style="margin: 0 2px 10px">
-                    Compact：list → push detail。无桌面双栏。desktopOnly 分区在手机侧栏隐藏（shortcuts /
-                    integrations / permissions）。
+                    Compact：list → push detail。无桌面双栏。desktopOnly
+                    分区在手机侧栏隐藏（shortcuts / integrations / permissions）。
                   </p>
                   <div class="m-sec">分区（与代码 slug 一致）</div>
                   <div class="m-card">

@@ -35,6 +35,11 @@ function trimNonEmpty(value: NullableString): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
+/**
+ * Normalizes a settings returnTo value into a safe in-app route.
+ * @param value The raw returnTo query value, possibly delivered as an array
+ * @returns The normalized route, or null when it is blank, protocol-relative, or points back at settings
+ */
 export function normalizeSettingsReturnToRoute(value: string | string[] | null | undefined) {
   const rawValue = Array.isArray(value) ? value[0] : value;
   const normalized = trimNonEmpty(rawValue);
@@ -128,6 +133,7 @@ function isLegacyPathLikeWorkspaceValue(value: string): boolean {
   return value.includes("/") || value.includes("\\") || /^[A-Za-z]:[\\/]/.test(value);
 }
 
+/** Describes which surface should be focused when a workspace route is opened. */
 export type WorkspaceOpenIntent =
   | { kind: "agent"; agentId: string }
   | { kind: "terminal"; terminalId: string }
@@ -137,6 +143,11 @@ export type WorkspaceOpenIntent =
   | { kind: "draft"; draftId: string }
   | { kind: "setup"; workspaceId: string };
 
+/**
+ * Parses a serialized `open` query value into a workspace open intent.
+ * @param value The raw `open` query parameter value
+ * @returns The parsed intent, or null when the value is blank or unrecognized
+ */
 export function parseWorkspaceOpenIntent(
   value: string | null | undefined,
 ): WorkspaceOpenIntent | null {
@@ -200,10 +211,20 @@ export function parseWorkspaceOpenIntent(
   return null;
 }
 
+/**
+ * Checks whether an intent opens a full workspace screen rather than focusing a single item.
+ * @param intent The parsed workspace open intent
+ * @returns True when the intent targets the changes review or new-terminal screen
+ */
 export function isWorkspaceScreenOpenIntent(intent: WorkspaceOpenIntent): boolean {
   return intent.kind === "changes" || intent.kind === "terminal-new";
 }
 
+/**
+ * Extracts the workspace open intent from the query string embedded in a pathname.
+ * @param pathname The URL pathname, optionally including query string and hash
+ * @returns The parsed intent, or null when no valid `open` parameter is present
+ */
 export function parseHostWorkspaceOpenIntentFromPathname(
   pathname: string,
 ): WorkspaceOpenIntent | null {
@@ -214,6 +235,11 @@ export function parseHostWorkspaceOpenIntentFromPathname(
   return parseWorkspaceOpenIntent(new URLSearchParams(search).get("open"));
 }
 
+/**
+ * Encodes a workspace id for use inside a URL path segment.
+ * @param workspaceId The raw workspace id, which may be a filesystem path
+ * @returns A URL-safe segment, base64url-encoded with a b64_ prefix when the id is not already URL-safe, or an empty string for blank input
+ */
 export function encodeWorkspaceIdForPathSegment(workspaceId: string): string {
   const normalized = trimNonEmpty(workspaceId);
   if (!normalized) {
@@ -226,6 +252,11 @@ export function encodeWorkspaceIdForPathSegment(workspaceId: string): string {
   return `${BASE64_WORKSPACE_ID_PREFIX}${toBase64UrlNoPad(id)}`;
 }
 
+/**
+ * Decodes a workspace id segment produced by encodeWorkspaceIdForPathSegment, tolerating legacy base64url encodings.
+ * @param workspaceIdSegment The URL path segment holding the encoded workspace id
+ * @returns The decoded workspace id, or null when the segment is blank
+ */
 export function decodeWorkspaceIdFromPathSegment(workspaceIdSegment: string): string | null {
   const normalizedSegment = trimNonEmpty(workspaceIdSegment);
   if (!normalizedSegment) {
@@ -257,6 +288,11 @@ export function decodeWorkspaceIdFromPathSegment(workspaceIdSegment: string): st
   return normalizeWorkspaceId(decoded);
 }
 
+/**
+ * Encodes a file path as a base64url URL path segment.
+ * @param filePath The raw file path
+ * @returns The base64url-encoded segment, or an empty string for blank input
+ */
 export function encodeFilePathForPathSegment(filePath: string): string {
   const normalized = trimNonEmpty(filePath);
   if (!normalized) {
@@ -265,6 +301,11 @@ export function encodeFilePathForPathSegment(filePath: string): string {
   return toBase64UrlNoPad(normalized);
 }
 
+/**
+ * Decodes a file path segment produced by encodeFilePathForPathSegment.
+ * @param filePathSegment The URL path segment holding the encoded file path
+ * @returns The decoded file path, or null when the segment is blank or not valid base64url
+ */
 export function decodeFilePathFromPathSegment(filePathSegment: string): string | null {
   const normalizedSegment = trimNonEmpty(filePathSegment);
   if (!normalizedSegment) {
@@ -277,6 +318,11 @@ export function decodeFilePathFromPathSegment(filePathSegment: string): string |
   return tryDecodeBase64UrlNoPadUtf8(decoded);
 }
 
+/**
+ * Extracts the server id from a host-scoped (/h/:serverId) pathname.
+ * @param pathname The URL pathname to inspect
+ * @returns The decoded server id, or null when the pathname is not host-scoped
+ */
 export function parseServerIdFromPathname(pathname: string): string | null {
   const pathOnly = stripSearchAndHash(pathname);
   const match = pathOnly.match(/^\/h\/([^/]+)(?:\/|$)/);
@@ -290,6 +336,11 @@ export function parseServerIdFromPathname(pathname: string): string | null {
   return trimNonEmpty(decodeSegment(raw));
 }
 
+/**
+ * Extracts the server id from a /settings/hosts/:serverId pathname.
+ * @param pathname The URL pathname to inspect
+ * @returns The decoded server id, or null when the pathname does not match a host settings route
+ */
 export function parseSettingsHostRouteFromPathname(pathname: string): string | null {
   const pathOnly = stripSearchAndHash(pathname);
   const match = pathOnly.match(/^\/settings\/hosts\/([^/]+)(?:\/|$)/);
@@ -304,6 +355,11 @@ export function parseSettingsHostRouteFromPathname(pathname: string): string | n
   return trimNonEmpty(decodeSegment(raw));
 }
 
+/**
+ * Extracts the server and agent ids from a /h/:serverId/agent/:agentId pathname.
+ * @param pathname The URL pathname to inspect
+ * @returns The decoded server and agent ids, or null when the pathname does not match
+ */
 export function parseHostAgentRouteFromPathname(
   pathname: string,
 ): { serverId: string; agentId: string } | null {
@@ -327,6 +383,11 @@ export function parseHostAgentRouteFromPathname(
   return { serverId, agentId };
 }
 
+/**
+ * Extracts the server and workspace ids from a /h/:serverId/workspace/:workspaceId pathname.
+ * @param pathname The URL pathname to inspect
+ * @returns The decoded server and workspace ids, or null when the pathname does not match
+ */
 export function parseHostWorkspaceRouteFromPathname(
   pathname: string,
 ): { serverId: string; workspaceId: string } | null {
@@ -349,6 +410,12 @@ export function parseHostWorkspaceRouteFromPathname(
   return { serverId, workspaceId };
 }
 
+/**
+ * Builds the canonical route for a workspace on a host.
+ * @param serverId The host server id
+ * @param workspaceId The workspace id
+ * @returns The workspace route, or "/" when either id is blank
+ */
 export function buildHostWorkspaceRoute(serverId: string, workspaceId: string) {
   const normalizedServerId = trimNonEmpty(serverId);
   const normalizedWorkspaceId = trimNonEmpty(workspaceId);
@@ -362,6 +429,13 @@ export function buildHostWorkspaceRoute(serverId: string, workspaceId: string) {
   return `/h/${encodeSegment(normalizedServerId)}/workspace/${encodeSegment(encodedWorkspaceId)}` as const;
 }
 
+/**
+ * Builds a workspace route that opens a specific surface via the `open` query parameter.
+ * @param serverId The host server id
+ * @param workspaceId The workspace id
+ * @param openIntent The serialized open intent, e.g. "changes" or "agent:<id>"
+ * @returns The workspace route with the open intent appended, or the plain workspace route when inputs are blank
+ */
 export function buildHostWorkspaceOpenRoute(
   serverId: string,
   workspaceId: string,
@@ -375,6 +449,13 @@ export function buildHostWorkspaceOpenRoute(
   return `${base}?open=${encodeURIComponent(normalizedOpenIntent)}` as const;
 }
 
+/**
+ * Builds the route for an agent detail view, scoped inside a workspace route when a workspace id is provided.
+ * @param serverId The host server id
+ * @param agentId The agent id
+ * @param workspaceId Optional workspace id; when present the agent opens via the workspace `open` intent
+ * @returns The agent detail route, or "/" when required ids are blank
+ */
 export function buildHostAgentDetailRoute(serverId: string, agentId: string, workspaceId?: string) {
   const normalizedWorkspaceId = trimNonEmpty(workspaceId);
   if (normalizedWorkspaceId) {
@@ -396,6 +477,11 @@ export function buildHostAgentDetailRoute(serverId: string, agentId: string, wor
   return `${buildHostRootRoute(normalizedServerId)}/agent/${encodeSegment(normalizedAgentId)}` as const;
 }
 
+/**
+ * Builds the root route for a host.
+ * @param serverId The host server id
+ * @returns The host root route, or "/" when the id is blank
+ */
 export function buildHostRootRoute(serverId: string) {
   const normalized = trimNonEmpty(serverId);
   if (!normalized) {
@@ -404,6 +490,11 @@ export function buildHostRootRoute(serverId: string) {
   return `/h/${encodeSegment(normalized)}` as const;
 }
 
+/**
+ * Builds the sessions list route for a host.
+ * @param serverId The host server id
+ * @returns The host sessions route, or "/" when the id is blank
+ */
 export function buildHostSessionsRoute(serverId: string) {
   const base = buildHostRootRoute(serverId);
   if (base === "/") {
@@ -412,6 +503,11 @@ export function buildHostSessionsRoute(serverId: string) {
   return `${base}/sessions` as const;
 }
 
+/**
+ * Builds the open-project route for a host.
+ * @param serverId The host server id
+ * @returns The host open-project route, or "/" when the id is blank
+ */
 export function buildHostOpenProjectRoute(serverId: string) {
   const base = buildHostRootRoute(serverId);
   if (base === "/") {
@@ -420,6 +516,13 @@ export function buildHostOpenProjectRoute(serverId: string) {
   return `${base}/open-project` as const;
 }
 
+/**
+ * Builds the new-workspace route for a host with optional prefilled query parameters.
+ * @param serverId The host server id
+ * @param sourceDirectory Optional directory to prefill as the workspace source
+ * @param options Optional display name, project id, and draft key query values
+ * @returns The new-workspace route, or "/" when the server id is blank
+ */
 export function buildHostNewWorkspaceRoute(
   serverId: string,
   sourceDirectory?: NullableString,
@@ -453,6 +556,7 @@ export function buildHostNewWorkspaceRoute(
   return search ? (`${base}/new?${search}` as const) : (`${base}/new` as const);
 }
 
+/** Ordered list of valid settings section slugs addressable in settings routes. */
 export const SETTINGS_SECTION_SLUGS = [
   "general",
   "models",
@@ -467,18 +571,30 @@ export const SETTINGS_SECTION_SLUGS = [
   "about",
 ] as const;
 
+/** A valid settings section slug derived from SETTINGS_SECTION_SLUGS. */
 export type SettingsSectionSlug = (typeof SETTINGS_SECTION_SLUGS)[number];
 
 export function isSettingsSectionSlug(value: string): value is SettingsSectionSlug {
   return (SETTINGS_SECTION_SLUGS as readonly string[]).includes(value);
 }
 
+/**
+ * Builds the top-level settings route, optionally carrying a returnTo target.
+ * @param options Optional returnTo route appended as a query parameter
+ * @returns The settings route
+ */
 export function buildSettingsRoute(): "/settings";
 export function buildSettingsRoute(options: SettingsRouteOptions): string;
 export function buildSettingsRoute(options?: SettingsRouteOptions) {
   return appendSettingsReturnTo("/settings", options);
 }
 
+/**
+ * Builds the route for a settings section, optionally carrying a returnTo target.
+ * @param section The settings section slug
+ * @param options Optional returnTo route appended as a query parameter
+ * @returns The settings section route
+ */
 export function buildSettingsSectionRoute(section: SettingsSectionSlug): `/settings/${string}`;
 export function buildSettingsSectionRoute(
   section: SettingsSectionSlug,
@@ -491,6 +607,13 @@ export function buildSettingsSectionRoute(
   return appendSettingsReturnTo(`/settings/${section}`, options);
 }
 
+/**
+ * Builds the settings route for a specific host, optionally carrying a returnTo target.
+ * @param serverId The host server id
+ * @param options Optional returnTo route appended as a query parameter
+ * @returns The host settings route
+ * @throws When serverId is blank
+ */
 export function buildSettingsHostRoute(serverId: string): `/settings/hosts/${string}`;
 export function buildSettingsHostRoute(serverId: string, options: SettingsRouteOptions): string;
 export function buildSettingsHostRoute(serverId: string, options?: SettingsRouteOptions) {
@@ -501,12 +624,24 @@ export function buildSettingsHostRoute(serverId: string, options?: SettingsRoute
   return appendSettingsReturnTo(`/settings/hosts/${encodeSegment(normalized)}`, options);
 }
 
+/**
+ * Builds the projects settings route, optionally carrying a returnTo target.
+ * @param options Optional returnTo route appended as a query parameter
+ * @returns The projects settings route
+ */
 export function buildProjectsSettingsRoute(): "/settings/projects";
 export function buildProjectsSettingsRoute(options: SettingsRouteOptions): string;
 export function buildProjectsSettingsRoute(options?: SettingsRouteOptions) {
   return appendSettingsReturnTo("/settings/projects", options);
 }
 
+/**
+ * Builds the settings route for a specific project, optionally carrying a returnTo target.
+ * @param projectKey The project key
+ * @param options Optional returnTo route appended as a query parameter
+ * @returns The project settings route
+ * @throws When projectKey is blank
+ */
 export function buildProjectSettingsRoute(projectKey: string): `/settings/projects/${string}`;
 export function buildProjectSettingsRoute(
   projectKey: string,
@@ -520,6 +655,12 @@ export function buildProjectSettingsRoute(projectKey: string, options?: Settings
   return appendSettingsReturnTo(`/settings/projects/${encodeSegment(normalized)}`, options);
 }
 
+/**
+ * Rewrites a pathname so it points at the equivalent route on another host server.
+ * @param pathname The current URL pathname
+ * @param nextServerId The server id to switch to
+ * @returns The mapped pathname on the target server, or "/" when the server id is blank
+ */
 export function mapPathnameToServer(pathname: string, nextServerId: string) {
   const normalized = trimNonEmpty(nextServerId);
   if (!normalized) {

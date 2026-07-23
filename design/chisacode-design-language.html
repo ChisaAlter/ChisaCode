@@ -649,7 +649,9 @@
 
       .composer-float:focus-within {
         border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
-        box-shadow: var(--shadow-composer), 0 0 0 3px var(--accent-soft);
+        box-shadow:
+          var(--shadow-composer),
+          0 0 0 3px var(--accent-soft);
       }
 
       .composer-float textarea {
@@ -996,8 +998,9 @@
       <header class="page-head">
         <h1>ChisaCode Design Language · Soft Workbench</h1>
         <p>
-          参考 WorkBuddy 的 craft：大留白、软表面、居中空态、悬浮输入卡——但 IA 仍是 ChisaCode（project /
-          session / host / multi-provider）。不是 ZCode 密对话壳，也不是 WorkBuddy 功能克隆。
+          参考 WorkBuddy 的 craft：大留白、软表面、居中空态、悬浮输入卡——但 IA 仍是
+          ChisaCode（project / session / host / multi-provider）。不是 ZCode 密对话壳，也不是
+          WorkBuddy 功能克隆。
         </p>
         <div class="meta">
           <span><strong>气质</strong> soft · spacious · calm</span>
@@ -1037,7 +1040,9 @@
 
             <div class="nav-scroll">
               <div class="sec">
-                <div class="sec-h"><span class="chev">▾</span> 置顶 <span class="count">1</span></div>
+                <div class="sec-h">
+                  <span class="chev">▾</span> 置顶 <span class="count">1</span>
+                </div>
                 <div class="sess on">
                   <div class="t">工作台布局重构方向</div>
                   <div class="m">刚刚</div>
@@ -1045,7 +1050,9 @@
               </div>
 
               <div class="sec">
-                <div class="sec-h"><span class="chev">▾</span> Projects <span class="count">4</span></div>
+                <div class="sec-h">
+                  <span class="chev">▾</span> Projects <span class="count">4</span>
+                </div>
 
                 <div class="space">
                   <div class="space-h">
@@ -1258,9 +1265,7 @@
         btnMode.textContent = on ? "回到空态（Home）" : "切换到会话态";
       }
 
-      btnTheme.addEventListener("click", () =>
-        setTheme(app.getAttribute("data-theme") !== "dark"),
-      );
+      btnTheme.addEventListener("click", () => setTheme(app.getAttribute("data-theme") !== "dark"));
       btnMode.addEventListener("click", () => setSession(!app.classList.contains("mode-session")));
 
       // Clicking active session in sidebar also goes session mode

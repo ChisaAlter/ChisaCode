@@ -996,7 +996,9 @@ export function BrowserPane({
               </Pressable>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel={selectorActive ? "取消元素选择器" : "选择元素"}
+                accessibilityLabel={
+                  selectorActive ? t("browser.cancelElementSelector") : t("browser.selectElement")
+                }
                 onPress={handleToggleElementSelector}
                 style={selectorIconButtonStyle}
               >

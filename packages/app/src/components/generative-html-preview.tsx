@@ -2,6 +2,7 @@ import React, { memo, useCallback, useMemo, useState } from "react";
 import { Pressable, Text, View, type TextStyle } from "react-native";
 import { Code2, PanelsTopLeft } from "lucide-react-native";
 import { StyleSheet } from "react-native-unistyles";
+import { useTranslation } from "react-i18next";
 import { HighlightedCodeBlock } from "@/components/highlighted-code-block";
 import { Fonts } from "@/constants/theme";
 import { buildGenerativeHtmlDocument } from "@/utils/generative-ui-html";
@@ -18,6 +19,7 @@ export const GenerativeHtmlPreview = memo(function GenerativeHtmlPreview({
   inheritedStyles,
   sourceTextStyle,
 }: GenerativeHtmlPreviewProps) {
+  const { t } = useTranslation();
   const [mode, setMode] = useState<"preview" | "source">("preview");
   const documentHtml = useMemo(() => buildGenerativeHtmlDocument(html), [html]);
   const showPreview = mode === "preview";
@@ -29,18 +31,35 @@ export const GenerativeHtmlPreview = memo(function GenerativeHtmlPreview({
       <View style={generativeHtmlPreviewStyles.header}>
         <View style={generativeHtmlPreviewStyles.titleGroup}>
           <PanelsTopLeft size={15} color={generativeHtmlPreviewStyles.titleIcon.color} />
-          <Text style={generativeHtmlPreviewStyles.title}>生成式 UI</Text>
-          <Text style={generativeHtmlPreviewStyles.subtitle}>HTML 沙箱</Text>
+          <Text style={generativeHtmlPreviewStyles.title}>
+            {t("workspace.generativeHtmlPreviewTitle")}
+          </Text>
+          <Text style={generativeHtmlPreviewStyles.subtitle}>
+            {t("workspace.generativeHtmlPreviewSubtitle")}
+          </Text>
         </View>
         <View style={generativeHtmlPreviewStyles.segment}>
-          <ModeButton active={showPreview} icon="preview" label="预览" onPress={showPreviewMode} />
-          <ModeButton active={!showPreview} icon="source" label="源码" onPress={showSourceMode} />
+          <ModeButton
+            active={showPreview}
+            icon="preview"
+            label={t("workspace.generativeHtmlPreviewPreview")}
+            onPress={showPreviewMode}
+          />
+          <ModeButton
+            active={!showPreview}
+            icon="source"
+            label={t("workspace.generativeHtmlPreviewSource")}
+            onPress={showSourceMode}
+          />
         </View>
       </View>
 
       {showPreview ? (
         <View style={generativeHtmlPreviewStyles.frame} testID="generative-ui-frame">
-          <GenerativeHtmlPreviewFrame documentHtml={documentHtml} title="生成式 UI 预览" />
+          <GenerativeHtmlPreviewFrame
+            documentHtml={documentHtml}
+            title={t("workspace.generativeHtmlPreviewFrameTitle")}
+          />
         </View>
       ) : (
         <View style={generativeHtmlPreviewStyles.source} testID="generative-ui-source">

@@ -26,14 +26,24 @@ describe("generative UI HTML", () => {
     expect(getGenerativeHtmlFence("javascript", "<div>Not a preview</div>")).toBeNull();
   });
 
-  it("wraps fragments in a sandbox document with a restrictive CSP", () => {
+  it("wraps fragments in a sandbox document with a restrictive CSP (no scripts by default)", () => {
     const documentHtml = buildGenerativeHtmlDocument("<button>Run</button>");
 
     expect(documentHtml).toContain("<!doctype html>");
     expect(documentHtml).toContain("default-src 'none'");
-    expect(documentHtml).toContain("script-src 'unsafe-inline'");
+    expect(documentHtml).toContain("script-src 'none'");
+    expect(documentHtml).not.toContain("script-src 'unsafe-inline'");
     expect(documentHtml).toContain("connect-src 'none'");
     expect(documentHtml).toContain("<button>Run</button>");
+  });
+
+  it("opts into inline scripts only when allowScripts is true", () => {
+    const documentHtml = buildGenerativeHtmlDocument("<button>Run</button>", {
+      allowScripts: true,
+    });
+
+    expect(documentHtml).toContain("script-src 'unsafe-inline'");
+    expect(documentHtml).not.toContain("script-src 'none'");
   });
 
   it("adds the sandbox CSP to full HTML documents", () => {

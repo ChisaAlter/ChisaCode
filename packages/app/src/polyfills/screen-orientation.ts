@@ -1,5 +1,12 @@
+import { isWeb } from "@/constants/platform";
+
 export function polyfillScreenOrientation() {
-  if (typeof window === "undefined" || typeof screen === "undefined" || screen.orientation) {
+  if (
+    !isWeb ||
+    typeof window === "undefined" ||
+    typeof screen === "undefined" ||
+    screen.orientation
+  ) {
     return;
   }
 

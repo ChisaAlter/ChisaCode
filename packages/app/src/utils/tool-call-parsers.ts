@@ -1,11 +1,13 @@
 import { z } from "zod/v3";
 import type { HighlightToken } from "@chisacode/highlight";
 
+/** A run of text within a diff line, flagged as changed or unchanged for word-level highlighting. */
 export interface DiffSegment {
   text: string;
   changed: boolean;
 }
 
+/** A single line of a diff produced from tool-call inputs, with optional word-level segments and highlight tokens. */
 export interface DiffLine {
   type: "add" | "remove" | "context" | "header";
   content: string;
@@ -134,6 +136,12 @@ function computeWordLevelDiff(
   };
 }
 
+/**
+ * Builds a line-level diff between two versions of a text, with word-level segments for changed pairs.
+ * @param originalText The text before the change
+ * @param updatedText The text after the change
+ * @returns The diff lines, prefixed with -, +, or space
+ */
 export function buildLineDiff(originalText: string, updatedText: string): DiffLine[] {
   const originalLines = splitIntoLines(originalText);
   const updatedLines = splitIntoLines(updatedText);
@@ -204,6 +212,11 @@ export function buildLineDiff(originalText: string, updatedText: string): DiffLi
   return diff;
 }
 
+/**
+ * Parses unified diff text into display lines, skipping file metadata headers.
+ * @param diffText The unified diff text to parse
+ * @returns The parsed diff lines, or an empty array when no diff text is provided
+ */
 export function parseUnifiedDiff(diffText?: string): DiffLine[] {
   if (!diffText) {
     return [];
@@ -259,8 +272,10 @@ export function parseUnifiedDiff(diffText?: string): DiffLine[] {
 
 // ---- Task Extraction (cross-provider) ----
 
+/** Status of a task extracted from a tool call, normalized across providers. */
 export type TaskStatus = "pending" | "in_progress" | "completed";
 
+/** A single task extracted from a provider's todo or plan tool call. */
 export interface TaskEntry {
   text: string;
   status: TaskStatus;
@@ -295,6 +310,12 @@ function normalizeToolName(toolName: string): string {
     .toLowerCase();
 }
 
+/**
+ * Extracts task entries from a provider tool call such as TodoWrite or update_plan.
+ * @param toolName The tool name as reported by the provider
+ * @param input The raw tool call input payload
+ * @returns The normalized task entries, or null when the tool call is not a task list or fails validation
+ */
 export function extractTaskEntriesFromToolCall(
   toolName: string,
   input: unknown,

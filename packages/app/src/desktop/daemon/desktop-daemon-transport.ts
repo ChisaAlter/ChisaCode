@@ -63,6 +63,8 @@ export function createDesktopLocalDaemonTransportFactory(
     let unlisten: (() => void) | null = null;
     let disposed = false;
     let didEmitOpen = false;
+    /** Outbound frames queued before the session id resolves; flushed on open. */
+    const pendingSendQueue: Array<string | Uint8Array | ArrayBuffer> = [];
 
     const openHandlers = new Set<() => void>();
     const closeHandlers = new Set<(event?: unknown) => void>();
@@ -74,6 +76,13 @@ export function createDesktopLocalDaemonTransportFactory(
         return;
       }
       didEmitOpen = true;
+      // Flush any frames queued before the session id resolved.
+      while (pendingSendQueue.length > 0) {
+        const queued = pendingSendQueue.shift();
+        if (queued) {
+          deliverSend(queued);
+        }
+      }
       for (const handler of openHandlers) {
         handler();
       }
@@ -146,22 +155,36 @@ export function createDesktopLocalDaemonTransportFactory(
         emitError(error);
       });
 
+    const deliverSend = (data: string | Uint8Array | ArrayBuffer): void => {
+      if (!sessionId) {
+        return;
+      }
+      if (typeof data === "string") {
+        void rpc.sendMessage({ sessionId, text: data }).catch((error) => emitError(error));
+        return;
+      }
+      const binaryBase64 = encodeBinaryToBase64(
+        data instanceof ArrayBuffer ? data : new Uint8Array(data),
+      );
+      void rpc.sendMessage({ sessionId, binaryBase64 }).catch((error) => emitError(error));
+    };
+
     const transport: DaemonTransport = {
       send: (data) => {
+        if (disposed) {
+          return;
+        }
         if (!sessionId) {
+          // Buffer outbound frames until the session opens so early handshake
+          // frames (auth/hello) are not silently dropped during the open race.
+          pendingSendQueue.push(data);
           return;
         }
-        if (typeof data === "string") {
-          void rpc.sendMessage({ sessionId, text: data }).catch((error) => emitError(error));
-          return;
-        }
-        const binaryBase64 = encodeBinaryToBase64(
-          data instanceof ArrayBuffer ? data : new Uint8Array(data),
-        );
-        void rpc.sendMessage({ sessionId, binaryBase64 }).catch((error) => emitError(error));
+        deliverSend(data);
       },
       close: () => {
         disposed = true;
+        pendingSendQueue.length = 0;
         const currentSessionId = sessionId;
         sessionId = null;
         if (currentSessionId) {

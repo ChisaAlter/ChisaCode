@@ -39,7 +39,7 @@ import {
   MicVocal,
   Cog,
 } from "lucide-react-native";
-import { StyleSheet, useUnistyles, withUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { type Theme } from "@/styles/theme";
 import { resolveThemeWorkbenchSurfaceRoles } from "@/styles/workbench-surface-roles";
 import {
@@ -156,6 +156,13 @@ const MARKDOWN_TOP_LEVEL_MAX_EXCEEDED_ITEM = <Text key="dotdotdot">...</Text>;
 const ThemedMicVocal = withUnistyles(MicVocal);
 const ThemedTodoCheckIcon = withUnistyles(Check);
 const ThemedCog = withUnistyles(Cog);
+const ThemedActivityCircle = withUnistyles(Circle);
+const ThemedActivityInfo = withUnistyles(Info);
+const ThemedActivityCheckCircle = withUnistyles(CheckCircle);
+const ThemedActivityXCircle = withUnistyles(XCircle);
+const ThemedActivityFileText = withUnistyles(FileText);
+const ThemedActivityChevronDown = withUnistyles(ChevronDown);
+const ThemedActivityChevronRight = withUnistyles(ChevronRight);
 
 const foregroundMutedColorMapping = (theme: Theme) => ({
   color: theme.colors.foregroundMuted,
@@ -1510,6 +1517,7 @@ export const SpeakMessage = memo(function SpeakMessage({
   timestamp: _timestamp,
   disableOuterSpacing,
 }: SpeakMessageProps) {
+  const { t } = useTranslation();
   const resolvedDisableOuterSpacing = useDisableOuterSpacing(disableOuterSpacing);
   const containerStyle = useMemo(
     () => [
@@ -1523,7 +1531,7 @@ export const SpeakMessage = memo(function SpeakMessage({
     <View testID="speak-message" style={containerStyle}>
       <View style={speakMessageStylesheet.header}>
         <ThemedMicVocal size={12} uniProps={foregroundMutedColorMapping} />
-        <Text style={speakMessageStylesheet.headerLabel}>已朗读</Text>
+        <Text style={speakMessageStylesheet.headerLabel}>{t("message.spokenLabel")}</Text>
       </View>
       <Text style={speakMessageStylesheet.text}>{message}</Text>
     </View>
@@ -1541,6 +1549,24 @@ interface ActivityLogProps {
   onArtifactClick?: (artifactId: string) => void;
   disableOuterSpacing?: boolean;
 }
+
+// Activity log icon color mappings for withUnistyles-wrapped lucide icons, so
+// the theme-reactive `color` flows through `uniProps` without `useUnistyles()`.
+const activityLogSystemColorMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+});
+const activityLogInfoColorMapping = (theme: Theme) => ({
+  color: theme.colors.palette.blue[400],
+});
+const activityLogSuccessColorMapping = (theme: Theme) => ({
+  color: theme.colors.palette.green[400],
+});
+const activityLogErrorColorMapping = (theme: Theme) => ({
+  color: theme.colors.palette.red[500],
+});
+const activityLogArtifactColorMapping = (theme: Theme) => ({
+  color: theme.colors.palette.blue[300],
+});
 
 const activityLogStylesheet = StyleSheet.create((theme) => ({
   // Soft stream activity chip: quiet r12 card.
@@ -1592,6 +1618,21 @@ const activityLogStylesheet = StyleSheet.create((theme) => ({
     fontSize: 12.5,
     lineHeight: 18,
   },
+  systemText: {
+    color: theme.colors.foregroundMuted,
+  },
+  infoText: {
+    color: theme.colors.palette.blue[400],
+  },
+  successText: {
+    color: theme.colors.palette.green[400],
+  },
+  errorText: {
+    color: theme.colors.palette.red[500],
+  },
+  artifactText: {
+    color: theme.colors.palette.blue[300],
+  },
   detailsRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -1631,31 +1672,40 @@ export const ActivityLog = memo(function ActivityLog({
   onArtifactClick,
   disableOuterSpacing,
 }: ActivityLogProps) {
-  const { theme } = useUnistyles();
+  const { t } = useTranslation();
   const resolvedDisableOuterSpacing = useDisableOuterSpacing(disableOuterSpacing);
   const [isExpanded, setIsExpanded] = useState(false);
 
   const typeConfig = {
     system: {
       bg: activityLogStylesheet.systemBg,
-      color: theme.colors.foregroundMuted,
-      Icon: Circle,
+      textStyle: activityLogStylesheet.systemText,
+      Icon: ThemedActivityCircle,
+      iconUniProps: activityLogSystemColorMapping,
     },
-    info: { bg: activityLogStylesheet.infoBg, color: theme.colors.palette.blue[400], Icon: Info },
+    info: {
+      bg: activityLogStylesheet.infoBg,
+      textStyle: activityLogStylesheet.infoText,
+      Icon: ThemedActivityInfo,
+      iconUniProps: activityLogInfoColorMapping,
+    },
     success: {
       bg: activityLogStylesheet.successBg,
-      color: theme.colors.palette.green[400],
-      Icon: CheckCircle,
+      textStyle: activityLogStylesheet.successText,
+      Icon: ThemedActivityCheckCircle,
+      iconUniProps: activityLogSuccessColorMapping,
     },
     error: {
       bg: activityLogStylesheet.errorBg,
-      color: theme.colors.palette.red[500],
-      Icon: XCircle,
+      textStyle: activityLogStylesheet.errorText,
+      Icon: ThemedActivityXCircle,
+      iconUniProps: activityLogErrorColorMapping,
     },
     artifact: {
       bg: activityLogStylesheet.artifactBg,
-      color: theme.colors.palette.blue[300],
-      Icon: FileText,
+      textStyle: activityLogStylesheet.artifactText,
+      Icon: ThemedActivityFileText,
+      iconUniProps: activityLogArtifactColorMapping,
     },
   };
 
@@ -1684,8 +1734,8 @@ export const ActivityLog = memo(function ActivityLog({
     [resolvedDisableOuterSpacing, config.bg, isInteractive],
   );
   const messageTextStyle = useMemo(
-    () => [activityLogStylesheet.messageText, { color: config.color }],
-    [config.color],
+    () => [activityLogStylesheet.messageText, config.textStyle],
+    [config.textStyle],
   );
 
   return (
@@ -1693,7 +1743,7 @@ export const ActivityLog = memo(function ActivityLog({
       <View style={activityLogStylesheet.content}>
         <View style={activityLogStylesheet.row}>
           <View style={activityLogStylesheet.iconContainer}>
-            <IconComponent size={16} color={config.color} />
+            <IconComponent size={16} uniProps={config.iconUniProps} />
           </View>
           <View style={activityLogStylesheet.textContainer}>
             <Text style={messageTextStyle} selectable>
@@ -1701,11 +1751,13 @@ export const ActivityLog = memo(function ActivityLog({
             </Text>
             {metadata && (
               <View style={activityLogStylesheet.detailsRow}>
-                <Text style={activityLogStylesheet.detailsText}>详情</Text>
+                <Text style={activityLogStylesheet.detailsText}>
+                  {t("message.activityDetails")}
+                </Text>
                 {isExpanded ? (
-                  <ChevronDown size={12} color={theme.colors.foregroundMuted} />
+                  <ThemedActivityChevronDown size={12} uniProps={foregroundMutedColorMapping} />
                 ) : (
-                  <ChevronRight size={12} color={theme.colors.foregroundMuted} />
+                  <ThemedActivityChevronRight size={12} uniProps={foregroundMutedColorMapping} />
                 )}
               </View>
             )}
@@ -1895,6 +1947,7 @@ export const TodoListCard = memo(function TodoListCard({
   disableOuterSpacing,
   presentation = "default",
 }: TodoListCardProps) {
+  const { t } = useTranslation();
   const [isExpanded, setIsExpanded] = useState(false);
 
   const nextTask = useMemo(() => items.find((item) => !item.completed)?.text, [items]);
@@ -1908,7 +1961,7 @@ export const TodoListCard = memo(function TodoListCard({
       <View style={todoListCardStylesheet.detailsWrapper}>
         <View style={todoListCardStylesheet.list}>
           {items.length === 0 ? (
-            <Text style={todoListCardStylesheet.emptyText}>还没有任务。</Text>
+            <Text style={todoListCardStylesheet.emptyText}>{t("message.todoEmpty")}</Text>
           ) : (
             items.map((item) => (
               <TodoListItemRow key={item.text} text={item.text} completed={item.completed} />
@@ -1917,14 +1970,17 @@ export const TodoListCard = memo(function TodoListCard({
         </View>
       </View>
     );
-  }, [items]);
+  }, [items, t]);
 
   if (presentation === "workbench") {
     return (
       <View style={todoListCardStylesheet.workbenchCard} testID="workbench-todo-card">
-        <Text style={todoListCardStylesheet.workbenchTitle}>计划 / Todos</Text>
+        <Text style={todoListCardStylesheet.workbenchTitle}>{t("message.todoWorkbenchTitle")}</Text>
         <View style={todoListCardStylesheet.workbenchList}>
           {items.map((item) => (
+            // Known limitation: keying on item.text can collide if two todo
+            // items share identical text. A stable id on TodoEntry (protocol
+            // change) is the proper fix; tracked as a follow-up.
             <View key={item.text} style={todoListCardStylesheet.workbenchItemRow}>
               <View style={todoListCardStylesheet.workbenchCheck}>
                 {item.completed ? (

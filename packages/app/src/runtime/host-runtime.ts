@@ -147,6 +147,10 @@ const ADAPTIVE_SWITCH_THRESHOLD_MS = 40;
 const ADAPTIVE_SWITCH_CONSECUTIVE_PROBES = 3;
 const DEFAULT_AGENT_DIRECTORY_PAGE_LIMIT = 200;
 const CONFIGURED_OVERRIDE_BOOTSTRAP_RETRY_MS = 1_000;
+/** Max activation attempts before giving up on a probe cycle's first switch. */
+const PROBE_ACTIVATE_MAX_ATTEMPTS = 3;
+/** Max bootstrap retry attempts before surfacing permanent override failure. */
+const CONFIGURED_OVERRIDE_BOOTSTRAP_MAX_ATTEMPTS = 30;
 
 const DEFAULT_AGENT_DIRECTORY_SORT: NonNullable<FetchAgentsOptions["sort"]> = [
   { key: "updated_at", direction: "desc" },
@@ -758,7 +762,13 @@ export class HostRuntimeController {
       connectionId: string,
       client: DaemonClient,
     ): Promise<boolean> => {
+      // Bound the activation loop: a failed switchToConnection that leaves
+      // activeConnectionId null must not spin forever blocking the probe cycle.
+      let attempts = 0;
       while (!this.snapshot.activeConnectionId) {
+        if (attempts++ >= PROBE_ACTIVATE_MAX_ATTEMPTS) {
+          return false;
+        }
         if (!activationLock) {
           activationLock = this.switchToConnection({
             connectionId,
@@ -1382,6 +1392,13 @@ export class HostRuntimeStore {
     let attempt = 0;
     while (!registryHasConnection(this.hosts, connection)) {
       attempt += 1;
+      if (attempt > CONFIGURED_OVERRIDE_BOOTSTRAP_MAX_ATTEMPTS) {
+        console.warn("[HostRuntime] configured bootstrap gave up after max attempts", {
+          endpoint,
+          attempts: attempt,
+        });
+        return;
+      }
       try {
         await this.probeAndUpsertConnection({
           connection,

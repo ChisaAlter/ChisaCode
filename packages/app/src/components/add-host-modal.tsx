@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useReducer, useRef, useState } from "react";
 import { Alert, Pressable, Text, TextInput, View } from "react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { Check, ChevronDown, ChevronRight, Eye, EyeOff, Link2 } from "lucide-react-native";
@@ -14,6 +14,23 @@ import {
 import { DaemonConnectionTestError } from "@/utils/test-daemon-connection";
 import { AdaptiveModalSheet, AdaptiveTextInput, type SheetHeader } from "./adaptive-modal-sheet";
 import { Button } from "@/components/ui/button";
+import type { Theme } from "@/styles/theme";
+
+// Lucide icons only accept `color` (a non-style prop), so wrap each one with
+// `withUnistyles` and feed the theme-reactive color through `uniProps`. Only the
+// icon node re-renders on theme changes — the surrounding tree does not.
+const ThemedLink2 = withUnistyles(Link2);
+const ThemedCheck = withUnistyles(Check);
+
+const whiteColorMapping = (theme: Theme) => ({
+  color: theme.colors.palette.white,
+});
+const accentForegroundColorMapping = (theme: Theme) => ({
+  color: theme.colors.accentForeground,
+});
+const foregroundMutedColorMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+});
 
 const FLEX_ONE_STYLE = { flex: 1 } as const;
 const DEFAULT_DIRECT_HOST = "localhost";
@@ -304,7 +321,6 @@ export interface AddHostModalProps {
 }
 
 export function AddHostModal({ visible, onClose, onCancel, onSaved }: AddHostModalProps) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const daemons = useHosts();
   const { probeAndUpsertDirectConnection } = useHostMutations();
@@ -356,10 +372,7 @@ export function AddHostModal({ visible, onClose, onCancel, onSaved }: AddHostMod
     bumpInputResetKey();
   }, []);
 
-  const connectIcon = useMemo(
-    () => <Link2 size={16} color={theme.colors.palette.white} />,
-    [theme.colors.palette.white],
-  );
+  const connectIcon = useMemo(() => <ThemedLink2 size={16} uniProps={whiteColorMapping} />, []);
   const hostFieldStyle = useMemo(() => [styles.field, styles.hostField], []);
   const portFieldStyle = useMemo(() => [styles.field, styles.portField], []);
   const checkboxStyle = useMemo(
@@ -519,6 +532,10 @@ export function AddHostModal({ visible, onClose, onCancel, onSaved }: AddHostMod
 
   const AdvancedIcon = isAdvancedOpen ? ChevronDown : ChevronRight;
   const PasswordIcon = isPasswordVisible ? EyeOff : Eye;
+  // Icons are dynamic per state; wrap with `withUnistyles` so the theme-reactive
+  // `color` flows through `uniProps` without a `useUnistyles` hook call.
+  const ThemedAdvancedIcon = useMemo(() => withUnistyles(AdvancedIcon), [AdvancedIcon]);
+  const ThemedPasswordIcon = useMemo(() => withUnistyles(PasswordIcon), [PasswordIcon]);
 
   return (
     <AdaptiveModalSheet
@@ -541,7 +558,6 @@ export function AddHostModal({ visible, onClose, onCancel, onSaved }: AddHostMod
             resetKey={`direct-host-${inputResetKey}`}
             onChangeText={handleHostChange}
             placeholder="localhost"
-            placeholderTextColor={theme.colors.foregroundMuted}
             style={styles.input}
             autoCapitalize="none"
             autoCorrect={false}
@@ -561,7 +577,6 @@ export function AddHostModal({ visible, onClose, onCancel, onSaved }: AddHostMod
             resetKey={`direct-port-${inputResetKey}`}
             onChangeText={handlePortChange}
             placeholder="6767"
-            placeholderTextColor={theme.colors.foregroundMuted}
             style={styles.input}
             autoCapitalize="none"
             autoCorrect={false}
@@ -585,7 +600,7 @@ export function AddHostModal({ visible, onClose, onCancel, onSaved }: AddHostMod
         <View style={checkboxStyle}>
           {useTls ? (
             <View testID="direct-ssl-toggle-checked">
-              <Check size={14} color={theme.colors.accentForeground} />
+              <ThemedCheck size={14} uniProps={accentForegroundColorMapping} />
             </View>
           ) : null}
         </View>
@@ -604,7 +619,6 @@ export function AddHostModal({ visible, onClose, onCancel, onSaved }: AddHostMod
             resetKey={`direct-password-${inputResetKey}`}
             onChangeText={handlePasswordChange}
             placeholder={t("host.optional")}
-            placeholderTextColor={theme.colors.foregroundMuted}
             style={passwordInputStyle}
             autoCapitalize="none"
             autoCorrect={false}
@@ -621,7 +635,7 @@ export function AddHostModal({ visible, onClose, onCancel, onSaved }: AddHostMod
             accessibilityLabel={isPasswordVisible ? t("host.hidePassword") : t("host.showPassword")}
             testID="direct-password-visibility-toggle"
           >
-            <PasswordIcon size={18} color={theme.colors.foregroundMuted} />
+            <ThemedPasswordIcon size={18} uniProps={foregroundMutedColorMapping} />
           </Pressable>
         </View>
       </View>
@@ -637,7 +651,7 @@ export function AddHostModal({ visible, onClose, onCancel, onSaved }: AddHostMod
           }
           testID="direct-host-advanced-toggle"
         >
-          <AdvancedIcon size={16} color={theme.colors.foregroundMuted} />
+          <ThemedAdvancedIcon size={16} uniProps={foregroundMutedColorMapping} />
           <Text style={styles.advancedText}>{t("host.advanced")}</Text>
         </Pressable>
         {isAdvancedOpen ? (
@@ -649,7 +663,6 @@ export function AddHostModal({ visible, onClose, onCancel, onSaved }: AddHostMod
             resetKey={`direct-host-uri-${inputResetKey}`}
             onChangeText={setAdvancedUri}
             placeholder="tcp://localhost:6767?ssl=true"
-            placeholderTextColor={theme.colors.foregroundMuted}
             style={styles.input}
             autoCapitalize="none"
             autoCorrect={false}

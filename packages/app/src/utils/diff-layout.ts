@@ -3,12 +3,14 @@ import type { DiffLine, ParsedDiffFile } from "@/git/use-diff-query";
 type ReviewSide = "old" | "new";
 type ReviewableLineType = "add" | "remove" | "context";
 
+/** Input identifying a single reviewable line within a diff file by side and line number. */
 export interface ReviewableDiffTargetKeyInput {
   filePath: string;
   side: ReviewSide;
   lineNumber: number;
 }
 
+/** A single diff line that can receive review comments, with its position inside the file and hunk. */
 export interface ReviewableDiffTarget {
   key: string;
   filePath: string;
@@ -23,14 +25,21 @@ export interface ReviewableDiffTarget {
   content: string;
 }
 
+/**
+ * Builds the stable key used to identify a reviewable diff line.
+ * @param input The file path, side, and line number identifying the line
+ * @returns A composite key in the form "filePath:side:lineNumber"
+ */
 export function buildReviewableDiffTargetKey(input: ReviewableDiffTargetKeyInput): string {
   return `${input.filePath}:${input.side}:${input.lineNumber}`;
 }
 
+/** A reviewable diff target paired with the underlying parsed diff line. */
 export interface NumberedDiffCell extends ReviewableDiffTarget {
   line: DiffLine;
 }
 
+/** A diff line annotated with old/new line numbers and per-side reviewable cells. */
 export interface NumberedDiffLine {
   key: string;
   filePath: string;
@@ -45,12 +54,14 @@ export interface NumberedDiffLine {
   newCell: NumberedDiffCell | null;
 }
 
+/** A diff hunk with its header and line-numbered rows. */
 export interface NumberedDiffHunk {
   hunkIndex: number;
   hunkHeader: string;
   lines: NumberedDiffLine[];
 }
 
+/** A displayable line on one side of a split diff view, with its review target when reviewable. */
 export interface SplitDiffDisplayLine {
   type: DiffLine["type"];
   content: string;
@@ -59,6 +70,7 @@ export interface SplitDiffDisplayLine {
   reviewTarget: ReviewableDiffTarget | null;
 }
 
+/** A displayable line in a unified diff view, with its review target when reviewable. */
 export interface UnifiedDiffDisplayLine {
   key: string;
   line: DiffLine;
@@ -66,6 +78,7 @@ export interface UnifiedDiffDisplayLine {
   reviewTarget: ReviewableDiffTarget | null;
 }
 
+/** A row in a split diff view: either a hunk header or a paired left/right line. */
 export type SplitDiffRow =
   | {
       kind: "header";
@@ -112,6 +125,11 @@ function getHunkHeader(hunk: ParsedDiffFile["hunks"][number]): string {
   return headerLine?.content ?? "@@";
 }
 
+/**
+ * Annotates every line of a parsed diff file with old/new line numbers and reviewable cells.
+ * @param file The parsed diff file to annotate
+ * @returns The hunks with line-numbered rows
+ */
 export function buildNumberedDiffHunks(file: ParsedDiffFile): NumberedDiffHunk[] {
   const numberedHunks: NumberedDiffHunk[] = [];
   for (const [hunkIndex, hunk] of file.hunks.entries()) {
@@ -224,6 +242,11 @@ function buildNumberedCell(input: {
   };
 }
 
+/**
+ * Flattens a parsed diff file into display lines for a unified diff view.
+ * @param file The parsed diff file to render
+ * @returns The display lines with line numbers and review targets
+ */
 export function buildUnifiedDiffLines(file: ParsedDiffFile): UnifiedDiffDisplayLine[] {
   return buildNumberedDiffHunks(file).flatMap((hunk) =>
     hunk.lines.map((numberedLine) => ({
@@ -235,6 +258,11 @@ export function buildUnifiedDiffLines(file: ParsedDiffFile): UnifiedDiffDisplayL
   );
 }
 
+/**
+ * Lays out a parsed diff file as paired left/right rows for a split diff view.
+ * @param file The parsed diff file to render
+ * @returns The ordered header and pair rows of the split view
+ */
 export function buildSplitDiffRows(file: ParsedDiffFile): SplitDiffRow[] {
   const rows: SplitDiffRow[] = [];
 

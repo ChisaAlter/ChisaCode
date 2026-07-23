@@ -5,6 +5,7 @@ import {
 } from "@/stores/workspace-tabs-store";
 import { buildHostWorkspaceRoute } from "@/utils/host-routes";
 
+/** Identifies the workspace tab to open or focus, with an optional pin request */
 export interface PrepareWorkspaceTabInput {
   serverId: string;
   workspaceId: string;
@@ -12,15 +13,18 @@ export interface PrepareWorkspaceTabInput {
   pin?: boolean;
 }
 
+/** Extends {@link PrepareWorkspaceTabInput} with the current route used for navigation decisions */
 export interface NavigateToPreparedWorkspaceTabInput extends PrepareWorkspaceTabInput {
   currentPathname?: string | null;
 }
 
+/** Store callbacks needed to open or pin a workspace tab */
 export interface PrepareWorkspaceTabDeps {
   openTabFocused: (workspaceKey: string, target: WorkspaceTabTarget) => string | null;
   pinAgent: (workspaceKey: string, agentId: string) => void;
 }
 
+/** Extends {@link PrepareWorkspaceTabDeps} with the workspace navigation callback */
 export interface NavigateToPreparedWorkspaceTabDeps extends PrepareWorkspaceTabDeps {
   navigateToWorkspace: (
     serverId: string,
@@ -36,6 +40,12 @@ function getPreparedTarget(target: WorkspaceTabTarget): WorkspaceTabTarget {
   return { kind: "draft", draftId: generateDraftId() };
 }
 
+/**
+ * Opens (or focuses) the target workspace tab, materializing "new" draft ids and pinning agents on request
+ * @param input The workspace, tab target, and pin option to prepare
+ * @param deps The store callbacks used to open and pin tabs
+ * @returns The host workspace route for the prepared tab
+ */
 export function prepareWorkspaceTab(
   input: PrepareWorkspaceTabInput,
   deps: PrepareWorkspaceTabDeps,
@@ -56,6 +66,12 @@ export function prepareWorkspaceTab(
   return buildHostWorkspaceRoute(input.serverId, input.workspaceId);
 }
 
+/**
+ * Prepares the target workspace tab and then navigates to its workspace route
+ * @param input The workspace, tab target, and current route used for navigation
+ * @param deps The store and navigation callbacks used to open the tab and change route
+ * @returns The host workspace route that was navigated to
+ */
 export function navigateToPreparedWorkspaceTab(
   input: NavigateToPreparedWorkspaceTabInput,
   deps: NavigateToPreparedWorkspaceTabDeps,

@@ -6,13 +6,14 @@ import {
 
 export function useWorkspaceTerminalSessionRetention(input: { scopeKey: string | null }): void {
   useEffect(() => {
-    if (!input.scopeKey) {
+    const scopeKey = input.scopeKey;
+    if (!scopeKey) {
       return;
     }
 
-    retainWorkspaceTerminalSession({ scopeKey: input.scopeKey });
+    retainWorkspaceTerminalSession({ scopeKey });
     return () => {
-      releaseWorkspaceTerminalSession({ scopeKey: input.scopeKey! });
+      releaseWorkspaceTerminalSession({ scopeKey });
     };
   }, [input.scopeKey]);
 }

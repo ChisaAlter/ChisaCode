@@ -17,6 +17,7 @@ import { useWebScrollbarStyle } from "@/hooks/use-web-scrollbar-style";
 import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
 import { getCodeInsets } from "./code-insets";
 import { isWeb } from "@/constants/platform";
+import { useTranslation } from "react-i18next";
 
 const ScrollView = isWeb ? RNScrollView : GHScrollView;
 
@@ -205,6 +206,7 @@ export function DiffViewer({
   showLineNumbers = false,
 }: DiffViewerProps) {
   const [scrollViewWidth, setScrollViewWidth] = React.useState(0);
+  const { t } = useTranslation();
   const { theme } = useUnistyles();
   const webScrollbarStyle = useWebScrollbarStyle();
   const handleInnerLayout = React.useCallback(
@@ -320,7 +322,7 @@ export function DiffViewer({
           accessibilityLabel="Open in DiffPane"
         >
           <ExternalLink size={12} color={theme.colors.foregroundMuted} />
-          <Text style={styles.openInDiffPaneText}>打开</Text>
+          <Text style={styles.openInDiffPaneText}>{t("workspace.diffOpenInPane")}</Text>
         </Pressable>
       )}
     </View>

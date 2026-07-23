@@ -1,9 +1,10 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { Alert, Text, TextInput, View } from "react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { Link } from "lucide-react-native";
+import type { Theme } from "@/styles/theme";
 import type { HostProfile } from "@/types/host-connection";
 import { useHosts, useHostMutations } from "@/runtime/host-runtime";
 import { decodeOfferFragmentPayload, normalizeHostPort } from "@/utils/daemon-endpoints";
@@ -13,6 +14,11 @@ import { AdaptiveModalSheet, AdaptiveTextInput, type SheetHeader } from "./adapt
 import { Button } from "@/components/ui/button";
 
 const FLEX_ONE_STYLE = { flex: 1 } as const;
+
+// Icon color mappings for withUnistyles-wrapped lucide icons, so the
+// theme-reactive `color` flows through `uniProps` without `useUnistyles()`.
+const ThemedLink = withUnistyles(Link);
+const paletteWhiteColorMapping = (theme: Theme) => ({ color: theme.colors.palette.white });
 
 const styles = StyleSheet.create((theme) => ({
   helper: {
@@ -64,7 +70,6 @@ export interface PairLinkModalProps {
 }
 
 export function PairLinkModal({ visible, onClose, onCancel, onSaved }: PairLinkModalProps) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const daemons = useHosts();
   const { upsertConnectionFromOfferUrl: upsertDaemonFromOfferUrl } = useHostMutations();
@@ -81,10 +86,7 @@ export function PairLinkModal({ visible, onClose, onCancel, onSaved }: PairLinkM
     inputRef.current?.clear();
   }, []);
 
-  const pairIcon = useMemo(
-    () => <Link size={16} color={theme.colors.palette.white} />,
-    [theme.colors.palette.white],
-  );
+  const pairIcon = useMemo(() => <ThemedLink size={16} uniProps={paletteWhiteColorMapping} />, []);
 
   const handleClose = useCallback(() => {
     if (isSaving) return;
@@ -192,7 +194,6 @@ export function PairLinkModal({ visible, onClose, onCancel, onSaved }: PairLinkM
           accessibilityLabel={t("pairing.pairingLink")}
           onChangeText={handleChangeOfferUrl}
           placeholder="https://app.chisacode.sh/#offer=..."
-          placeholderTextColor={theme.colors.foregroundMuted}
           style={styles.input}
           autoFocus
           autoCapitalize="none"

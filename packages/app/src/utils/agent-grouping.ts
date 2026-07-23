@@ -4,6 +4,8 @@ import type { AggregatedAgent } from "@/hooks/use-aggregated-agents";
  * Derives the project key for grouping agents.
  * For worktrees, returns the parent repo path.
  * For regular repos/directories, returns the cwd.
+ * @param cwd The agent working directory to derive the key from
+ * @returns The project grouping key
  */
 export function deriveProjectKey(cwd: string): string {
   const worktreeMarker = ".chisacode/worktrees/";
@@ -21,6 +23,8 @@ export function deriveProjectKey(cwd: string): string {
  * Waterfall:
  * - Prefer a GitHub key (normalizes SSH/HTTPS to the same key).
  * - Fallback to a generic host/path key (still normalized across SSH/HTTPS).
+ * @param remoteUrl The git remote URL to normalize, if any
+ * @returns The normalized remote project key, or null when the URL cannot be parsed
  */
 export function deriveRemoteProjectKey(remoteUrl: string | null): string | null {
   if (!remoteUrl) {
@@ -94,6 +98,8 @@ function cleanRemotePath(path: string): string {
  *   git@github.com:anthropics/claude-code.git -> anthropics/claude-code
  *   https://github.com/anthropics/claude-code.git -> anthropics/claude-code
  *   https://github.com/anthropics/claude-code -> anthropics/claude-code
+ * @param remoteUrl The git remote URL to parse, if any
+ * @returns The owner/repo path, or null when the URL cannot be parsed
  */
 export function parseRepoNameFromRemoteUrl(remoteUrl: string | null): string | null {
   if (!remoteUrl) {
@@ -140,6 +146,8 @@ export function parseRepoNameFromRemoteUrl(remoteUrl: string | null): string | n
  * Extracts just the repo name (without owner) from a remote URL.
  * Examples:
  *   git@github.com:anthropics/claude-code.git -> claude-code
+ * @param remoteUrl The git remote URL to parse, if any
+ * @returns The repo name without its owner, or null when the URL cannot be parsed
  */
 export function parseRepoShortNameFromRemoteUrl(remoteUrl: string | null): string | null {
   const fullName = parseRepoNameFromRemoteUrl(remoteUrl);
@@ -152,6 +160,8 @@ export function parseRepoShortNameFromRemoteUrl(remoteUrl: string | null): strin
 
 /**
  * Extracts the project name from a path (last segment).
+ * @param projectKey The project key or path to shorten
+ * @returns The project display name
  */
 export function deriveProjectName(projectKey: string): string {
   const githubRemotePrefix = "remote:github.com/";
@@ -168,6 +178,8 @@ export function deriveProjectName(projectKey: string): string {
  * - GitHub remotes show owner/repo
  * - Other remotes show the remote path when possible
  * - Local projects prefer the provided projectName, then fallback to cwd tail
+ * @param input The project key and the fallback project name
+ * @returns The formatted project display name
  */
 export function deriveProjectDisplayName(input: {
   projectKey: string;
@@ -202,6 +214,8 @@ export function deriveProjectDisplayName(input: {
 
 /**
  * Determines the date group label for an agent based on lastActivityAt.
+ * @param lastActivityAt The agent's last activity timestamp
+ * @returns The localized date bucket label
  */
 export function deriveDateGroup(lastActivityAt: Date): string {
   if (!Number.isFinite(lastActivityAt.getTime())) {
@@ -235,6 +249,7 @@ export function deriveDateGroup(lastActivityAt: Date): string {
   return "更早";
 }
 
+/** A group of active agents sharing a project, with activity counts for display */
 export interface ProjectGroup {
   projectKey: string;
   projectName: string;
@@ -245,11 +260,13 @@ export interface ProjectGroup {
   totalCount: number;
 }
 
+/** A group of inactive agents bucketed under a date label */
 export interface DateGroup {
   label: string;
   agents: AggregatedAgent[];
 }
 
+/** The result of grouping agents: active agents by project and inactive agents by date */
 export interface GroupedAgents {
   activeGroups: ProjectGroup[];
   inactiveGroups: DateGroup[];
@@ -390,6 +407,13 @@ function buildInactiveDateGroups(inactiveAgents: AggregatedAgent[]): DateGroup[]
   return inactiveGroups;
 }
 
+/**
+ * Groups agents into active (by project) and inactive (by date) sections, limiting recently-active-but-idle
+ * agents per project and sorting everything by most recent activity
+ * @param agents The agents to group
+ * @param options Optional callbacks such as a remote URL lookup used for remote-based grouping
+ * @returns The grouped active and inactive agent sections
+ */
 export function groupAgents(
   agents: AggregatedAgent[],
   options?: GroupAgentsOptions,

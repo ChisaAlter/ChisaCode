@@ -9,7 +9,8 @@ import {
   type TextStyle,
   type ViewStyle,
 } from "react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet } from "react-native-unistyles";
+import { FONT_SIZE, LINE_HEIGHT } from "@/styles/theme";
 
 import { DiffScroll } from "@/components/diff-scroll";
 import { lineNumberGutterWidth } from "@/components/code-insets";
@@ -63,8 +64,7 @@ function HighlightedToken({ token }: { token: HighlightToken }) {
 }
 
 function HighlightedText({ tokens, wrapLines = false }: HighlightedTextProps) {
-  const { theme } = useUnistyles();
-  const lineHeight = theme.lineHeight.diff;
+  const lineHeight = LINE_HEIGHT.diff;
 
   const containerStyle = useMemo(
     () => [styles.diffLineText, { lineHeight, ...getWrappedTextStyle(wrapLines) }],
@@ -723,7 +723,6 @@ export function DiffFileBody({
   const [scrollViewWidth, setScrollViewWidth] = useState(0);
   const [bodyWidth, setBodyWidth] = useState(0);
   const [hoveredReviewTargetKey, setHoveredReviewTargetKey] = useState<string | null>(null);
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
 
   const handleLayout = useCallback(
@@ -764,7 +763,7 @@ export function DiffFileBody({
             hunk.newStart + hunk.newCount,
           );
         }
-        const gutterWidth = lineNumberGutterWidth(maxLineNo, theme.fontSize.code);
+        const gutterWidth = lineNumberGutterWidth(maxLineNo, FONT_SIZE.code);
 
         if (layout === "split") {
           const rows = buildSplitDiffRows(file);

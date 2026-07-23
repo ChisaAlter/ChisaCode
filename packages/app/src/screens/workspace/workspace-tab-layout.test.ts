@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   computeWorkspaceTabLayout,
   computeWorkspaceVisibleTabWindow,
+  shouldShowMobileWorkspaceTabSwitcher,
 } from "@/screens/workspace/workspace-tab-layout";
 
 const metrics = {
@@ -139,5 +140,17 @@ describe("computeWorkspaceTabLayout", () => {
       endIndex: 24,
       hiddenCount: 19,
     });
+  });
+});
+
+describe("shouldShowMobileWorkspaceTabSwitcher", () => {
+  it("hides the Soft compact tab wall when there are fewer than two tabs", () => {
+    expect(shouldShowMobileWorkspaceTabSwitcher(0)).toBe(false);
+    expect(shouldShowMobileWorkspaceTabSwitcher(1)).toBe(false);
+  });
+
+  it("shows the compact tab switcher once two or more tabs exist", () => {
+    expect(shouldShowMobileWorkspaceTabSwitcher(2)).toBe(true);
+    expect(shouldShowMobileWorkspaceTabSwitcher(5)).toBe(true);
   });
 });

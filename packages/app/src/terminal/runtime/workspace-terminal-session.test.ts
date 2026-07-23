@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   getWorkspaceTerminalSession,
@@ -7,6 +7,10 @@ import {
 } from "./workspace-terminal-session";
 
 describe("workspace-terminal-session", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("returns the same workspace session instance for the same scope", () => {
     const first = getWorkspaceTerminalSession({
       scopeKey: "workspace-a",
@@ -46,11 +50,9 @@ describe("workspace-terminal-session", () => {
     });
   });
 
-  it("evicts workspace terminal session state when the retain count returns to zero", () => {
-    const scopeKey = "workspace-release";
-    const first = getWorkspaceTerminalSession({
-      scopeKey,
-    });
+  it("reuses the session within the release grace period (Strict Mode remount safety)", () => {
+    const scopeKey = "workspace-grace-reuse";
+    const first = getWorkspaceTerminalSession({ scopeKey });
     first.snapshots.set({
       terminalId: "term-1",
       state: {
@@ -65,10 +67,42 @@ describe("workspace-terminal-session", () => {
     retainWorkspaceTerminalSession({ scopeKey });
     releaseWorkspaceTerminalSession({ scopeKey });
 
-    const second = getWorkspaceTerminalSession({
-      scopeKey,
+    // A rapid re-mount (e.g. Strict Mode dev mount→unmount→mount) should
+    // revive the existing session and preserve scrollback, not create a new one.
+    const second = getWorkspaceTerminalSession({ scopeKey });
+    expect(second).toBe(first);
+    expect(second.snapshots.get({ terminalId: "term-1" })).toEqual({
+      rows: 1,
+      cols: 1,
+      grid: [[{ char: "A" }]],
+      scrollback: [],
+      cursor: { row: 0, col: 0 },
+    });
+  });
+
+  it("evicts workspace terminal session state after the release grace period elapses", () => {
+    vi.useFakeTimers();
+    const scopeKey = "workspace-release-timeout";
+    const first = getWorkspaceTerminalSession({ scopeKey });
+    first.snapshots.set({
+      terminalId: "term-1",
+      state: {
+        rows: 1,
+        cols: 1,
+        grid: [[{ char: "A" }]],
+        scrollback: [],
+        cursor: { row: 0, col: 0 },
+      },
     });
 
+    retainWorkspaceTerminalSession({ scopeKey });
+    releaseWorkspaceTerminalSession({ scopeKey });
+
+    // Advance past the grace period so the pending teardown fires without a
+    // intervening getWorkspaceTerminalSession call (which would cancel it).
+    vi.advanceTimersByTime(6_000);
+
+    const second = getWorkspaceTerminalSession({ scopeKey });
     expect(second).not.toBe(first);
     expect(second.snapshots.get({ terminalId: "term-1" })).toBeNull();
   });

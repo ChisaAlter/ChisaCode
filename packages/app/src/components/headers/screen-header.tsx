@@ -2,7 +2,7 @@ import { useMemo, type ReactNode } from "react";
 import type { LayoutChangeEvent } from "react-native";
 import { View, type StyleProp, type ViewStyle } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet } from "react-native-unistyles";
 import {
   HEADER_INNER_HEIGHT,
   HEADER_INNER_HEIGHT_MOBILE,
@@ -12,6 +12,7 @@ import {
 } from "@/constants/layout";
 import { useWindowControlsPadding } from "@/utils/desktop-window";
 import { TitlebarDragRegion } from "@/components/desktop/titlebar-drag-region";
+import { SPACING } from "@/styles/theme";
 import { resolveThemeWorkbenchSurfaceRoles } from "@/styles/workbench-surface-roles";
 
 interface ScreenHeaderProps {
@@ -43,14 +44,15 @@ export function ScreenHeader({
   horizontalPadding,
   backgroundColor,
 }: ScreenHeaderProps) {
-  const { theme } = useUnistyles();
   const insets = useSafeAreaInsets();
   const isMobile = useIsCompactFormFactor();
   const padding = useWindowControlsPadding(windowControlsPaddingRole);
   // Only add extra padding on mobile for better touch targets; on desktop, only use safe area insets
   const topPadding = isMobile ? HEADER_TOP_PADDING_MOBILE : 0;
+  // `spacing` is the static `SPACING` scale shared by every theme, so the
+  // constant is imported directly instead of read from a hook.
   const baseHorizontalPadding =
-    horizontalPadding ?? (isMobile ? theme.spacing[2] : WORKBENCH_HEADER_HORIZONTAL_PADDING);
+    horizontalPadding ?? (isMobile ? SPACING[2] : WORKBENCH_HEADER_HORIZONTAL_PADDING);
 
   const innerStyle = useMemo(
     () => [styles.inner, { paddingTop: insets.top + topPadding }],

@@ -303,13 +303,33 @@ export function WorkspaceHeaderTitleBar({
       ) : (
         <View style={styles.headerTitleTextGroup}>
           {isMobile ? (
-            <BranchSwitcher
-              currentBranchName={currentBranchName}
-              title={title}
-              serverId={normalizedServerId}
-              workspaceId={normalizedWorkspaceId}
-              isGitCheckout={isGitCheckout}
-            />
+            <>
+              {/* Soft .m-header: title + optional branch pill on one row; subtitle below. */}
+              <View style={styles.compactHeaderTitleRow}>
+                <Text testID="workspace-header-title" style={styles.headerTitle} numberOfLines={1}>
+                  {title}
+                </Text>
+                {isGitCheckout && currentBranchName ? (
+                  <BranchSwitcher
+                    currentBranchName={currentBranchName}
+                    title={currentBranchName}
+                    serverId={normalizedServerId}
+                    workspaceId={normalizedWorkspaceId}
+                    isGitCheckout={isGitCheckout}
+                    presentation="soft-pill"
+                  />
+                ) : null}
+              </View>
+              {showSubtitle ? (
+                <Text
+                  testID="workspace-header-subtitle"
+                  style={styles.headerProjectTitle}
+                  numberOfLines={1}
+                >
+                  {subtitle}
+                </Text>
+              ) : null}
+            </>
           ) : (
             <DesktopWorkspaceHeaderTitle
               activeTab={activeTab}
@@ -318,15 +338,6 @@ export function WorkspaceHeaderTitleBar({
               workspaceId={normalizedWorkspaceId}
             />
           )}
-          {isMobile && showSubtitle ? (
-            <Text
-              testID="workspace-header-subtitle"
-              style={styles.headerProjectTitle}
-              numberOfLines={1}
-            >
-              {subtitle}
-            </Text>
-          ) : null}
         </View>
       )}
       <View style={styles.compactHeaderMenuCluster}>
@@ -782,6 +793,15 @@ const styles = StyleSheet.create((theme) => ({
       xs: 0,
       md: theme.spacing[2],
     },
+  },
+  // Soft .m-header title row: session label + quiet branch ctx pill.
+  compactHeaderTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    minWidth: 0,
+    maxWidth: "100%",
+    flexShrink: 1,
   },
   // Soft .topbar .title: plain session label, no icon chip, flex fills remaining space.
   desktopHeaderTitleRow: {

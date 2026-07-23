@@ -1,18 +1,22 @@
 import { buildHostWorkspaceOpenRoute } from "@/utils/host-routes";
 
+/** Resolved routes and workspace context backing the mobile sidebar quick-action sheet. */
 export interface MobileSidebarQuickActionModel {
   workspaceId: string | null;
   changesRoute: string | null;
   terminalRoute: string | null;
 }
 
+/** Identifiers of the actions available in the mobile sidebar quick-action sheet. */
 export type MobileSidebarQuickActionId = "resume" | "changes" | "terminal" | "sessions" | "close";
 
+/** A quick-action button to render in the mobile sidebar, with its visual variant. */
 export interface MobileSidebarQuickActionButtonModel {
   id: MobileSidebarQuickActionId;
   variant: "primary" | "secondary";
 }
 
+/** Minimal agent shape required to select and label a quick-action resume target. */
 export interface MobileSidebarQuickActionAgent {
   id: string;
   serverId: string;
@@ -21,6 +25,7 @@ export interface MobileSidebarQuickActionAgent {
   archivedAt?: string | Date | null;
 }
 
+/** A resolved agent target (server id plus agent id) that a quick action can resume. */
 export interface MobileSidebarQuickActionAgentTarget {
   serverId: string;
   agentId: string;
@@ -41,6 +46,13 @@ function hasArchivedAt(value: string | Date | null | undefined): boolean {
   return trimNonEmpty(value) !== null;
 }
 
+/**
+ * Picks the agent the quick-action resume button should target.
+ * @param agents The candidate agents
+ * @param selectedAgentId The currently selected agent id, optionally qualified as "serverId:agentId"
+ * @param preferredServerId Optional server id preferred when no selection matches
+ * @returns The matching unarchived agent, or null when no agent is available
+ */
 export function selectMobileSidebarQuickActionAgent<Agent extends MobileSidebarQuickActionAgent>(
   agents: readonly Agent[],
   selectedAgentId: string | null | undefined,
@@ -74,6 +86,11 @@ export function selectMobileSidebarQuickActionAgent<Agent extends MobileSidebarQ
   );
 }
 
+/**
+ * Derives the display label for a quick-action agent.
+ * @param agent The agent to label
+ * @returns The agent title, the last cwd segment, the agent id, or "Agent" as a last resort
+ */
 export function resolveMobileSidebarQuickActionAgentLabel(
   agent: Pick<MobileSidebarQuickActionAgent, "title" | "cwd" | "id">,
 ): string {
@@ -95,6 +112,11 @@ function resolveMobileSidebarQuickActionCwdLabel(cwd: string | null | undefined)
   return segments.at(-1) ?? value;
 }
 
+/**
+ * Resolves an agent into a resume target for quick actions.
+ * @param agent The agent to resolve
+ * @returns The server and agent ids, or null when either is blank
+ */
 export function resolveMobileSidebarQuickActionAgentTarget(
   agent: Pick<MobileSidebarQuickActionAgent, "serverId" | "id"> | null | undefined,
 ): MobileSidebarQuickActionAgentTarget | null {
@@ -106,6 +128,11 @@ export function resolveMobileSidebarQuickActionAgentTarget(
   return { serverId, agentId };
 }
 
+/**
+ * Builds the model backing the mobile sidebar quick-action sheet for the current workspace context.
+ * @param input The current server id, workspace id, and project kind
+ * @returns The workspace id and available changes/terminal routes, all null when the context is incomplete
+ */
 export function buildMobileSidebarQuickActionModel(input: {
   serverId: string | null | undefined;
   workspaceId: string | null | undefined;
@@ -130,6 +157,11 @@ export function buildMobileSidebarQuickActionModel(input: {
   };
 }
 
+/**
+ * Builds the ordered list of quick-action buttons to show based on available targets and routes.
+ * @param input Flags describing which targets and routes are available
+ * @returns The ordered button models, always ending with the close action
+ */
 export function buildMobileSidebarQuickActionButtons(input: {
   hasAgentTarget: boolean;
   changesRoute: string | null | undefined;

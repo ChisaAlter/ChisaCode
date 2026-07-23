@@ -1,10 +1,22 @@
 import { useCallback, useMemo } from "react";
 import { Pressable, Text, View } from "react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { QrCode, Link2, ClipboardPaste } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { AdaptiveModalSheet, type SheetHeader } from "./adaptive-modal-sheet";
 import { isNative } from "@/constants/platform";
+import type { Theme } from "@/styles/theme";
+
+// Lucide icons only accept `color` (a non-style prop), so wrap each one with
+// `withUnistyles` and feed the theme-reactive color through `uniProps`. Only the
+// icon node re-renders on theme changes — the surrounding tree does not.
+const ThemedQrCode = withUnistyles(QrCode);
+const ThemedLink2 = withUnistyles(Link2);
+const ThemedClipboardPaste = withUnistyles(ClipboardPaste);
+
+const foregroundColorMapping = (theme: Theme) => ({
+  color: theme.colors.foreground,
+});
 
 const styles = StyleSheet.create((theme) => ({
   option: {
@@ -49,7 +61,6 @@ export function AddHostMethodModal({
   onScanQr,
   onPasteLink,
 }: AddHostMethodModalProps) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const header = useMemo<SheetHeader>(() => ({ title: t("host.addConnection") }), [t]);
 
@@ -79,7 +90,7 @@ export function AddHostMethodModal({
         accessibilityLabel={t("host.directConnection")}
         testID="add-host-method-direct"
       >
-        <Link2 size={18} color={theme.colors.foreground} />
+        <ThemedLink2 size={18} uniProps={foregroundColorMapping} />
         <View style={styles.optionBody}>
           <Text style={styles.optionText}>{t("host.directConnection")}</Text>
           <Text style={styles.optionSubtext}>{t("host.localNetworkOrVpn")}</Text>
@@ -93,7 +104,7 @@ export function AddHostMethodModal({
           accessibilityRole="button"
           accessibilityLabel={t("host.scanQr")}
         >
-          <QrCode size={18} color={theme.colors.foreground} />
+          <ThemedQrCode size={18} uniProps={foregroundColorMapping} />
           <View style={styles.optionBody}>
             <Text style={styles.optionText}>{t("host.scanQr")}</Text>
             <Text style={styles.optionSubtext}>{t("host.encryptedRelayConnection")}</Text>
@@ -108,7 +119,7 @@ export function AddHostMethodModal({
         accessibilityLabel={t("host.pastePairingLink")}
         testID="add-host-method-pair-link"
       >
-        <ClipboardPaste size={18} color={theme.colors.foreground} />
+        <ThemedClipboardPaste size={18} uniProps={foregroundColorMapping} />
         <View style={styles.optionBody}>
           <Text style={styles.optionText}>{t("host.pastePairingLink")}</Text>
           <Text style={styles.optionSubtext}>{t("host.encryptedRelayConnection")}</Text>

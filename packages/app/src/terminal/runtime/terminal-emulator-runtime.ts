@@ -334,6 +334,11 @@ export class TerminalEmulatorRuntime {
 
     this.terminal = terminal;
     this.fitAddon = fitAddon;
+    // Debug hook: exposes the live xterm instance for inspection. This module
+    // runs only in the web/dom renderer ("use dom"), so the global is contained
+    // to the terminal's own webview context; in a hardened Electron renderer
+    // with contextIsolation the exposure is further contained. Kept for
+    // browser test assertions and dev diagnostics.
     window.__chisacodeTerminal = terminal;
 
     const fitAndEmitResize = (force: boolean): void => {
@@ -768,15 +773,23 @@ export class TerminalEmulatorRuntime {
     if (operation.suppressInput) {
       this.suppressInput = Boolean(operation.suppressInput);
     }
+    // Capture the terminal that owns this operation so late timeout/write
+    // callbacks bail if the runtime has unmounted or remounted a new terminal.
+    const owningTerminal = terminal;
     const finalizeOperation = (expectedOperation: TerminalOutputOperation) => {
       if (this.inFlightOutputOperation !== expectedOperation) {
         return;
       }
+      // If the owning terminal is gone or replaced, commit silently without
+      // re-entering processOutputQueue (which would target the new terminal).
+      const terminalStillOwns = this.terminal === owningTerminal;
       this.inFlightOutputOperation = null;
       this.clearInFlightOutputTimeout();
       this.suppressInput = previousSuppressInput;
       expectedOperation.onCommitted?.();
-      this.processOutputQueue();
+      if (terminalStillOwns) {
+        this.processOutputQueue();
+      }
     };
 
     if (operation.type === "clear") {

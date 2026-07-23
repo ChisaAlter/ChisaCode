@@ -30,8 +30,9 @@ export function formatTimeAgo(date: Date): string {
     return `${diffDay}d ago`;
   }
 
-  // For older dates, show abbreviated month and day
-  const month = date.toLocaleDateString("en-US", { month: "short" });
+  // For older dates, show abbreviated month and day — respect the active
+  // locale (undefined falls back to the OS default) instead of hardcoding en-US.
+  const month = date.toLocaleDateString(undefined, { month: "short" });
   const day = date.getDate();
   return `${month} ${day}`;
 }

@@ -758,6 +758,7 @@ export function WorkspaceDraftAgentTab({
           formErrorMessage={formErrorMessage}
           composerKeyboardStyle={composerKeyboardStyle}
           contextSlot={softHomeContextSlot}
+          compact={isCompact}
         >
           <Composer
             agentId={tabId}

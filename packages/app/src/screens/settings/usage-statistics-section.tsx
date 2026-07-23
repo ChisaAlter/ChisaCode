@@ -30,10 +30,11 @@ type RangeOption = (typeof RANGE_OPTIONS)[number];
 type ExportFormat = "json" | "csv";
 type UsageTab = "local" | "provider";
 
-const TAB_OPTIONS = [
-  { value: "local", label: "本地用量" },
-  { value: "provider", label: "Provider 配额" },
-] as const;
+/** Tab option values; labels are resolved via i18n at render time. */
+const TAB_OPTIONS: ReadonlyArray<{ value: UsageTab; label: string }> = [
+  { value: "local", label: "" },
+  { value: "provider", label: "" },
+];
 
 /** Chart color palette — uses theme tokens where palette equivalents exist; hardcodes otherwise. */
 const CHART_COLOR_KEYS = [

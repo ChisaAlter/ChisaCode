@@ -11,7 +11,6 @@ import {
   GitBranch,
   GitPullRequest,
   Inbox,
-  SquarePen,
   X,
 } from "lucide-react-native";
 import { useRouter, type Href } from "expo-router";
@@ -1454,28 +1453,12 @@ export function NewWorkspaceScreen({
     ],
   );
 
-  const softHomeContextSlot = useMemo(
-    () => (
-      <>
-        {isCompact ? (
-          <View style={styles.draftLeadRow}>
-            <View style={styles.draftLeadCopy}>
-              <SquarePen size={14} color={theme.colors.accent} />
-              <Text style={styles.draftLeadText} numberOfLines={1}>
-                {t("workspace.startUsingChisaCode")}
-              </Text>
-            </View>
-          </View>
-        ) : null}
-        {workspaceControls}
-      </>
-    ),
-    [isCompact, t, theme.colors.accent, workspaceControls],
-  );
+  // Soft Home context is path/branch/import only — hero owns the compact title stack.
+  const softHomeContextSlot = useMemo(() => workspaceControls, [workspaceControls]);
 
   const softHomeComposer = (
     <SoftHomeEmpty
-      formErrorMessage={!isCompact ? errorMessage : null}
+      formErrorMessage={errorMessage}
       compact={isCompact}
       contextSlot={softHomeContextSlot}
     >
@@ -1502,13 +1485,9 @@ export function NewWorkspaceScreen({
         onAddImages={handleAddImagesCallback}
         placeholder={t("workspace.softHomeComposerPlaceholder")}
         inputWrapperStyle={styles.draftComposerInputWrapper}
-        inputAreaStyle={!isCompact ? softHomeComposerInputAreaStyle : undefined}
+        // Soft Home host owns horizontal inset; zero Composer dock pad on all form factors.
+        inputAreaStyle={softHomeComposerInputAreaStyle}
       />
-      {isCompact && errorMessage ? (
-        <View style={styles.errorRow}>
-          <Text style={styles.errorText}>{errorMessage}</Text>
-        </View>
-      ) : null}
     </SoftHomeEmpty>
   );
 
@@ -1591,30 +1570,6 @@ const styles = StyleSheet.create((theme) => ({
   desktopSoftTopSpacer: {
     flex: 1,
   },
-  draftLeadRow: {
-    width: "100%",
-    minHeight: 40,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: theme.spacing[2],
-    paddingBottom: theme.spacing[2],
-  },
-  draftLeadCopy: {
-    minWidth: 0,
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing[1.5],
-  },
-  draftLeadText: {
-    minWidth: 0,
-    flexShrink: 1,
-    color: theme.colors.foregroundMuted,
-    // Soft new-workspace muted: 12.5.
-    fontSize: 12.5,
-    lineHeight: 18,
-  },
   importAction: {
     minHeight: 30,
     height: 30,
@@ -1654,16 +1609,6 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: 14.5,
     lineHeight: 20,
     flexShrink: 1,
-  },
-  errorText: {
-    fontSize: 12.5,
-    lineHeight: 16,
-    color: theme.colors.destructive,
-  },
-  errorRow: {
-    width: "100%",
-    alignSelf: "center",
-    paddingTop: theme.spacing[2],
   },
   optionsRow: {
     flexDirection: "row",

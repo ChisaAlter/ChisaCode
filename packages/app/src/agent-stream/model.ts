@@ -60,6 +60,22 @@ const turnTimingCache = new WeakMap<
   WeakMap<StreamItem[], Map<string, StreamTurnTiming>>
 >();
 
+/** Cap inner cache maps so a long-lived StreamItem[] does not accumulate an
+ *  unbounded number of cache-key variants (platform/breakpoint/mounted-window
+ *  combinations). When the cap is reached the oldest entry is evicted. */
+const CACHE_INNER_MAX_ENTRIES = 8;
+
+function setBoundedCacheEntry<K, V>(map: Map<K, V>, key: K, value: V): void {
+  if (map.size >= CACHE_INNER_MAX_ENTRIES && !map.has(key)) {
+    // Evict the first (oldest) entry to keep the map bounded.
+    const firstKey = map.keys().next().value;
+    if (firstKey !== undefined) {
+      map.delete(firstKey);
+    }
+  }
+  map.set(key, value);
+}
+
 function isAssistantMessageItem(
   item: StreamItem,
 ): item is Extract<StreamItem, { kind: "assistant_message" }> {
@@ -339,7 +355,7 @@ function getOrderedItems(params: {
     return cached;
   }
   const ordered = order(source);
-  cachedByKey.set(cacheKey, ordered);
+  setBoundedCacheEntry(cachedByKey, cacheKey, ordered);
   return ordered;
 }
 
@@ -373,7 +389,7 @@ function splitOrderedTail(params: {
         liveHead: EMPTY_STREAM_ITEMS,
       },
     } satisfies Pick<AgentStreamRenderModel, "history" | "segments">;
-    cachedByKey.set(cacheKey, unsplit);
+    setBoundedCacheEntry(cachedByKey, cacheKey, unsplit);
     return unsplit;
   }
 
@@ -389,7 +405,7 @@ function splitOrderedTail(params: {
       liveHead: EMPTY_STREAM_ITEMS,
     },
   } satisfies Pick<AgentStreamRenderModel, "history" | "segments">;
-  cachedByKey.set(cacheKey, split);
+  setBoundedCacheEntry(cachedByKey, cacheKey, split);
   return split;
 }
 
@@ -413,7 +429,7 @@ function getTurnTiming(params: {
     return cached;
   }
   const timing = deriveStreamTurnTiming(params);
-  cachedByStatus.set(params.agentStatus, timing);
+  setBoundedCacheEntry(cachedByStatus, params.agentStatus, timing);
   return timing;
 }
 

@@ -23,7 +23,13 @@ import {
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { ArrowUp, Mic, MicOff, CornerDownLeft, Plus, Square } from "lucide-react-native";
-import Animated, { useSharedValue, useAnimatedStyle, withTiming } from "react-native-reanimated";
+import Animated, {
+  runOnJS,
+  useAnimatedReaction,
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+} from "react-native-reanimated";
 import { useDictation } from "@/hooks/use-dictation";
 import { DictationOverlay } from "@/components/dictation-controls";
 import { RealtimeVoiceOverlay } from "@/components/realtime-voice-overlay";
@@ -56,6 +62,7 @@ import type { MessageInputKeyboardActionKind } from "@/keyboard/actions";
 import { isImeComposingKeyboardEvent } from "@/utils/keyboard-ime";
 import { isNative, isWeb } from "@/constants/platform";
 import { useIsCompactFormFactor } from "@/constants/layout";
+import { resolveSoftComposerCardElevation } from "@/composer/draft/soft-home-layout";
 import { COMPOSER_VOICE_UI_VISIBLE } from "@/composer/voice-visibility";
 import { useComposerHeightMirror } from "./height-mirror";
 import { computeCanStartDictation } from "./state";
@@ -552,6 +559,13 @@ function usePasteImagesEffect(args: PasteImagesEffectArgs): void {
     onAddImages,
   } = args;
 
+  // Track the guard-only state in refs so toggling dictation/voice does not
+  // tear down and re-add the paste listener (the guard already short-circuits).
+  const isDictatingRef = useRef(isDictating);
+  const isRealtimeVoiceRef = useRef(isRealtimeVoiceForCurrentAgent);
+  isDictatingRef.current = isDictating;
+  isRealtimeVoiceRef.current = isRealtimeVoiceForCurrentAgent;
+
   useEffect(() => {
     if (!isWeb || !onAddImages) return;
 
@@ -571,7 +585,7 @@ function usePasteImagesEffect(args: PasteImagesEffectArgs): void {
 
     let disposed = false;
     const handlePaste = (event: ClipboardEvent) => {
-      if (!isConnected || disabled || isDictating || isRealtimeVoiceForCurrentAgent) return;
+      if (!isConnected || disabled || isDictatingRef.current || isRealtimeVoiceRef.current) return;
 
       const imageFiles = collectImageFilesFromClipboardData(event.clipboardData);
       if (imageFiles.length === 0) return;
@@ -594,14 +608,7 @@ function usePasteImagesEffect(args: PasteImagesEffectArgs): void {
       disposed = true;
       textarea.removeEventListener?.("paste", handlePaste);
     };
-  }, [
-    disabled,
-    getWebTextArea,
-    isConnected,
-    isDictating,
-    isRealtimeVoiceForCurrentAgent,
-    onAddImages,
-  ]);
+  }, [disabled, getWebTextArea, isConnected, onAddImages]);
 }
 
 function useAutoFocusOnWebEffect(
@@ -1333,11 +1340,15 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       valueRef.current = value;
     }, [value]);
 
+    // Emit blur only on true unmount, not when onFocusChange identity changes
+    // mid-focus (which would deliver a spurious blur to the parent).
+    const onFocusChangeRef = useRef(onFocusChange);
+    onFocusChangeRef.current = onFocusChange;
     useEffect(() => {
       return () => {
-        onFocusChange?.(false);
+        onFocusChangeRef.current?.(false);
       };
-    }, [onFocusChange]);
+    }, []);
 
     useAutoFocusOnWebEffect(textInputRef, autoFocus, autoFocusKey);
 
@@ -1458,9 +1469,23 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       });
     }, [overlayTransition, showOverlay]);
 
+    // Drive pointerEvents via a React state toggle at the 0.5 threshold so the
+    // prop works on native (pointerEvents is a view prop, not a style property,
+    // and cannot be driven by useAnimatedStyle on native).
+    const [overlayPointerEvents, setOverlayPointerEvents] = useState<"auto" | "none">(
+      showOverlay ? "auto" : "none",
+    );
+    useAnimatedReaction(
+      () => overlayTransition.value > 0.5,
+      (isInteractive, previous) => {
+        if (isInteractive !== previous) {
+          runOnJS(setOverlayPointerEvents)(isInteractive ? "auto" : "none");
+        }
+      },
+    );
+
     const overlayAnimatedStyle = useAnimatedStyle(() => ({
       opacity: overlayTransition.value,
-      pointerEvents: overlayTransition.value > 0.5 ? "auto" : "none",
     }));
 
     const inputAnimatedStyle = useAnimatedStyle(() => ({
@@ -1674,11 +1699,25 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
     const shouldHandleWebKeyPress = isWeb;
     const shouldSubmitOnEnter = computeShouldSubmitOnEnter(isWeb, isCompact, isNative);
 
-    function handleDesktopKeyPress(event: WebTextInputKeyPressEvent) {
-      if (!shouldHandleWebKeyPress) return;
-      handleDesktopKeyPressImpl(event, {
+    const handleDesktopKeyPress = useCallback(
+      (event: WebTextInputKeyPressEvent) => {
+        if (!shouldHandleWebKeyPress) return;
+        handleDesktopKeyPressImpl(event, {
+          onKeyPressCallback,
+          submitOnEnter: shouldSubmitOnEnter,
+          isAgentRunning,
+          onQueue,
+          isSubmitDisabled,
+          isSubmitLoading,
+          disabled,
+          handleAlternateSendAction,
+          handleDefaultSendAction,
+        });
+      },
+      [
+        shouldHandleWebKeyPress,
+        shouldSubmitOnEnter,
         onKeyPressCallback,
-        submitOnEnter: shouldSubmitOnEnter,
         isAgentRunning,
         onQueue,
         isSubmitDisabled,
@@ -1686,13 +1725,27 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
         disabled,
         handleAlternateSendAction,
         handleDefaultSendAction,
-      });
-    }
+      ],
+    );
 
-    function handleNativeKeyPressEvent(event: NativeSyntheticEvent<TextInputKeyPressEventData>) {
-      const ctx: DesktopKeyPressContext = {
+    const handleNativeKeyPressEvent = useCallback(
+      (event: NativeSyntheticEvent<TextInputKeyPressEventData>) => {
+        const ctx: DesktopKeyPressContext = {
+          onKeyPressCallback,
+          submitOnEnter: shouldSubmitOnEnter,
+          isAgentRunning,
+          onQueue,
+          isSubmitDisabled,
+          isSubmitLoading,
+          disabled,
+          handleAlternateSendAction,
+          handleDefaultSendAction,
+        };
+        handleNativeKeyPress(event, ctx);
+      },
+      [
         onKeyPressCallback,
-        submitOnEnter: shouldSubmitOnEnter,
+        shouldSubmitOnEnter,
         isAgentRunning,
         onQueue,
         isSubmitDisabled,
@@ -1700,15 +1753,13 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
         disabled,
         handleAlternateSendAction,
         handleDefaultSendAction,
-      };
-      handleNativeKeyPress(event, ctx);
-    }
+      ],
+    );
 
-    const keyPressHandler = resolveKeyPressHandler(
-      isWeb,
-      isNative,
-      handleDesktopKeyPress,
-      handleNativeKeyPressEvent,
+    const keyPressHandler = useMemo(
+      () =>
+        resolveKeyPressHandler(isWeb, isNative, handleDesktopKeyPress, handleNativeKeyPressEvent),
+      [handleDesktopKeyPress, handleNativeKeyPressEvent],
     );
 
     const { shouldShowSendButton } = computeSendableContent({
@@ -1942,7 +1993,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
           </View>
         </Animated.View>
 
-        <Animated.View style={overlayContainerStyle}>
+        <Animated.View style={overlayContainerStyle} pointerEvents={overlayPointerEvents}>
           <MessageInputOverlay
             showDictationOverlay={showDictationOverlay}
             showRealtimeOverlay={showRealtimeOverlay}
@@ -1986,10 +2037,9 @@ const styles = StyleSheet.create((theme: Theme) => ({
     paddingRight: 0,
     paddingBottom: 0,
     paddingLeft: 0,
+    ...resolveSoftComposerCardElevation(),
     ...(isWeb
       ? {
-          // Soft docked pen-bar: short contact shadow (no long 36px trail).
-          boxShadow: "0 1px 2px rgba(20, 23, 31, 0.04), 0 4px 12px rgba(20, 23, 31, 0.06)",
           transitionProperty: "border-color, box-shadow",
           transitionDuration: "200ms",
           transitionTimingFunction: "ease-in-out",

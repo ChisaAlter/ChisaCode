@@ -192,7 +192,11 @@ export function createLocalFileAttachmentStore(params: {
       const entries = await fileSystem.listDirectory(baseDirectory);
       await Promise.all(
         entries.map(async (entryName) => {
-          const id = entryName.split(".", 1)[0] ?? "";
+          // Parse the attachment id as everything before the last dot (the
+          // extension boundary) so ids or filenames containing dots are not
+          // truncated mid-id and live attachments are not mis-deleted.
+          const lastDotIndex = entryName.lastIndexOf(".");
+          const id = lastDotIndex > 0 ? entryName.slice(0, lastDotIndex) : entryName;
           if (!id || referencedIds.has(id)) {
             return;
           }

@@ -8,7 +8,7 @@ import {
   type PressableStateCallbackType,
 } from "react-native";
 import { BottomSheetFlatList } from "@gorhom/bottom-sheet";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import {
   useIsCompactFormFactor,
   WORKBENCH_COMPOSER_CONTROL_HEIGHT,
@@ -28,7 +28,51 @@ import type { AgentProvider } from "@chisacode/protocol/agent-types";
 import type { SheetHeader } from "@/components/adaptive-modal-sheet";
 import { useProviderSettingsStore } from "@/stores/provider-settings-store";
 import { Button } from "@/components/ui/button";
+import { ICON_SIZE, type Theme } from "@/styles/theme";
 const IS_WEB = platformIsWeb;
+
+// Lucide icons (and provider icons) only accept `color`/`size` as non-style
+// props, so wrap each one with `withUnistyles` and feed the theme-reactive
+// color through `uniProps`. Only the icon node re-renders on theme changes;
+// the surrounding row tree does not. `iconSize` is a static constant
+// (`ICON_SIZE`), so it is imported directly rather than read from the hook.
+const ThemedAlertTriangle = withUnistyles(AlertTriangle);
+const ThemedChevronDown = withUnistyles(ChevronDown);
+const ThemedChevronRight = withUnistyles(ChevronRight);
+const ThemedSearch = withUnistyles(Search);
+const ThemedSettings = withUnistyles(Settings);
+const ThemedStar = withUnistyles(Star);
+const ThemedActivityIndicator = withUnistyles(ActivityIndicator);
+
+type IconColorMapping = (theme: Theme) => { color: string; fill?: string };
+
+const foregroundMutedColorMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+});
+const foregroundColorMapping = (theme: Theme) => ({
+  color: theme.colors.foreground,
+});
+// Favorite star: amber stroke + amber fill when favorited.
+const favoriteStarColorMapping = (theme: Theme) => ({
+  color: theme.colors.palette.amber[500],
+  fill: theme.colors.palette.amber[500],
+});
+// Hovered (not favorited) star: muted stroke, transparent fill.
+const hoveredStarColorMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+  fill: "transparent",
+});
+// Default (not favorited, not hovered) star: border stroke, transparent fill.
+const defaultStarColorMapping = (theme: Theme) => ({
+  color: theme.colors.border,
+  fill: "transparent",
+});
+const settingsIconColorMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+});
+const settingsIconDisabledColorMapping = (theme: Theme) => ({
+  color: theme.colors.border,
+});
 
 import { Combobox, ComboboxItem, type ComboboxOption } from "@/components/ui/combobox";
 import {
@@ -154,9 +198,12 @@ function ModelRow({
   onPress: () => void;
   onToggleFavorite?: (provider: string, modelId: string) => void;
 }) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const ProviderIcon = getProviderIcon(row.agentProvider);
+  // Provider icons are dynamic per row; wrap with `withUnistyles` so the
+  // theme-reactive `color` flows through `uniProps` without a `useUnistyles`
+  // subscription on this row.
+  const ThemedProviderIcon = useMemo(() => withUnistyles(ProviderIcon), [ProviderIcon]);
 
   const handleToggleFavorite = useCallback(
     (event: GestureResponderEvent) => {
@@ -167,8 +214,8 @@ function ModelRow({
   );
 
   const leadingSlot = useMemo(
-    () => <ProviderIcon size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />,
-    [ProviderIcon, theme.iconSize.sm, theme.colors.foregroundMuted],
+    () => <ThemedProviderIcon size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />,
+    [ThemedProviderIcon],
   );
   const trailingSlot = useMemo(
     () =>
@@ -184,31 +231,19 @@ function ModelRow({
           testID={`favorite-model-${row.provider}-${row.modelId}`}
         >
           {({ hovered }) => {
-            let starColor: string;
-            if (isFavorite) starColor = theme.colors.palette.amber[500];
-            else if (hovered) starColor = theme.colors.foregroundMuted;
-            else starColor = theme.colors.border;
-            return (
-              <Star
-                size={16}
-                color={starColor}
-                fill={isFavorite ? theme.colors.palette.amber[500] : "transparent"}
-              />
-            );
+            let starUniProps: IconColorMapping;
+            if (isFavorite) {
+              starUniProps = favoriteStarColorMapping;
+            } else if (hovered) {
+              starUniProps = hoveredStarColorMapping;
+            } else {
+              starUniProps = defaultStarColorMapping;
+            }
+            return <ThemedStar size={16} uniProps={starUniProps} />;
           }}
         </Pressable>
       ) : null,
-    [
-      onToggleFavorite,
-      handleToggleFavorite,
-      isFavorite,
-      row.provider,
-      row.modelId,
-      theme.colors.palette.amber,
-      theme.colors.foregroundMuted,
-      theme.colors.border,
-      t,
-    ],
+    [onToggleFavorite, handleToggleFavorite, isFavorite, row.provider, row.modelId, t],
   );
 
   const showDescription = row.description && PROVIDERS_WITH_MODEL_DESCRIPTIONS.has(row.provider);
@@ -323,9 +358,11 @@ function iconButtonStyle({ hovered, pressed }: PressableStateCallbackType & { ho
 }
 
 function GroupProviderButton({ provider, onDrillDown }: GroupProviderButtonProps) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const ProvIcon = getProviderIcon(provider.id);
+  // Provider icons are dynamic per row; wrap with `withUnistyles` so the
+  // theme-reactive `color` flows through `uniProps`.
+  const ThemedProvIcon = useMemo(() => withUnistyles(ProvIcon), [ProvIcon]);
   const selection = provider.modelSelection;
 
   const handlePress = useCallback(() => {
@@ -341,9 +378,9 @@ function GroupProviderButton({ provider, onDrillDown }: GroupProviderButtonProps
   } else if (selection.kind === "loading") {
     stateNode = (
       <View style={styles.rowStateInline}>
-        <ActivityIndicator
+        <ThemedActivityIndicator
           size="small"
-          color={theme.colors.foregroundMuted}
+          uniProps={foregroundMutedColorMapping}
           style={styles.rowSpinner}
         />
         <Text style={styles.drillDownCount}>{t("modelSelector.loading")}</Text>
@@ -352,7 +389,7 @@ function GroupProviderButton({ provider, onDrillDown }: GroupProviderButtonProps
   } else {
     stateNode = (
       <View style={styles.rowStateInline}>
-        <AlertTriangle size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
+        <ThemedAlertTriangle size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
         <Text style={styles.drillDownCount}>{t("modelSelector.error")}</Text>
       </View>
     );
@@ -365,11 +402,11 @@ function GroupProviderButton({ provider, onDrillDown }: GroupProviderButtonProps
       accessibilityRole="button"
       accessibilityLabel={provider.label}
     >
-      <ProvIcon size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
+      <ThemedProvIcon size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
       <Text style={styles.drillDownText}>{provider.label}</Text>
       <View style={styles.drillDownTrailing}>
         {stateNode}
-        <ChevronRight size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
+        <ThemedChevronRight size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
       </View>
     </Pressable>
   );
@@ -478,14 +515,13 @@ function ProviderErrorEmptyState({
   onRetryProvider?: (provider: AgentProvider) => void;
   isRetryingProvider: boolean;
 }) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const handleRetry = useCallback(() => {
     onRetryProvider?.(providerId);
   }, [onRetryProvider, providerId]);
   return (
     <View style={styles.emptyState}>
-      <AlertTriangle size={theme.iconSize.md} color={theme.colors.foregroundMuted} />
+      <ThemedAlertTriangle size={ICON_SIZE.md} uniProps={foregroundMutedColorMapping} />
       <Text style={styles.emptyStateText}>{message}</Text>
       {onRetryProvider ? (
         <Button variant="default" size="sm" onPress={handleRetry} disabled={isRetryingProvider}>
@@ -510,7 +546,6 @@ function SelectorContent({
   onRetryProvider,
   isRetryingProvider,
 }: SelectorContentProps) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const normalizedQuery = useMemo(() => normalizeSearchQuery(searchQuery), [searchQuery]);
   const selectedViewProvider = useMemo(
@@ -540,7 +575,7 @@ function SelectorContent({
   }
   const emptyState = (
     <View style={styles.emptyState}>
-      <Search size={theme.iconSize.md} color={theme.colors.foregroundMuted} />
+      <ThemedSearch size={ICON_SIZE.md} uniProps={foregroundMutedColorMapping} />
       <Text style={styles.emptyStateText}>{emptyMessage}</Text>
     </View>
   );
@@ -553,9 +588,9 @@ function SelectorContent({
     if (drillSelection.kind === "loading") {
       return (
         <View style={styles.emptyState}>
-          <ActivityIndicator
+          <ThemedActivityIndicator
             size="small"
-            color={theme.colors.foregroundMuted}
+            uniProps={foregroundMutedColorMapping}
             style={styles.rowSpinner}
           />
           <Text style={styles.emptyStateText}>{t("modelSelector.loading")}</Text>
@@ -628,7 +663,6 @@ export function CombinedModelSelector({
   disabled = false,
   serverId = null,
 }: CombinedModelSelectorProps) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const anchorRef = useRef<View>(null);
   const [isOpen, setIsOpen] = useState(false);
@@ -774,6 +808,9 @@ export function CombinedModelSelector({
       return { title: t("modelSelector.selectProvider") };
     }
     const ProviderIconForView = getProviderIcon(view.providerId);
+    // Provider icons are dynamic per view; wrap with `withUnistyles` so the
+    // theme-reactive `color` flows through `uniProps`.
+    const ThemedProviderIconForView = withUnistyles(ProviderIconForView);
     const headerActions = (
       <Pressable
         onPress={openHeaderProviderSettings}
@@ -786,16 +823,16 @@ export function CombinedModelSelector({
         })}
         testID={`selector-header-settings-${view.providerId}`}
       >
-        <Settings
-          size={theme.iconSize.sm}
-          color={!serverId ? theme.colors.border : theme.colors.foregroundMuted}
+        <ThemedSettings
+          size={ICON_SIZE.sm}
+          uniProps={!serverId ? settingsIconDisabledColorMapping : settingsIconColorMapping}
         />
       </Pressable>
     );
     return {
       title: view.providerLabel,
       leading: ProviderIconForView ? (
-        <ProviderIconForView size={theme.iconSize.md} color={theme.colors.foreground} />
+        <ThemedProviderIconForView size={ICON_SIZE.md} uniProps={foregroundColorMapping} />
       ) : undefined,
       back: singleProviderView ? undefined : { onPress: handleBackToAll },
       actions: headerActions,
@@ -812,14 +849,9 @@ export function CombinedModelSelector({
     singleProviderView,
     serverId,
     openHeaderProviderSettings,
-    theme.colors.border,
-    theme.colors.foregroundMuted,
     handleBackToAll,
     handleSearchQueryChange,
     searchResetKey,
-    theme.iconSize.md,
-    theme.iconSize.sm,
-    theme.colors.foreground,
     t,
   ]);
 
@@ -849,7 +881,7 @@ export function CombinedModelSelector({
             <Text style={styles.triggerText} numberOfLines={1} ellipsizeMode="tail">
               {triggerLabel}
             </Text>
-            <ChevronDown size={10} color={theme.colors.foregroundMuted} />
+            <ThemedChevronDown size={10} uniProps={foregroundMutedColorMapping} />
           </>
         )}
       </Pressable>
@@ -883,7 +915,7 @@ export function CombinedModelSelector({
           />
         ) : (
           <View style={styles.sheetLoadingState}>
-            <ActivityIndicator size="small" color={theme.colors.foregroundMuted} />
+            <ThemedActivityIndicator size="small" uniProps={foregroundMutedColorMapping} />
             <Text style={styles.sheetLoadingText}>{t("modelSelector.loadingSelector")}</Text>
           </View>
         )}

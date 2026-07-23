@@ -1,5 +1,6 @@
 import type { WorkspaceDescriptor } from "@/stores/session-store";
 
+/** A condensed view of a single workspace within a project listing */
 export interface WorkspaceSummary {
   id: string;
   name: string;
@@ -8,6 +9,7 @@ export interface WorkspaceSummary {
   currentBranch: string | null;
 }
 
+/** A host (server) that contributes workspaces to a project, with its repo root and runtime state */
 export interface ProjectHostEntry {
   serverId: string;
   serverName: string;
@@ -19,6 +21,7 @@ export interface ProjectHostEntry {
   githubRuntime?: WorkspaceDescriptor["githubRuntime"];
 }
 
+/** An aggregated project spanning one or more hosts, sorted and ready for display */
 export interface ProjectSummary {
   projectKey: string;
   projectName: string;
@@ -30,6 +33,7 @@ export interface ProjectSummary {
   githubUrl?: string;
 }
 
+/** A host and its workspaces, used as input when building project summaries */
 export interface ProjectHost {
   serverId: string;
   serverName: string;
@@ -37,10 +41,12 @@ export interface ProjectHost {
   workspaces: WorkspaceDescriptor[];
 }
 
+/** Input for {@link buildProjects}: the set of hosts whose workspaces should be grouped into projects */
 export interface BuildProjectsInput {
   hosts: ProjectHost[];
 }
 
+/** Output of {@link buildProjects}: the aggregated, name-sorted project summaries */
 export interface BuildProjectsResult {
   projects: ProjectSummary[];
 }
@@ -130,6 +136,11 @@ function toProjectSummary(draft: ProjectGroup): ProjectSummary {
   };
 }
 
+/**
+ * Groups workspaces from all hosts into per-project summaries sorted by project name
+ * @param input The hosts and their workspaces to aggregate
+ * @returns The aggregated project summaries with per-host entries and workspace counts
+ */
 export function buildProjects(input: BuildProjectsInput): BuildProjectsResult {
   const groups = new Map<string, ProjectGroup>();
 

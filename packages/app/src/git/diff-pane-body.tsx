@@ -10,9 +10,16 @@ import {
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from "react-native";
-import { StyleSheet } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
 
 import type { ParsedDiffFile } from "@/git/use-diff-query";
+import type { Theme } from "@/styles/theme";
+
+const ThemedActivityIndicator = withUnistyles(ActivityIndicator);
+
+const activityIndicatorColorMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+});
 
 /** Header/body row model used by the diff pane virtualized list. */
 export type DiffPaneFlatItem =
@@ -43,7 +50,6 @@ interface DiffPaneBodyProps {
   handleDiffListScroll: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
   onContentSizeChange: (width: number, height: number) => void;
   showDesktopWebScrollbar: boolean;
-  foregroundMutedColor: string;
 }
 
 /** Renders loading, error, empty, and virtualized diff-list states. */
@@ -66,13 +72,12 @@ export function DiffPaneBody({
   handleDiffListScroll,
   onContentSizeChange,
   showDesktopWebScrollbar,
-  foregroundMutedColor,
 }: DiffPaneBodyProps) {
   const { t } = useTranslation();
   if (isStatusLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={foregroundMutedColor} />
+        <ThemedActivityIndicator size="large" uniProps={activityIndicatorColorMapping} />
         <Text style={styles.loadingText}>{t("git.checkingRepository")}</Text>
       </View>
     );
@@ -94,7 +99,7 @@ export function DiffPaneBody({
   if (isDiffLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={foregroundMutedColor} />
+        <ThemedActivityIndicator size="large" uniProps={activityIndicatorColorMapping} />
       </View>
     );
   }

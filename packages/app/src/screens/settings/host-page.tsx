@@ -2,7 +2,7 @@ import { ChevronRight, Globe, Monitor, Pencil, RotateCw, Trash2 } from "lucide-r
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { AdaptiveRenameModal } from "@/components/rename-modal";
 import { SettingsTextAreaCard } from "@/components/settings-textarea";
@@ -27,6 +27,7 @@ import { ProvidersSection } from "@/screens/settings/providers-section";
 import { SettingsSection } from "@/screens/settings/settings-section";
 import { useSessionStore } from "@/stores/session-store";
 import { settingsStyles } from "@/styles/settings";
+import type { Theme } from "@/styles/theme";
 import type { HostConnection, HostProfile } from "@/types/host-connection";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import { useToast } from "@/contexts/toast-context";
@@ -43,26 +44,48 @@ function formatHostConnectionLabel(connection: HostConnection): string {
   return `TCP (${connection.endpoint})`;
 }
 
+// Lucide icons only accept `color`/`size` as non-style props, so wrap each one
+// with `withUnistyles` and feed theme-reactive values through `uniProps`. Only
+// the icon node re-renders on theme changes; the surrounding tree does not.
+const ThemedGlobe = withUnistyles(Globe);
+const ThemedMonitor = withUnistyles(Monitor);
+const ThemedPencil = withUnistyles(Pencil);
+const ThemedRotateCw = withUnistyles(RotateCw);
+const ThemedChevronRight = withUnistyles(ChevronRight);
+const ThemedTrash2 = withUnistyles(Trash2);
+
+const foregroundMutedSmIconMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+  size: theme.iconSize.sm,
+});
+const foregroundSmIconMapping = (theme: Theme) => ({
+  color: theme.colors.foreground,
+  size: theme.iconSize.sm,
+});
+const destructiveSmIconMapping = (theme: Theme) => ({
+  color: theme.colors.destructive,
+  size: theme.iconSize.sm,
+});
+
 function formatActiveConnectionBadge(
   activeConnection: { type: HostConnection["type"]; display: string } | null,
-  theme: ReturnType<typeof useUnistyles>["theme"],
   t: (key: string) => string,
 ): { icon: React.ReactNode; text: string } | null {
   if (!activeConnection) return null;
   if (activeConnection.type === "relay") {
     return {
-      icon: <Globe size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />,
+      icon: <ThemedGlobe uniProps={foregroundMutedSmIconMapping} />,
       text: t("settings.hostPage.connectionType.relay"),
     };
   }
   if (activeConnection.type === "directSocket" || activeConnection.type === "directPipe") {
     return {
-      icon: <Monitor size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />,
+      icon: <ThemedMonitor uniProps={foregroundMutedSmIconMapping} />,
       text: t("settings.hostPage.connectionType.local"),
     };
   }
   return {
-    icon: <Monitor size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />,
+    icon: <ThemedMonitor uniProps={foregroundMutedSmIconMapping} />,
     text: activeConnection.display,
   };
 }
@@ -90,7 +113,6 @@ export function HostPage({ serverId, onHostRemoved }: HostPageProps) {
   const { t } = useTranslation();
   const daemons = useHosts();
   const host = daemons.find((entry) => entry.serverId === serverId) ?? null;
-  const { theme } = useUnistyles();
   const snapshot = useHostRuntimeSnapshot(serverId);
   const isLocalDaemon = useIsLocalDaemon(serverId);
 
@@ -103,40 +125,43 @@ export function HostPage({ serverId, onHostRemoved }: HostPageProps) {
   const lastError = snapshot?.lastError ?? null;
   const statusLabel = formatConnectionStatus(connectionStatus, t);
   const statusTone = getConnectionStatusTone(connectionStatus);
-  let statusColor: string;
+  let statusPillVariantStyle;
+  let statusDotVariantStyle;
+  let statusTextVariantStyle;
   if (statusTone === "success") {
-    statusColor = theme.colors.palette.green[400];
+    statusPillVariantStyle = styles.statusPillSuccess;
+    statusDotVariantStyle = styles.statusDotSuccess;
+    statusTextVariantStyle = styles.statusTextSuccess;
   } else if (statusTone === "warning") {
-    statusColor = theme.colors.palette.amber[500];
+    statusPillVariantStyle = styles.statusPillWarning;
+    statusDotVariantStyle = styles.statusDotWarning;
+    statusTextVariantStyle = styles.statusTextWarning;
   } else if (statusTone === "error") {
-    statusColor = theme.colors.destructive;
+    statusPillVariantStyle = styles.statusPillError;
+    statusDotVariantStyle = styles.statusDotError;
+    statusTextVariantStyle = styles.statusTextError;
   } else {
-    statusColor = theme.colors.foregroundMuted;
+    statusPillVariantStyle = styles.statusPillDefault;
+    statusDotVariantStyle = styles.statusDotDefault;
+    statusTextVariantStyle = styles.statusTextDefault;
   }
-  let statusPillBg: string;
-  if (statusTone === "success") {
-    statusPillBg = theme.colors.statusSuccessBg;
-  } else if (statusTone === "warning") {
-    statusPillBg = theme.colors.statusWarningBg;
-  } else if (statusTone === "error") {
-    statusPillBg = theme.colors.statusDangerBg;
-  } else {
-    statusPillBg = "rgba(161, 161, 170, 0.1)";
-  }
-  const connectionBadge = formatActiveConnectionBadge(activeConnection, theme, t);
+  const connectionBadge = formatActiveConnectionBadge(activeConnection, t);
   const versionBadgeText = formatDaemonVersionBadge(daemonVersion);
   const connectionError =
     typeof lastError === "string" && lastError.trim().length > 0 ? lastError.trim() : null;
 
   const statusPillStyle = useMemo(
-    () => [styles.statusPill, { backgroundColor: statusPillBg }],
-    [statusPillBg],
+    () => [styles.statusPill, statusPillVariantStyle],
+    [statusPillVariantStyle],
   );
   const statusDotStyle = useMemo(
-    () => [styles.statusDot, { backgroundColor: statusColor }],
-    [statusColor],
+    () => [styles.statusDot, statusDotVariantStyle],
+    [statusDotVariantStyle],
   );
-  const statusTextStyle = useMemo(() => [styles.statusText, { color: statusColor }], [statusColor]);
+  const statusTextStyle = useMemo(
+    () => [styles.statusText, statusTextVariantStyle],
+    [statusTextVariantStyle],
+  );
 
   if (!host) {
     return (
@@ -188,7 +213,6 @@ export function HostPage({ serverId, onHostRemoved }: HostPageProps) {
 
 export function HostRenameButton({ host }: { host: HostProfile }) {
   const { t } = useTranslation();
-  const { theme } = useUnistyles();
   const { renameHost } = useHostMutations();
   const [isEditing, setIsEditing] = useState(false);
 
@@ -214,7 +238,7 @@ export function HostRenameButton({ host }: { host: HostProfile }) {
         accessibilityLabel={t("settings.hostPage.editLabel")}
         testID="host-page-label-edit-button"
       >
-        <Pencil size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
+        <ThemedPencil uniProps={foregroundMutedSmIconMapping} />
       </Pressable>
 
       <AdaptiveRenameModal
@@ -348,7 +372,6 @@ function ConnectionRow({
   latencyError: boolean;
   onRemove: (connection: HostConnection) => void;
 }) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const title = formatHostConnectionLabel(connection);
 
@@ -356,9 +379,14 @@ function ConnectionRow({
     if (latencyLoading) return "...";
     if (latencyError) return t("settings.hostPage.latency.timeout");
     if (latencyMs != null) return formatLatency(latencyMs);
-    return "\u2014";
+    return "—";
   })();
-  const latencyColor = latencyError ? theme.colors.palette.red[300] : theme.colors.foregroundMuted;
+  let latencyVariantStyle;
+  if (latencyError) {
+    latencyVariantStyle = styles.connectionLatencyError;
+  } else {
+    latencyVariantStyle = styles.connectionLatencyDefault;
+  }
 
   const handlePressRemove = useCallback(() => {
     onRemove(connection);
@@ -369,12 +397,8 @@ function ConnectionRow({
     [showBorder],
   );
   const latencyTextStyle = useMemo(
-    () => [styles.connectionLatency, { color: latencyColor }],
-    [latencyColor],
-  );
-  const destructiveTextStyle = useMemo(
-    () => ({ color: theme.colors.destructive }),
-    [theme.colors.destructive],
+    () => [styles.connectionLatency, latencyVariantStyle],
+    [latencyVariantStyle],
   );
 
   return (
@@ -388,7 +412,7 @@ function ConnectionRow({
       <Button
         variant="ghost"
         size="sm"
-        textStyle={destructiveTextStyle}
+        textStyle={styles.destructiveText}
         onPress={handlePressRemove}
       >
         {t("common.remove")}
@@ -421,7 +445,6 @@ const delay = (ms: number) =>
   });
 
 function RestartDaemonCard({ host }: { host: HostProfile }) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const toast = useToast();
   const reportError = useUserVisibleErrorReporter();
@@ -523,10 +546,7 @@ function RestartDaemonCard({ host }: { host: HostProfile }) {
     t,
   ]);
 
-  const restartIcon = useMemo(
-    () => <RotateCw size={theme.iconSize.sm} color={theme.colors.foreground} />,
-    [theme.iconSize.sm, theme.colors.foreground],
-  );
+  const restartIcon = useMemo(() => <ThemedRotateCw uniProps={foregroundSmIconMapping} />, []);
 
   return (
     <View style={settingsStyles.card} testID="host-page-restart-card">
@@ -705,7 +725,6 @@ function AppendSystemPromptCard({ serverId }: { serverId: string }) {
 
 function PairDeviceRow() {
   const { t } = useTranslation();
-  const { theme } = useUnistyles();
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const handleOpen = useCallback(() => setIsModalOpen(true), []);
@@ -723,7 +742,7 @@ function PairDeviceRow() {
           <Text style={settingsStyles.rowTitle}>{t("settings.hostPage.pairDevice.rowTitle")}</Text>
           <Text style={settingsStyles.rowHint}>{t("settings.hostPage.pairDevice.rowHint")}</Text>
         </View>
-        <ChevronRight size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
+        <ThemedChevronRight uniProps={foregroundMutedSmIconMapping} />
       </Pressable>
 
       <PairDeviceModal
@@ -737,16 +756,10 @@ function PairDeviceRow() {
 
 function RemoveHostSection({ host, onRemoved }: { host: HostProfile; onRemoved?: () => void }) {
   const { t } = useTranslation();
-  const { theme } = useUnistyles();
   const reportError = useUserVisibleErrorReporter();
   const { removeHost } = useHostMutations();
   const [isConfirming, setIsConfirming] = useState(false);
   const [isRemoving, setIsRemoving] = useState(false);
-
-  const destructiveTextStyle = useMemo(
-    () => ({ color: theme.colors.destructive }),
-    [theme.colors.destructive],
-  );
 
   const handleOpenConfirm = useCallback(() => setIsConfirming(true), []);
   const handleCloseConfirm = useCallback(() => {
@@ -772,10 +785,7 @@ function RemoveHostSection({ host, onRemoved }: { host: HostProfile; onRemoved?:
       .finally(() => setIsRemoving(false));
   }, [host.serverId, onRemoved, removeHost, reportError, t]);
 
-  const removeIcon = useMemo(
-    () => <Trash2 size={theme.iconSize.sm} color={theme.colors.destructive} />,
-    [theme.iconSize.sm, theme.colors.destructive],
-  );
+  const removeIcon = useMemo(() => <ThemedTrash2 uniProps={destructiveSmIconMapping} />, []);
 
   return (
     <SettingsSection
@@ -796,7 +806,7 @@ function RemoveHostSection({ host, onRemoved }: { host: HostProfile; onRemoved?:
             variant="outline"
             size="sm"
             leftIcon={removeIcon}
-            textStyle={destructiveTextStyle}
+            textStyle={styles.destructiveText}
             onPress={handleOpenConfirm}
             testID="host-page-remove-host-button"
           >
@@ -876,6 +886,46 @@ const styles = StyleSheet.create((theme) => ({
     lineHeight: 16,
     fontWeight: theme.fontWeight.normal,
   },
+  // Connection-status color variants (selected via if-else on status tone).
+  statusPillSuccess: {
+    backgroundColor: theme.colors.statusSuccessBg,
+  },
+  statusPillWarning: {
+    backgroundColor: theme.colors.statusWarningBg,
+  },
+  statusPillError: {
+    backgroundColor: theme.colors.statusDangerBg,
+  },
+  statusPillDefault: {
+    backgroundColor: "rgba(161, 161, 170, 0.1)",
+  },
+  statusDotSuccess: {
+    backgroundColor: theme.colors.palette.green[400],
+  },
+  statusDotWarning: {
+    backgroundColor: theme.colors.palette.amber[500],
+  },
+  statusDotError: {
+    backgroundColor: theme.colors.destructive,
+  },
+  statusDotDefault: {
+    backgroundColor: theme.colors.foregroundMuted,
+  },
+  statusTextSuccess: {
+    color: theme.colors.palette.green[400],
+  },
+  statusTextWarning: {
+    color: theme.colors.palette.amber[500],
+  },
+  statusTextError: {
+    color: theme.colors.destructive,
+  },
+  statusTextDefault: {
+    color: theme.colors.foregroundMuted,
+  },
+  destructiveText: {
+    color: theme.colors.destructive,
+  },
   // Soft quiet host badge.
   badgePill: {
     flexDirection: "row",
@@ -906,6 +956,12 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: 13,
     lineHeight: 18,
     marginRight: theme.spacing[2],
+  },
+  connectionLatencyError: {
+    color: theme.colors.palette.red[300],
+  },
+  connectionLatencyDefault: {
+    color: theme.colors.foregroundMuted,
   },
   confirmText: {
     color: theme.colors.foregroundMuted,

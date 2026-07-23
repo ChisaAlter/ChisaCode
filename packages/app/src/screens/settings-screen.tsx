@@ -14,7 +14,7 @@ import * as Clipboard from "expo-clipboard";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { Buffer } from "buffer";
 import {
   ArrowLeft,
@@ -49,7 +49,8 @@ import {
   type ServiceUrlBehavior,
   type Settings as EffectiveSettings,
 } from "@/hooks/use-settings";
-import { THEME_PICKER_OPTIONS, THEME_PREVIEWS, type ThemeName } from "@/styles/theme";
+import { THEME_PICKER_OPTIONS, THEME_PREVIEWS, ICON_SIZE, type ThemeName } from "@/styles/theme";
+import type { Theme } from "@/styles/theme";
 import {
   getHostRuntimeStore,
   isHostRuntimeConnected,
@@ -164,17 +165,33 @@ const SIDEBAR_SECTION_ITEMS: SidebarSectionItem[] = [
 // Theme helpers (General section)
 // ---------------------------------------------------------------------------
 
-function ThemeIcon({
-  theme,
-  size,
-  color,
-}: {
-  theme: AppSettings["theme"];
-  size: number;
-  color: string;
-}) {
+// Lucide icons (and the dynamic sidebar/detail icons) only accept
+// `color`/`size` as non-style props, so wrap each one with `withUnistyles` and
+// feed the theme-reactive color through `uniProps`. Only the icon node
+// re-renders on theme changes; the surrounding tree does not. `iconSize` is a
+// static constant (`ICON_SIZE`), so it is passed directly as a prop.
+const ThemedMonitor = withUnistyles(Monitor);
+const ThemedChevronDown = withUnistyles(ChevronDown);
+const ThemedFolder = withUnistyles(Folder);
+const ThemedServer = withUnistyles(Server);
+const ThemedPlus = withUnistyles(Plus);
+// ScreenHeader takes `backgroundColor` as a plain prop (not `style`), so wrap
+// it and map the glass-aware background through `uniProps`.
+const ThemedScreenHeader = withUnistyles(ScreenHeader);
+
+const foregroundMutedColorMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+});
+const accentColorMapping = (theme: Theme) => ({
+  color: theme.colors.accent,
+});
+const glassHeaderBackgroundMapping = (theme: Theme) => ({
+  backgroundColor: theme.glass.enabled ? "transparent" : undefined,
+});
+
+function ThemeIcon({ theme, size }: { theme: AppSettings["theme"]; size: number }) {
   return theme === "auto" ? (
-    <Monitor size={size} color={color} />
+    <ThemedMonitor size={size} uniProps={foregroundMutedColorMapping} />
   ) : (
     <ThemePreview theme={theme} width={size + 4} height={size} />
   );
@@ -279,7 +296,6 @@ interface ThemeMenuItemProps {
   themeValue: AppSettings["theme"];
   selected: boolean;
   previewHeight: number;
-  iconColor: string;
   label: string;
   onChange: (theme: AppSettings["theme"]) => void;
 }
@@ -288,7 +304,6 @@ function ThemeMenuItem({
   themeValue,
   selected,
   previewHeight,
-  iconColor,
   label,
   onChange,
 }: ThemeMenuItemProps) {
@@ -296,8 +311,8 @@ function ThemeMenuItem({
     onChange(themeValue);
   }, [onChange, themeValue]);
   const leading = useMemo(
-    () => <ThemeIcon theme={themeValue} size={previewHeight} color={iconColor} />,
-    [themeValue, previewHeight, iconColor],
+    () => <ThemeIcon theme={themeValue} size={previewHeight} />,
+    [themeValue, previewHeight],
   );
   return (
     <DropdownMenuItem selected={selected} onSelect={handleSelect} leading={leading}>
@@ -357,10 +372,7 @@ function GeneralSection({
   handleTerminalScrollbackLinesChange,
   handleShowReasoningChange,
 }: GeneralSectionProps) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
-  const iconSize = theme.iconSize.md;
-  const iconColor = theme.colors.foregroundMuted;
   const themePreviewHeight = 18;
   const [terminalScrollbackValue, setTerminalScrollbackValue] = useState(
     String(settings.terminalScrollbackLines),
@@ -403,11 +415,11 @@ function GeneralSection({
           </View>
           <DropdownMenu>
             <DropdownMenuTrigger style={themeTriggerStyle}>
-              <ThemeIcon theme={settings.theme} size={iconSize} color={iconColor} />
+              <ThemeIcon theme={settings.theme} size={ICON_SIZE.md} />
               <Text style={styles.themeTriggerText}>
                 {t(`settings.general.theme.options.${settings.theme}`)}
               </Text>
-              <ChevronDown size={theme.iconSize.sm} color={iconColor} />
+              <ThemedChevronDown size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
             </DropdownMenuTrigger>
             <DropdownMenuContent side="bottom" align="end" width={200}>
               {THEME_PICKER_OPTIONS.map((themeValue) => (
@@ -416,7 +428,6 @@ function GeneralSection({
                   themeValue={themeValue}
                   selected={settings.theme === themeValue}
                   previewHeight={themePreviewHeight}
-                  iconColor={iconColor}
                   label={t(`settings.general.theme.options.${themeValue}`)}
                   onChange={handleThemeChange}
                 />
@@ -433,7 +444,7 @@ function GeneralSection({
               <Text style={styles.themeTriggerText}>
                 {t(`settings.general.language.options.${settings.language}`)}
               </Text>
-              <ChevronDown size={theme.iconSize.sm} color={iconColor} />
+              <ThemedChevronDown size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
             </DropdownMenuTrigger>
             <DropdownMenuContent side="bottom" align="end" width={200}>
               {APP_LANGUAGE_VALUES.map((value) => (
@@ -486,7 +497,7 @@ function GeneralSection({
                 <Text style={styles.themeTriggerText}>
                   {t(`settings.general.serviceUrls.options.${settings.serviceUrlBehavior}`)}
                 </Text>
-                <ChevronDown size={theme.iconSize.sm} color={iconColor} />
+                <ThemedChevronDown size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
               </DropdownMenuTrigger>
               <DropdownMenuContent side="bottom" align="end" width={200}>
                 {SERVICE_URL_BEHAVIOR_VALUES.map((value) => (
@@ -1071,18 +1082,14 @@ function SidebarSectionButton({
   isSelected,
   onSelect,
 }: SidebarSectionButtonProps) {
-  const { theme } = useUnistyles();
+  const ThemedIcon = useMemo(() => withUnistyles(IconComponent), [IconComponent]);
   const handlePress = useCallback(() => {
     onSelect(itemId);
   }, [onSelect, itemId]);
   const accessibilityState = useMemo(() => ({ selected: isSelected }), [isSelected]);
   const labelStyle = useMemo(
-    () => [
-      sidebarStyles.navigationLabel,
-      // Soft .set-item.on: text + medium weight, not accent ink.
-      isSelected && { color: theme.colors.foreground, fontWeight: theme.fontWeight.medium },
-    ],
-    [isSelected, theme.colors.foreground, theme.fontWeight.medium],
+    () => [sidebarStyles.navigationLabel, isSelected && sidebarStyles.navigationLabelSelected],
+    [isSelected],
   );
   return (
     <Pressable
@@ -1092,7 +1099,7 @@ function SidebarSectionButton({
       testID={`settings-section-${itemId}`}
       style={isSelected ? selectedSidebarItemStyle : sidebarItemStyle}
     >
-      <IconComponent size={theme.iconSize.md} color={theme.colors.foregroundMuted} />
+      <ThemedIcon size={ICON_SIZE.md} uniProps={foregroundMutedColorMapping} />
       <Text style={labelStyle} numberOfLines={1}>
         {label}
       </Text>
@@ -1106,16 +1113,11 @@ interface SidebarProjectsButtonProps {
 }
 
 function SidebarProjectsButton({ isSelected, onSelect }: SidebarProjectsButtonProps) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const accessibilityState = useMemo(() => ({ selected: isSelected }), [isSelected]);
   const labelStyle = useMemo(
-    () => [
-      sidebarStyles.navigationLabel,
-      // Soft .set-item.on: text + medium weight, not accent ink.
-      isSelected && { color: theme.colors.foreground, fontWeight: theme.fontWeight.medium },
-    ],
-    [isSelected, theme.colors.foreground, theme.fontWeight.medium],
+    () => [sidebarStyles.navigationLabel, isSelected && sidebarStyles.navigationLabelSelected],
+    [isSelected],
   );
   return (
     <Pressable
@@ -1125,7 +1127,7 @@ function SidebarProjectsButton({ isSelected, onSelect }: SidebarProjectsButtonPr
       testID="settings-projects"
       style={isSelected ? selectedSidebarItemStyle : sidebarItemStyle}
     >
-      <Folder size={theme.iconSize.md} color={theme.colors.foregroundMuted} />
+      <ThemedFolder size={ICON_SIZE.md} uniProps={foregroundMutedColorMapping} />
       <Text style={labelStyle} numberOfLines={1}>
         {t("settings.projects")}
       </Text>
@@ -1142,18 +1144,13 @@ interface SidebarHostItemProps {
 }
 
 function SidebarHostItem({ serverId, label, isSelected, isLocal, onSelect }: SidebarHostItemProps) {
-  const { theme } = useUnistyles();
   const handlePress = useCallback(() => {
     onSelect(serverId);
   }, [onSelect, serverId]);
   const accessibilityState = useMemo(() => ({ selected: isSelected }), [isSelected]);
   const labelStyle = useMemo(
-    () => [
-      sidebarStyles.label,
-      // Soft .set-item.on host chip: foreground + medium, not accent.
-      isSelected && { color: theme.colors.foreground, fontWeight: theme.fontWeight.medium },
-    ],
-    [isSelected, theme.colors.foreground, theme.fontWeight.medium],
+    () => [sidebarStyles.label, isSelected && sidebarStyles.labelSelected],
+    [isSelected],
   );
   return (
     <Pressable
@@ -1166,9 +1163,9 @@ function SidebarHostItem({ serverId, label, isSelected, isLocal, onSelect }: Sid
       {isLocal ? (
         <View style={sidebarStyles.localDot} />
       ) : (
-        <Server
-          size={theme.iconSize.md}
-          color={isSelected ? theme.colors.accent : theme.colors.foregroundMuted}
+        <ThemedServer
+          size={ICON_SIZE.md}
+          uniProps={isSelected ? accentColorMapping : foregroundMutedColorMapping}
         />
       )}
       <Text style={labelStyle} numberOfLines={1}>
@@ -1197,7 +1194,6 @@ function SettingsSidebar({
   onBackToWorkspace,
   layout,
 }: SettingsSidebarProps) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const hosts = useHosts();
   const localServerId = useLocalDaemonServerId();
@@ -1284,7 +1280,7 @@ function SettingsSidebar({
         testID="settings-add-host"
         style={sidebarStyles.addHostItem}
       >
-        <Plus size={theme.iconSize.sm} color={theme.colors.accent} />
+        <ThemedPlus size={ICON_SIZE.sm} uniProps={accentColorMapping} />
         <Text style={sidebarStyles.addHostLabel} numberOfLines={1}>
           {t("settings.addHost")}
         </Text>
@@ -1335,7 +1331,6 @@ export interface SettingsScreenProps {
 
 export default function SettingsScreen({ view }: SettingsScreenProps) {
   const router = useRouter();
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const voiceAudioEngine = useVoiceAudioEngineOptional();
   const { settings, isLoading: settingsLoading, updateSettings } = useSettings();
@@ -1542,17 +1537,17 @@ export default function SettingsScreen({ view }: SettingsScreenProps) {
     router.replace("/");
   }, [anyOnlineServerId, returnToRoute, router]);
 
-  const detailHeader = ((): {
+  const detailHeader: {
     title: string;
     Icon: ComponentType<{ size: number; color: string }>;
     titleAccessory?: ReactNode;
-  } | null => {
+  } | null = (() => {
     if (view.kind === "host") {
       const host = hosts.find((h) => h.serverId === view.serverId);
       if (!host) return null;
       return {
         title: host.label,
-        Icon: Server,
+        Icon: ThemedServer,
         titleAccessory: <HostRenameButton host={host} />,
       };
     }
@@ -1562,10 +1557,17 @@ export default function SettingsScreen({ view }: SettingsScreenProps) {
       return { title: t(item.labelKey), Icon: item.icon };
     }
     if (view.kind === "project" || view.kind === "projects") {
-      return { title: t("settings.projects"), Icon: Folder };
+      return { title: t("settings.projects"), Icon: ThemedFolder };
     }
     return null;
   })();
+
+  // Wrap the dynamic detail-header icon with withUnistyles so its color flows
+  // through uniProps without a useUnistyles hook read.
+  const ThemedDetailIcon = useMemo(
+    () => (detailHeader ? withUnistyles(detailHeader.Icon) : null),
+    [detailHeader],
+  );
 
   // eslint-disable-next-line complexity
   const content = (() => {
@@ -1738,8 +1740,8 @@ export default function SettingsScreen({ view }: SettingsScreenProps) {
           layout="desktop"
         />
         <View style={desktopStyles.contentPane}>
-          <ScreenHeader
-            backgroundColor={theme.glass.enabled ? "transparent" : undefined}
+          <ThemedScreenHeader
+            uniProps={glassHeaderBackgroundMapping}
             borderless={!detailHeader}
             height={SETTINGS_DESKTOP_HEADER_HEIGHT}
             horizontalPadding={20}
@@ -1748,7 +1750,9 @@ export default function SettingsScreen({ view }: SettingsScreenProps) {
               detailHeader ? (
                 <>
                   <HeaderIconBadge variant="settings">
-                    <detailHeader.Icon size={theme.iconSize.sm} color={theme.colors.accent} />
+                    {ThemedDetailIcon ? (
+                      <ThemedDetailIcon size={ICON_SIZE.sm} uniProps={accentColorMapping} />
+                    ) : null}
                   </HeaderIconBadge>
                   <ScreenTitle
                     testID="settings-detail-header-title"
@@ -1972,12 +1976,22 @@ const sidebarStyles = StyleSheet.create((theme) => ({
     fontWeight: theme.fontWeight.normal,
     flex: 1,
   },
+  // Soft .set-item.on: text + medium weight, not accent ink.
+  navigationLabelSelected: {
+    color: theme.colors.foreground,
+    fontWeight: theme.fontWeight.medium,
+  },
   label: {
     fontSize: 13,
     lineHeight: 18,
     color: theme.colors.foregroundMuted,
     fontWeight: theme.fontWeight.normal,
     flex: 1,
+  },
+  // Soft .set-item.on host chip: foreground + medium, not accent.
+  labelSelected: {
+    color: theme.colors.foreground,
+    fontWeight: theme.fontWeight.medium,
   },
   addHostLabel: {
     color: theme.colors.accent,

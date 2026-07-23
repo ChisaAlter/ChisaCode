@@ -8,9 +8,10 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import Svg, { Defs, LinearGradient, Path, Stop } from "react-native-svg";
-import { useUnistyles } from "react-native-unistyles";
+import { withUnistyles } from "react-native-unistyles";
 
 import { isWeb } from "@/constants/platform";
+import type { Theme } from "@/styles/theme";
 import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
 import { buildLiquidNeonBackdropStyle } from "./liquid-neon-backdrop-style";
 /**
@@ -32,15 +33,33 @@ function isAndroidLowEndDevice(): boolean {
   return false;
 }
 
+// Theme-reactive values (glass toggle + surface colors) flow into this leaf
+// through `uniProps` so only the backdrop node re-renders on theme changes;
+// no `useUnistyles()` in the surrounding tree. See docs/unistyles.md.
+const ThemedLiquidNeonBackdropGate = withUnistyles(LiquidNeonBackdropGate);
+
+const liquidNeonBackdropUniProps = (theme: Theme) => ({
+  enabled: theme.glass.enabled,
+  backgroundCss: theme.colors.backgroundCss,
+  surface0: theme.colors.surface0,
+});
+
 export function LiquidNeonBackdrop() {
-  const { theme } = useUnistyles();
-  if (!theme.glass.enabled || isAndroidLowEndDevice()) return null;
-  return (
-    <LiquidNeonBackdropAnimated
-      backgroundCss={theme.colors.backgroundCss}
-      surface0={theme.colors.surface0}
-    />
-  );
+  if (isAndroidLowEndDevice()) return null;
+  return <ThemedLiquidNeonBackdropGate uniProps={liquidNeonBackdropUniProps} />;
+}
+
+function LiquidNeonBackdropGate({
+  enabled,
+  backgroundCss,
+  surface0,
+}: {
+  enabled: boolean;
+  backgroundCss: string;
+  surface0: string;
+}) {
+  if (!enabled) return null;
+  return <LiquidNeonBackdropAnimated backgroundCss={backgroundCss} surface0={surface0} />;
 }
 
 function LiquidNeonBackdropAnimated({

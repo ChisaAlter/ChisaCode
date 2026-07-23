@@ -21,7 +21,10 @@ export async function downloadTextFile(
     document.body.append(anchor);
     anchor.click();
     anchor.remove();
-    window.setTimeout(() => URL.revokeObjectURL(href), 0);
+    // Defer revocation slightly so slow setups have time to start the download
+    // before the blob URL is invalidated (browsers keep in-flight downloads alive
+    // after revoke, but a 0ms revoke is aggressive on heavily loaded machines).
+    window.setTimeout(() => URL.revokeObjectURL(href), 1_000);
     return true;
   }
 
