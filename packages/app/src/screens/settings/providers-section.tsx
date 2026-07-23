@@ -7,7 +7,8 @@ import {
   type GestureResponderEvent,
   type PressableStateCallbackType,
 } from "react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { settingsStyles } from "@/styles/settings";
 import { useHostRuntimeIsConnected, useHostRuntimeClient } from "@/runtime/host-runtime";
 import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
@@ -23,10 +24,22 @@ import { useIsCompactFormFactor } from "@/constants/layout";
 import { ChevronRight, Download, RefreshCw } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
+
 import {
   runProviderToolingAction,
   type ProviderToolingAction,
 } from "@/screens/settings/provider-tooling-action";
+
+const ThemedDownload = withUnistyles(Download);
+const ThemedRefreshCw = withUnistyles(RefreshCw);
+const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
+const ThemedChevronRight = withUnistyles(ChevronRight);
+
+const accentColorMapping = (theme: Theme) => ({ color: theme.colors.accent });
+const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
+const foregroundMutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
+const chevronHoveredColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
+const chevronIdleColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 
 type ProviderDefinition = ReturnType<typeof buildProviderDefinitions>[number];
 type ProviderEntry = NonNullable<ReturnType<typeof useProvidersSnapshot>["entries"]>[number];
@@ -260,7 +273,6 @@ function ProviderMaintenanceActions({
   onUpdate: (event: GestureResponderEvent) => void;
   onReinstall: (event: GestureResponderEvent) => void;
 }) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const rowStyle = useMemo(
     () => [styles.actionsRow, compact && styles.compactActionsRow],
@@ -277,9 +289,9 @@ function ProviderMaintenanceActions({
           style={styles.actionButton}
         >
           {toolingAction === "install" ? (
-            <LoadingSpinner size={14} color={theme.colors.accent} />
+            <ThemedLoadingSpinner size={14} uniProps={accentColorMapping} />
           ) : (
-            <Download size={14} color={theme.colors.accent} />
+            <ThemedDownload size={14} uniProps={accentColorMapping} />
           )}
           <Text style={styles.actionLabel}>{t("providers.install")}</Text>
         </Pressable>
@@ -292,9 +304,9 @@ function ProviderMaintenanceActions({
           style={styles.actionButton}
         >
           {toolingAction === "update" ? (
-            <LoadingSpinner size={14} color={theme.colors.accent} />
+            <ThemedLoadingSpinner size={14} uniProps={accentColorMapping} />
           ) : (
-            <RefreshCw size={14} color={theme.colors.accent} />
+            <ThemedRefreshCw size={14} uniProps={accentColorMapping} />
           )}
           <Text style={styles.actionLabel}>{t("providers.update")}</Text>
         </Pressable>
@@ -309,9 +321,9 @@ function ProviderMaintenanceActions({
           style={styles.actionButton}
         >
           {toolingAction === "reinstall" ? (
-            <LoadingSpinner size={14} color={theme.colors.accent} />
+            <ThemedLoadingSpinner size={14} uniProps={accentColorMapping} />
           ) : (
-            <RefreshCw size={14} color={theme.colors.accent} />
+            <ThemedRefreshCw size={14} uniProps={accentColorMapping} />
           )}
           <Text style={styles.actionLabel}>{t("settings.integrations.reinstall")}</Text>
         </Pressable>
@@ -333,20 +345,23 @@ function ProviderSummary({
   providerError: string | null;
   ProviderIcon: ReturnType<typeof getProviderIcon>;
 }) {
-  const { theme } = useUnistyles();
   const isCompact = useIsCompactFormFactor();
   const titleRowStyle = useMemo(
     () => [styles.titleRow, isCompact && styles.compactTitleRow],
     [isCompact],
   );
   const titleStyle = useMemo(() => [settingsStyles.rowTitle, styles.providerTitle], []);
+  const ThemedProviderIcon = useMemo(() => withUnistyles(ProviderIcon), [ProviderIcon]);
+  let chevronMapping;
+  if (hovered) {
+    chevronMapping = chevronHoveredColorMapping;
+  } else {
+    chevronMapping = chevronIdleColorMapping;
+  }
   return (
     <View style={styles.rowContent}>
-      <ChevronRight
-        size={theme.iconSize.sm}
-        color={hovered ? theme.colors.foreground : theme.colors.foregroundMuted}
-      />
-      <ProviderIcon size={theme.iconSize.md} color={theme.colors.foreground} />
+      <ThemedChevronRight size={ICON_SIZE.sm} uniProps={chevronMapping} />
+      <ThemedProviderIcon size={ICON_SIZE.md} uniProps={foregroundColorMapping} />
       <View style={styles.textColumn}>
         <View style={titleRowStyle}>
           <Text style={titleStyle} numberOfLines={1}>
@@ -365,16 +380,16 @@ function ProviderSummary({
   );
 }
 
-function getDotColor(tone: StatusTone, theme: ReturnType<typeof useUnistyles>["theme"]): string {
+function getDotStyle(tone: StatusTone) {
   switch (tone) {
     case "success":
-      return theme.colors.statusSuccess;
+      return styles.statusDotSuccess;
     case "warning":
-      return theme.colors.statusWarning;
+      return styles.statusDotWarning;
     case "danger":
-      return theme.colors.statusDanger;
+      return styles.statusDotDanger;
     default:
-      return theme.colors.foregroundMuted;
+      return styles.statusDotMuted;
   }
 }
 
@@ -385,18 +400,14 @@ function StatusIndicator({
   status: ProviderStatus;
   compact?: boolean;
 }) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const rowStyle = useMemo(() => [styles.statusRow, compact && styles.compactStatusRow], [compact]);
-  const dotStyle = useMemo(
-    () => [styles.statusDot, { backgroundColor: getDotColor(status.tone, theme) }],
-    [status.tone, theme],
-  );
+  const dotStyle = useMemo(() => [styles.statusDot, getDotStyle(status.tone)], [status.tone]);
 
   return (
     <View style={rowStyle}>
       {status.tone === "loading" ? (
-        <LoadingSpinner size={10} color={theme.colors.foregroundMuted} />
+        <ThemedLoadingSpinner size={10} uniProps={foregroundMutedColorMapping} />
       ) : (
         <View style={dotStyle} />
       )}
@@ -582,6 +593,18 @@ const styles = StyleSheet.create((theme) => ({
     width: 8,
     height: 8,
     borderRadius: 4,
+  },
+  statusDotSuccess: {
+    backgroundColor: theme.colors.statusSuccess,
+  },
+  statusDotWarning: {
+    backgroundColor: theme.colors.statusWarning,
+  },
+  statusDotDanger: {
+    backgroundColor: theme.colors.statusDanger,
+  },
+  statusDotMuted: {
+    backgroundColor: theme.colors.foregroundMuted,
   },
   statusLabel: {
     color: theme.colors.foregroundMuted,

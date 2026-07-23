@@ -1,8 +1,14 @@
 import { useMemo, type ReactNode } from "react";
 import { Pressable, Text, View, type StyleProp, type ViewStyle } from "react-native";
 import { Info } from "lucide-react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+
+const ThemedInfo = withUnistyles(Info);
+const foregroundMutedColorMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+});
 
 interface SettingsGroupProps {
   title: string;
@@ -27,7 +33,6 @@ export function SettingsGroup({
   style,
   children,
 }: SettingsGroupProps) {
-  const { theme } = useUnistyles();
   const groupStyle = useMemo(() => [styles.group, style], [style]);
   return (
     <View style={groupStyle} testID={testID}>
@@ -44,7 +49,7 @@ export function SettingsGroup({
                   hitSlop={8}
                   style={styles.infoButton}
                 >
-                  <Info size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
+                  <ThemedInfo size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
                 </Pressable>
               </TooltipTrigger>
               <TooltipContent side="top" align="start" offset={8}>

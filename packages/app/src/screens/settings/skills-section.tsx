@@ -13,7 +13,8 @@ import {
   View,
 } from "react-native";
 import { useFocusEffect } from "expo-router";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import { type Theme } from "@/styles/theme";
 import { Download, FolderInput, Plus, RefreshCw, Search, Trash2 } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { AdaptiveModalSheet } from "@/components/adaptive-modal-sheet";
@@ -30,6 +31,17 @@ import type {
   AgentSkillStatus,
   SkillManagementConfig,
 } from "@chisacode/protocol/messages";
+
+const ThemedSearch = withUnistyles(Search);
+const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
+const ThemedTextInput = withUnistyles(TextInput);
+
+const foregroundMutedColorMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+});
+const placeholderTextColorMapping = (theme: Theme) => ({
+  placeholderTextColor: theme.colors.foregroundMuted,
+});
 
 type SelectedScope =
   | { type: "global" }
@@ -188,7 +200,6 @@ function SkillRow({ skill, index, selectedScope, working, onToggle, onUninstall 
 }
 
 export function SkillsSection({ serverId }: SkillsSectionProps) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const reportError = useUserVisibleErrorReporter();
   const client = useHostRuntimeClient(serverId);
@@ -550,7 +561,7 @@ export function SkillsSection({ serverId }: SkillsSectionProps) {
   if (isLoading) {
     skillContent = (
       <View style={settingsStyles.row}>
-        <LoadingSpinner size="small" color={theme.colors.foregroundMuted} />
+        <ThemedLoadingSpinner size="small" uniProps={foregroundMutedColorMapping} />
       </View>
     );
   } else if (filteredSkills.length === 0) {
@@ -604,12 +615,12 @@ export function SkillsSection({ serverId }: SkillsSectionProps) {
         </ScrollView>
         <View style={styles.contentToolbar}>
           <View style={styles.searchBox}>
-            <Search size={16} color={theme.colors.foregroundMuted} />
-            <TextInput
+            <ThemedSearch size={16} uniProps={foregroundMutedColorMapping} />
+            <ThemedTextInput
               value={searchValue}
               onChangeText={setSearchValue}
               placeholder={t("settings.skills.searchPlaceholder")}
-              placeholderTextColor={theme.colors.foregroundMuted}
+              uniProps={placeholderTextColorMapping}
               style={styles.searchInput}
             />
           </View>
@@ -624,7 +635,7 @@ export function SkillsSection({ serverId }: SkillsSectionProps) {
         desktopMaxWidth={520}
         footer={installModalFooter}
       >
-        <TextInput
+        <ThemedTextInput
           value={installValue}
           onChangeText={setInstallValue}
           placeholder={
@@ -632,7 +643,7 @@ export function SkillsSection({ serverId }: SkillsSectionProps) {
               ? t("settings.skills.urlPlaceholder")
               : t("settings.skills.localPlaceholder")
           }
-          placeholderTextColor={theme.colors.foregroundMuted}
+          uniProps={placeholderTextColorMapping}
           style={styles.input}
           autoCapitalize="none"
           autoCorrect={false}

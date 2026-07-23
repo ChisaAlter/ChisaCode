@@ -13,7 +13,8 @@ import {
   View,
 } from "react-native";
 import { useFocusEffect } from "expo-router";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import { type Theme } from "@/styles/theme";
 import { Edit3, Globe2, Plus, RefreshCw, Search, Terminal, Trash2 } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { AdaptiveModalSheet } from "@/components/adaptive-modal-sheet";
@@ -31,6 +32,17 @@ import type {
   McpServerManagementConfig,
   ManagedMcpServerConfig,
 } from "@chisacode/protocol/messages";
+
+const ThemedSearch = withUnistyles(Search);
+const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
+const ThemedTextInput = withUnistyles(TextInput);
+
+const foregroundMutedColorMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+});
+const placeholderTextColorMapping = (theme: Theme) => ({
+  placeholderTextColor: theme.colors.foregroundMuted,
+});
 
 type SelectedScope =
   | { type: "global" }
@@ -337,7 +349,6 @@ function McpServerRow({
 }
 
 export function McpServersSection({ serverId }: McpServersSectionProps) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const reportError = useUserVisibleErrorReporter();
   const client = useHostRuntimeClient(serverId);
@@ -716,7 +727,7 @@ export function McpServersSection({ serverId }: McpServersSectionProps) {
   if (isLoading) {
     serverContent = (
       <View style={settingsStyles.row}>
-        <LoadingSpinner size="small" color={theme.colors.foregroundMuted} />
+        <ThemedLoadingSpinner size="small" uniProps={foregroundMutedColorMapping} />
       </View>
     );
   } else if (filteredServers.length === 0) {
@@ -773,12 +784,12 @@ export function McpServersSection({ serverId }: McpServersSectionProps) {
         </ScrollView>
         <View style={styles.contentToolbar}>
           <View style={styles.searchBox}>
-            <Search size={16} color={theme.colors.foregroundMuted} />
-            <TextInput
+            <ThemedSearch size={16} uniProps={foregroundMutedColorMapping} />
+            <ThemedTextInput
               value={searchValue}
               onChangeText={setSearchValue}
               placeholder={t("settings.mcpServers.searchPlaceholder")}
-              placeholderTextColor={theme.colors.foregroundMuted}
+              uniProps={placeholderTextColorMapping}
               style={styles.searchInput}
             />
           </View>
@@ -795,55 +806,55 @@ export function McpServersSection({ serverId }: McpServersSectionProps) {
       >
         {form ? (
           <View style={styles.formStack}>
-            <TextInput
+            <ThemedTextInput
               value={form.name}
               onChangeText={updateFormName}
               placeholder={t("settings.mcpServers.namePlaceholder")}
-              placeholderTextColor={theme.colors.foregroundMuted}
+              uniProps={placeholderTextColorMapping}
               style={styles.input}
               autoCapitalize="none"
               autoCorrect={false}
             />
-            <TextInput
+            <ThemedTextInput
               value={form.label}
               onChangeText={updateFormLabel}
               placeholder={t("settings.mcpServers.labelPlaceholder")}
-              placeholderTextColor={theme.colors.foregroundMuted}
+              uniProps={placeholderTextColorMapping}
               style={styles.input}
             />
-            <TextInput
+            <ThemedTextInput
               value={form.description}
               onChangeText={updateFormDescription}
               placeholder={t("settings.mcpServers.descriptionPlaceholder")}
-              placeholderTextColor={theme.colors.foregroundMuted}
+              uniProps={placeholderTextColorMapping}
               style={styles.input}
             />
             {form.mode === "stdio" ? (
               <>
-                <TextInput
+                <ThemedTextInput
                   value={form.command}
                   onChangeText={updateFormCommand}
                   placeholder={t("settings.mcpServers.commandPlaceholder")}
-                  placeholderTextColor={theme.colors.foregroundMuted}
+                  uniProps={placeholderTextColorMapping}
                   style={styles.input}
                   autoCapitalize="none"
                   autoCorrect={false}
                 />
-                <TextInput
+                <ThemedTextInput
                   value={form.argsText}
                   onChangeText={updateFormArgs}
                   placeholder={t("settings.mcpServers.argsPlaceholder")}
-                  placeholderTextColor={theme.colors.foregroundMuted}
+                  uniProps={placeholderTextColorMapping}
                   style={styles.textArea}
                   multiline
                   autoCapitalize="none"
                   autoCorrect={false}
                 />
-                <TextInput
+                <ThemedTextInput
                   value={form.envText}
                   onChangeText={updateFormEnv}
                   placeholder={t("settings.mcpServers.envPlaceholder")}
-                  placeholderTextColor={theme.colors.foregroundMuted}
+                  uniProps={placeholderTextColorMapping}
                   style={styles.textArea}
                   multiline
                   autoCapitalize="none"
@@ -868,20 +879,20 @@ export function McpServersSection({ serverId }: McpServersSectionProps) {
                     SSE
                   </Button>
                 </View>
-                <TextInput
+                <ThemedTextInput
                   value={form.url}
                   onChangeText={updateFormUrl}
                   placeholder={t("settings.mcpServers.urlPlaceholder")}
-                  placeholderTextColor={theme.colors.foregroundMuted}
+                  uniProps={placeholderTextColorMapping}
                   style={styles.input}
                   autoCapitalize="none"
                   autoCorrect={false}
                 />
-                <TextInput
+                <ThemedTextInput
                   value={form.headersText}
                   onChangeText={updateFormHeaders}
                   placeholder={t("settings.mcpServers.headersPlaceholder")}
-                  placeholderTextColor={theme.colors.foregroundMuted}
+                  uniProps={placeholderTextColorMapping}
                   style={styles.textArea}
                   multiline
                   autoCapitalize="none"

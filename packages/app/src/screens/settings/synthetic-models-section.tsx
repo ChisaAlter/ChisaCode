@@ -7,10 +7,12 @@ import type {
   SyntheticModelParameters,
 } from "@chisacode/protocol/provider-config";
 import { Brain, FlaskConical, Pencil, Play, Plus, Trash2 } from "lucide-react-native";
+
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, Text, TextInput, View, type PressableStateCallbackType } from "react-native";
 import { useTranslation } from "react-i18next";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import { ICON_SIZE, type Theme } from "@/styles/theme";
 import {
   AdaptiveModalSheet,
   AdaptiveTextInput,
@@ -36,6 +38,23 @@ import { settingsStyles } from "@/styles/settings";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import { useUserVisibleErrorReporter } from "@/hooks/use-user-visible-error";
 import { reportPresentedError } from "@/utils/user-visible-error";
+
+const ThemedPencil = withUnistyles(Pencil);
+const ThemedTrash2 = withUnistyles(Trash2);
+const ThemedPlus = withUnistyles(Plus);
+const ThemedBrain = withUnistyles(Brain);
+const ThemedFlaskConical = withUnistyles(FlaskConical);
+const ThemedTextInput = withUnistyles(TextInput);
+
+const foregroundMutedColorMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+});
+const destructiveColorMapping = (theme: Theme) => ({
+  color: theme.colors.destructive,
+});
+const placeholderTextColorMapping = (theme: Theme) => ({
+  placeholderTextColor: theme.colors.foregroundMuted,
+});
 
 interface SyntheticModelsSectionProps {
   serverId: string;
@@ -412,7 +431,6 @@ function SyntheticModelRow({
   onEdit: (model: SyntheticModelEntry) => void;
   onDelete: (model: SyntheticModelEntry) => void;
 }) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const handleEdit = useCallback(() => onEdit(model), [model, onEdit]);
   const handleDelete = useCallback(() => onDelete(model), [model, onDelete]);
@@ -448,7 +466,7 @@ function SyntheticModelRow({
           accessibilityRole="button"
           accessibilityLabel={t("syntheticModels.editModel", { model: model.label })}
         >
-          <Pencil size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
+          <ThemedPencil size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
         </Pressable>
         <Pressable
           onPress={handleDelete}
@@ -457,7 +475,7 @@ function SyntheticModelRow({
           accessibilityRole="button"
           accessibilityLabel={t("syntheticModels.deleteModel", { model: model.label })}
         >
-          <Trash2 size={theme.iconSize.sm} color={theme.colors.destructive} />
+          <ThemedTrash2 size={ICON_SIZE.sm} uniProps={destructiveColorMapping} />
         </Pressable>
       </View>
     </View>
@@ -765,7 +783,6 @@ function SyntheticModelEditorSheet({
     previous: PreviousSyntheticModelRef | null,
   ) => Promise<void>;
 }) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const [values, setValues] = useState<SyntheticModelEditorValues>(() =>
     createDefaultValues(gateways),
@@ -869,7 +886,6 @@ function SyntheticModelEditorSheet({
               resetKey={`synthetic-id-${state?.mode ?? "closed"}-${previous?.id ?? "new"}`}
               onChangeText={handleIdChange}
               placeholder="moa-coder"
-              placeholderTextColor={theme.colors.foregroundMuted}
               autoCapitalize="none"
               autoCorrect={false}
               // @ts-expect-error - outlineStyle is web-only
@@ -883,7 +899,6 @@ function SyntheticModelEditorSheet({
               resetKey={`synthetic-label-${state?.mode ?? "closed"}-${previous?.id ?? "new"}`}
               onChangeText={handleLabelChange}
               placeholder={t("syntheticModels.modelLabelPlaceholder")}
-              placeholderTextColor={theme.colors.foregroundMuted}
               autoCapitalize="none"
               autoCorrect={false}
               // @ts-expect-error - outlineStyle is web-only
@@ -898,7 +913,6 @@ function SyntheticModelEditorSheet({
             resetKey={`synthetic-description-${state?.mode ?? "closed"}-${previous?.id ?? "new"}`}
             onChangeText={handleDescriptionChange}
             placeholder={t("syntheticModels.descriptionPlaceholder")}
-            placeholderTextColor={theme.colors.foregroundMuted}
             // @ts-expect-error - outlineStyle is web-only
             style={FORM_INPUT_STYLE}
           />
@@ -956,7 +970,6 @@ function MoaTesterSheet({
   gateways: SelectableSyntheticGateway[];
   onClose: () => void;
 }) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const client = useHostRuntimeClient(serverId);
   const [values, setValues] = useState<MoaTesterValues>(() =>
@@ -1090,11 +1103,11 @@ function MoaTesterSheet({
         </View>
         <View style={styles.fieldGroup}>
           <Text style={styles.formLabel}>{t("syntheticModels.testPrompt")}</Text>
-          <TextInput
+          <ThemedTextInput
             value={values.prompt}
             onChangeText={handlePromptChange}
             placeholder={t("syntheticModels.testPromptPlaceholder")}
-            placeholderTextColor={theme.colors.foregroundMuted}
+            uniProps={placeholderTextColorMapping}
             multiline
             style={PROMPT_INPUT_STYLE}
             testID="moa-test-prompt-input"
@@ -1163,7 +1176,6 @@ function GatewayModelRadioRow({
 }
 
 export function SyntheticModelsSection({ serverId }: SyntheticModelsSectionProps) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const reportError = useUserVisibleErrorReporter();
   const { config, patchConfig } = useDaemonConfig(serverId);
@@ -1282,7 +1294,7 @@ export function SyntheticModelsSection({ serverId }: SyntheticModelsSectionProps
           accessibilityRole="button"
           accessibilityLabel={t("syntheticModels.openMoaTest")}
         >
-          <FlaskConical size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
+          <ThemedFlaskConical size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
           <Text style={settingsStyles.sectionHeaderLinkText}>{t("syntheticModels.moaTest")}</Text>
         </Pressable>
         <Pressable
@@ -1292,12 +1304,12 @@ export function SyntheticModelsSection({ serverId }: SyntheticModelsSectionProps
           accessibilityRole="button"
           accessibilityLabel={t("syntheticModels.addSyntheticModel")}
         >
-          <Plus size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
+          <ThemedPlus size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
           <Text style={settingsStyles.sectionHeaderLinkText}>{t("syntheticModels.add")}</Text>
         </Pressable>
       </View>
     ),
-    [openAdd, openMoaTester, t, theme.colors.foregroundMuted, theme.iconSize.sm],
+    [openAdd, openMoaTester, t],
   );
 
   return (
@@ -1320,7 +1332,7 @@ export function SyntheticModelsSection({ serverId }: SyntheticModelsSectionProps
           </View>
         ) : (
           <View style={EMPTY_CARD_STYLE}>
-            <Brain size={theme.iconSize.md} color={theme.colors.foregroundMuted} />
+            <ThemedBrain size={ICON_SIZE.md} uniProps={foregroundMutedColorMapping} />
             <Text style={styles.emptyText}>{t("syntheticModels.empty")}</Text>
           </View>
         )}

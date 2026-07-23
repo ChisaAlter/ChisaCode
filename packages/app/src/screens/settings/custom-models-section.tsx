@@ -1,9 +1,11 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 import { Pencil, Plus, Trash2 } from "lucide-react-native";
+
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, type PressableStateCallbackType, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import { ICON_SIZE, type Theme } from "@/styles/theme";
 import {
   AdaptiveModalSheet,
   AdaptiveTextInput,
@@ -27,6 +29,17 @@ import {
   type SelectableCustomModelProvider,
 } from "@/screens/settings/custom-models";
 import type { AgentProvider } from "@chisacode/protocol/agent-types";
+
+const ThemedPencil = withUnistyles(Pencil);
+const ThemedTrash2 = withUnistyles(Trash2);
+const ThemedPlus = withUnistyles(Plus);
+
+const foregroundMutedColorMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+});
+const destructiveColorMapping = (theme: Theme) => ({
+  color: theme.colors.destructive,
+});
 
 interface CustomModelsSectionProps {
   serverId: string;
@@ -60,7 +73,6 @@ function CustomModelRow({
   onEdit: (model: CustomModelEntry) => void;
   onDelete: (model: CustomModelEntry) => void;
 }) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const handleEdit = useCallback(() => onEdit(model), [model, onEdit]);
   const handleDelete = useCallback(() => onDelete(model), [model, onDelete]);
@@ -95,7 +107,7 @@ function CustomModelRow({
           accessibilityLabel={t("customModels.editModel", { model: model.label })}
           testID={`edit-custom-model-${model.id}`}
         >
-          <Pencil size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
+          <ThemedPencil size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
         </Pressable>
         <Pressable
           onPress={handleDelete}
@@ -106,7 +118,7 @@ function CustomModelRow({
           accessibilityLabel={t("customModels.deleteModel", { model: model.label })}
           testID={`delete-custom-model-${model.id}`}
         >
-          <Trash2 size={theme.iconSize.sm} color={theme.colors.destructive} />
+          <ThemedTrash2 size={ICON_SIZE.sm} uniProps={destructiveColorMapping} />
         </Pressable>
       </View>
     </View>
@@ -164,7 +176,6 @@ function CustomModelEditorSheet({
     providerIds: string[];
   }) => Promise<void>;
 }) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const [modelId, setModelId] = useState("");
   const [label, setLabel] = useState("");
@@ -242,7 +253,6 @@ function CustomModelEditorSheet({
             resetKey={`custom-model-id-${state?.mode ?? "closed"}-${previousId ?? "new"}`}
             onChangeText={setModelId}
             placeholder="e.g. openai/gpt-5"
-            placeholderTextColor={theme.colors.foregroundMuted}
             autoCapitalize="none"
             autoCorrect={false}
             returnKeyType="next"
@@ -258,7 +268,6 @@ function CustomModelEditorSheet({
             resetKey={`custom-model-label-${state?.mode ?? "closed"}-${previousId ?? "new"}`}
             onChangeText={setLabel}
             placeholder={t("customModels.modelLabelPlaceholder")}
-            placeholderTextColor={theme.colors.foregroundMuted}
             autoCapitalize="none"
             autoCorrect={false}
             returnKeyType="done"
@@ -304,7 +313,6 @@ function CustomModelEditorSheet({
 }
 
 export function CustomModelsSection({ serverId }: CustomModelsSectionProps) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const reportError = useUserVisibleErrorReporter();
   const { config, patchConfig } = useDaemonConfig(serverId);
@@ -408,11 +416,11 @@ export function CustomModelsSection({ serverId }: CustomModelsSectionProps) {
         accessibilityLabel={t("customModels.addCustomModel")}
         testID="add-custom-model-button"
       >
-        <Plus size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
+        <ThemedPlus size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
         <Text style={settingsStyles.sectionHeaderLinkText}>{t("customModels.add")}</Text>
       </Pressable>
     ),
-    [handleOpenAdd, t, theme.colors.foregroundMuted, theme.iconSize.sm],
+    [handleOpenAdd, t],
   );
 
   return (

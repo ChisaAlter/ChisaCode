@@ -4,7 +4,8 @@ import { useTranslation } from "react-i18next";
 import Svg, { Circle } from "react-native-svg";
 import { Download, RefreshCw, Trash2 } from "lucide-react-native";
 import type { UsageSummaryPayload } from "@chisacode/protocol/messages";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet } from "react-native-unistyles";
+import { baseColors } from "@/styles/theme";
 import { SettingsSection } from "@/screens/settings/settings-section";
 import { Button } from "@/components/ui/button";
 import { SegmentedControl } from "@/components/ui/segmented-control";
@@ -422,16 +423,15 @@ function TrendBar({ bar, maxTokens }: { bar: UsageTrendBar; maxTokens: number })
 }
 
 function TrendBarSegment({ segment }: { segment: UsageTrendSegment }) {
-  const { theme } = useUnistyles();
   const segmentStyle = useMemo(
     () => [
       styles.trendBarSegment,
       {
         flexGrow: Math.max(segment.totalTokens, 1),
-        backgroundColor: chartColor(segment.colorIndex, theme),
+        backgroundColor: chartColor(segment.colorIndex),
       },
     ],
-    [segment.colorIndex, segment.totalTokens, theme],
+    [segment.colorIndex, segment.totalTokens],
   );
   return <View style={segmentStyle} />;
 }
@@ -491,7 +491,6 @@ function ModelDonut({
   segments: UsageModelSegment[];
   activeModel: string | null;
 }) {
-  const { theme } = useUnistyles();
   const size = 148;
   const strokeWidth = 18;
   const radius = (size - strokeWidth) / 2;
@@ -518,7 +517,7 @@ function ModelDonut({
             cx={size / 2}
             cy={size / 2}
             r={radius}
-            stroke={chartColor(segment.colorIndex, theme)}
+            stroke={chartColor(segment.colorIndex)}
             strokeWidth={segment.model === activeModel ? strokeWidth + 4 : strokeWidth}
             strokeLinecap="butt"
             strokeDasharray={dashArray}
@@ -543,15 +542,14 @@ function ModelRow({
   active: boolean;
   onActivate: (model: string) => void;
 }) {
-  const { theme } = useUnistyles();
   const handleActivate = useCallback(() => onActivate(segment.model), [onActivate, segment.model]);
   const rowStyle = useMemo(
     () => [styles.modelRow, active ? styles.modelRowActive : null],
     [active],
   );
   const swatchStyle = useMemo(
-    () => [styles.modelSwatch, { backgroundColor: chartColor(segment.colorIndex, theme) }],
-    [segment.colorIndex, theme],
+    () => [styles.modelSwatch, { backgroundColor: chartColor(segment.colorIndex) }],
+    [segment.colorIndex],
   );
   return (
     <TooltipTarget tooltip={segment.tooltip} onShow={handleActivate}>
@@ -644,17 +642,17 @@ function groupIntoWeeks(cells: UsageHeatmapCell[]): UsageHeatmapCell[][] {
   return weeks;
 }
 
-function chartColor(index: number, theme: ReturnType<typeof useUnistyles>["theme"]): string {
+function chartColor(index: number): string {
   const key = CHART_COLOR_KEYS[index % CHART_COLOR_KEYS.length];
   switch (key) {
     case "blue600":
-      return theme.colors.palette.blue[600];
+      return baseColors.blue[600];
     case "green600":
-      return theme.colors.palette.green[600];
+      return baseColors.green[600];
     case "amber500":
-      return theme.colors.palette.amber[500];
+      return baseColors.amber[500];
     case "red600":
-      return theme.colors.palette.red[600];
+      return baseColors.red[600];
     // Hardcoded — no close palette equivalent exists
     case "violet700":
       return "#7c3aed";

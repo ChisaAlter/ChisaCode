@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import type { PressableStateCallbackType } from "react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { createNameId } from "mnemonic-id";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -13,6 +14,7 @@ import {
   Inbox,
   X,
 } from "lucide-react-native";
+
 import { useRouter, type Href } from "expo-router";
 import { Composer } from "@/composer";
 import { DraftAgentModeControl } from "@/composer/agent-controls/mode-control";
@@ -78,6 +80,17 @@ import {
 import { findCheckoutHintPrAttachment, syncPickerPrAttachment } from "./new-workspace-picker-state";
 import { useTranslation } from "react-i18next";
 
+const ThemedGitPullRequest = withUnistyles(GitPullRequest);
+const ThemedGitBranch = withUnistyles(GitBranch);
+const ThemedChevronDown = withUnistyles(ChevronDown);
+const ThemedCheck = withUnistyles(Check);
+const ThemedX = withUnistyles(X);
+const ThemedFolder = withUnistyles(Folder);
+
+const foregroundMutedColorMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+});
+
 function resolveCheckoutRequest(
   selectedItem: PickerItem | null,
   currentBranch: string | null,
@@ -115,27 +128,25 @@ const PR_OPTION_PREFIX = "github-pr:";
 function RefPickerBadgeContent({
   selectedItem,
   triggerLabel,
-  iconColor,
   iconSize,
 }: {
   selectedItem: PickerItem | null;
   triggerLabel: string;
-  iconColor: string;
   iconSize: number;
 }) {
   return (
     <>
       <View style={styles.badgeIconBox}>
         {selectedItem?.kind === "github-pr" ? (
-          <GitPullRequest size={iconSize} color={iconColor} />
+          <ThemedGitPullRequest size={iconSize} uniProps={foregroundMutedColorMapping} />
         ) : (
-          <GitBranch size={iconSize} color={iconColor} />
+          <ThemedGitBranch size={iconSize} uniProps={foregroundMutedColorMapping} />
         )}
       </View>
       <Text style={styles.badgeText} numberOfLines={1}>
         {triggerLabel}
       </Text>
-      <ChevronDown size={iconSize} color={iconColor} />
+      <ThemedChevronDown size={iconSize} uniProps={foregroundMutedColorMapping} />
     </>
   );
 }
@@ -147,7 +158,6 @@ function RefPickerTrigger({
   badgePressableStyle,
   selectedItem,
   triggerLabel,
-  iconColor,
   iconSize,
 }: {
   pickerAnchorRef: React.RefObject<View | null>;
@@ -156,7 +166,6 @@ function RefPickerTrigger({
   badgePressableStyle: React.ComponentProps<typeof Pressable>["style"];
   selectedItem: PickerItem | null;
   triggerLabel: string;
-  iconColor: string;
   iconSize: number;
 }) {
   const { t } = useTranslation();
@@ -175,7 +184,6 @@ function RefPickerTrigger({
           <RefPickerBadgeContent
             selectedItem={selectedItem}
             triggerLabel={triggerLabel}
-            iconColor={iconColor}
             iconSize={iconSize}
           />
         </Pressable>
@@ -191,13 +199,11 @@ function CheckoutHintBadge({
   prNumber,
   onAccept,
   onDismiss,
-  iconColor,
   iconSize,
 }: {
   prNumber: number;
   onAccept: () => void;
   onDismiss: () => void;
-  iconColor: string;
   iconSize: number;
 }) {
   const { t } = useTranslation();
@@ -213,7 +219,7 @@ function CheckoutHintBadge({
         accessibilityRole="button"
         accessibilityLabel={t("workspace.checkoutPr", { number: prNumber })}
       >
-        <Check size={iconSize} color={iconColor} />
+        <ThemedCheck size={iconSize} uniProps={foregroundMutedColorMapping} />
       </Pressable>
       <Pressable
         testID="new-workspace-checkout-hint-dismiss"
@@ -222,7 +228,7 @@ function CheckoutHintBadge({
         accessibilityRole="button"
         accessibilityLabel={t("workspace.dismissCheckoutHint", { number: prNumber })}
       >
-        <X size={iconSize} color={iconColor} />
+        <ThemedX size={iconSize} uniProps={foregroundMutedColorMapping} />
       </Pressable>
     </View>
   );
@@ -234,7 +240,6 @@ function DirectoryTrigger({
   onPress,
   disabled,
   badgePressableStyle,
-  iconColor,
   iconSize,
 }: {
   anchorRef: React.RefObject<View | null>;
@@ -242,7 +247,6 @@ function DirectoryTrigger({
   onPress: () => void;
   disabled: boolean;
   badgePressableStyle: React.ComponentProps<typeof Pressable>["style"];
-  iconColor: string;
   iconSize: number;
 }) {
   const { t } = useTranslation();
@@ -260,12 +264,12 @@ function DirectoryTrigger({
           accessibilityLabel={t("workspace.directoryPicker.select")}
         >
           <View style={styles.badgeIconBox}>
-            <Folder size={iconSize} color={iconColor} />
+            <ThemedFolder size={iconSize} uniProps={foregroundMutedColorMapping} />
           </View>
           <Text style={styles.badgeText} numberOfLines={1}>
             {label}
           </Text>
-          <ChevronDown size={iconSize} color={iconColor} />
+          <ThemedChevronDown size={iconSize} uniProps={foregroundMutedColorMapping} />
         </Pressable>
       </TooltipTrigger>
       <TooltipContent side="top" align="center" offset={8}>
@@ -299,7 +303,6 @@ function NewWorkspaceComposerFooter({
   openDirectoryPicker,
   isPending,
   badgePressableStyle,
-  iconColor,
   iconSize,
   isLocalDaemon,
   directoryOptions,
@@ -331,7 +334,6 @@ function NewWorkspaceComposerFooter({
   openDirectoryPicker: () => void;
   isPending: boolean;
   badgePressableStyle: React.ComponentProps<typeof Pressable>["style"];
-  iconColor: string;
   iconSize: number;
   isLocalDaemon: boolean;
   directoryOptions: ComboboxOptionType[];
@@ -369,7 +371,6 @@ function NewWorkspaceComposerFooter({
             onPress={openDirectoryPicker}
             disabled={isPending}
             badgePressableStyle={badgePressableStyle}
-            iconColor={iconColor}
             iconSize={iconSize}
           />
           <Combobox
@@ -405,7 +406,6 @@ function NewWorkspaceComposerFooter({
             badgePressableStyle={badgePressableStyle}
             selectedItem={selectedItem}
             triggerLabel={triggerLabel}
-            iconColor={iconColor}
             iconSize={iconSize}
           />
           <Combobox
@@ -434,7 +434,6 @@ function NewWorkspaceComposerFooter({
             prNumber={checkoutHintPrAttachment.item.number}
             onAccept={acceptCheckoutHint}
             onDismiss={dismissCheckoutHint}
-            iconColor={iconColor}
             iconSize={iconSize}
           />
         ) : null}
@@ -455,7 +454,6 @@ function PickerOptionItem({
   disabled,
   onPress,
   isBranch,
-  iconColor,
   iconSize,
 }: {
   testID: string;
@@ -466,20 +464,19 @@ function PickerOptionItem({
   disabled: boolean;
   onPress: () => void;
   isBranch: boolean;
-  iconColor: string;
   iconSize: number;
 }) {
   const leadingSlot = useMemo(
     () => (
       <View style={styles.rowIconBox}>
         {isBranch ? (
-          <GitBranch size={iconSize} color={iconColor} />
+          <ThemedGitBranch size={iconSize} uniProps={foregroundMutedColorMapping} />
         ) : (
-          <GitPullRequest size={iconSize} color={iconColor} />
+          <ThemedGitPullRequest size={iconSize} uniProps={foregroundMutedColorMapping} />
         )}
       </View>
     ),
-    [isBranch, iconSize, iconColor],
+    [isBranch, iconSize],
   );
   return (
     <ComboboxItem
@@ -911,7 +908,6 @@ export function NewWorkspaceScreen({
 }: NewWorkspaceScreenProps) {
   const { t } = useTranslation();
   const router = useRouter();
-  const { theme } = useUnistyles();
   const isCompact = useIsCompactFormFactor();
   const toast = useToast();
   const openProject = useOpenProject(serverId);
@@ -1358,12 +1354,11 @@ export function NewWorkspaceScreen({
           disabled={isPending}
           onPress={onPress}
           isBranch={renderModel.isBranch}
-          iconColor={theme.colors.foregroundMuted}
-          iconSize={theme.iconSize.sm}
+          iconSize={ICON_SIZE.sm}
         />
       );
     },
-    [isPending, itemById, t, theme.colors.foregroundMuted, theme.iconSize.sm],
+    [isPending, itemById, t],
   );
 
   const agentControlsWithDisabled = useMemo(
@@ -1390,8 +1385,7 @@ export function NewWorkspaceScreen({
         openDirectoryPicker={openDirectoryPicker}
         isPending={isPending}
         badgePressableStyle={badgePressableStyle}
-        iconColor={theme.colors.foregroundMuted}
-        iconSize={theme.iconSize.sm}
+        iconSize={ICON_SIZE.sm}
         isLocalDaemon={isLocalDaemon}
         directoryOptions={directoryOptions}
         handleSelectDirectoryOption={handleSelectDirectoryOption}
@@ -1447,8 +1441,6 @@ export function NewWorkspaceScreen({
       selectedOptionId,
       setDirectorySearchQuery,
       setPickerSearchQuery,
-      theme.colors.foregroundMuted,
-      theme.iconSize.sm,
       triggerLabel,
     ],
   );
@@ -1659,8 +1651,8 @@ const styles = StyleSheet.create((theme) => ({
     borderColor: theme.colors.border,
   },
   checkoutHintAction: {
-    width: theme.iconSize.md,
-    height: theme.iconSize.md,
+    width: ICON_SIZE.md,
+    height: ICON_SIZE.md,
     alignItems: "center",
     justifyContent: "center",
     borderRadius: theme.borderRadius.full,
@@ -1686,15 +1678,15 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.popoverForeground,
   },
   badgeIconBox: {
-    width: theme.iconSize.md,
-    height: theme.iconSize.md,
+    width: ICON_SIZE.md,
+    height: ICON_SIZE.md,
     alignItems: "center",
     justifyContent: "center",
     flexShrink: 0,
   },
   rowIconBox: {
-    width: theme.iconSize.md,
-    height: theme.iconSize.md,
+    width: ICON_SIZE.md,
+    height: ICON_SIZE.md,
     alignItems: "center",
     justifyContent: "center",
   },

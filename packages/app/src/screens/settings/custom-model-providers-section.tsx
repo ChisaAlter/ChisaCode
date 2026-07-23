@@ -1,8 +1,10 @@
 import { Brain, Pencil, Plus, Trash2 } from "lucide-react-native";
+
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, Text, View, type PressableStateCallbackType } from "react-native";
 import { useTranslation } from "react-i18next";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import { ICON_SIZE, type Theme } from "@/styles/theme";
 import {
   AdaptiveModalSheet,
   AdaptiveTextInput,
@@ -31,6 +33,18 @@ import { confirmDialog } from "@/utils/confirm-dialog";
 import { reportPresentedError, type ErrorLogger } from "@/utils/user-visible-error";
 import type { AgentProvider } from "@chisacode/protocol/agent-types";
 import type { MutableDaemonConfig } from "@chisacode/protocol/messages";
+
+const ThemedPencil = withUnistyles(Pencil);
+const ThemedTrash2 = withUnistyles(Trash2);
+const ThemedPlus = withUnistyles(Plus);
+const ThemedBrain = withUnistyles(Brain);
+
+const foregroundMutedColorMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+});
+const destructiveColorMapping = (theme: Theme) => ({
+  color: theme.colors.destructive,
+});
 
 interface CustomModelProvidersSectionProps {
   serverId: string;
@@ -237,7 +251,6 @@ function SavedModelRow({
   onEdit: (model: CollectedSavedModel) => void;
   onDelete: (model: CollectedSavedModel) => void;
 }) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const handleEdit = useCallback(() => onEdit(model), [model, onEdit]);
   const handleDelete = useCallback(() => onDelete(model), [model, onDelete]);
@@ -263,7 +276,7 @@ function SavedModelRow({
     <View style={styles.modelRow} testID={`saved-model-row-${model.gatewayId}-${model.modelId}`}>
       <View style={styles.modelLeading}>
         <View style={styles.modelBadgeIcon}>
-          <Plus size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
+          <ThemedPlus size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
         </View>
         <View style={styles.modelTextColumn}>
           <Text style={settingsStyles.rowTitle} numberOfLines={1}>
@@ -303,7 +316,7 @@ function SavedModelRow({
           accessibilityLabel={t("customModelProviders.editModel", { model: model.label })}
           testID={`edit-saved-model-${model.gatewayId}-${model.modelId}`}
         >
-          <Pencil size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
+          <ThemedPencil size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
         </Pressable>
         <Pressable
           onPress={handleDelete}
@@ -314,7 +327,7 @@ function SavedModelRow({
           accessibilityLabel={t("customModelProviders.deleteModel", { model: model.label })}
           testID={`delete-saved-model-${model.gatewayId}-${model.modelId}`}
         >
-          <Trash2 size={theme.iconSize.sm} color={theme.colors.destructive} />
+          <ThemedTrash2 size={ICON_SIZE.sm} uniProps={destructiveColorMapping} />
         </Pressable>
       </View>
     </View>
@@ -385,7 +398,6 @@ function EndpointFields({
   baseUrl,
   apiKey,
   resetPrefix,
-  placeholderColor,
   baseUrlPlaceholder,
   apiKeyPlaceholder,
   onEnabledChange,
@@ -397,7 +409,6 @@ function EndpointFields({
   baseUrl: string;
   apiKey: string;
   resetPrefix: string;
-  placeholderColor: string;
   baseUrlPlaceholder: string;
   apiKeyPlaceholder: string;
   onEnabledChange: (value: boolean) => void;
@@ -417,7 +428,6 @@ function EndpointFields({
             resetKey={`${resetPrefix}-base`}
             onChangeText={onBaseUrlChange}
             placeholder={baseUrlPlaceholder}
-            placeholderTextColor={placeholderColor}
             autoCapitalize="none"
             // @ts-expect-error - outlineStyle is web-only
             style={FORM_INPUT_STYLE}
@@ -427,7 +437,6 @@ function EndpointFields({
             resetKey={`${resetPrefix}-key`}
             onChangeText={onApiKeyChange}
             placeholder={apiKeyPlaceholder}
-            placeholderTextColor={placeholderColor}
             secureTextEntry
             autoCapitalize="none"
             // @ts-expect-error - outlineStyle is web-only
@@ -452,7 +461,6 @@ function ModelEditorSheet({
   onSave: (values: ModelEditorValues, previous: CollectedSavedModel | null) => Promise<void>;
   errorLogger?: ErrorLogger;
 }) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const [values, setValues] = useState<ModelEditorValues>(createEmptyEditorValues);
   const [formError, setFormError] = useState<string | null>(null);
@@ -661,7 +669,6 @@ function ModelEditorSheet({
                 resetKey={`base-url-${resetSeed}`}
                 onChangeText={handleBaseUrlChange}
                 placeholder={baseUrlPlaceholder}
-                placeholderTextColor={theme.colors.foregroundMuted}
                 autoCapitalize="none"
                 autoCorrect={false}
                 testID="custom-model-base-url-input"
@@ -676,7 +683,6 @@ function ModelEditorSheet({
                 resetKey={`api-key-${resetSeed}`}
                 onChangeText={handleApiKeyChange}
                 placeholder={t("customModelProviders.apiKeyPlaceholder")}
-                placeholderTextColor={theme.colors.foregroundMuted}
                 secureTextEntry
                 autoCapitalize="none"
                 testID="custom-model-api-key-input"
@@ -695,7 +701,6 @@ function ModelEditorSheet({
               resetKey={`model-id-${resetSeed}`}
               onChangeText={handleModelIdChange}
               placeholder={t("customModelProviders.modelNamePlaceholder")}
-              placeholderTextColor={theme.colors.foregroundMuted}
               autoCapitalize="none"
               autoCorrect={false}
               testID="custom-model-id-input"
@@ -710,7 +715,6 @@ function ModelEditorSheet({
               resetKey={`context-window-${resetSeed}`}
               onChangeText={handleContextWindowChange}
               placeholder={t("customModelProviders.contextPlaceholder")}
-              placeholderTextColor={theme.colors.foregroundMuted}
               autoCapitalize="none"
               autoCorrect={false}
               keyboardType="number-pad"
@@ -784,7 +788,6 @@ function ModelEditorSheet({
               baseUrl={values.anthropicBaseUrl}
               apiKey={values.anthropicApiKey}
               resetPrefix={`anthropic-${resetSeed}`}
-              placeholderColor={theme.colors.foregroundMuted}
               baseUrlPlaceholder="https://api.example.com/anthropic"
               apiKeyPlaceholder={t("customModelProviders.apiKey")}
               onEnabledChange={handleAnthropicEnabledChange}
@@ -797,7 +800,6 @@ function ModelEditorSheet({
               baseUrl={values.openaiBaseUrl}
               apiKey={values.openaiApiKey}
               resetPrefix={`openai-${resetSeed}`}
-              placeholderColor={theme.colors.foregroundMuted}
               baseUrlPlaceholder="https://api.example.com/v1"
               apiKeyPlaceholder={t("customModelProviders.apiKey")}
               onEnabledChange={handleOpenaiEnabledChange}
@@ -810,7 +812,6 @@ function ModelEditorSheet({
               baseUrl={values.responsesBaseUrl}
               apiKey={values.responsesApiKey}
               resetPrefix={`responses-${resetSeed}`}
-              placeholderColor={theme.colors.foregroundMuted}
               baseUrlPlaceholder="https://api.example.com/v1"
               apiKeyPlaceholder={t("customModelProviders.apiKey")}
               onEnabledChange={handleResponsesEnabledChange}
@@ -846,7 +847,6 @@ export function CustomModelProvidersSection({
   serverId,
   errorLogger,
 }: CustomModelProvidersSectionProps) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const reportError = useUserVisibleErrorReporter();
   const { config, patchConfig } = useDaemonConfig(serverId);
@@ -978,13 +978,13 @@ export function CustomModelProvidersSection({
         accessibilityLabel={t("customModelProviders.addCustomModel")}
         testID="add-custom-model-button"
       >
-        <Plus size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
+        <ThemedPlus size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
         <Text style={settingsStyles.sectionHeaderLinkText}>
           {t("customModelProviders.addModel")}
         </Text>
       </Pressable>
     ),
-    [openAdd, t, theme.colors.foregroundMuted, theme.iconSize.sm],
+    [openAdd, t],
   );
 
   return (
@@ -1014,7 +1014,7 @@ export function CustomModelProvidersSection({
           </View>
         ) : (
           <View style={EMPTY_CARD_STYLE}>
-            <Brain size={theme.iconSize.md} color={theme.colors.foregroundMuted} />
+            <ThemedBrain size={ICON_SIZE.md} uniProps={foregroundMutedColorMapping} />
             <Text style={styles.emptyText}>{t("customModelProviders.empty")}</Text>
           </View>
         )}
