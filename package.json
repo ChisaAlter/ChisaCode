@@ -62,6 +62,7 @@
     "test:desktop-chain": "npm run build:server && npm run test --workspace=@chisacode/protocol && npm run test --workspace=@chisacode/client && npm run test --workspace=@chisacode/desktop && npm run test:e2e:desktop-chain --workspace=@chisacode/app",
     "test:android-chain": "bash packages/app/maestro/test-android-chain.sh",
     "test:audit": "node scripts/audit-tests.mjs",
+    "test:guard": "vitest run scripts/guard.test.ts --bail=1",
     "check:node": "node scripts/check-node-version.mjs",
     "format": "oxfmt .",
     "format:files": "oxfmt",
