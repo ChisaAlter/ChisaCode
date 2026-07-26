@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type {
   ModelGatewayConfig,
   ModelGatewayUpstream,
@@ -9,6 +10,100 @@ import type {
 export type ModelGatewayTargetFormat = "anthropic" | "chatCompletions" | "responses";
 
 type JsonRecord = Record<string, unknown>;
+
+/**
+ * Stable id for synthetic tool calls when the upstream chat stream omits `tool_calls[].id`.
+ * Must be identical for both Responses `id` and `call_id` so later function_call_output pairs.
+ */
+function newToolCallId(): string {
+  return `call_${randomUUID()}`;
+}
+
+/**
+ * Coerces tool / function_call_output payloads into a chat `role=tool` content string.
+ * Codex and other clients may send plain strings, content-part arrays, or structured
+ * objects (`{ stdout, stderr }`, `{ text }`, nested `content`). Silent empty strings
+ * here make models re-read forever and invent file contents.
+ * @param value Raw tool output from Responses or Anthropic tool_result
+ * @returns Text the upstream model should see as the tool result
+ */
+// eslint-disable-next-line complexity
+function stringifyToolOutput(value: unknown): string {
+  if (typeof value === "string") {
+    return value;
+  }
+  if (value == null) {
+    return "";
+  }
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  if (Array.isArray(value)) {
+    const joined = value.map(readPartText).join("");
+    if (joined.length > 0) {
+      return joined;
+    }
+    // Array of structured objects without text parts — fall through to JSON.
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return "";
+    }
+  }
+
+  const record = asRecord(value);
+  if (!record) {
+    return String(value);
+  }
+
+  if (typeof record.text === "string") {
+    return record.text;
+  }
+  if (typeof record.output_text === "string") {
+    return record.output_text;
+  }
+  if (typeof record.output === "string") {
+    return record.output;
+  }
+  if (typeof record.content === "string") {
+    return record.content;
+  }
+  if (Array.isArray(record.content)) {
+    const fromContent = stringifyToolOutput(record.content);
+    if (fromContent.length > 0) {
+      return fromContent;
+    }
+  }
+
+  const stdout = typeof record.stdout === "string" ? record.stdout : "";
+  const stderr = typeof record.stderr === "string" ? record.stderr : "";
+  if (stdout.length > 0 || stderr.length > 0) {
+    if (stdout.length > 0 && stderr.length > 0) {
+      return `${stdout}\n${stderr}`;
+    }
+    return stdout.length > 0 ? stdout : stderr;
+  }
+
+  if (typeof record.aggregated_output === "string") {
+    return record.aggregated_output;
+  }
+  if (typeof record.aggregatedOutput === "string") {
+    return record.aggregatedOutput;
+  }
+  if (typeof record.formatted_output === "string") {
+    return record.formatted_output;
+  }
+  if (typeof record.formattedOutput === "string") {
+    return record.formattedOutput;
+  }
+
+  // Last resort: preserve structured tool payloads instead of dropping them.
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return "";
+  }
+}
 
 interface HandleModelGatewayRequestOptions {
   gateway: ModelGatewayConfig;
@@ -146,6 +241,9 @@ function selectUpstream(
 }
 
 function readPartText(part: unknown): string {
+  if (typeof part === "string") {
+    return part;
+  }
   const record = asRecord(part);
   if (!record) {
     return "";
@@ -158,6 +256,12 @@ function readPartText(part: unknown): string {
   }
   if (typeof record.output_text === "string") {
     return record.output_text;
+  }
+  if (typeof record.stdout === "string") {
+    return record.stdout;
+  }
+  if (typeof record.output === "string") {
+    return record.output;
   }
   return "";
 }
@@ -201,6 +305,53 @@ function findSyntheticModel(
   return syntheticModels.find((model) => model.id === withoutProviderPrefix) ?? null;
 }
 
+/**
+ * Builds an OpenAI-compatible `/v1/models` listing for a gateway face.
+ * OpenCode/MiMoCode discover models via this endpoint when `OPENAI_BASE_URL`
+ * points at the gateway; without it they never see `openai/grok-4.5`.
+ * @param gateway The gateway configuration whose models should be listed
+ * @returns OpenAI models list JSON (`{ object: "list", data: [...] }`)
+ */
+export function listModelGatewayModels(gateway: ModelGatewayConfig): JsonRecord {
+  const seen = new Set<string>();
+  const data: JsonRecord[] = [];
+  const now = Math.floor(Date.now() / 1000);
+
+  function addModel(id: string): void {
+    const normalized = id.trim();
+    if (!normalized || seen.has(normalized)) {
+      return;
+    }
+    seen.add(normalized);
+    data.push({
+      id: normalized,
+      object: "model",
+      created: now,
+      owned_by: gateway.id,
+    });
+  }
+
+  for (const model of gateway.models ?? []) {
+    addModel(model.id);
+  }
+  for (const model of gateway.syntheticModels ?? []) {
+    addModel(model.id);
+  }
+  // Face providers (opencode/mimocode/pi) request models as `openai/<id>`.
+  for (const model of gateway.models ?? []) {
+    if (!model.id.includes("/")) {
+      addModel(`openai/${model.id}`);
+    }
+  }
+  for (const model of gateway.syntheticModels ?? []) {
+    if (!model.id.includes("/")) {
+      addModel(`openai/${model.id}`);
+    }
+  }
+
+  return { object: "list", data };
+}
+
 function parseJsonObject(value: unknown): JsonRecord {
   if (typeof value !== "string" || value.trim().length === 0) {
     return {};
@@ -231,11 +382,25 @@ function anthropicToChat(body: JsonRecord): JsonRecord {
       continue;
     }
     const content = Array.isArray(record.content) ? record.content : [];
+    const toolResults = readAnthropicToolResults(content);
+    if (toolResults.length > 0) {
+      for (const toolResult of toolResults) {
+        messages.push(toolResult);
+      }
+      // A user message may contain only tool_result blocks.
+      const text = readTextContent(record.content);
+      if (text.length === 0) {
+        continue;
+      }
+    }
     const toolCalls = readAnthropicToolCalls(content);
     const role = record.role === "assistant" ? "assistant" : "user";
     messages.push({
       role,
-      content: readTextContent(record.content),
+      content:
+        toolCalls.length > 0
+          ? readTextContent(record.content) || null
+          : readTextContent(record.content),
       ...(toolCalls.length > 0 ? { tool_calls: toolCalls } : {}),
     });
   }
@@ -245,7 +410,101 @@ function anthropicToChat(body: JsonRecord): JsonRecord {
     messages,
     ...(typeof body.max_tokens === "number" ? { max_tokens: body.max_tokens } : {}),
     stream: body.stream === true,
+    ...convertAnthropicToolsToChat(body.tools),
   };
+}
+
+/**
+ * Picks the first string field from a record by priority, falling back to "".
+ * Used to avoid nested ternaries when resolving tool call ids.
+ * @param record Record to read from
+ * @param keys Field names in priority order
+ * @returns First string value found, or ""
+ */
+function firstStringField(record: JsonRecord | null, ...keys: string[]): string {
+  if (!record) return "";
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "string") {
+      return value;
+    }
+  }
+  return "";
+}
+
+/**
+ * Maps a chat-completions finish_reason to an Anthropic stop_reason without nesting.
+ * @param finishReason Chat finish_reason
+ * @param hasToolUse Whether the assistant content contains tool_use blocks
+ * @returns Anthropic stop_reason
+ */
+function chatFinishReasonToAnthropicStop(finishReason: string, hasToolUse: boolean): string {
+  if (finishReason === "length") return "max_tokens";
+  if (finishReason === "tool_calls" || hasToolUse) return "tool_use";
+  return "end_turn";
+}
+
+/**
+ * Maps an Anthropic stop_reason to a chat-completions finish_reason without nesting.
+ * @param stopReason Anthropic stop_reason
+ * @param hasToolUse Whether the assistant content contains tool_use blocks
+ * @returns Chat finish_reason
+ */
+function anthropicStopToChatFinishReason(stopReason: string, hasToolUse: boolean): string {
+  if (stopReason === "max_tokens") return "length";
+  if (stopReason === "tool_use" || hasToolUse) return "tool_calls";
+  return "stop";
+}
+
+/**
+ * Extracts Anthropic tool_result content blocks as chat role=tool messages.
+ * @param content Anthropic message content array
+ * @returns Chat tool messages
+ */
+function readAnthropicToolResults(content: unknown[]): JsonRecord[] {
+  return content.flatMap((part) => {
+    const record = asRecord(part);
+    if (!record || record.type !== "tool_result") {
+      return [];
+    }
+    const toolUseId = firstStringField(record, "tool_use_id", "id");
+    return [
+      {
+        role: "tool",
+        tool_call_id: toolUseId,
+        content: stringifyToolOutput(record.content ?? record.output ?? ""),
+      },
+    ];
+  });
+}
+
+/**
+ * Converts Anthropic tool definitions to OpenAI chat-completions tool format.
+ * Anthropic tools: `[{ name, description, input_schema }]`
+ * Chat tools: `[{ type: "function", function: { name, description, parameters } }]`
+ * @param tools Anthropic tools array from the request body
+ * @returns Chat-completions tools, or empty spread when absent
+ */
+function convertAnthropicToolsToChat(tools: unknown): { tools?: JsonRecord[] } {
+  if (!Array.isArray(tools)) {
+    return {};
+  }
+  const chatTools: JsonRecord[] = [];
+  for (const tool of tools) {
+    const record = asRecord(tool);
+    if (!record || typeof record.name !== "string") {
+      continue;
+    }
+    chatTools.push({
+      type: "function",
+      function: {
+        name: record.name,
+        ...(typeof record.description === "string" ? { description: record.description } : {}),
+        parameters: asRecord(record.input_schema) ?? { type: "object", properties: {} },
+      },
+    });
+  }
+  return chatTools.length > 0 ? { tools: chatTools } : {};
 }
 
 function readAnthropicToolCalls(content: unknown[]): JsonRecord[] {
@@ -277,16 +536,7 @@ function responsesToChat(body: JsonRecord): JsonRecord {
   if (typeof input === "string") {
     messages.push({ role: "user", content: input });
   } else if (Array.isArray(input)) {
-    for (const item of input) {
-      const record = asRecord(item);
-      if (!record) {
-        continue;
-      }
-      messages.push({
-        role: normalizeMessageRole(record.role),
-        content: readTextContent(record.content),
-      });
-    }
+    appendResponsesInputAsChatMessages(input, messages);
   }
 
   return {
@@ -294,7 +544,174 @@ function responsesToChat(body: JsonRecord): JsonRecord {
     messages,
     ...(typeof body.max_output_tokens === "number" ? { max_tokens: body.max_output_tokens } : {}),
     stream: body.stream === true,
+    ...convertResponsesToolsToChat(body.tools),
   };
+}
+
+/**
+ * Converts Responses-API `input` items into chat-completions messages, preserving
+ * prior function calls and tool outputs so multi-turn tool use can continue.
+ *
+ * Chat completions require `role=tool` messages to immediately follow the assistant
+ * message that contains the matching `tool_calls`. Codex often emits an empty
+ * assistant message (or a short status line) between `function_call` and
+ * `function_call_output`; inserting that as a separate chat message breaks pairing
+ * and makes upstream models treat shell/read results as missing.
+ *
+ * @param input Responses request `input` array
+ * @param messages Mutable chat message list to append into
+ */
+// eslint-disable-next-line complexity
+function appendResponsesInputAsChatMessages(input: unknown[], messages: JsonRecord[]): void {
+  // Keep pending tool_calls as plain data so TS doesn't infer never[] on JsonRecord fields.
+  let pendingToolCalls: JsonRecord[] = [];
+  let pendingAssistantText: string | null = null;
+
+  function flushPendingAssistant(): void {
+    if (pendingToolCalls.length === 0 && pendingAssistantText == null) {
+      return;
+    }
+    const message: JsonRecord = {
+      role: "assistant",
+      content: pendingAssistantText,
+    };
+    if (pendingToolCalls.length > 0) {
+      message.tool_calls = pendingToolCalls;
+    }
+    messages.push(message);
+    pendingToolCalls = [];
+    pendingAssistantText = null;
+  }
+
+  for (const item of input) {
+    const record = asRecord(item);
+    if (!record) {
+      continue;
+    }
+
+    // Responses function_call items become assistant tool_calls.
+    if (record.type === "function_call") {
+      const callId = firstStringField(record, "call_id", "id") || `call_${messages.length}`;
+      const name = typeof record.name === "string" ? record.name : "";
+      const args =
+        typeof record.arguments === "string"
+          ? record.arguments
+          : JSON.stringify(record.arguments ?? {});
+      pendingToolCalls.push({
+        id: callId,
+        type: "function",
+        function: { name, arguments: args },
+      });
+      continue;
+    }
+
+    // Responses function_call_output items become role=tool messages.
+    if (record.type === "function_call_output") {
+      flushPendingAssistant();
+      const callId = firstStringField(record, "call_id", "id");
+      const output = stringifyToolOutput(record.output ?? record.content);
+      messages.push({
+        role: "tool",
+        tool_call_id: callId,
+        content: output,
+      });
+      continue;
+    }
+
+    // Message-like items (role + content)
+    if (typeof record.role === "string" || record.type === "message") {
+      const role = normalizeMessageRole(record.role);
+      const text = readTextContent(record.content ?? record.text);
+
+      // Empty non-assistant placeholders are noise.
+      if (text.length === 0 && role !== "assistant") {
+        continue;
+      }
+
+      // Empty assistant messages must not split tool_calls from tool results.
+      // Codex routinely inserts them between function_call and function_call_output.
+      if (role === "assistant" && text.length === 0) {
+        continue;
+      }
+
+      if (role === "assistant") {
+        if (pendingToolCalls.length > 0) {
+          // Merge status text into the same assistant message that owns tool_calls.
+          pendingAssistantText =
+            pendingAssistantText && pendingAssistantText.length > 0
+              ? `${pendingAssistantText}\n${text}`
+              : text;
+          continue;
+        }
+        flushPendingAssistant();
+        messages.push({ role: "assistant", content: text });
+        continue;
+      }
+
+      // user/system: end any open tool_call assistant first.
+      flushPendingAssistant();
+      messages.push({
+        role,
+        content: text,
+      });
+      continue;
+    }
+
+    // Fallback: unknown item with textual content.
+    const fallbackText = readTextContent(record.content ?? record.text ?? record.output);
+    if (fallbackText.length > 0) {
+      flushPendingAssistant();
+      messages.push({ role: "user", content: fallbackText });
+    }
+  }
+
+  flushPendingAssistant();
+}
+
+/**
+ * Converts OpenAI Responses-API tool definitions to chat-completions tool format.
+ * Responses tools may be flat (`{ type: "function", name, description, parameters }`)
+ * or wrapped (`{ type: "function", function: { name, ... } }`). Chat tools are always
+ * wrapped: `[{ type: "function", function: { name, description, parameters } }]`.
+ * @param tools Responses-API tools array from the request body
+ * @returns Chat-completions tools, or empty spread when absent
+ */
+function convertResponsesToolsToChat(tools: unknown): { tools?: JsonRecord[] } {
+  if (!Array.isArray(tools)) {
+    return {};
+  }
+  const chatTools: JsonRecord[] = [];
+  for (const tool of tools) {
+    const record = asRecord(tool);
+    if (!record) {
+      continue;
+    }
+    // Wrapped form: { type: "function", function: { name, ... } }
+    const wrapped = asRecord(record.function);
+    if (wrapped && typeof wrapped.name === "string") {
+      chatTools.push({
+        type: "function",
+        function: {
+          name: wrapped.name,
+          ...(typeof wrapped.description === "string" ? { description: wrapped.description } : {}),
+          parameters: asRecord(wrapped.parameters) ?? { type: "object", properties: {} },
+        },
+      });
+      continue;
+    }
+    // Flat form: { type: "function", name, description, parameters }
+    if (typeof record.name === "string") {
+      chatTools.push({
+        type: "function",
+        function: {
+          name: record.name,
+          ...(typeof record.description === "string" ? { description: record.description } : {}),
+          parameters: asRecord(record.parameters) ?? { type: "object", properties: {} },
+        },
+      });
+    }
+  }
+  return chatTools.length > 0 ? { tools: chatTools } : {};
 }
 
 function normalizeMessageRole(role: unknown): string {
@@ -325,7 +742,33 @@ function chatToAnthropic(body: JsonRecord): JsonRecord {
     ...(systemMessages.length > 0 ? { system: systemMessages.join("\n\n") } : {}),
     ...(typeof body.max_tokens === "number" ? { max_tokens: body.max_tokens } : {}),
     stream: body.stream === true,
+    ...convertChatToolsToAnthropic(body.tools),
   };
+}
+
+/**
+ * Converts chat-completions tool definitions to Anthropic tool definitions.
+ * @param tools Chat tools array
+ * @returns Anthropic tools spread, or empty when absent
+ */
+function convertChatToolsToAnthropic(tools: unknown): { tools?: JsonRecord[] } {
+  if (!Array.isArray(tools)) {
+    return {};
+  }
+  const anthropicTools: JsonRecord[] = [];
+  for (const tool of tools) {
+    const record = asRecord(tool);
+    const fn = asRecord(record?.function);
+    if (!fn || typeof fn.name !== "string") {
+      continue;
+    }
+    anthropicTools.push({
+      name: fn.name,
+      ...(typeof fn.description === "string" ? { description: fn.description } : {}),
+      input_schema: asRecord(fn.parameters) ?? { type: "object", properties: {} },
+    });
+  }
+  return anthropicTools.length > 0 ? { tools: anthropicTools } : {};
 }
 
 function appendChatMessageAsAnthropic(
@@ -348,7 +791,7 @@ function appendChatMessageAsAnthropic(
         {
           type: "tool_result",
           tool_use_id: typeof record.tool_call_id === "string" ? record.tool_call_id : "",
-          content: contentText,
+          content: stringifyToolOutput(record.content ?? record.output ?? contentText),
         },
       ],
     });
@@ -384,6 +827,7 @@ function readChatToolUseContent(toolCalls: unknown): JsonRecord[] {
   });
 }
 
+// eslint-disable-next-line complexity
 function chatToResponses(body: JsonRecord): JsonRecord {
   const input: JsonRecord[] = [];
   const instructions: string[] = [];
@@ -400,8 +844,46 @@ function chatToResponses(body: JsonRecord): JsonRecord {
       }
       continue;
     }
+    if (role === "tool") {
+      input.push({
+        type: "function_call_output",
+        call_id: typeof record.tool_call_id === "string" ? record.tool_call_id : "",
+        // Prefer full tool payload coercion — content may be a structured object.
+        output: stringifyToolOutput(record.content ?? record.output ?? text),
+      });
+      continue;
+    }
+    if (role === "assistant") {
+      if (text.length > 0) {
+        input.push({
+          type: "message",
+          role: "assistant",
+          content: [{ type: "output_text", text }],
+        });
+      }
+      const toolCalls = Array.isArray(record.tool_calls) ? record.tool_calls : [];
+      for (const toolCall of toolCalls) {
+        const toolCallRecord = asRecord(toolCall);
+        const fn = asRecord(toolCallRecord?.function);
+        if (!toolCallRecord || !fn || typeof fn.name !== "string") {
+          continue;
+        }
+        const callId =
+          typeof toolCallRecord.id === "string" ? toolCallRecord.id : `call_${input.length}`;
+        input.push({
+          type: "function_call",
+          id: callId,
+          call_id: callId,
+          name: fn.name,
+          arguments:
+            typeof fn.arguments === "string" ? fn.arguments : JSON.stringify(fn.arguments ?? {}),
+        });
+      }
+      continue;
+    }
     input.push({
-      role: role === "assistant" ? "assistant" : "user",
+      type: "message",
+      role: "user",
       content: text,
     });
   }
@@ -412,7 +894,22 @@ function chatToResponses(body: JsonRecord): JsonRecord {
     ...(instructions.length > 0 ? { instructions: instructions.join("\n\n") } : {}),
     ...(typeof body.max_tokens === "number" ? { max_output_tokens: body.max_tokens } : {}),
     stream: body.stream === true,
+    ...convertChatToolsToResponses(body.tools),
   };
+}
+
+/**
+ * Passes chat-completions tool definitions through to Responses format.
+ * Chat tools are already `{ type:"function", function:{ name, parameters } }`;
+ * Responses accepts the same shape.
+ * @param tools Chat-completions tools array
+ * @returns Responses tools spread, or empty when absent
+ */
+function convertChatToolsToResponses(tools: unknown): { tools?: JsonRecord[] } {
+  if (!Array.isArray(tools) || tools.length === 0) {
+    return {};
+  }
+  return { tools: tools as JsonRecord[] };
 }
 
 function anthropicToResponses(body: JsonRecord): JsonRecord {
@@ -503,14 +1000,17 @@ function chatToAnthropicResponse(chatResponse: JsonRecord, fallbackModel: unknow
   const firstChoice = asRecord(choices[0]);
   const message = asRecord(firstChoice?.message) ?? {};
   const usage = asRecord(chatResponse.usage) ?? {};
+  const content = readChatMessageAsAnthropicContent(message);
+  const hasToolUse = content.some((part) => asRecord(part)?.type === "tool_use");
+  const finishReason = firstChoice?.finish_reason;
 
   return {
     id: typeof chatResponse.id === "string" ? chatResponse.id : `msg_${Date.now()}`,
     type: "message",
     role: "assistant",
     model: typeof chatResponse.model === "string" ? chatResponse.model : fallbackModel,
-    content: readChatMessageAsAnthropicContent(message),
-    stop_reason: firstChoice?.finish_reason === "length" ? "max_tokens" : "end_turn",
+    content,
+    stop_reason: chatFinishReasonToAnthropicStop(String(finishReason ?? ""), hasToolUse),
     stop_sequence: null,
     usage: {
       input_tokens: readUsageNumber(usage, "prompt_tokens"),
@@ -549,7 +1049,10 @@ function anthropicToChatResponse(
           content: readTextContent(content),
           ...readAnthropicToolCallsAsChat(content),
         },
-        finish_reason: anthropicResponse.stop_reason === "max_tokens" ? "length" : "stop",
+        finish_reason: anthropicStopToChatFinishReason(
+          String(anthropicResponse.stop_reason ?? ""),
+          content.some((part) => asRecord(part)?.type === "tool_use"),
+        ),
       },
     ],
     usage: {
@@ -612,20 +1115,24 @@ function chatToResponsesResponse(chatResponse: JsonRecord, fallbackModel: unknow
   const text = readTextContent(message.content);
   const promptTokens = readUsageNumber(usage, "prompt_tokens");
   const completionTokens = readUsageNumber(usage, "completion_tokens");
+  const toolCalls = readChatToolCallsAsResponses(message.tool_calls);
+  const output: JsonRecord[] = [];
+  if (text.length > 0) {
+    output.push({
+      id: `msg_${Date.now()}`,
+      type: "message",
+      status: "completed",
+      role: "assistant",
+      content: [{ type: "output_text", text }],
+    });
+  }
+  output.push(...toolCalls);
   return {
     id: typeof chatResponse.id === "string" ? chatResponse.id : `resp_${Date.now()}`,
     object: "response",
     status: "completed",
     model: typeof chatResponse.model === "string" ? chatResponse.model : fallbackModel,
-    output: [
-      {
-        id: `msg_${Date.now()}`,
-        type: "message",
-        status: "completed",
-        role: "assistant",
-        content: [{ type: "output_text", text }],
-      },
-    ],
+    output: output.length > 0 ? output : [],
     output_text: text,
     usage: {
       input_tokens: promptTokens,
@@ -633,6 +1140,84 @@ function chatToResponsesResponse(chatResponse: JsonRecord, fallbackModel: unknow
       total_tokens: promptTokens + completionTokens,
     },
   };
+}
+
+/**
+ * Codex shell tools reject floating-point timeout fields (`expected u64`). Grok often
+ * emits `timeout_ms: 15000.0` in tool arguments; coerce known numeric timeout keys to
+ * integers so the app-server can execute instead of returning parse errors in a loop.
+ * @param name Tool / function name
+ * @param argumentsJson Raw JSON arguments string
+ * @returns Sanitized arguments JSON string
+ */
+function sanitizeToolCallArguments(name: string, argumentsJson: string): string {
+  if (!argumentsJson || argumentsJson.trim().length === 0) {
+    return argumentsJson;
+  }
+  // Fast path: rewrite float literals in timeout fields without full parse.
+  // Codex rejects `timeout_ms: 15000.0` (expected u64). JS number equality cannot
+  // detect the trailing `.0` once parsed, so operate on the raw JSON text too.
+  const floatTimeoutFixed = argumentsJson.replace(
+    /("(?:timeout_ms|timeoutMs|timeout|command_timeout_ms)"\s*:\s*)(-?\d+)\.0+\b/g,
+    "$1$2",
+  );
+  try {
+    const parsed = JSON.parse(floatTimeoutFixed) as unknown;
+    const record = asRecord(parsed);
+    if (!record) {
+      return floatTimeoutFixed;
+    }
+    let changed = floatTimeoutFixed !== argumentsJson;
+    for (const key of ["timeout_ms", "timeoutMs", "timeout", "command_timeout_ms"]) {
+      const value = record[key];
+      if (typeof value === "number" && Number.isFinite(value)) {
+        const asInt = Math.max(0, Math.trunc(value));
+        if (asInt !== value) {
+          record[key] = asInt;
+          changed = true;
+        } else if (!Number.isInteger(value)) {
+          record[key] = asInt;
+          changed = true;
+        }
+      }
+    }
+    // shell_command / exec tools are the main offenders; still safe for other tools.
+    void name;
+    return changed ? JSON.stringify(record) : floatTimeoutFixed;
+  } catch {
+    return floatTimeoutFixed;
+  }
+}
+
+/**
+ * Converts chat-completions tool_calls to Responses-API function_call output items.
+ * @param toolCalls The `message.tool_calls` array from a chat-completions response
+ * @returns Responses-API function_call output items
+ */
+function readChatToolCallsAsResponses(toolCalls: unknown): JsonRecord[] {
+  if (!Array.isArray(toolCalls)) {
+    return [];
+  }
+  return toolCalls.flatMap((toolCall) => {
+    const record = asRecord(toolCall);
+    const fn = asRecord(record?.function);
+    if (!record || !fn || typeof fn.name !== "string") {
+      return [];
+    }
+    const callId =
+      typeof record.id === "string" && record.id.length > 0 ? record.id : newToolCallId();
+    const rawArgs =
+      typeof fn.arguments === "string" ? fn.arguments : JSON.stringify(fn.arguments ?? {});
+    return [
+      {
+        type: "function_call",
+        id: callId,
+        call_id: callId,
+        name: fn.name,
+        arguments: sanitizeToolCallArguments(fn.name, rawArgs),
+      },
+    ];
+  });
 }
 
 function sseEvent(event: string, data: JsonRecord): string {
@@ -696,9 +1281,11 @@ function readSseBlockTextDelta(block: string, format: ModelGatewayTargetFormat):
 function createStreamFormatter(targetFormat: ModelGatewayTargetFormat): {
   start: () => string;
   delta: (text: string) => string;
-  finish: () => string;
+  toolCall?: (call: { id: string; name: string; arguments: string }) => string;
+  finish: (hasToolCalls?: boolean) => string;
 } {
   if (targetFormat === "anthropic") {
+    let blockIndex = 0;
     return {
       start: () =>
         [
@@ -727,9 +1314,42 @@ function createStreamFormatter(targetFormat: ModelGatewayTargetFormat): {
           index: 0,
           delta: { type: "text_delta", text },
         }),
-      finish: () =>
-        [
+      toolCall: (call) => {
+        blockIndex += 1;
+        const idx = blockIndex;
+        return [
           sseEvent("content_block_stop", { type: "content_block_stop", index: 0 }),
+          sseEvent("content_block_start", {
+            type: "content_block_start",
+            index: idx,
+            content_block: {
+              type: "tool_use",
+              id: call.id || `toolu_${Date.now()}`,
+              name: call.name,
+              input: {},
+            },
+          }),
+          sseEvent("content_block_delta", {
+            type: "content_block_delta",
+            index: idx,
+            delta: { type: "input_json_delta", partial_json: call.arguments },
+          }),
+          sseEvent("content_block_stop", { type: "content_block_stop", index: idx }),
+        ].join("");
+      },
+      finish: (hasToolCalls) =>
+        [
+          ...(hasToolCalls
+            ? []
+            : [sseEvent("content_block_stop", { type: "content_block_stop", index: 0 })]),
+          sseEvent("message_delta", {
+            type: "message_delta",
+            delta: {
+              stop_reason: hasToolCalls ? "tool_use" : "end_turn",
+              stop_sequence: null,
+            },
+            usage: { output_tokens: 0 },
+          }),
           sseEvent("message_stop", { type: "message_stop" }),
         ].join(""),
     };
@@ -745,12 +1365,18 @@ function createStreamFormatter(targetFormat: ModelGatewayTargetFormat): {
           object: "chat.completion.chunk",
           choices: [{ index: 0, delta: { content: text }, finish_reason: null }],
         })}\n\n`,
-      finish: () =>
+      finish: (hasToolCalls) =>
         [
           `data: ${JSON.stringify({
             id,
             object: "chat.completion.chunk",
-            choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
+            choices: [
+              {
+                index: 0,
+                delta: {},
+                finish_reason: hasToolCalls ? "tool_calls" : "stop",
+              },
+            ],
           })}\n\n`,
           "data: [DONE]\n\n",
         ].join(""),
@@ -760,6 +1386,8 @@ function createStreamFormatter(targetFormat: ModelGatewayTargetFormat): {
   const responseId = `resp_${Date.now()}`;
   const itemId = `msg_${Date.now()}`;
   const chunks: string[] = [];
+  const toolCallItems: JsonRecord[] = [];
+  let outputIndex = 0;
   return {
     start: () =>
       [
@@ -802,7 +1430,34 @@ function createStreamFormatter(targetFormat: ModelGatewayTargetFormat): {
         delta: text,
       });
     },
-    finish: () => {
+    toolCall: (call) => {
+      outputIndex += 1;
+      // One id for both fields — dual Date.now() previously could desync call_id pairing.
+      const callId = call.id && call.id.length > 0 ? call.id : newToolCallId();
+      const fcItem = {
+        type: "function_call",
+        id: callId,
+        call_id: callId,
+        name: call.name,
+        arguments: sanitizeToolCallArguments(call.name, call.arguments),
+        status: "completed",
+      };
+      toolCallItems.push(fcItem);
+      return [
+        sseEvent("response.output_item.added", {
+          type: "response.output_item.added",
+          output_index: outputIndex,
+          item: fcItem,
+        }),
+        sseEvent("response.output_item.done", {
+          type: "response.output_item.done",
+          output_index: outputIndex,
+          item: fcItem,
+        }),
+      ].join("");
+    },
+    finish: (hasToolCalls?: boolean) => {
+      void hasToolCalls;
       const fullText = chunks.join("");
       const messageItem = {
         id: itemId,
@@ -837,7 +1492,7 @@ function createStreamFormatter(targetFormat: ModelGatewayTargetFormat): {
             id: responseId,
             object: "response",
             status: "completed",
-            output: [messageItem],
+            output: [messageItem, ...toolCallItems],
             output_text: fullText,
           },
         }),
@@ -855,6 +1510,10 @@ function createStreamingTextTransform(
   const encoder = new TextEncoder();
   const formatter = createStreamFormatter(targetFormat);
   let buffer = "";
+  // Track tool calls across chunks so we can emit them on finish when the
+  // upstream streams chatCompletions tool_calls deltas. Text deltas are still
+  // streamed live for responsiveness.
+  const toolCallAccumulator = new Map<number, { id: string; name: string; arguments: string }>();
 
   function emit(value: string, controller: TransformStreamDefaultController<Uint8Array>): void {
     if (value.length > 0) {
@@ -870,9 +1529,14 @@ function createStreamingTextTransform(
       }
       const block = buffer.slice(0, match.index);
       buffer = buffer.slice(match.index + match[0].length);
+      // First try text delta (streamed live)
       const text = readSseBlockTextDelta(block, upstreamFormat);
       if (text.length > 0) {
         emit(formatter.delta(text), controller);
+      }
+      // Then accumulate tool_calls deltas (emitted on finish)
+      if (upstreamFormat === "chatCompletions") {
+        accumulateChatToolCallDeltas(block, toolCallAccumulator);
       }
     }
   }
@@ -892,10 +1556,77 @@ function createStreamingTextTransform(
         if (text.length > 0) {
           emit(formatter.delta(text), controller);
         }
+        if (upstreamFormat === "chatCompletions") {
+          accumulateChatToolCallDeltas(buffer, toolCallAccumulator);
+        }
       }
-      emit(formatter.finish(), controller);
+      // Emit accumulated tool calls before finish. Fill missing ids once so
+      // Responses call_id pairing stays stable across the whole item.
+      const toolCalls = [...toolCallAccumulator.entries()]
+        .sort(([a], [b]) => a - b)
+        .map(([, tc]) => {
+          if (!tc.id) {
+            tc.id = newToolCallId();
+          }
+          return tc;
+        });
+      if (toolCalls.length > 0) {
+        for (const tc of toolCalls) {
+          emit(formatter.toolCall?.(tc) ?? "", controller);
+        }
+      }
+      emit(formatter.finish(toolCalls.length > 0), controller);
     },
   });
+}
+
+/**
+ * Parses a chatCompletions SSE block for tool_calls deltas and accumulates them
+ * by index, concatenating argument fragments into complete tool calls.
+ * @param block A single SSE block (double-newline-terminated chunk)
+ * @param accumulator Map keyed by tool_calls index to the accumulated call
+ */
+// eslint-disable-next-line complexity
+function accumulateChatToolCallDeltas(
+  block: string,
+  accumulator: Map<number, { id: string; name: string; arguments: string }>,
+): void {
+  for (const line of block.split(/\r?\n/u)) {
+    if (!line.startsWith("data:")) {
+      continue;
+    }
+    const payload = line.slice("data:".length).trim();
+    if (!payload || payload === "[DONE]") {
+      continue;
+    }
+    try {
+      const parsed = JSON.parse(payload) as unknown;
+      const record = asRecord(parsed) ?? {};
+      const choices = Array.isArray(record.choices) ? record.choices : [];
+      const firstChoice = asRecord(choices[0]);
+      const delta = asRecord(firstChoice?.delta) ?? {};
+      const toolCalls = Array.isArray(delta.tool_calls) ? delta.tool_calls : [];
+      for (const tc of toolCalls) {
+        const tcRecord = asRecord(tc);
+        if (!tcRecord) continue;
+        const index = typeof tcRecord.index === "number" ? tcRecord.index : 0;
+        const fn = asRecord(tcRecord.function) ?? {};
+        const existing = accumulator.get(index) ?? { id: "", name: "", arguments: "" };
+        if (typeof tcRecord.id === "string" && existing.id === "") {
+          existing.id = tcRecord.id;
+        }
+        if (typeof fn.name === "string" && existing.name === "") {
+          existing.name = fn.name;
+        }
+        if (typeof fn.arguments === "string") {
+          existing.arguments += fn.arguments;
+        }
+        accumulator.set(index, existing);
+      }
+    } catch {
+      // Ignore malformed deltas
+    }
+  }
 }
 
 function streamTextAsAnthropic(contentChunks: string[], status: number): Response {

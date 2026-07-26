@@ -806,6 +806,9 @@ test("model gateway materializes provider entries for all built-in agents", asyn
       env: {
         OPENAI_API_KEY: "internal-token",
         OPENAI_BASE_URL: "http://127.0.0.1:6767/api/model-gateways/zai/v1",
+        OPENCODE_CONFIG: expect.stringMatching(
+          /[\\/]\.chisacode[\\/]opencode-model-gateways[\\/]zai[\\/]opencode\.json$/u,
+        ),
       },
     },
   });
@@ -823,6 +826,9 @@ test("model gateway materializes provider entries for all built-in agents", asyn
       env: {
         OPENAI_API_KEY: "internal-token",
         OPENAI_BASE_URL: "http://127.0.0.1:6767/api/model-gateways/zai/v1",
+        MIMOCODE_CONFIG: expect.stringMatching(
+          /[\\/]\.chisacode[\\/]mimocode-model-gateways[\\/]zai[\\/]mimocode\.jsonc$/u,
+        ),
       },
     },
   });

@@ -16,6 +16,43 @@ async function collectHistory(
 }
 
 describe("Pi history mapper", () => {
+  test("replays failed assistant turns with empty content as timeline errors", async () => {
+    await expect(
+      collectHistory([
+        {
+          role: "user",
+          content: [{ type: "text", text: "看看这个项目" }],
+        },
+        {
+          role: "assistant",
+          content: [],
+          provider: "openai",
+          model: "grok-4.5",
+          stopReason: "error",
+          errorMessage: 'OpenAI API error (401): 401 "Invalid API key"',
+        },
+      ]),
+    ).resolves.toEqual([
+      {
+        type: "timeline",
+        provider: "pi",
+        item: {
+          type: "user_message",
+          text: "看看这个项目",
+        },
+      },
+      {
+        type: "timeline",
+        provider: "pi",
+        item: {
+          type: "error",
+          message:
+            'OpenAI API error (401): 401 "Invalid API key" (stopReason=error, model=openai/grok-4.5)',
+        },
+      },
+    ]);
+  });
+
   test("replays user, assistant, reasoning, and completed tool calls", async () => {
     await expect(
       collectHistory([

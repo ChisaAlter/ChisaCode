@@ -9,6 +9,7 @@ import {
   refreshTrackedPosixProcess,
   resolveWindowsProcessQueryTimeout,
   selectOwnedWindowsProcesses,
+  terminateProcessTreeWithFallback,
   terminateWithTreeKill,
 } from "./tree-kill.js";
 
@@ -2030,3 +2031,80 @@ function createLaunchToleranceWindowsProcessRecords(): WindowsProcessSelectionRe
     },
   ];
 }
+
+describe("terminateProcessTreeWithFallback", () => {
+  test("force-kills the root PID when tree tracking fails closed as kill-timeout", async () => {
+    // Spawn a real long-lived child so process.kill(pid, SIGKILL) has a target.
+    const child = spawn(process.execPath, ["-e", "setInterval(() => {}, 60000)"], {
+      stdio: "ignore",
+    });
+    const pid = child.pid;
+    expect(typeof pid === "number" && pid > 0).toBe(true);
+    try {
+      await waitFor(() => isProcessRunning(pid ?? -1), 5_000, "fallback child did not start");
+
+      // Windows operations that return records without the live root, with no
+      // launch bound, force terminateWithTreeKill into the unverified -> kill-timeout
+      // path so the fallback is exercised.
+      const windowsOperations: TestWindowsOperations = {
+        async query() {
+          return [];
+        },
+        signal() {
+          // Should never be called: unverified returns kill-timeout without signalling.
+        },
+        isRunning() {
+          return true;
+        },
+      };
+
+      const result = await terminateProcessTreeWithFallback(child, {
+        gracefulTimeoutMs: 0,
+        forceTimeoutMs: 0,
+        windowsOperations,
+      });
+
+      expect(result).toBe("killed");
+      await waitFor(() => !isProcessRunning(pid ?? -1), 5_000, "fallback did not kill the child");
+      expect(child.exitCode).not.toBeNull();
+    } finally {
+      try {
+        process.kill(pid ?? -1, "SIGKILL");
+      } catch {
+        // Already reaped.
+      }
+      child.removeAllListeners();
+    }
+  });
+
+  test("returns the original result when tree termination succeeds", async () => {
+    // A child that already exited with no live PID: the fallback skips because
+    // isProcessExited(child) is true, so the result from terminateWithTreeKill
+    // passes through unchanged. Use a non-tracked platform path (posixOperations
+    // on a non-Windows host) so Windows PID lookup does not interfere.
+    const child = {
+      pid: 99_999,
+      exitCode: 0,
+      signalCode: null,
+      kill() {
+        return true;
+      },
+    };
+
+    const result = await terminateProcessTreeWithFallback(child, {
+      gracefulTimeoutMs: 0,
+      forceTimeoutMs: 0,
+      // Force the non-Windows tracking path so an already-exited child with a
+      // synthetic PID short-circuits to already-exited without a real lookup.
+      posixOperations: {
+        async readProcessTable() {
+          return { complete: true, records: new Map() };
+        },
+        signal() {},
+        signalProcessGroup() {},
+      },
+    });
+
+    expect(result).toBe("already-exited");
+  });
+});

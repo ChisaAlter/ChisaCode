@@ -1,6 +1,10 @@
 import { describe, expect, test } from "vitest";
 
-import { handleModelGatewayRequest, runSyntheticModelTest } from "./model-gateway.js";
+import {
+  handleModelGatewayRequest,
+  listModelGatewayModels,
+  runSyntheticModelTest,
+} from "./model-gateway.js";
 import type { ModelGatewayConfig } from "@chisacode/protocol/provider-config";
 
 function makeGateway(overrides: Partial<ModelGatewayConfig> = {}): ModelGatewayConfig {
@@ -877,7 +881,7 @@ describe("model gateway", () => {
         expect(init?.body).toBe(
           JSON.stringify({
             model: "glm-5",
-            input: [{ role: "user", content: "hello" }],
+            input: [{ type: "message", role: "user", content: "hello" }],
             instructions: "Be terse.",
             max_output_tokens: 32,
             stream: false,
@@ -951,5 +955,454 @@ describe("model gateway", () => {
     expect(text).toContain("event: response.output_item.done");
     expect(text).toContain("event: response.completed");
     expect(text).toContain('"output_text":"hi"');
+  });
+
+  test("lists gateway models for OpenAI-compatible discovery", () => {
+    const listing = listModelGatewayModels(
+      makeGateway({
+        models: [{ id: "grok-4.5", label: "grok-4.5", isDefault: true }],
+      }),
+    );
+    expect(listing.object).toBe("list");
+    const ids = (listing.data as Array<{ id: string }>).map((entry) => entry.id);
+    expect(ids).toEqual(expect.arrayContaining(["grok-4.5", "openai/grok-4.5"]));
+  });
+
+  test("preserves Responses function_call history when converting to chat completions", async () => {
+    let upstreamBody: unknown;
+    await handleModelGatewayRequest({
+      gateway: makeGatewayWithOnly("chatCompletions"),
+      targetFormat: "responses",
+      requestBody: {
+        model: "glm-5",
+        input: [
+          { type: "message", role: "user", content: "read sample.ts" },
+          {
+            type: "function_call",
+            id: "call_1",
+            call_id: "call_1",
+            name: "read",
+            arguments: '{"path":"sample.ts"}',
+          },
+          {
+            type: "function_call_output",
+            call_id: "call_1",
+            output: "export function oldName() {}",
+          },
+        ],
+        tools: [
+          {
+            type: "function",
+            name: "read",
+            description: "read a file",
+            parameters: { type: "object", properties: { path: { type: "string" } } },
+          },
+        ],
+      },
+      fetchImpl: async (_url, init) => {
+        upstreamBody = JSON.parse(String(init?.body ?? "{}"));
+        return Response.json({
+          id: "chatcmpl_1",
+          object: "chat.completion",
+          model: "glm-5",
+          choices: [
+            {
+              index: 0,
+              message: { role: "assistant", content: "oldName" },
+              finish_reason: "stop",
+            },
+          ],
+          usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+        });
+      },
+    });
+
+    expect(upstreamBody).toMatchObject({
+      model: "glm-5",
+      messages: [
+        { role: "user", content: "read sample.ts" },
+        {
+          role: "assistant",
+          tool_calls: [
+            {
+              id: "call_1",
+              type: "function",
+              function: { name: "read", arguments: '{"path":"sample.ts"}' },
+            },
+          ],
+        },
+        {
+          role: "tool",
+          tool_call_id: "call_1",
+          content: "export function oldName() {}",
+        },
+      ],
+      tools: [
+        {
+          type: "function",
+          function: {
+            name: "read",
+          },
+        },
+      ],
+    });
+  });
+
+  test("keeps function_call and function_call_output adjacent despite empty assistant messages", async () => {
+    let upstreamBody: unknown;
+    await handleModelGatewayRequest({
+      gateway: makeGatewayWithOnly("chatCompletions"),
+      targetFormat: "responses",
+      requestBody: {
+        model: "glm-5",
+        input: [
+          { type: "message", role: "user", content: "read README" },
+          {
+            type: "function_call",
+            call_id: "call_shell",
+            name: "shell_command",
+            arguments: '{"command":"Get-Content README.md"}',
+          },
+          // Codex inserts empty assistant messages between call and output.
+          {
+            type: "message",
+            role: "assistant",
+            content: [],
+          },
+          {
+            type: "function_call_output",
+            call_id: "call_shell",
+            output:
+              "Exit code: 0\nWall time: 0.5 seconds\nOutput:\nSecret token for read case: TOKEN_ALPHA_7749\n",
+          },
+          {
+            type: "message",
+            role: "assistant",
+            content: [{ type: "output_text", text: "TOKEN_ALPHA_7749" }],
+          },
+        ],
+      },
+      fetchImpl: async (_url, init) => {
+        upstreamBody = JSON.parse(String(init?.body ?? "{}"));
+        return Response.json({
+          choices: [{ message: { role: "assistant", content: "ok" }, finish_reason: "stop" }],
+        });
+      },
+    });
+
+    const messages = (upstreamBody as { messages: Array<Record<string, unknown>> }).messages;
+    const roles = messages.map((m) => m.role);
+    // Must be user -> assistant(tool_calls) -> tool -> assistant(text)
+    // without an empty assistant splitting the tool pair.
+    expect(roles).toEqual(["user", "assistant", "tool", "assistant"]);
+    expect(messages[1]).toMatchObject({
+      role: "assistant",
+      tool_calls: [{ id: "call_shell", function: { name: "shell_command" } }],
+    });
+    expect(messages[2]).toMatchObject({
+      role: "tool",
+      tool_call_id: "call_shell",
+    });
+    expect(String(messages[2]?.content)).toContain("TOKEN_ALPHA_7749");
+    expect(messages[3]).toMatchObject({
+      role: "assistant",
+      content: "TOKEN_ALPHA_7749",
+    });
+  });
+
+  test("merges assistant status text into pending tool_calls message", async () => {
+    let upstreamBody: unknown;
+    await handleModelGatewayRequest({
+      gateway: makeGatewayWithOnly("chatCompletions"),
+      targetFormat: "responses",
+      requestBody: {
+        model: "glm-5",
+        input: [
+          {
+            type: "function_call",
+            call_id: "call_1",
+            name: "shell_command",
+            arguments: '{"command":"dir"}',
+          },
+          {
+            type: "message",
+            role: "assistant",
+            content: [{ type: "output_text", text: "Listing files..." }],
+          },
+          {
+            type: "function_call_output",
+            call_id: "call_1",
+            output: "sample.ts",
+          },
+        ],
+      },
+      fetchImpl: async (_url, init) => {
+        upstreamBody = JSON.parse(String(init?.body ?? "{}"));
+        return Response.json({
+          choices: [{ message: { role: "assistant", content: "ok" }, finish_reason: "stop" }],
+        });
+      },
+    });
+
+    const messages = (upstreamBody as { messages: Array<Record<string, unknown>> }).messages;
+    expect(messages.map((m) => m.role)).toEqual(["assistant", "tool"]);
+    expect(messages[0]).toMatchObject({
+      role: "assistant",
+      content: "Listing files...",
+      tool_calls: [{ id: "call_1" }],
+    });
+    expect(messages[1]).toMatchObject({ role: "tool", content: "sample.ts" });
+  });
+
+  test("coerces floating timeout_ms in streamed tool call arguments to integers", async () => {
+    const response = await handleModelGatewayRequest({
+      gateway: makeGatewayWithOnly("chatCompletions"),
+      targetFormat: "responses",
+      requestBody: {
+        model: "glm-5",
+        stream: true,
+        input: [{ type: "message", role: "user", content: "run" }],
+      },
+      fetchImpl: async () => {
+        const args = JSON.stringify({ command: "echo hi", timeout_ms: 15000.0 });
+        const sse = [
+          `data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_fixed","function":{"name":"shell_command","arguments":${JSON.stringify(args)}}}]}}]}\n\n`,
+          'data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}\n\n',
+          "data: [DONE]\n\n",
+        ].join("");
+        return new Response(sse, {
+          status: 200,
+          headers: { "Content-Type": "text/event-stream" },
+        });
+      },
+    });
+
+    const body = await response.text();
+    // Arguments are JSON-encoded inside the SSE payload, so quotes are escaped.
+    expect(body).toMatch(/timeout_ms\\?":\s*15000\b/);
+    expect(body).not.toMatch(/timeout_ms\\?":\s*15000\.0\b/);
+  });
+
+  test("preserves object-shaped function_call_output (stdout/stderr) as tool content", async () => {
+    let upstreamBody: unknown;
+    await handleModelGatewayRequest({
+      gateway: makeGatewayWithOnly("chatCompletions"),
+      targetFormat: "responses",
+      requestBody: {
+        model: "glm-5",
+        input: [
+          { type: "message", role: "user", content: "run ls" },
+          {
+            type: "function_call",
+            call_id: "call_shell",
+            name: "shell",
+            arguments: '{"command":"Get-Content README.md"}',
+          },
+          {
+            type: "function_call_output",
+            call_id: "call_shell",
+            output: {
+              stdout: "Secret token for read case: TOKEN_ALPHA_7749\n",
+              stderr: "",
+              exit_code: 0,
+            },
+          },
+        ],
+      },
+      fetchImpl: async (_url, init) => {
+        upstreamBody = JSON.parse(String(init?.body ?? "{}"));
+        return Response.json({
+          choices: [{ message: { role: "assistant", content: "ok" }, finish_reason: "stop" }],
+        });
+      },
+    });
+
+    const messages = (upstreamBody as { messages: Array<Record<string, unknown>> }).messages;
+    const toolMsg = messages.find((m) => m.role === "tool");
+    expect(toolMsg?.tool_call_id).toBe("call_shell");
+    expect(String(toolMsg?.content)).toContain("TOKEN_ALPHA_7749");
+  });
+
+  test("preserves content-part array function_call_output as tool content", async () => {
+    let upstreamBody: unknown;
+    await handleModelGatewayRequest({
+      gateway: makeGatewayWithOnly("chatCompletions"),
+      targetFormat: "responses",
+      requestBody: {
+        model: "glm-5",
+        input: [
+          {
+            type: "function_call",
+            call_id: "call_read",
+            name: "read_file",
+            arguments: "{}",
+          },
+          {
+            type: "function_call_output",
+            call_id: "call_read",
+            output: [{ type: "output_text", text: "export function oldName() {}" }],
+          },
+        ],
+      },
+      fetchImpl: async (_url, init) => {
+        upstreamBody = JSON.parse(String(init?.body ?? "{}"));
+        return Response.json({
+          choices: [{ message: { role: "assistant", content: "ok" }, finish_reason: "stop" }],
+        });
+      },
+    });
+
+    const messages = (upstreamBody as { messages: Array<Record<string, unknown>> }).messages;
+    const toolMsg = messages.find((m) => m.role === "tool");
+    expect(String(toolMsg?.content)).toContain("export function oldName");
+  });
+
+  test("streams Responses function_call with a single stable call_id when chat omits tool id", async () => {
+    const response = await handleModelGatewayRequest({
+      gateway: makeGatewayWithOnly("chatCompletions"),
+      targetFormat: "responses",
+      requestBody: {
+        model: "glm-5",
+        stream: true,
+        input: [{ type: "message", role: "user", content: "edit file" }],
+      },
+      fetchImpl: async () => {
+        const sse = [
+          'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"name":"shell","arguments":"{\\"c\\":"}}]}}]}\n\n',
+          'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"\\"ls\\"}"}}]}}]}\n\n',
+          'data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}\n\n',
+          "data: [DONE]\n\n",
+        ].join("");
+        return new Response(sse, {
+          status: 200,
+          headers: { "Content-Type": "text/event-stream" },
+        });
+      },
+    });
+
+    const body = await response.text();
+    const callIds = [...body.matchAll(/"call_id"\s*:\s*"([^"]+)"/g)].map((m) => m[1]);
+    const ids = [...body.matchAll(/"type":"function_call"[^}]*"id"\s*:\s*"([^"]+)"/g)].map(
+      (m) => m[1],
+    );
+    // Fallback: parse function_call items from SSE JSON payloads
+    const functionCallIds: string[] = [];
+    const functionCallCallIds: string[] = [];
+    for (const line of body.split(/\r?\n/)) {
+      if (!line.startsWith("data:")) continue;
+      const payload = line.slice(5).trim();
+      if (!payload || payload === "[DONE]") continue;
+      try {
+        const parsed = JSON.parse(payload) as {
+          item?: { type?: string; id?: string; call_id?: string };
+        };
+        if (parsed.item?.type === "function_call") {
+          if (parsed.item.id) functionCallIds.push(parsed.item.id);
+          if (parsed.item.call_id) functionCallCallIds.push(parsed.item.call_id);
+        }
+      } catch {
+        // ignore
+      }
+    }
+    expect(functionCallCallIds.length).toBeGreaterThan(0);
+    expect(functionCallIds.length).toBeGreaterThan(0);
+    expect(new Set(functionCallCallIds).size).toBe(1);
+    expect(functionCallIds[0]).toBe(functionCallCallIds[0]);
+    expect(functionCallCallIds[0]).toMatch(/^call_/);
+    void callIds;
+    void ids;
+  });
+
+  test("preserves Anthropic tool_result history when converting to chat completions", async () => {
+    let upstreamBody: unknown;
+    await handleModelGatewayRequest({
+      gateway: makeGatewayWithOnly("chatCompletions"),
+      targetFormat: "anthropic",
+      requestBody: {
+        model: "glm-5",
+        max_tokens: 64,
+        messages: [
+          {
+            role: "user",
+            content: [{ type: "text", text: "read sample.ts" }],
+          },
+          {
+            role: "assistant",
+            content: [
+              {
+                type: "tool_use",
+                id: "toolu_1",
+                name: "Read",
+                input: { path: "sample.ts" },
+              },
+            ],
+          },
+          {
+            role: "user",
+            content: [
+              {
+                type: "tool_result",
+                tool_use_id: "toolu_1",
+                content: "export function oldName() {}",
+              },
+            ],
+          },
+        ],
+        tools: [
+          {
+            name: "Read",
+            description: "Read a file",
+            input_schema: { type: "object", properties: { path: { type: "string" } } },
+          },
+        ],
+      },
+      fetchImpl: async (_url, init) => {
+        upstreamBody = JSON.parse(String(init?.body ?? "{}"));
+        return Response.json({
+          id: "chatcmpl_2",
+          object: "chat.completion",
+          model: "glm-5",
+          choices: [
+            {
+              index: 0,
+              message: { role: "assistant", content: "oldName" },
+              finish_reason: "stop",
+            },
+          ],
+          usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+        });
+      },
+    });
+
+    expect(upstreamBody).toMatchObject({
+      model: "glm-5",
+      messages: [
+        { role: "user", content: "read sample.ts" },
+        {
+          role: "assistant",
+          tool_calls: [
+            {
+              id: "toolu_1",
+              type: "function",
+              function: {
+                name: "Read",
+                arguments: '{"path":"sample.ts"}',
+              },
+            },
+          ],
+        },
+        {
+          role: "tool",
+          tool_call_id: "toolu_1",
+          content: "export function oldName() {}",
+        },
+      ],
+      tools: [
+        {
+          type: "function",
+          function: { name: "Read" },
+        },
+      ],
+    });
   });
 });

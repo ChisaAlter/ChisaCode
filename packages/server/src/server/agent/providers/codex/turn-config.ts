@@ -28,19 +28,33 @@ interface CodexModePreset {
   approvalsReviewer?: "auto_review";
 }
 
+/**
+ * On Windows, Codex's restricted sandboxes currently fail process launch with
+ * `CreateProcessAsUserW failed: 5` (access denied). Prefer full-access sandbox
+ * there so write/shell tools can actually execute; keep restricted sandboxes
+ * on platforms where they work.
+ */
+const WINDOWS_WRITABLE_SANDBOX =
+  process.platform === "win32" ? "danger-full-access" : "workspace-write";
+
 export const MODE_PRESETS: Record<string, CodexModePreset> = {
   "read-only": {
     approvalPolicy: "on-request",
+    // Still restricted when the user explicitly chooses read-only. On Windows
+    // this may fail shell launch; the mode remains available for opt-in safety.
     sandbox: "read-only",
   },
   auto: {
-    approvalPolicy: "on-request",
-    sandbox: "workspace-write",
+    approvalPolicy: process.platform === "win32" ? "never" : "on-request",
+    sandbox: WINDOWS_WRITABLE_SANDBOX,
+    ...(process.platform === "win32" ? { networkAccess: true } : {}),
   },
   "auto-review": {
-    approvalPolicy: "on-request",
-    sandbox: "workspace-write",
-    approvalsReviewer: "auto_review",
+    approvalPolicy: process.platform === "win32" ? "never" : "on-request",
+    sandbox: WINDOWS_WRITABLE_SANDBOX,
+    ...(process.platform === "win32"
+      ? { networkAccess: true }
+      : { approvalsReviewer: "auto_review" }),
   },
   "full-access": {
     approvalPolicy: "never",

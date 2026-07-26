@@ -9,6 +9,18 @@
 
 ## 进行中
 
+### Model gateway Responses→Chat 工具历史配对（2026-07-25 完成）
+
+- **问题**：`grok-4-5-codex`（及其它 chat-only upstream 的 Responses face）多轮工具调用时，模型“读到空 shell / 幻觉文件内容 / 不按工具结果改盘”。根因在 gateway 转换层，不在 Codex UI notification 路径。
+- **影响范围**：`packages/server/src/server/model-gateway/model-gateway.ts`；所有经 model gateway 的 codex/claude/opencode/pi/kimi faces。
+- **根因**：
+  1. Codex 在 `function_call` 与 `function_call_output` 之间插入空 assistant message；转换后打断 chat 的 `assistant.tool_calls → role=tool` 邻接契约。
+  2. 非字符串 `function_call_output.output`（stdout 对象等）被 `readTextContent` 静默变成 `""`。
+  3. 流式 tool_call 缺 id 时用两次 `Date.now()` 分别填 `id`/`call_id`，可能错配。
+  4. 模型常发 `timeout_ms: 15000.0`，Codex shell 解析要求 u64 整数，导致工具失败循环。
+- **方案**：`appendResponsesInputAsChatMessages` 合并/丢弃夹在 tool 对之间的空 assistant；`stringifyToolOutput`；稳定 `newToolCallId`；`sanitizeToolCallArguments` 整型化 timeout。
+- **状态**：完成。gateway 30 个单测通过；`tmp/agent-suite` codex 6/6 真实工具用例通过（读 secret、单文件/多文件重构、建文件、多轮读写、MARKER 写盘）。Windows codex 默认 `danger-full-access` 仍保留（`CreateProcessAsUserW failed: 5`）。
+
 ### 自定义模型协议 / 思考强度 / 识图副模型（2026-07-22 启动）
 
 - **问题**：Models 设置页结构混乱；自定义模型（含 Grok）在 Codex 等 agent 下无思考强度；不存在识图副模型管线。

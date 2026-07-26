@@ -392,3 +392,60 @@ function isProcessExited(child: TreeKillTarget): boolean {
     (child.signalCode !== null && child.signalCode !== undefined)
   );
 }
+
+const FORCE_KILL_FALLBACK_TIMEOUT_MS = 500;
+
+/**
+ * Terminates a child process tree and force-kills the root PID when tree
+ * tracking fails closed. `terminateWithTreeKill` returns `kill-timeout`
+ * without sending any signal when Windows lineage verification fails (e.g. an
+ * unowned root after the child already exited). For long-lived provider
+ * processes (Pi/Codex/OpenCode) that leak OS processes in that case, this
+ * wrapper falls back to a direct `process.kill(pid, SIGKILL)` so the root is
+ * reaped even when the tree could not be verified.
+ * @param child The spawned process to terminate
+ * @param options Termination options; same shape as `terminateWithTreeKill`
+ * @returns The termination result; `killed` when the fallback reaped the root
+ */
+export async function terminateProcessTreeWithFallback(
+  child: TreeKillTarget,
+  options: TerminateWithTreeKillOptions,
+): Promise<TerminateWithTreeKillResult> {
+  const result = await terminateWithTreeKill(child, options);
+  if (result !== "kill-timeout") {
+    return result;
+  }
+  // The tracked path returns kill-timeout when Windows lineage verification
+  // fails, even when the child already exited gracefully. Treat an exited
+  // child as a successful termination so callers do not log a spurious
+  // "did not report exit after SIGKILL" warning for an already-reaped process.
+  if (isProcessExited(child)) {
+    return "killed";
+  }
+  const pid = child.pid;
+  if (typeof pid !== "number" || pid <= 0) {
+    return result;
+  }
+  try {
+    process.kill(pid, "SIGKILL");
+  } catch {
+    // Process may have exited between the check and the kill; nothing to do.
+    return result;
+  }
+  const deadline = new TreeKillCleanupDeadline(
+    FORCE_KILL_FALLBACK_TIMEOUT_MS,
+    options.operations?.now ?? Date.now,
+    options.signal,
+  );
+  try {
+    const exited = await waitForExitOrTimeout(
+      child,
+      () => isProcessExited(child),
+      FORCE_KILL_FALLBACK_TIMEOUT_MS,
+      deadline,
+    );
+    return exited ? "killed" : "kill-timeout";
+  } finally {
+    deadline.dispose();
+  }
+}

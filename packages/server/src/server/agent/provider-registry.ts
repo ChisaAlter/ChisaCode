@@ -1,4 +1,5 @@
 import type { Logger } from "pino";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
@@ -694,6 +695,62 @@ function buildClaudeGatewayConfigDir(gatewayId: string): string {
   return join(homedir(), ".chisacode", "claude-model-gateways", gatewayId);
 }
 
+/**
+ * Writes a managed OpenCode/MiMoCode config that registers gateway models under
+ * the openai provider. OpenCode/MiMoCode do not fully discover arbitrary models
+ * from OPENAI_BASE_URL alone; they need an explicit provider.models entry.
+ * @param gatewayId Gateway id used for the managed config directory
+ * @param face OpenCode-compatible face (`opencode` or `mimocode`)
+ * @param baseUrl Gateway base URL (without `/v1`)
+ * @param token Gateway auth token written into the managed config
+ * @param models Gateway models to expose as `openai/<id>`
+ * @returns Absolute path to the written managed config file
+ */
+function writeOpenCodeCompatibleGatewayConfig(params: {
+  gatewayId: string;
+  face: "opencode" | "mimocode";
+  baseUrl: string;
+  token: string;
+  models: ProviderProfileModel[];
+}): string {
+  const dir = join(homedir(), ".chisacode", `${params.face}-model-gateways`, params.gatewayId);
+  mkdirSync(dir, { recursive: true, mode: 0o700 });
+  const fileName = params.face === "mimocode" ? "mimocode.jsonc" : "opencode.json";
+  const configPath = join(dir, fileName);
+  const models: Record<string, { name: string }> = {};
+  for (const model of params.models) {
+    const bareId = model.id.includes("/") ? model.id.slice(model.id.indexOf("/") + 1) : model.id;
+    if (!bareId || models[bareId]) {
+      continue;
+    }
+    models[bareId] = { name: model.label || bareId };
+  }
+  if (Object.keys(models).length === 0) {
+    models["default"] = { name: "default" };
+  }
+  // Use @ai-sdk/openai (chat completions). openai-compatible currently tries
+  // Responses API helpers that our gateway does not expose as a raw SDK surface.
+  const payload = {
+    $schema: "https://opencode.ai/config.json",
+    provider: {
+      openai: {
+        npm: "@ai-sdk/openai",
+        name: "ChisaCode Model Gateway",
+        options: {
+          baseURL: `${trimTrailingSlash(params.baseUrl)}/v1`,
+          apiKey: params.token,
+        },
+        models,
+      },
+    },
+  };
+  writeFileSync(configPath, `${JSON.stringify(payload, null, 2)}\n`, {
+    encoding: "utf8",
+    mode: 0o600,
+  });
+  return configPath;
+}
+
 function buildGatewayProviderModels(
   models: ProviderProfileModel[],
   options?: { modelPrefix?: string; supportsTools?: boolean },
@@ -821,6 +878,28 @@ function gatewayProviderOverride(params: {
       label: params.label,
       env: nativeXiaomi.env,
       models: buildGatewayProviderModels(models, { modelPrefix: nativeXiaomi.modelPrefix }),
+      enabled: gateway.enabled !== false,
+    };
+  }
+  if (extendsProvider === "opencode" || extendsProvider === "mimocode") {
+    const configPath = writeOpenCodeCompatibleGatewayConfig({
+      gatewayId: gateway.id,
+      face: extendsProvider,
+      baseUrl: routeBase,
+      token,
+      models,
+    });
+    return {
+      extends: extendsProvider,
+      label: params.label,
+      env: {
+        OPENAI_API_KEY: token,
+        OPENAI_BASE_URL: `${routeBase}/v1`,
+        ...(extendsProvider === "opencode"
+          ? { OPENCODE_CONFIG: configPath }
+          : { MIMOCODE_CONFIG: configPath }),
+      },
+      models,
       enabled: gateway.enabled !== false,
     };
   }

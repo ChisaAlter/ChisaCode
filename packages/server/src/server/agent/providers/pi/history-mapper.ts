@@ -37,6 +37,29 @@ export function getUserMessageText(content: string | (PiTextContent | PiImageCon
   return textParts.join("\n\n");
 }
 
+/**
+ * Formats a failed Pi assistant turn for history replay.
+ * Live turns surface the same failure via turn_failed; resume/history must not drop it.
+ * @param message Pi assistant message that may include errorMessage/stopReason
+ * @returns Error text for a timeline error item, or null when the turn succeeded
+ */
+export function formatPiHistoryError(
+  message: Extract<PiAgentMessage, { role: "assistant" }>,
+): string | null {
+  const headline = message.errorMessage?.trim();
+  if (!headline && message.stopReason !== "error") {
+    return null;
+  }
+  const details = [
+    message.stopReason ? `stopReason=${message.stopReason}` : null,
+    message.provider && message.model ? `model=${message.provider}/${message.model}` : null,
+    message.responseModel ? `responseModel=${message.responseModel}` : null,
+    message.responseId ? `responseId=${message.responseId}` : null,
+  ].filter((detail): detail is string => detail !== null);
+  const base = headline || "Pi turn failed";
+  return details.length > 0 ? `${base} (${details.join(", ")})` : base;
+}
+
 export async function* streamPiHistory(
   provider: string,
   messages: PiAgentMessage[],
@@ -100,6 +123,17 @@ export async function* streamPiHistory(
             },
           };
         }
+      }
+
+      // Failed turns often have empty content (e.g. 401 before the first token).
+      // Without this, resume/history only shows the user message and the UI looks hung.
+      const historyError = formatPiHistoryError(message);
+      if (historyError) {
+        yield {
+          type: "timeline",
+          provider,
+          item: { type: "error", message: historyError },
+        };
       }
       continue;
     }

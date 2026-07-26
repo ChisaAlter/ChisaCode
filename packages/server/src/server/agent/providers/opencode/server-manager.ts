@@ -6,7 +6,7 @@ import type { Logger } from "pino";
 
 import { findExecutable } from "../../../../utils/executable.js";
 import { spawnProcess } from "../../../../utils/spawn.js";
-import { terminateWithTreeKill } from "../../../../utils/tree-kill.js";
+import { terminateProcessTreeWithFallback } from "../../../../utils/tree-kill.js";
 import {
   createProviderEnvSpec,
   resolveProviderCommandPrefix,
@@ -386,7 +386,7 @@ export class OpenCodeServerManager implements OpenCodeServerManagerLike {
     ) {
       return;
     }
-    const result = await terminateWithTreeKill(server.process, {
+    const result = await terminateProcessTreeWithFallback(server.process, {
       gracefulTimeoutMs: OPENCODE_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT_MS,
       forceTimeoutMs: OPENCODE_SERVER_FORCE_SHUTDOWN_TIMEOUT_MS,
       onForceSignal: () => {

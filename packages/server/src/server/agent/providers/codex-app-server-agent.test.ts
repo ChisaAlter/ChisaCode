@@ -329,12 +329,21 @@ describe("Codex app-server provider", () => {
 
     expect(await session.getCurrentMode()).toBe("auto");
     const startCall = requests.find((req) => req.method === "thread/start");
-    expect(startCall?.params).toEqual(
-      expect.objectContaining({
-        approvalPolicy: "on-request",
-        sandbox: "workspace-write",
-      }),
-    );
+    if (process.platform === "win32") {
+      expect(startCall?.params).toEqual(
+        expect.objectContaining({
+          approvalPolicy: "never",
+          sandbox: "danger-full-access",
+        }),
+      );
+    } else {
+      expect(startCall?.params).toEqual(
+        expect.objectContaining({
+          approvalPolicy: "on-request",
+          sandbox: "workspace-write",
+        }),
+      );
+    }
   });
 
   test("getAvailableModes includes auto-review when the Codex version supports it", async () => {
@@ -383,11 +392,19 @@ describe("Codex app-server provider", () => {
     await session.startTurn("trigger thread creation");
 
     const startCall = requests.find((req) => req.method === "thread/start");
-    expect(startCall?.params).toMatchObject({
-      approvalPolicy: "on-request",
-      sandbox: "workspace-write",
-      approvalsReviewer: "auto_review",
-    });
+    if (process.platform === "win32") {
+      expect(startCall?.params).toMatchObject({
+        approvalPolicy: "never",
+        sandbox: "danger-full-access",
+      });
+      expect(startCall?.params).not.toHaveProperty("approvalsReviewer");
+    } else {
+      expect(startCall?.params).toMatchObject({
+        approvalPolicy: "on-request",
+        sandbox: "workspace-write",
+        approvalsReviewer: "auto_review",
+      });
+    }
   });
 
   test.each(["auto_review", "guardian_subagent"])(
@@ -418,7 +435,13 @@ describe("Codex app-server provider", () => {
 
       await session.startTurn("trigger thread creation");
 
-      await expect(session.getCurrentMode()).resolves.toBe("auto-review");
+      // On Windows, auto mode uses danger-full-access and does not promote to
+      // auto-review; the promotion path only applies to workspace-write + on-request.
+      if (process.platform === "win32") {
+        await expect(session.getCurrentMode()).resolves.toBe("auto");
+      } else {
+        await expect(session.getCurrentMode()).resolves.toBe("auto-review");
+      }
     },
   );
 
@@ -439,12 +462,22 @@ describe("Codex app-server provider", () => {
     await session.startTurn("needs approval");
 
     const turnStartCall = request.mock.calls.find(([method]) => method === "turn/start");
-    expect(turnStartCall?.[1]).toEqual(
-      expect.objectContaining({
-        approvalPolicy: "on-request",
-        approvalsReviewer: "auto_review",
-      }),
-    );
+    if (process.platform === "win32") {
+      expect(turnStartCall?.[1]).toEqual(
+        expect.objectContaining({
+          approvalPolicy: "never",
+          sandboxPolicy: { type: "dangerFullAccess" },
+        }),
+      );
+      expect(turnStartCall?.[1]).not.toHaveProperty("approvalsReviewer");
+    } else {
+      expect(turnStartCall?.[1]).toEqual(
+        expect.objectContaining({
+          approvalPolicy: "on-request",
+          approvalsReviewer: "auto_review",
+        }),
+      );
+    }
   });
 
   test("passes ephemeral: true to thread/start when constructed as ephemeral", async () => {

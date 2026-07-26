@@ -3,7 +3,7 @@ import readline from "node:readline";
 import type { Logger } from "pino";
 import { z } from "zod/v3";
 
-import { terminateWithTreeKill } from "../../../../utils/tree-kill.js";
+import { terminateProcessTreeWithFallback } from "../../../../utils/tree-kill.js";
 
 const DEFAULT_TIMEOUT_MS = 14 * 24 * 60 * 60 * 1000;
 const APP_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT_MS = 2_000;
@@ -257,7 +257,7 @@ export class CodexAppServerClient {
     } catch {
       // ignore
     }
-    const result = await terminateWithTreeKill(this.child, {
+    const result = await terminateProcessTreeWithFallback(this.child, {
       gracefulTimeoutMs: APP_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT_MS,
       forceTimeoutMs: APP_SERVER_FORCE_SHUTDOWN_TIMEOUT_MS,
       onForceSignal: () => {

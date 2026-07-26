@@ -315,6 +315,7 @@ import { isHostnameAllowed, type HostnamesConfig } from "./hostnames.js";
 import { createRequireBearerMiddleware, type DaemonAuthConfig } from "./auth.js";
 import {
   handleModelGatewayRequest,
+  listModelGatewayModels,
   type ModelGatewayTargetFormat,
 } from "./model-gateway/model-gateway.js";
 import type { ModelGatewayConfigs } from "./agent/provider-launch-config.js";
@@ -807,6 +808,21 @@ export async function createChisaCodeDaemon(
   });
   app.post("/api/model-gateways/:id/v1/responses", modelGatewayJsonParser, (req, res) => {
     void runModelGatewayRequest(req, res, "responses");
+  });
+  app.get("/api/model-gateways/:id/v1/models", (req, res) => {
+    const authHeader = req.header("authorization") ?? "";
+    const apiKeyHeader = req.header("x-api-key") ?? "";
+    if (authHeader !== `Bearer ${modelGatewayToken}` && apiKeyHeader !== modelGatewayToken) {
+      res.status(401).json({ error: "Model gateway token required" });
+      return;
+    }
+    const gatewayId = typeof req.params.id === "string" ? req.params.id : "";
+    const gateway = daemonConfigStore.get().modelGateways[gatewayId];
+    if (!gateway || gateway.enabled === false) {
+      res.status(404).json({ error: "Unknown model gateway" });
+      return;
+    }
+    res.json(listModelGatewayModels(gateway));
   });
 
   app.use(defaultJsonParser);

@@ -1,11 +1,15 @@
 import { type ChildProcess, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { createRequire } from "node:module";
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, extname, join } from "node:path";
 import type { Logger } from "pino";
 
 import { spawnProcess } from "../../../../utils/spawn.js";
-import { terminateWithTreeKill } from "../../../../utils/tree-kill.js";
+import { terminateProcessTreeWithFallback } from "../../../../utils/tree-kill.js";
 import type { ProviderRuntimeSettings } from "../../provider-launch-config.js";
 import {
   buildPiLaunch,
+  type PiPromptOptions,
   type PiRuntime,
   type PiRuntimeLaunch,
   type PiRuntimeSession,
@@ -22,6 +26,10 @@ import type {
   PiSessionStats,
 } from "./rpc-types.js";
 
+type Which = (command: string) => string;
+const piRequire = createRequire(import.meta.url);
+const which = piRequire("which") as Which & { sync: Which };
+
 const DEFAULT_PI_COMMAND: [string, ...string[]] = [
   process.env.PI_COMMAND ?? process.env.PI_ACP_PI_COMMAND ?? "pi",
 ];
@@ -32,6 +40,65 @@ const STDERR_BUFFER_LIMIT = 8192;
 const STDOUT_BUFFER_LIMIT = 1024 * 1024;
 const GRACEFUL_SHUTDOWN_TIMEOUT_MS = 2_000;
 const FORCE_SHUTDOWN_TIMEOUT_MS = 1_000;
+
+/**
+ * Resolves a bare Pi command (e.g. `pi`) to a direct `node cli.js` invocation
+ * on Windows. npm generates `pi.cmd` shims whose `%_prog%` indirection defeats
+ * `spawnProcess`'s `.cmd` shim parser, so spawning `pi` falls back to
+ * `cmd.exe /c pi`. The `cmd.exe` wrapper exits immediately after launching
+ * the Pi `node.exe`, orphaning it so tree-kill cannot reap it on session close.
+ *
+ * This reads the resolved `.cmd` shim, finds the `node_modules` `cli.js` it
+ * invokes, and returns `[nodeExe, cliJsPath, ...args]` so `spawnProcess`
+ * spawns `node.exe` directly (shell: false), keeping the Pi process as a
+ * direct child that tree-kill can terminate.
+ * @param command The configured Pi command, usually `pi`
+ * @returns A direct `node cli.js` command, or the original on non-Windows / failure
+ */
+function resolvePiCommand(command: [string, ...string[]]): [string, ...string[]] {
+  if (process.platform !== "win32") {
+    return command;
+  }
+  const [executable, ...args] = command;
+  // Only resolve bare command names (no path separator, no extension) that
+  // need a PATH lookup; absolute/relative paths with an extension are left as-is.
+  if (extname(executable) !== "" || executable.includes("/") || executable.includes("\\")) {
+    return command;
+  }
+  let shimPath: string;
+  try {
+    shimPath = which.sync(executable);
+  } catch {
+    // Command not on PATH; fall through to the original and let spawn error.
+    return command;
+  }
+  if (!shimPath.toLowerCase().endsWith(".cmd") && !shimPath.toLowerCase().endsWith(".bat")) {
+    return command;
+  }
+  const cliJsPath = resolveCliJsFromNpmShim(shimPath);
+  if (!cliJsPath) {
+    return command;
+  }
+  return [process.execPath, cliJsPath, ...args];
+}
+
+/**
+ * Extracts the `dist/cli.js` path an npm `.cmd` shim forwards to.
+ * npm shims invoke `<dp0>\node_modules\<pkg>\dist\cli.js` after a `%_prog%`
+ * indirection; this finds that path relative to the shim directory.
+ * @param shimPath Absolute path to the `.cmd` shim
+ * @returns Absolute path to the target `cli.js`, or null when not found
+ */
+function resolveCliJsFromNpmShim(shimPath: string): string | null {
+  const shimDir = dirname(shimPath);
+  const contents = readFileSync(shimPath, "utf8");
+  const cliJsMatch = /node_modules[\\/][^\s"]*?cli\.js/iu.exec(contents);
+  if (!cliJsMatch) {
+    return null;
+  }
+  const cliJsPath = join(shimDir, cliJsMatch[0].replace(/\\/g, "/"));
+  return existsSync(cliJsPath) ? cliJsPath : null;
+}
 
 function assertChildWithPipes(
   child: ChildProcess,
@@ -59,7 +126,9 @@ export class PiCliRuntime implements PiRuntime {
   private readonly spawnProcess: (launch: PiRuntimeLaunch) => ChildProcessWithoutNullStreams;
 
   constructor(private readonly options: PiCliRuntimeOptions) {
-    this.command = options.command ?? DEFAULT_PI_COMMAND;
+    // Only resolve the default bare `pi` command; an explicit command (tests,
+    // custom installs, PI_COMMAND env) is trusted as-is.
+    this.command = options.command ? options.command : resolvePiCommand(DEFAULT_PI_COMMAND);
     this.spawnProcess =
       options.spawnProcess ??
       ((launch) => {
@@ -125,11 +194,15 @@ class PiCliRuntimeSession implements PiRuntimeSession {
     };
   }
 
-  async prompt(
-    message: string,
-    images?: Array<{ type: "image"; data: string; mimeType: string }>,
-  ): Promise<void> {
-    await this.request({ type: "prompt", message, ...(images?.length ? { images } : {}) });
+  async prompt(message: string, options?: PiPromptOptions): Promise<void> {
+    await this.request({
+      type: "prompt",
+      message,
+      ...(options?.images?.length ? { images: options.images } : {}),
+      // Always include so mid-stream user messages queue instead of failing.
+      // Pi ignores this field when the agent is idle.
+      streamingBehavior: options?.streamingBehavior ?? "followUp",
+    });
   }
 
   async abort(): Promise<void> {
@@ -188,7 +261,7 @@ class PiCliRuntimeSession implements PiRuntimeSession {
     } catch {
       // ignore
     }
-    const result = await terminateWithTreeKill(this.child, {
+    const result = await terminateProcessTreeWithFallback(this.child, {
       gracefulTimeoutMs: GRACEFUL_SHUTDOWN_TIMEOUT_MS,
       forceTimeoutMs: FORCE_SHUTDOWN_TIMEOUT_MS,
       onForceSignal: () => {
