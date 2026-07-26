@@ -127,3 +127,6 @@ NUL
 # Accidental env-var path expansion pollution
 %SystemDrive%/
 **/%SystemDrive%/
+
+# Local agent test harness output (fixtures/workspaces/results)
+/tmp/
