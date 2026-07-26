@@ -25,12 +25,19 @@ const CLAUDE_ULTRACODE_THINKING_OPTIONS = [
   { id: "ultracode", label: "Ultracode" },
 ] as const;
 
+const OPUS_COST = { input: 15, output: 75, cacheRead: 1.875, cacheWrite: 18.75 };
+const SONNET_COST = { input: 3, output: 15, cacheRead: 0.375, cacheWrite: 3.75 };
+const HAIKU_COST = { input: 0.8, output: 4, cacheRead: 0.08, cacheWrite: 1 };
+
 const CLAUDE_MODELS: AgentModelDefinition[] = [
   {
     provider: "claude",
     id: "claude-opus-4-8[1m]",
     label: "Opus 4.8 1M",
     description: "Opus 4.8 with 1M context window",
+    contextWindowMaxTokens: 1_000_000,
+    supportsImages: true,
+    cost: OPUS_COST,
     thinkingOptions: [...CLAUDE_ULTRACODE_THINKING_OPTIONS],
   },
   {
@@ -39,6 +46,9 @@ const CLAUDE_MODELS: AgentModelDefinition[] = [
     label: "Opus 4.8",
     description: "Opus 4.8 · Latest release",
     isDefault: true,
+    contextWindowMaxTokens: 200_000,
+    supportsImages: true,
+    cost: OPUS_COST,
     thinkingOptions: [...CLAUDE_ULTRACODE_THINKING_OPTIONS],
   },
   {
@@ -46,6 +56,9 @@ const CLAUDE_MODELS: AgentModelDefinition[] = [
     id: "claude-opus-4-7[1m]",
     label: "Opus 4.7 1M",
     description: "Opus 4.7 with 1M context window",
+    contextWindowMaxTokens: 1_000_000,
+    supportsImages: true,
+    cost: OPUS_COST,
     thinkingOptions: [...CLAUDE_OPUS_EXTENDED_THINKING_OPTIONS],
   },
   {
@@ -53,6 +66,9 @@ const CLAUDE_MODELS: AgentModelDefinition[] = [
     id: "claude-opus-4-7",
     label: "Opus 4.7",
     description: "Opus 4.7 · Previous release",
+    contextWindowMaxTokens: 200_000,
+    supportsImages: true,
+    cost: OPUS_COST,
     thinkingOptions: [...CLAUDE_OPUS_EXTENDED_THINKING_OPTIONS],
   },
   {
@@ -60,6 +76,9 @@ const CLAUDE_MODELS: AgentModelDefinition[] = [
     id: "claude-opus-4-6[1m]",
     label: "Opus 4.6 1M",
     description: "Opus 4.6 with 1M context window",
+    contextWindowMaxTokens: 1_000_000,
+    supportsImages: true,
+    cost: OPUS_COST,
     thinkingOptions: [...CLAUDE_THINKING_OPTIONS],
   },
   {
@@ -67,6 +86,9 @@ const CLAUDE_MODELS: AgentModelDefinition[] = [
     id: "claude-opus-4-6",
     label: "Opus 4.6",
     description: "Opus 4.6 · Most capable for complex work",
+    contextWindowMaxTokens: 200_000,
+    supportsImages: true,
+    cost: OPUS_COST,
     thinkingOptions: [...CLAUDE_THINKING_OPTIONS],
   },
   {
@@ -74,6 +96,9 @@ const CLAUDE_MODELS: AgentModelDefinition[] = [
     id: "claude-sonnet-4-6[1m]",
     label: "Sonnet 4.6 1M",
     description: "Sonnet 4.6 with 1M context window",
+    contextWindowMaxTokens: 1_000_000,
+    supportsImages: true,
+    cost: SONNET_COST,
     thinkingOptions: [...CLAUDE_THINKING_OPTIONS],
   },
   {
@@ -81,6 +106,9 @@ const CLAUDE_MODELS: AgentModelDefinition[] = [
     id: "claude-sonnet-4-6",
     label: "Sonnet 4.6",
     description: "Sonnet 4.6 · Best for everyday tasks",
+    contextWindowMaxTokens: 200_000,
+    supportsImages: true,
+    cost: SONNET_COST,
     thinkingOptions: [...CLAUDE_THINKING_OPTIONS],
   },
   {
@@ -88,6 +116,9 @@ const CLAUDE_MODELS: AgentModelDefinition[] = [
     id: "claude-haiku-4-5",
     label: "Haiku 4.5",
     description: "Haiku 4.5 · Fastest for quick answers",
+    contextWindowMaxTokens: 200_000,
+    supportsImages: true,
+    cost: HAIKU_COST,
   },
 ];
 

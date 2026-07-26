@@ -61,9 +61,19 @@ export interface AgentModelDefinition {
   isDefault?: boolean;
   contextWindowMaxTokens?: number;
   supportsImages?: boolean;
+  /** Per-million-token pricing in USD. Omitted when unknown or not applicable. */
+  cost?: ModelCost;
   metadata?: AgentMetadata;
   thinkingOptions?: AgentSelectOption[];
   defaultThinkingOptionId?: string;
+}
+
+/** USD pricing per million tokens. */
+export interface ModelCost {
+  input?: number;
+  output?: number;
+  cacheRead?: number;
+  cacheWrite?: number;
 }
 
 export interface AgentSelectOption {
