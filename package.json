@@ -64,6 +64,8 @@
     "test:audit": "node scripts/audit-tests.mjs",
     "test:guard": "vitest run scripts/guard.test.ts --bail=1",
     "check:node": "node scripts/check-node-version.mjs",
+    "check:i18n-glossary": "node scripts/check-i18n-glossary.mjs",
+    "check:i18n-glossary:report": "node scripts/check-i18n-glossary.mjs --report",
     "format": "oxfmt .",
     "format:files": "oxfmt",
     "format:check": "oxfmt --check .",
