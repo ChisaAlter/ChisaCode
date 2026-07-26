@@ -152,7 +152,7 @@ export function validateProposals(
 ): { valid: boolean; errors: string[] } {
   const errors: string[] = [];
 
-  const totalBytes = proposals.reduce((sum, p) => sum + p.content.length, 0);
+  const totalBytes = proposals.reduce((sum, p) => sum + Buffer.byteLength(p.content, "utf8"), 0);
   if (totalBytes > config.maxProposalTotalBytes) {
     errors.push(`Total proposal size ${totalBytes} exceeds limit ${config.maxProposalTotalBytes}`);
   }

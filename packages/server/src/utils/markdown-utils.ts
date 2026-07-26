@@ -122,7 +122,7 @@ export function parseDiffLines(diff: string): DiffLine[] {
  * like "$5 $10").
  */
 export function hasInlineMath(text: string): boolean {
-  // Match $...$ where content is non-empty and doesn't start/end with space
-  const re = /\$(?!\s)((?:[^$\\]|\\.)+?)(?<!\s)\$(?!\d)/g;
-  return re.test(text);
+  // Match $...$ where content is non-empty and doesn't start/end with space.
+  // No /g flag — .test() with /g is stateful (lastIndex persists across calls).
+  return /\$(?!\s)((?:[^$\\]|\\.)+?)(?<!\s)\$(?!\d)/.test(text);
 }

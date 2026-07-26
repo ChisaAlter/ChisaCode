@@ -8,6 +8,8 @@
  *
  * Design adapted from Cindy's git-snapshot/ (Apache-2.0).
  */
+import { existsSync } from "node:fs";
+
 import type { Logger } from "pino";
 
 import { detectSensitivePath } from "../utils/sensitive-path.js";
@@ -49,6 +51,7 @@ export interface RewindResult {
 }
 
 const TRAILER_PREFIX = "XDT";
+const SNAPSHOT_BRANCH = "chisacode-snapshots";
 
 // ── Blocking state detection ───────────────────────────────────────────────
 
@@ -74,7 +77,6 @@ export async function detectBlockedGitState(
       const gitPath = result.stdout?.trim();
       if (!gitPath) continue;
 
-      const { existsSync } = await import("node:fs");
       if (existsSync(gitPath)) {
         return { reason };
       }
@@ -118,11 +120,10 @@ export function parseSnapshotTrailers(message: string): {
 /**
  * Create a git snapshot of the current workspace state.
  *
- * Steps:
- * 1. Check for blocking git state
- * 2. Stage all non-sensitive changed files
- * 3. Commit on the snapshot branch with trailer metadata
- * 4. Switch back to the original branch
+ * Uses git plumbing commands (write-tree + commit-tree + update-ref) to
+ * create a snapshot commit without touching HEAD, the current branch, or
+ * the staging area. The snapshot is stored under refs/chisacode-snapshots/
+ * and can be listed/rewound later.
  */
 export async function createSnapshot(
   cwd: string,
@@ -158,16 +159,46 @@ export async function createSnapshot(
       return { ok: false, reason: "all changed files are sensitive", excludedFiles };
     }
 
-    // 4. Stage safe files
+    // 4. Stage safe files (temporarily modifies the index)
     await runGitCommand(["add", "--", ...safeFiles], { cwd }, logger);
 
-    // 5. Commit with trailer metadata
-    const message = buildSnapshotCommitMessage(meta);
-    await runGitCommand(["commit", "-m", message, "--no-verify", "--allow-empty"], { cwd }, logger);
+    // 5. Create a tree object from the current index
+    const treeResult = await runGitCommand(["write-tree"], { cwd }, logger);
+    const treeHash = treeResult.stdout?.trim();
 
-    // 6. Get commit hash
-    const hashResult = await runGitCommand(["rev-parse", "HEAD"], { cwd }, logger);
-    const commitHash = hashResult.stdout?.trim();
+    // 6. Restore the index to HEAD (unstage the files we just added)
+    await runGitCommand(["reset", "HEAD", "--"], { cwd }, logger);
+
+    if (!treeHash) {
+      return { ok: false, reason: "failed to create tree object" };
+    }
+
+    // 7. Create a commit object pointing at the tree (does NOT touch HEAD)
+    const message = buildSnapshotCommitMessage(meta);
+    const headResult = await runGitCommand(["rev-parse", "HEAD"], { cwd }, logger);
+    const parentHash = headResult.stdout?.trim();
+
+    const commitArgs = parentHash
+      ? ["commit-tree", treeHash, "-p", parentHash, "-m", message]
+      : ["commit-tree", treeHash, "-m", message];
+    const commitResult = await runGitCommand(commitArgs, { cwd }, logger);
+    const commitHash = commitResult.stdout?.trim();
+
+    if (!commitHash) {
+      return { ok: false, reason: "failed to create commit object" };
+    }
+
+    // 8. Store the snapshot ref for later listing/rewind
+    try {
+      await runGitCommand(
+        ["update-ref", `refs/${SNAPSHOT_BRANCH}/${commitHash.slice(0, 12)}`, commitHash],
+        { cwd },
+        logger,
+      );
+    } catch (refError) {
+      // Non-fatal: commit object exists but isn't easily discoverable
+      logger.warn({ err: refError, commitHash }, "failed to store snapshot ref");
+    }
 
     logger.info(
       { commitHash, kind: meta.kind, files: safeFiles.length, excluded: excludedFiles.length },
@@ -186,6 +217,7 @@ export async function createSnapshot(
 
 /**
  * Restore specific files from a snapshot commit.
+ * Validates that the target commit is actually a snapshot (has XDT trailer).
  */
 export async function rewindToSnapshot(
   cwd: string,
@@ -194,6 +226,17 @@ export async function rewindToSnapshot(
   logger: Logger,
 ): Promise<RewindResult> {
   try {
+    // Validate that this is actually a snapshot commit
+    const logResult = await runGitCommand(
+      ["log", "-1", "--format=%B", commitHash],
+      { cwd },
+      logger,
+    );
+    const trailers = parseSnapshotTrailers(logResult.stdout ?? "");
+    if (!trailers.kind) {
+      return { ok: false, reason: `commit ${commitHash} is not a snapshot (no XDT trailer)` };
+    }
+
     const targets = files.length > 0 ? files : ["."];
     await runGitCommand(["checkout", commitHash, "--", ...targets], { cwd }, logger);
 
@@ -207,7 +250,7 @@ export async function rewindToSnapshot(
 }
 
 /**
- * List recent snapshot commits (by XDT trailer).
+ * List recent snapshot commits from the refs/chisacode-snapshots/ namespace.
  */
 export async function listSnapshots(
   cwd: string,
@@ -215,24 +258,34 @@ export async function listSnapshots(
   maxCount = 50,
 ): Promise<Array<{ hash: string; message: string; kind?: string }>> {
   try {
-    const result = await runGitCommand(
+    // Get the list of snapshot refs
+    const refsResult = await runGitCommand(
       [
-        "log",
-        `--max-count=${maxCount}`,
-        "--format=%H%x1f%B%x1e",
-        `--grep=${TRAILER_PREFIX}-Snapshot-Kind:`,
+        "for-each-ref",
+        `--count=${maxCount}`,
+        "--sort=-creatordate",
+        "--format=%(objectname)",
+        `refs/${SNAPSHOT_BRANCH}/`,
       ],
       { cwd },
       logger,
     );
+    const hashes = (refsResult.stdout ?? "").trim().split("\n").filter(Boolean);
+    if (hashes.length === 0) return [];
 
-    const records = (result.stdout ?? "").split("\x1e").filter((r) => r.trim());
-    return records.map((record) => {
-      const [hash, ...bodyParts] = record.split("\x1f");
-      const message = bodyParts.join("\x1f").trim();
-      const trailers = parseSnapshotTrailers(message);
-      return { hash: hash.trim(), message, kind: trailers.kind };
-    });
+    // Read each commit message individually (avoids git log format parsing issues)
+    const results: Array<{ hash: string; message: string; kind?: string }> = [];
+    for (const hash of hashes) {
+      try {
+        const msgResult = await runGitCommand(["log", "-1", "--format=%B", hash], { cwd }, logger);
+        const message = (msgResult.stdout ?? "").trim();
+        const trailers = parseSnapshotTrailers(message);
+        results.push({ hash: hash.trim(), message, kind: trailers.kind });
+      } catch {
+        // Skip unreadable commits
+      }
+    }
+    return results;
   } catch {
     return [];
   }
@@ -241,13 +294,25 @@ export async function listSnapshots(
 // ── Internals ──────────────────────────────────────────────────────────────
 
 function parseStatusPorcelain(output: string): string[] {
-  // -z format: entries separated by NUL, each entry is "XY path"
+  // -z format: entries separated by NUL, each entry is "XY path".
+  // Rename/copy entries (R/C status) have an extra NUL-separated old path
+  // immediately after the new path entry — we skip those.
   const entries = output.split("\0").filter(Boolean);
   const files: string[] = [];
+  let skipNext = false;
   for (const entry of entries) {
+    if (skipNext) {
+      skipNext = false;
+      continue; // This is the old path of a rename/copy — skip it
+    }
     // Format: "XY <path>" where XY is 2 status chars + space
+    const status = entry.slice(0, 2);
     const filePath = entry.slice(3).trim();
     if (filePath) files.push(filePath);
+    // Rename (R) and copy (C) entries are followed by the original path
+    if (status[0] === "R" || status[0] === "C") {
+      skipNext = true;
+    }
   }
   return files;
 }

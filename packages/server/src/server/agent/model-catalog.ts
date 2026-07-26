@@ -96,11 +96,14 @@ export function estimateTurnCost(
   tokens: { input: number; output: number; cacheRead?: number; cacheWrite?: number },
 ): number | null {
   if (!cost) return null;
+  const input = Math.max(0, tokens.input);
+  const output = Math.max(0, tokens.output);
+  const cacheRead = Math.max(0, tokens.cacheRead ?? 0);
+  const cacheWrite = Math.max(0, tokens.cacheWrite ?? 0);
   let total = 0;
-  if (cost.input) total += (tokens.input / 1_000_000) * cost.input;
-  if (cost.output) total += (tokens.output / 1_000_000) * cost.output;
-  if (cost.cacheRead && tokens.cacheRead) total += (tokens.cacheRead / 1_000_000) * cost.cacheRead;
-  if (cost.cacheWrite && tokens.cacheWrite)
-    total += (tokens.cacheWrite / 1_000_000) * cost.cacheWrite;
+  if (cost.input) total += (input / 1_000_000) * cost.input;
+  if (cost.output) total += (output / 1_000_000) * cost.output;
+  if (cost.cacheRead && cacheRead) total += (cacheRead / 1_000_000) * cost.cacheRead;
+  if (cost.cacheWrite && cacheWrite) total += (cacheWrite / 1_000_000) * cost.cacheWrite;
   return total;
 }

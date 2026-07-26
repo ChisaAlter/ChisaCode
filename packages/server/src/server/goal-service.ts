@@ -182,7 +182,7 @@ export function buildContinuationPrompt(goal: GoalState): string {
     `[Goal continuation — turn ${goal.turnsUsed + 1}]`,
     `Objective: ${goal.objective}`,
   ];
-  if (goal.limits.maxTurns) {
+  if (goal.limits.maxTurns !== null) {
     parts.push(`Turns used: ${goal.turnsUsed}/${goal.limits.maxTurns}`);
   }
   if (goal.limits.budgetTokens) {

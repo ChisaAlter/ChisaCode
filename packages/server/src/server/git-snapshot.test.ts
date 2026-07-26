@@ -131,10 +131,12 @@ describe("createSnapshot", () => {
 describe("listSnapshots", () => {
   test("lists snapshot commits by trailer", async () => {
     writeFileSync(path.join(tmpDir, "file1.ts"), "a");
-    await createSnapshot(tmpDir, { kind: "before-edit" }, logger);
+    const snap1 = await createSnapshot(tmpDir, { kind: "before-edit" }, logger);
+    expect(snap1.ok).toBe(true);
 
     writeFileSync(path.join(tmpDir, "file1.ts"), "b");
-    await createSnapshot(tmpDir, { kind: "after-edit" }, logger);
+    const snap2 = await createSnapshot(tmpDir, { kind: "after-edit" }, logger);
+    expect(snap2.ok).toBe(true);
 
     const snapshots = await listSnapshots(tmpDir, logger);
     expect(snapshots.length).toBe(2);

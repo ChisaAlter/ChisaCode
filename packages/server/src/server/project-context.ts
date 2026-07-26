@@ -14,7 +14,7 @@
  * Design adapted from Cindy's packages/project-context (Apache-2.0).
  */
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 export interface DiscoveredModule {
@@ -68,13 +68,13 @@ export function discoverModules(workDir: string): DiscoveredModule[] {
  * Build the full project context for a workspace, including the TOC string
  * ready for system prompt injection.
  */
-export function buildProjectContext(workDir: string): ProjectContext {
+export function buildProjectContext(workDir: string, now: number = Date.now()): ProjectContext {
   const rootPkg = readPackageJson(workDir);
   const projectName = (rootPkg?.name as string | undefined) ?? path.basename(workDir);
   const modules = discoverModules(workDir);
   const toc = renderToc(projectName, modules);
 
-  return { workDir, projectName, modules, toc, builtAt: Date.now() };
+  return { workDir, projectName, modules, toc, builtAt: now };
 }
 
 /**
@@ -124,7 +124,7 @@ function readPackageJson(dir: string): Record<string, unknown> | null {
 
 function pkgMtime(dir: string): number {
   try {
-    const { mtimeMs } = require("node:fs").statSync(path.join(dir, "package.json"));
+    const { mtimeMs } = statSync(path.join(dir, "package.json"));
     return mtimeMs;
   } catch {
     return 0;
@@ -156,7 +156,6 @@ function discoverFromGlobs(workDir: string, globs: string[]): DiscoveredModule[]
     if (!existsSync(baseDir)) continue;
 
     try {
-      const { readdirSync } = require("node:fs");
       const entries = readdirSync(baseDir, { withFileTypes: true });
       for (const entry of entries) {
         if (!entry.isDirectory()) continue;
@@ -194,7 +193,6 @@ function discoverFromDirectoryListing(workDir: string): DiscoveredModule[] {
   ]);
 
   try {
-    const { readdirSync } = require("node:fs");
     const entries = readdirSync(workDir, { withFileTypes: true });
     for (const entry of entries) {
       if (!entry.isDirectory()) continue;

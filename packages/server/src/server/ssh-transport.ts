@@ -36,12 +36,6 @@ export interface SSHSpawnOptions {
   remoteEnv?: Record<string, string>;
 }
 
-export interface SSHSpawnResult {
-  child: ChildProcess;
-  /** The full SSH command line (for logging/debugging). */
-  commandLine: string;
-}
-
 // ── SSH command building ───────────────────────────────────────────────────
 
 /**
@@ -77,6 +71,10 @@ export function buildSSHArgs(config: SSHConnectionConfig, options: SSHSpawnOptio
   // Connection timeout
   args.push("-o", "ConnectTimeout=30");
 
+  // Keepalive for long-running NDJSON streams (prevent silent disconnect)
+  args.push("-o", "ServerAliveInterval=60");
+  args.push("-o", "ServerAliveCountMax=3");
+
   // Target
   const target = config.user ? `${config.user}@${config.host}` : config.host;
   args.push(target);
@@ -88,6 +86,10 @@ export function buildSSHArgs(config: SSHConnectionConfig, options: SSHSpawnOptio
   }
   if (options.remoteEnv) {
     for (const [key, value] of Object.entries(options.remoteEnv)) {
+      // Validate key is a safe shell variable name (prevent command injection)
+      if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) {
+        throw new Error(`Invalid environment variable name: "${key}"`);
+      }
       commandParts.push(`export ${key}=${shellQuote(value)}`);
     }
   }
