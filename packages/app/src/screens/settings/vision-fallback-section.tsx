@@ -1,6 +1,7 @@
+import { Image as ImageIcon } from "lucide-react-native";
 import { useCallback, useMemo, useState } from "react";
 import { Pressable, Text, View } from "react-native";
-import { StyleSheet } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
 
 import type { MutableDaemonConfig } from "@chisacode/protocol/messages";
@@ -9,10 +10,17 @@ import { useUserVisibleErrorReporter } from "@/hooks/use-user-visible-error";
 import { SettingsSection } from "@/screens/settings/settings-section";
 import { collectSavedModels } from "@/screens/settings/custom-model-providers";
 import { settingsStyles } from "@/styles/settings";
+import { ICON_SIZE, type Theme } from "@/styles/theme";
 
 interface VisionFallbackSectionProps {
   serverId: string | null;
 }
+
+const ThemedImageIcon = withUnistyles(ImageIcon);
+
+const foregroundMutedColorMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+});
 
 function modelSupportsImages(model: { supportsImages?: boolean }): boolean {
   return model.supportsImages === true;
@@ -127,8 +135,12 @@ export function VisionFallbackSection({ serverId }: VisionFallbackSectionProps) 
     <SettingsSection title={t("visionFallback.title")} testID="vision-fallback-section">
       <Text style={styles.hint}>{t("visionFallback.hint")}</Text>
       {visionCandidates.length === 0 ? (
-        <View style={settingsStyles.card}>
-          <Text style={settingsStyles.rowHint}>{t("visionFallback.empty")}</Text>
+        <View style={EMPTY_CARD_STYLE} testID="vision-fallback-empty">
+          <View style={styles.emptyIconWrap}>
+            <ThemedImageIcon size={ICON_SIZE.md} uniProps={foregroundMutedColorMapping} />
+          </View>
+          <Text style={styles.emptyTitle}>{t("visionFallback.emptyTitle")}</Text>
+          <Text style={styles.emptyText}>{t("visionFallback.empty")}</Text>
         </View>
       ) : (
         <View style={styles.list}>
@@ -161,7 +173,38 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foregroundMuted,
     fontSize: 12.5,
     lineHeight: 17,
+    marginBottom: theme.spacing[2],
+  },
+  emptyCard: {
+    paddingVertical: theme.spacing[6],
+    paddingHorizontal: theme.spacing[4],
+    gap: theme.spacing[2],
+    alignItems: "center",
+  },
+  emptyIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: theme.borderRadius.full,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface1,
+    alignItems: "center",
+    justifyContent: "center",
     marginBottom: theme.spacing[1],
+  },
+  emptyTitle: {
+    color: theme.colors.foreground,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: theme.fontWeight.medium,
+    textAlign: "center",
+  },
+  emptyText: {
+    color: theme.colors.foregroundMuted,
+    fontSize: 12.5,
+    lineHeight: 17,
+    textAlign: "center",
+    maxWidth: 320,
   },
   list: {
     gap: theme.spacing[2],
@@ -218,3 +261,5 @@ const styles = StyleSheet.create((theme) => ({
     lineHeight: 16,
   },
 }));
+
+const EMPTY_CARD_STYLE = [settingsStyles.card, styles.emptyCard];

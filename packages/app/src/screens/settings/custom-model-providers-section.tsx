@@ -29,7 +29,6 @@ import {
   type CustomOpenAIWireApi,
 } from "@/screens/settings/custom-model-providers";
 import { settingsStyles } from "@/styles/settings";
-import { confirmDialog } from "@/utils/confirm-dialog";
 import { reportPresentedError, type ErrorLogger } from "@/utils/user-visible-error";
 import type { AgentProvider } from "@chisacode/protocol/agent-types";
 import type { MutableDaemonConfig } from "@chisacode/protocol/messages";
@@ -45,6 +44,12 @@ const foregroundMutedColorMapping = (theme: Theme) => ({
 const destructiveColorMapping = (theme: Theme) => ({
   color: theme.colors.destructive,
 });
+
+const FLEX_1_STYLE = { flex: 1 };
+
+function DeleteModelSheetHeader(t: (key: string) => string): SheetHeader {
+  return { title: t("customModelProviders.deleteConfirmTitle") };
+}
 
 interface CustomModelProvidersSectionProps {
   serverId: string;
@@ -853,6 +858,7 @@ export function CustomModelProvidersSection({
   const { refresh } = useProvidersSnapshot(serverId);
   const [editorState, setEditorState] = useState<EditingModelState | null>(null);
   const [deletingKey, setDeletingKey] = useState<string | null>(null);
+  const [pendingDeleteModel, setPendingDeleteModel] = useState<CollectedSavedModel | null>(null);
 
   const savedModels = useMemo(
     () => collectSavedModels(config?.modelGateways),
@@ -865,6 +871,8 @@ export function CustomModelProvidersSection({
     [],
   );
   const closeEditor = useCallback(() => setEditorState(null), []);
+
+  const deleteSheetHeader = useMemo(() => DeleteModelSheetHeader(t), [t]);
 
   const handleSave = useCallback(
     async (values: ModelEditorValues, previous: CollectedSavedModel | null) => {
@@ -927,46 +935,64 @@ export function CustomModelProvidersSection({
     [config?.modelGateways, patchConfig, refresh, t],
   );
 
-  const handleDelete = useCallback(
-    (model: CollectedSavedModel) => {
-      void (async () => {
-        const confirmed = await confirmDialog({
-          title: t("customModelProviders.deleteConfirmTitle"),
-          message: t("customModelProviders.deleteConfirmMessage", { model: model.label }),
-          confirmLabel: t("common.delete"),
-          cancelLabel: t("common.cancel"),
-          destructive: true,
+  const handleRequestDelete = useCallback((model: CollectedSavedModel) => {
+    setPendingDeleteModel(model);
+  }, []);
+
+  const handleCloseDeleteConfirm = useCallback(() => {
+    if (deletingKey) {
+      return;
+    }
+    setPendingDeleteModel(null);
+  }, [deletingKey]);
+
+  const handleCancelDelete = useCallback(() => {
+    if (deletingKey) {
+      return;
+    }
+    setPendingDeleteModel(null);
+  }, [deletingKey]);
+
+  const handleConfirmDelete = useCallback(() => {
+    if (!pendingDeleteModel || deletingKey) {
+      return;
+    }
+    const model = pendingDeleteModel;
+    setDeletingKey(model.key);
+    void (async () => {
+      try {
+        const patch = buildDeleteSavedModelPatch({
+          currentGateways: config?.modelGateways,
+          gatewayId: model.gatewayId,
+          modelId: model.modelId,
         });
-        if (!confirmed) {
-          return;
+        const updatedConfig = await patchConfig(patch);
+        if (!updatedConfig) {
+          throw new Error(t("customModelProviders.deleteFailed"));
         }
-        setDeletingKey(model.key);
-        try {
-          const patch = buildDeleteSavedModelPatch({
-            currentGateways: config?.modelGateways,
-            gatewayId: model.gatewayId,
-            modelId: model.modelId,
-          });
-          const updatedConfig = await patchConfig(patch);
-          if (!updatedConfig) {
-            throw new Error(t("customModelProviders.deleteFailed"));
-          }
-          void refresh(model.providerIds as AgentProvider[]).catch((error) => {
-            console.warn("[CustomModelProviders] Failed to refresh providers after delete", error);
-          });
-        } catch (error) {
-          reportError({
-            error,
-            logLabel: `[CustomModelProviders] Failed to delete model ${model.modelId}`,
-            fallbackMessage: t("customModelProviders.deleteFailed"),
-          });
-        } finally {
-          setDeletingKey((current) => (current === model.key ? null : current));
-        }
-      })();
-    },
-    [config?.modelGateways, patchConfig, refresh, reportError, t],
-  );
+        setPendingDeleteModel(null);
+        void refresh(model.providerIds as AgentProvider[]).catch((error) => {
+          console.warn("[CustomModelProviders] Failed to refresh providers after delete", error);
+        });
+      } catch (error) {
+        reportError({
+          error,
+          logLabel: `[CustomModelProviders] Failed to delete model ${model.modelId}`,
+          fallbackMessage: t("customModelProviders.deleteFailed"),
+        });
+      } finally {
+        setDeletingKey((current) => (current === model.key ? null : current));
+      }
+    })();
+  }, [
+    config?.modelGateways,
+    deletingKey,
+    patchConfig,
+    pendingDeleteModel,
+    refresh,
+    reportError,
+    t,
+  ]);
 
   const headerActions = useMemo(
     () => (
@@ -1007,7 +1033,7 @@ export function CustomModelProvidersSection({
                   model={model}
                   deleting={deletingKey === model.key}
                   onEdit={openEdit}
-                  onDelete={handleDelete}
+                  onDelete={handleRequestDelete}
                 />
               </View>
             ))}
@@ -1027,6 +1053,43 @@ export function CustomModelProvidersSection({
         onSave={handleSave}
         errorLogger={errorLogger}
       />
+
+      {pendingDeleteModel ? (
+        <AdaptiveModalSheet
+          header={deleteSheetHeader}
+          visible
+          onClose={handleCloseDeleteConfirm}
+          testID="delete-saved-model-confirm-modal"
+        >
+          <Text style={styles.confirmText}>
+            {t("customModelProviders.deleteConfirmMessage", {
+              model: pendingDeleteModel.label,
+            })}
+          </Text>
+          <View style={styles.confirmActions}>
+            <Button
+              variant="secondary"
+              size="sm"
+              style={FLEX_1_STYLE}
+              onPress={handleCancelDelete}
+              disabled={Boolean(deletingKey)}
+            >
+              {t("common.cancel")}
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              style={FLEX_1_STYLE}
+              onPress={handleConfirmDelete}
+              disabled={Boolean(deletingKey)}
+              loading={Boolean(deletingKey)}
+              testID="delete-saved-model-confirm"
+            >
+              {t("common.delete")}
+            </Button>
+          </View>
+        </AdaptiveModalSheet>
+      ) : null}
     </>
   );
 }
@@ -1108,6 +1171,17 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foregroundMuted,
     fontSize: 12.5,
     lineHeight: 16,
+  },
+  confirmText: {
+    color: theme.colors.foregroundMuted,
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  confirmActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+    marginTop: theme.spacing[4],
   },
   modelRow: {
     flexDirection: "row",

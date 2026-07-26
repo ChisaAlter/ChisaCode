@@ -187,6 +187,36 @@ function isPiRequestAbortError(error: unknown): boolean {
   return /\brequest was aborted\b|\babort(ed)?\b/i.test(toDiagnosticErrorMessage(error));
 }
 
+function isPiStreamingBehaviorRequiredError(error: unknown): boolean {
+  return /streamingBehavior/i.test(toDiagnosticErrorMessage(error));
+}
+
+const PI_IDLE_POLL_INTERVAL_MS = 50;
+const PI_IDLE_WAIT_TIMEOUT_MS = 2_000;
+
+/**
+ * Wait until Pi reports it is no longer streaming (best-effort).
+ * Used after abort so a replacement prompt is not rejected while Pi is still
+ * finishing the previous stream, and so we can fall back cleanly if polling fails.
+ */
+async function waitForPiIdle(
+  runtimeSession: Pick<PiRuntimeSession, "getState">,
+  timeoutMs = PI_IDLE_WAIT_TIMEOUT_MS,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      const state = await runtimeSession.getState();
+      if (!state.isStreaming) {
+        return;
+      }
+    } catch {
+      // getState can fail during process teardown; keep trying until timeout.
+    }
+    await new Promise((resolve) => setTimeout(resolve, PI_IDLE_POLL_INTERVAL_MS));
+  }
+}
+
 function piAssistantText(message: Extract<PiAgentMessage, { role: "assistant" }>): string | null {
   const text = message.content
     .flatMap((part) => {
@@ -299,15 +329,20 @@ export class PiRpcAgentSession implements AgentSession {
   }
 
   async startTurn(prompt: AgentPromptInput, _options?: AgentRunOptions): Promise<StartTurnResult> {
-    if (this.sessionEvents.activeTurnId) {
-      throw new Error("A Pi turn is already active");
+    const payload = convertPromptInput(prompt);
+    const activeTurnId = this.sessionEvents.activeTurnId;
+
+    // Pi can still be streaming after our local turn bookkeeping desyncs, and
+    // concurrent user messages must queue with streamingBehavior instead of failing.
+    if (activeTurnId) {
+      await this.promptWithStreamingFallback(payload, "followUp");
+      return { turnId: activeTurnId };
     }
 
-    const payload = convertPromptInput(prompt);
     const turnId = randomUUID();
     this.sessionEvents.beginTurn(turnId);
 
-    void this.runtimeSession.prompt(payload.text, payload.images).catch((error) => {
+    void this.promptWithStreamingFallback(payload, "followUp").catch((error) => {
       const failedTurnId = this.sessionEvents.activeTurnId ?? turnId;
       if (isPiRequestAbortError(error)) {
         this.sessionEvents.finishTurn({
@@ -327,6 +362,32 @@ export class PiRpcAgentSession implements AgentSession {
     });
 
     return { turnId };
+  }
+
+  /**
+   * Send a prompt with streamingBehavior so Pi can queue while streaming.
+   * Retries once with followUp if an older Pi still rejects without the field
+   * (defensive — cli-runtime always includes the field).
+   */
+  private async promptWithStreamingFallback(
+    payload: PiPromptPayload,
+    streamingBehavior: "steer" | "followUp",
+  ): Promise<void> {
+    try {
+      await this.runtimeSession.prompt(payload.text, {
+        images: payload.images,
+        streamingBehavior,
+      });
+    } catch (error) {
+      if (!isPiStreamingBehaviorRequiredError(error)) {
+        throw error;
+      }
+      // Race: Pi still streaming but first attempt lacked/lost the field.
+      await this.runtimeSession.prompt(payload.text, {
+        images: payload.images,
+        streamingBehavior: "followUp",
+      });
+    }
   }
 
   subscribe(callback: (event: AgentStreamEvent) => void): () => void {
@@ -376,6 +437,10 @@ export class PiRpcAgentSession implements AgentSession {
 
   async interrupt(): Promise<void> {
     await this.runtimeSession.abort();
+    // replaceRunning aborts then immediately startTurns the next prompt.
+    // Pi can still report isStreaming until agent_end settles; wait so the
+    // replacement prompt is accepted as idle (or at least with followUp queue).
+    await waitForPiIdle(this.runtimeSession);
   }
 
   async revertConversation(input: { messageId: string }): Promise<void> {

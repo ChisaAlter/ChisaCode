@@ -7,6 +7,7 @@ import type {
   PiSessionStats,
 } from "./rpc-types.js";
 import type { ProviderRuntimeSettings } from "../../provider-launch-config.js";
+import { preparePiGatewayEnv } from "./gateway-env.js";
 
 export interface PiRuntimeLaunch {
   cwd: string;
@@ -31,12 +32,20 @@ export interface PiStartSessionInput {
   extensionPaths?: string[];
 }
 
+export type PiPromptStreamingBehavior = "steer" | "followUp";
+
+export interface PiPromptOptions {
+  images?: Array<{ type: "image"; data: string; mimeType: string }>;
+  /**
+   * Queueing policy when Pi is already streaming.
+   * Idle prompts ignore this field; during streaming Pi requires it.
+   */
+  streamingBehavior?: PiPromptStreamingBehavior;
+}
+
 export interface PiRuntimeSession {
   onEvent(callback: (event: PiRuntimeEvent) => void): () => void;
-  prompt(
-    message: string,
-    images?: Array<{ type: "image"; data: string; mimeType: string }>,
-  ): Promise<void>;
+  prompt(message: string, options?: PiPromptOptions): Promise<void>;
   abort(): Promise<void>;
   getState(): Promise<PiSessionState>;
   getMessages(): Promise<PiAgentMessage[]>;
@@ -80,27 +89,37 @@ export function buildPiLaunch(input: {
   if (input.session.session) {
     argv.push("--session", input.session.session);
   }
-  const systemPrompt = input.session.systemPrompt?.trim();
-  if (systemPrompt) {
-    argv.push("--append-system-prompt", systemPrompt);
-  }
   if (input.session.mcpConfigPath) {
     argv.push("--mcp-config", input.session.mcpConfigPath);
   }
+  // Put --extension before --append-system-prompt. On Windows, spawning bare
+  // `pi` uses shell:true; a multiline prompt value ends the cmd line early and
+  // silently drops any trailing flags (including --extension).
   for (const extensionPath of input.session.extensionPaths ?? []) {
     argv.push("--extension", extensionPath);
   }
+  const systemPrompt = input.session.systemPrompt?.trim();
+  if (systemPrompt) {
+    // Prefer a file path (written by session-lifecycle). Pi loads the path when
+    // it exists; keep inline text only for short single-line prompts.
+    argv.push("--append-system-prompt", systemPrompt);
+  }
+
+  // Gateway faces put OPENAI_API_KEY / OPENAI_BASE_URL on runtimeSettings.env;
+  // launchContext may only carry CHISACODE_AGENT_ID. Merge first, then isolate
+  // Pi's models.json so personal ~/.pi baseUrls cannot override the gateway.
+  const mergedEnv =
+    input.runtimeSettings?.env || input.session.env
+      ? {
+          ...input.runtimeSettings?.env,
+          ...input.session.env,
+        }
+      : undefined;
 
   return {
     cwd: input.session.cwd,
     argv,
-    env:
-      input.runtimeSettings?.env || input.session.env
-        ? {
-            ...input.runtimeSettings?.env,
-            ...input.session.env,
-          }
-        : undefined,
+    env: preparePiGatewayEnv(mergedEnv),
     model: input.session.model,
     thinkingOptionId: input.session.thinkingOptionId,
     session: input.session.session,

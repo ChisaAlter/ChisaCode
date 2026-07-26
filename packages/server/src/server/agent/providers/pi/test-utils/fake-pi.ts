@@ -13,20 +13,24 @@ import type {
   PiSessionStats,
 } from "../rpc-types.js";
 import { buildPiLaunch } from "../runtime.js";
+import type { ProviderRuntimeSettings } from "../../../provider-launch-config.js";
 
 export class FakePi implements PiRuntime {
   readonly recordedLaunches: PiRuntimeLaunch[] = [];
   private readonly sessions: FakePiSession[] = [];
   private readonly command: [string, ...string[]];
   private readonly queuedCommands: PiRpcSlashCommand[][] = [];
+  private readonly runtimeSettings?: ProviderRuntimeSettings;
 
-  constructor(command: [string, ...string[]] = ["pi"]) {
+  constructor(command: [string, ...string[]] = ["pi"], runtimeSettings?: ProviderRuntimeSettings) {
     this.command = command;
+    this.runtimeSettings = runtimeSettings;
   }
 
   async startSession(input: PiStartSessionInput): Promise<FakePiSession> {
     const launch = buildPiLaunch({
       command: this.command,
+      runtimeSettings: this.runtimeSettings,
       session: input,
     });
     this.recordedLaunches.push(launch);
@@ -50,7 +54,11 @@ export class FakePi implements PiRuntime {
 }
 
 export class FakePiSession implements PiRuntimeSession {
-  readonly prompts: Array<{ message: string; imageCount: number }> = [];
+  readonly prompts: Array<{
+    message: string;
+    imageCount: number;
+    streamingBehavior?: "steer" | "followUp";
+  }> = [];
   readonly setModelRequests: Array<{ provider: string; modelId: string }> = [];
   readonly setThinkingLevelRequests: string[] = [];
   readonly treeNavigationRequests: string[] = [];
@@ -95,15 +103,28 @@ export class FakePiSession implements PiRuntimeSession {
 
   async prompt(
     message: string,
-    images?: Array<{ type: "image"; data: string; mimeType: string }>,
+    options?: {
+      images?: Array<{ type: "image"; data: string; mimeType: string }>;
+      streamingBehavior?: "steer" | "followUp";
+    },
   ): Promise<void> {
-    this.prompts.push({ message, imageCount: images?.length ?? 0 });
+    if (this.state.isStreaming && !options?.streamingBehavior) {
+      throw new Error(
+        "Agent is already processing. Specify streamingBehavior ('steer' or 'followUp') to queue the message.",
+      );
+    }
+    this.prompts.push({
+      message,
+      imageCount: options?.images?.length ?? 0,
+      streamingBehavior: options?.streamingBehavior,
+    });
     this.handleTreeNavigationCommand(message);
     this.handleEntryCaptureCommand(message);
   }
 
   async abort(): Promise<void> {
     this.abortRequested = true;
+    this.state = { ...this.state, isStreaming: false };
   }
 
   async getState(): Promise<PiSessionState> {

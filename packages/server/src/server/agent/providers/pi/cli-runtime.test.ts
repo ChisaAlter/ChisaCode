@@ -132,11 +132,39 @@ describe("PiCliRuntime", () => {
       systemPrompt: "  Use the daemon prompt.  ",
     });
 
+    // Direct runtime.startSession keeps inline text; session-lifecycle writes a
+    // temp file. Order still places any --extension flags first when present.
     expect(launches).toEqual([
       expect.objectContaining({
         cwd: "/workspace/project",
         systemPrompt: "Use the daemon prompt.",
         argv: ["pi", "--mode", "rpc", "--append-system-prompt", "Use the daemon prompt."],
+      }),
+    ]);
+  });
+
+  test("includes streamingBehavior on prompt so mid-stream messages queue", async () => {
+    const child = createPiChild();
+    const received: Array<Record<string, unknown>> = [];
+    replyToCommands(child, (command) => {
+      received.push(command);
+      return {};
+    });
+    const session = await createRuntime(child).startSession({ cwd: "/workspace/project" });
+
+    await session.prompt("hello");
+    await session.prompt("steer me", { streamingBehavior: "steer" });
+
+    expect(received.filter((command) => command.type === "prompt")).toEqual([
+      expect.objectContaining({
+        type: "prompt",
+        message: "hello",
+        streamingBehavior: "followUp",
+      }),
+      expect.objectContaining({
+        type: "prompt",
+        message: "steer me",
+        streamingBehavior: "steer",
       }),
     ]);
   });

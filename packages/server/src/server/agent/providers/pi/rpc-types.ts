@@ -105,8 +105,21 @@ export interface PiRpcSlashCommand {
   sourceInfo?: Record<string, unknown>;
 }
 
+/** How Pi should queue a prompt while the agent is already streaming. */
+export type PiStreamingBehavior = "steer" | "followUp";
+
 export type PiRpcCommand =
-  | { id?: string; type: "prompt"; message: string; images?: PiImageContent[] }
+  | {
+      id?: string;
+      type: "prompt";
+      message: string;
+      images?: PiImageContent[];
+      /**
+       * Required by Pi when a prompt is accepted while the agent is already streaming.
+       * Idle prompts ignore this field.
+       */
+      streamingBehavior?: PiStreamingBehavior;
+    }
   | { id?: string; type: "abort" }
   | { id?: string; type: "get_state" }
   | { id?: string; type: "get_messages" }

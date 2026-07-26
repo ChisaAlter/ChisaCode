@@ -994,7 +994,8 @@ export const resources = {
       visionFallback: {
         title: "默认识图模型",
         hint: "主模型不支持识图时，用该模型描述图片并注入文本。请选择已勾选「图片输入」的自定义模型。",
-        empty: "还没有支持图片的自定义模型。请先在上方添加并勾选图片输入。",
+        emptyTitle: "暂无可用识图模型",
+        empty: "在上方添加自定义模型，并勾选「图片输入」后，即可在这里选择。",
         selected: "已选",
         clear: "清除选择",
         saveFailed: "保存识图模型失败",
@@ -2908,7 +2909,8 @@ export const resources = {
       visionFallback: {
         title: "Default vision model",
         hint: "When the main model cannot see images, this model describes them and the text is injected. Choose a custom model with image input enabled.",
-        empty: "No image-capable custom models yet. Add one above and enable image input.",
+        emptyTitle: "No vision models available",
+        empty: "Add a custom model above and enable Image input to choose one here.",
         selected: "Selected",
         clear: "Clear selection",
         saveFailed: "Failed to save vision model",

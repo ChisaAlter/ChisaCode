@@ -1,4 +1,5 @@
 import { closeSync, existsSync, fstatSync, openSync, readSync } from "node:fs";
+import { join } from "node:path";
 import pino from "pino";
 import { describe, expect, test } from "vitest";
 
@@ -7,13 +8,10 @@ import { PiRpcAgentClient, PiRpcAgentSession, transformPiModels } from "./agent.
 import { FakePi } from "./test-utils/fake-pi.js";
 import type { ProviderRuntimeSettings } from "../../provider-launch-config.js";
 
-function createClient(
-  pi = new FakePi(),
-  runtimeSettings?: ProviderRuntimeSettings,
-): PiRpcAgentClient {
+function createClient(pi?: FakePi, runtimeSettings?: ProviderRuntimeSettings): PiRpcAgentClient {
   return new PiRpcAgentClient({
     logger: pino({ level: "silent" }),
-    runtime: pi,
+    runtime: pi ?? new FakePi(["pi"], runtimeSettings),
     runtimeSettings,
   });
 }
@@ -72,14 +70,73 @@ test("forwards launch-context env to the Pi process launch", async () => {
   await session.close();
 });
 
+test("isolates Pi agent dir when gateway OPENAI_BASE_URL is on runtimeSettings", async () => {
+  const baseUrl = "http://127.0.0.1:6767/api/model-gateways/grok-4-5/v1";
+  const runtimeSettings: ProviderRuntimeSettings = {
+    env: {
+      OPENAI_API_KEY: "internal-token",
+      OPENAI_BASE_URL: baseUrl,
+    },
+  };
+  const pi = new FakePi(["pi"], runtimeSettings);
+  const client = createClient(pi, runtimeSettings);
+  const session = await client.createSession(createConfig(), {
+    env: {
+      CHISACODE_AGENT_ID: "agent-1",
+    },
+  });
+
+  const launchEnv = pi.recordedLaunches[0]?.env;
+  expect(launchEnv?.OPENAI_API_KEY).toBe("internal-token");
+  expect(launchEnv?.OPENAI_BASE_URL).toBe(baseUrl);
+  expect(launchEnv?.CHISACODE_AGENT_ID).toBe("agent-1");
+  expect(launchEnv?.PI_CODING_AGENT_DIR).toBeTruthy();
+  expect(launchEnv?.PI_CODING_AGENT_DIR).toMatch(/provider-runtime[/\\]pi[/\\]/);
+
+  const modelsPath = join(launchEnv!.PI_CODING_AGENT_DIR!, "models.json");
+  expect(existsSync(modelsPath)).toBe(true);
+  const modelsJson = JSON.parse(readUtf8File(modelsPath)) as {
+    providers: { openai: { baseUrl: string; apiKey: string; api: string } };
+  };
+  expect(modelsJson.providers.openai).toEqual({
+    baseUrl,
+    api: "openai-completions",
+    apiKey: "$OPENAI_API_KEY",
+  });
+
+  await session.close();
+});
+
+test("does not override an explicit PI_CODING_AGENT_DIR", async () => {
+  const runtimeSettings: ProviderRuntimeSettings = {
+    env: {
+      OPENAI_API_KEY: "internal-token",
+      OPENAI_BASE_URL: "http://127.0.0.1:6767/api/model-gateways/grok-4-5/v1",
+      PI_CODING_AGENT_DIR: "/custom/pi-agent",
+    },
+  };
+  const pi = new FakePi(["pi"], runtimeSettings);
+  const client = createClient(pi, runtimeSettings);
+  const session = await client.createSession(createConfig());
+
+  expect(pi.recordedLaunches[0]?.env).toEqual({
+    OPENAI_API_KEY: "internal-token",
+    OPENAI_BASE_URL: "http://127.0.0.1:6767/api/model-gateways/grok-4-5/v1",
+    PI_CODING_AGENT_DIR: "/custom/pi-agent",
+  });
+
+  await session.close();
+});
+
 test("prefixes unqualified gateway models before launching Pi", async () => {
-  const pi = new FakePi();
-  const client = createClient(pi, {
+  const runtimeSettings: ProviderRuntimeSettings = {
     env: {
       CHISACODE_MODEL_PREFIX: "xiaomi",
       XIAOMI_API_KEY: "sk-xiaomi",
     },
-  });
+  };
+  const pi = new FakePi(["pi"], runtimeSettings);
+  const client = createClient(pi, runtimeSettings);
   const session = await client.createSession(createConfig({ model: "mimo-v2.5" }));
 
   expect(pi.recordedLaunches[0]?.argv).toContain("xiaomi/mimo-v2.5");
@@ -407,6 +464,57 @@ describe("PiRpcAgentSession", () => {
     expect(fakeSession.canceledExtensionUiRequests).toEqual([]);
   });
 
+  test("sends followUp streamingBehavior with each prompt", async () => {
+    const { pi, session } = await createSession();
+
+    await session.startTurn("hello");
+
+    expect(pi.latestSession().prompts).toEqual([
+      { message: "hello", imageCount: 0, streamingBehavior: "followUp" },
+    ]);
+  });
+
+  test("queues a follow-up prompt when a Pi turn is already active", async () => {
+    const { pi, session } = await createSession();
+    const fakeSession = pi.latestSession();
+
+    const first = await session.startTurn("first");
+    const second = await session.startTurn("second");
+
+    expect(second.turnId).toBe(first.turnId);
+    expect(fakeSession.prompts).toEqual([
+      { message: "first", imageCount: 0, streamingBehavior: "followUp" },
+      { message: "second", imageCount: 0, streamingBehavior: "followUp" },
+    ]);
+  });
+
+  test("prompt while Pi isStreaming still succeeds when streamingBehavior is set", async () => {
+    const { pi, session } = await createSession();
+    const fakeSession = pi.latestSession();
+    fakeSession.state = { ...fakeSession.state, isStreaming: true };
+
+    await session.startTurn("queued while streaming");
+
+    expect(fakeSession.prompts).toEqual([
+      {
+        message: "queued while streaming",
+        imageCount: 0,
+        streamingBehavior: "followUp",
+      },
+    ]);
+  });
+
+  test("interrupt aborts Pi and waits until it is idle", async () => {
+    const { pi, session } = await createSession();
+    const fakeSession = pi.latestSession();
+    fakeSession.state = { ...fakeSession.state, isStreaming: true };
+
+    await session.interrupt();
+
+    expect(fakeSession.abortRequested).toBe(true);
+    expect(fakeSession.state.isStreaming).toBe(false);
+  });
+
   test("streams assistant text, reasoning, and tool calls from Pi events", async () => {
     const { pi, session, events } = await createSession();
     const fakeSession = pi.latestSession();
@@ -599,20 +707,23 @@ describe("PiRpcAgentSession", () => {
     const actualLaunch = pi.recordedLaunches[0]!;
     expect(actualLaunch).toMatchObject({
       cwd: "/tmp/chisacode-pi-rpc-test",
-      systemPrompt: "Agent prompt\n\nDaemon prompt",
     });
     expect(actualLaunch.extensionPaths).toHaveLength(1);
+    // System prompt is written to a temp file (Windows-safe) and --extension
+    // is ordered before --append-system-prompt so shell:true cannot drop it.
     expect(actualLaunch.argv).toEqual([
       "pi",
       "--mode",
       "rpc",
       "--thinking",
       "medium",
-      "--append-system-prompt",
-      "Agent prompt\n\nDaemon prompt",
       "--extension",
       actualLaunch.extensionPaths[0],
+      "--append-system-prompt",
+      actualLaunch.systemPrompt,
     ]);
+    expect(actualLaunch.systemPrompt).toMatch(/append-system-prompt\.txt$/);
+    expect(readUtf8File(actualLaunch.systemPrompt!)).toBe("Agent prompt\n\nDaemon prompt");
   });
 
   test("resumes Pi sessions with daemon system prompts appended", async () => {
@@ -641,7 +752,6 @@ describe("PiRpcAgentSession", () => {
     expect(actualLaunch).toMatchObject({
       cwd: "/workspace/project",
       session: "/tmp/native-pi-session",
-      systemPrompt: "Agent prompt\n\nDaemon prompt",
     });
     expect(actualLaunch.extensionPaths).toHaveLength(1);
     expect(actualLaunch.argv).toEqual([
@@ -654,11 +764,13 @@ describe("PiRpcAgentSession", () => {
       "high",
       "--session",
       "/tmp/native-pi-session",
-      "--append-system-prompt",
-      "Agent prompt\n\nDaemon prompt",
       "--extension",
       actualLaunch.extensionPaths[0],
+      "--append-system-prompt",
+      actualLaunch.systemPrompt,
     ]);
+    expect(actualLaunch.systemPrompt).toMatch(/append-system-prompt\.txt$/);
+    expect(readUtf8File(actualLaunch.systemPrompt!)).toBe("Agent prompt\n\nDaemon prompt");
   });
 
   test("updates model and thinking through Pi runtime commands", async () => {

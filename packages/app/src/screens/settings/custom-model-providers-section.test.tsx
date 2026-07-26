@@ -7,46 +7,39 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ProviderSnapshotEntry } from "@chisacode/protocol/agent-types";
 import type { MutableDaemonConfig } from "@chisacode/protocol/messages";
 
-const {
-  theme,
-  configState,
-  snapshotState,
-  patchConfigMock,
-  refreshMock,
-  confirmDialogMock,
-  errorLogger,
-} = vi.hoisted(() => ({
-  theme: {
-    spacing: { 1: 4, 2: 8, 3: 12, 4: 16 },
-    iconSize: { sm: 14, md: 18 },
-    fontSize: { xs: 11, sm: 13 },
-    fontWeight: { medium: "500" },
-    borderRadius: { full: 999, lg: 8 },
-    opacity: { 50: 0.5 },
-    glass: { enabled: false },
-    shadow: { sm: {}, md: {}, lg: {} },
-    colors: {
-      surface1: "#111",
-      surface2: "#222",
-      foreground: "#fff",
-      foregroundMuted: "#aaa",
-      border: "#555",
-      destructive: "#f00",
+const { theme, configState, snapshotState, patchConfigMock, refreshMock, errorLogger } = vi.hoisted(
+  () => ({
+    theme: {
+      spacing: { 1: 4, 2: 8, 3: 12, 4: 16 },
+      iconSize: { sm: 14, md: 18 },
+      fontSize: { xs: 11, sm: 13 },
+      fontWeight: { medium: "500" },
+      borderRadius: { full: 999, lg: 8 },
+      opacity: { 50: 0.5 },
+      glass: { enabled: false },
+      shadow: { sm: {}, md: {}, lg: {} },
+      colors: {
+        surface1: "#111",
+        surface2: "#222",
+        foreground: "#fff",
+        foregroundMuted: "#aaa",
+        border: "#555",
+        destructive: "#f00",
+      },
     },
-  },
-  configState: {
-    config: null as MutableDaemonConfig | null,
-  },
-  snapshotState: {
-    entries: undefined as ProviderSnapshotEntry[] | undefined,
-  },
-  patchConfigMock: vi.fn<(patch?: unknown) => Promise<MutableDaemonConfig | undefined>>(
-    async () => undefined,
-  ),
-  refreshMock: vi.fn<() => Promise<void>>(async () => undefined),
-  confirmDialogMock: vi.fn(async () => true),
-  errorLogger: { error: vi.fn() },
-}));
+    configState: {
+      config: null as MutableDaemonConfig | null,
+    },
+    snapshotState: {
+      entries: undefined as ProviderSnapshotEntry[] | undefined,
+    },
+    patchConfigMock: vi.fn<(patch?: unknown) => Promise<MutableDaemonConfig | undefined>>(
+      async () => undefined,
+    ),
+    refreshMock: vi.fn<() => Promise<void>>(async () => undefined),
+    errorLogger: { error: vi.fn() },
+  }),
+);
 
 vi.mock("react-native", () => ({
   View: ({ children, testID }: { children?: React.ReactNode; testID?: string; style?: unknown }) =>
@@ -105,6 +98,15 @@ vi.mock("react-native-unistyles", () => ({
     create: (factory: unknown) => (typeof factory === "function" ? factory(theme) : factory),
   },
   useUnistyles: () => ({ theme }),
+  withUnistyles: (Component: React.ComponentType<Record<string, unknown>>) => {
+    return function ThemedComponent(props: Record<string, unknown>) {
+      const mapped =
+        typeof props.uniProps === "function"
+          ? (props.uniProps as (value: typeof theme) => Record<string, unknown>)(theme)
+          : {};
+      return React.createElement(Component, { ...props, ...mapped });
+    };
+  },
   UnistylesRuntime: { pixelRatio: 1 },
 }));
 
@@ -292,10 +294,6 @@ vi.mock("@/screens/settings/settings-section", () => ({
     ),
 }));
 
-vi.mock("@/utils/confirm-dialog", () => ({
-  confirmDialog: confirmDialogMock,
-}));
-
 vi.mock("@/hooks/use-daemon-config", () => ({
   useDaemonConfig: () => ({
     config: configState.config,
@@ -380,8 +378,6 @@ describe("CustomModelProvidersSection", () => {
     patchConfigMock.mockResolvedValue(makeConfig());
     refreshMock.mockReset();
     refreshMock.mockResolvedValue(undefined);
-    confirmDialogMock.mockReset();
-    confirmDialogMock.mockResolvedValue(true);
     errorLogger.error.mockReset();
   });
 
@@ -506,20 +502,26 @@ describe("CustomModelProvidersSection", () => {
       root.render(<CustomModelProvidersSection serverId="server-1" />);
     });
 
-    await act(async () => {
+    act(() => {
       container
         .querySelector<HTMLButtonElement>('[data-testid="delete-saved-model-zai-glm-5"]')!
+        .click();
+    });
+
+    expect(
+      container.querySelector('[data-testid="delete-saved-model-confirm-modal"]'),
+    ).not.toBeNull();
+    expect(container.textContent).toContain("Delete custom model?");
+    expect(container.textContent).toContain("Delete GLM 5");
+
+    await act(async () => {
+      container
+        .querySelector<HTMLButtonElement>('[data-testid="delete-saved-model-confirm"]')!
         .click();
       await Promise.resolve();
       await Promise.resolve();
     });
 
-    expect(confirmDialogMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        title: "Delete custom model?",
-        destructive: true,
-      }),
-    );
     expect(patchConfigMock).toHaveBeenCalledTimes(1);
     const deletePatch = patchConfigMock.mock.calls[0]?.[0] as unknown;
     expect(deletePatch).toEqual({

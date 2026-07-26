@@ -58,6 +58,8 @@ interface PiTempFile {
 interface PiSessionResources {
   mcpConfigPath?: string;
   extensionPath: string;
+  /** Path to a temp file holding the append system prompt (Windows-safe). */
+  systemPromptPath?: string;
   supportsMcpServers: boolean;
   cleanup: () => void;
 }
@@ -145,6 +147,29 @@ function createPiMcpConfigFile(servers: Record<string, McpServerConfig>): PiTemp
       encoding: "utf8",
       mode: 0o600,
     });
+  } catch (error) {
+    rmSync(dir, { recursive: true, force: true });
+    throw error;
+  }
+  return {
+    path: filePath,
+    cleanup: () => rmSync(dir, { recursive: true, force: true }),
+  };
+}
+
+/**
+ * Write the append system prompt to a temp file.
+ * Pi accepts either inline text or a file path for `--append-system-prompt`.
+ * Using a file avoids Windows `cmd.exe` truncating the spawn command line when
+ * the prompt contains newlines (which would drop later args like `--extension`).
+ * @param content Full append system prompt text
+ * @returns Temp file handle with cleanup
+ */
+function createPiSystemPromptFile(content: string): PiTempFile {
+  const dir = mkdtempSync(join(tmpdir(), "chisacode-pi-system-prompt-"));
+  const filePath = join(dir, "append-system-prompt.txt");
+  try {
+    writeFileSync(filePath, content, { encoding: "utf8", mode: 0o600 });
   } catch (error) {
     rmSync(dir, { recursive: true, force: true });
     throw error;
@@ -272,10 +297,15 @@ export class PiSessionLifecycle {
       ...config,
       model: applyRuntimeModelPrefix(config.model, this.options.modelPrefix),
     };
+    const systemPrompt = composeSystemPromptParts(
+      normalizedConfig.systemPrompt,
+      normalizedConfig.daemonAppendSystemPrompt,
+    );
     const resources = await this.prepareResources(
       normalizedConfig.cwd,
       normalizedConfig.mcpServers,
       launchContext?.env,
+      systemPrompt,
     );
     return this.startSession(
       normalizedConfig,
@@ -284,10 +314,7 @@ export class PiSessionLifecycle {
         model: normalizedConfig.model,
         thinkingOptionId:
           normalizePiThinkingOption(normalizedConfig.thinkingOptionId) ?? DEFAULT_PI_THINKING_LEVEL,
-        systemPrompt: composeSystemPromptParts(
-          normalizedConfig.systemPrompt,
-          normalizedConfig.daemonAppendSystemPrompt,
-        ),
+        systemPrompt: resources.systemPromptPath ?? systemPrompt,
         env: launchContext?.env,
       },
       resources,
@@ -311,10 +338,15 @@ export class PiSessionLifecycle {
       ...resumeConfig.config,
       model,
     };
+    const systemPrompt = composeSystemPromptParts(
+      normalizedConfig.systemPrompt,
+      normalizedConfig.daemonAppendSystemPrompt,
+    );
     const resources = await this.prepareResources(
       resumeConfig.cwd,
       normalizedConfig.mcpServers,
       launchContext?.env,
+      systemPrompt,
     );
     return this.startSession(
       normalizedConfig,
@@ -323,10 +355,7 @@ export class PiSessionLifecycle {
         session: sessionFile,
         model,
         thinkingOptionId: normalizePiThinkingOption(resumeConfig.thinkingOptionId) ?? undefined,
-        systemPrompt: composeSystemPromptParts(
-          normalizedConfig.systemPrompt,
-          normalizedConfig.daemonAppendSystemPrompt,
-        ),
+        systemPrompt: resources.systemPromptPath ?? systemPrompt,
         env: launchContext?.env,
       },
       resources,
@@ -374,6 +403,7 @@ export class PiSessionLifecycle {
     cwd: string,
     servers: Record<string, McpServerConfig> | undefined,
     env: Record<string, string> | undefined,
+    systemPrompt?: string,
   ): Promise<PiSessionResources> {
     const mcpConfig = await this.prepareMcpConfig(cwd, servers, env);
     let extension: PiTempFile;
@@ -384,11 +414,28 @@ export class PiSessionLifecycle {
       throw error;
     }
 
+    let systemPromptFile: PiTempFile | undefined;
+    const trimmedSystemPrompt = systemPrompt?.trim();
+    if (trimmedSystemPrompt) {
+      try {
+        systemPromptFile = createPiSystemPromptFile(trimmedSystemPrompt);
+      } catch (error) {
+        extension.cleanup();
+        mcpConfig?.cleanup();
+        throw error;
+      }
+    }
+
     return {
       ...(mcpConfig ? { mcpConfigPath: mcpConfig.path } : {}),
       extensionPath: extension.path,
+      ...(systemPromptFile ? { systemPromptPath: systemPromptFile.path } : {}),
       supportsMcpServers: mcpConfig !== null,
-      cleanup: this.createCleanup([mcpConfig?.cleanup, extension.cleanup]),
+      cleanup: this.createCleanup([
+        mcpConfig?.cleanup,
+        extension.cleanup,
+        systemPromptFile?.cleanup,
+      ]),
     };
   }
 
