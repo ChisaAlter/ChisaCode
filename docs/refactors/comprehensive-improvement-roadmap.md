@@ -14,7 +14,7 @@
 - **问题**：`origin/cn-main`（领先本地 14 提交、67 文件、约 8500 行）把 Cindy 的 6 个高优借鉴项几乎全部"形"上落地，但对抗性审查发现几乎所有项都带着 high/critical 缺陷一起落地，两个门禁只写代码未接 CI，消息渲染只到 diff/CJK/检测，同会话 agent 切换未做。详见 [cindy-integration-hardening-plan.md](cindy-integration-hardening-plan.md)。
 - **影响范围**：`packages/protocol`（exports/gate/schema）、`packages/server`（ssh-transport/git-snapshot/team-handler/goal-service/learn-service/project-context/model-catalog/session）、`packages/client`+`packages/app`（cindy 命令/UI/markdown 渲染）、`scripts`（guard/i18n 门禁）。
 - **方案**：11 个 Slice 分四阶段——P0 合并前阻断（S1 协议 exports+gate、S2 snapshot 注入+workspace 绑定）、P1 安全加固（S3 SSH、S4 临时 index、S5 team 回收）、P2 正确性（S6 goal 取消传播、S7 编排集成测试+枚举、S8 model-catalog/定价）、P3 收尾（S9 门禁接入 CI、S10 消息渲染补全、S11 同会话切换+收尾）。
-- **状态**：P0-P2 + S9 完成（S1-S9，分支 `fix/cindy-integration-hardening`，9 个提交）。所有 critical/high 缺陷修复：协议 exports/gate、snapshot 注入+workspace 绑定、SSH 加固、临时 index、team spawn/队列/回收、goal 取消传播、GoalStatus 枚举+leak、model-catalog/定价、guard 接入 CI+i18n 校验+删副本。S10（消息渲染补全）/S11（同会话切换）属产品功能扩展，单独立项排期。后续跟踪项：team 全局 worker 上限、goal usedTools 跨 controller 重置竞争、learn distill cancel。
+- **状态**：全部完成（S1-S11，分支 `fix/cindy-integration-hardening`，13 个提交）。所有 critical/high 缺陷修复（S1-S9）+ Native 消息渲染流式节流与 math/diagram 视觉块（S10，Web 不考虑）+ 敏感路径批量 helper 与 checklist 修订（S11）。后续跟踪项：team 全局 worker 上限、goal usedTools 跨 controller 重置竞争、learn distill cancel、同会话切换 client UI（server 侧已支持 via resume_agent_request overrides.provider）、IM/Webhook 触发、敏感路径接入 attachment 下载/worktree 归档。
 
 ### Model gateway Responses→Chat 工具历史配对（2026-07-25 完成）
 
