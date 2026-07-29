@@ -57,6 +57,16 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Architecture guard tests
+        run: npm run test:guard
+
+      - name: i18n glossary report (non-blocking until glossary reconciled)
+        # Reports forbidden-term violations without failing the build. The
+        # glossary currently conflicts with existing zh-CN strings; once those
+        # are reconciled, switch this to `npm run check:i18n-glossary`.
+        run: npm run check:i18n-glossary:report
+        continue-on-error: true
+
       - name: Check formatting
         run: npm run format:check
 

@@ -40,8 +40,14 @@ function extractImports(filePath: string): string[] {
   const content = readFileSync(filePath, "utf8");
   const imports: string[] = [];
   for (const m of content.matchAll(/from\s+["']([^"']+)["']/g)) imports.push(m[1]);
-  for (const m of content.matchAll(/import\s*\(\s*["']([^"']+)["']\s*\)/g)) imports.push(m[1]);
-  for (const m of content.matchAll(/require\s*\(\s*["']([^"']+)["']\s*\)/g)) imports.push(m[1]);
+  // Dynamic import with a string literal. Tolerates a leading comment block
+  // (e.g. import(/* webpackChunkName: "x" */ "./x")) by scanning for the last
+  // quoted string on the line.
+  for (const m of content.matchAll(/import\s*\(.*?["']([^"']+)["'].*?\)/g)) imports.push(m[1]);
+  for (const m of content.matchAll(/require\s*\(.*?["']([^"']+)["'].*?\)/g)) imports.push(m[1]);
+  // Bare side-effect import: `import "x";` (no `from`). Without this a layering
+  // violation via a side-effect import slips past the guard.
+  for (const m of content.matchAll(/^\s*import\s+["']([^"']+)["']/gm)) imports.push(m[1]);
   return imports;
 }
 
@@ -104,9 +110,12 @@ describe("architecture guards", () => {
 
   test("session handlers must not import each other directly", () => {
     // Known violations that predate this guard — do not add new entries.
+    // The size is locked so the set can only shrink; adding an entry here fails
+    // the test, forcing a deliberate review instead of silent grandfathering.
     const KNOWN_VIOLATIONS = new Set([
       "packages/server/src/server/session-handlers/agent-lifecycle-handler.ts: imports sibling handler ./agent-directory-handler.js",
     ]);
+    expect(KNOWN_VIOLATIONS.size).toBe(1);
     const handlersDir = path.join(ROOT, "packages/server/src/server/session-handlers");
     let files: string[];
     try {

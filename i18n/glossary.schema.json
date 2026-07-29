@@ -2,6 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",
   "required": ["version", "sourceLocale", "locales", "terms"],
+  "additionalProperties": false,
   "properties": {
     "version": { "type": "integer" },
     "sourceLocale": { "type": "string" },
@@ -11,6 +12,7 @@
       "items": {
         "type": "object",
         "required": ["id", "status", "en", "translations"],
+        "additionalProperties": false,
         "properties": {
           "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
           "status": { "enum": ["decided", "proposed"] },
@@ -23,7 +25,8 @@
             "type": "object",
             "additionalProperties": {
               "type": "array",
-              "items": { "type": "string" }
+              "items": { "type": "string", "minLength": 1 },
+              "uniqueItems": true
             }
           },
           "note": { "type": "string" }

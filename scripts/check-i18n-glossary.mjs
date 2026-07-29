@@ -21,8 +21,87 @@ try {
   process.exit(2);
 }
 
-if (!Array.isArray(glossary.terms)) {
-  console.error("❌ glossary.terms must be an array");
+// Validate the glossary against the structural constraints of
+// i18n/glossary.schema.json. We inline the check rather than pulling in ajv
+// (a transitive dependency) so the gate is self-contained. A typo'd key
+// (e.g. `forbiden`) or an empty forbidden entry would otherwise make the gate
+// pass vacuously.
+function validateTerm(term, i, errors) {
+  const prefix = `terms[${i}]`;
+  if (typeof term.id !== "string" || !/^[a-z][a-z0-9-]*$/.test(term.id)) {
+    errors.push(`${prefix}.id must match ^[a-z][a-z0-9-]*$`);
+  }
+  if (term.status !== "decided" && term.status !== "proposed") {
+    errors.push(`${prefix}.status must be decided|proposed`);
+  }
+  if (typeof term.en !== "string" || term.en.length === 0) {
+    errors.push(`${prefix}.en must be a non-empty string`);
+  }
+  if (typeof term.translations !== "object" || term.translations === null) {
+    errors.push(`${prefix}.translations must be an object`);
+  } else {
+    for (const [locale, val] of Object.entries(term.translations)) {
+      if (typeof val !== "string" || val.length === 0) {
+        errors.push(`${prefix}.translations.${locale} must be a non-empty string`);
+      }
+    }
+  }
+  const allowedTermKeys = new Set(["id", "status", "en", "translations", "forbidden", "note"]);
+  for (const k of Object.keys(term)) {
+    if (!allowedTermKeys.has(k)) errors.push(`${prefix}: unknown key "${k}"`);
+  }
+  if (term.forbidden !== undefined) {
+    validateForbidden(term.forbidden, prefix, errors);
+  }
+}
+
+function validateForbidden(forbidden, prefix, errors) {
+  if (typeof forbidden !== "object" || forbidden === null) {
+    errors.push(`${prefix}.forbidden must be an object`);
+    return;
+  }
+  for (const [locale, list] of Object.entries(forbidden)) {
+    if (!Array.isArray(list)) {
+      errors.push(`${prefix}.forbidden.${locale} must be an array`);
+      continue;
+    }
+    const seen = new Set();
+    for (const item of list) {
+      if (typeof item !== "string" || item.length === 0) {
+        errors.push(`${prefix}.forbidden.${locale} items must be non-empty strings`);
+      } else if (seen.has(item)) {
+        errors.push(`${prefix}.forbidden.${locale} duplicate entry "${item}"`);
+      }
+      seen.add(item);
+    }
+  }
+}
+
+function validateGlossary(g) {
+  const errors = [];
+  if (typeof g.version !== "number") errors.push("version must be an integer");
+  if (typeof g.sourceLocale !== "string") errors.push("sourceLocale must be a string");
+  if (!Array.isArray(g.locales) || g.locales.length === 0) {
+    errors.push("locales must be a non-empty array");
+  }
+  if (!Array.isArray(g.terms)) {
+    errors.push("terms must be an array");
+    return errors;
+  }
+  const rootKeys = new Set(["version", "sourceLocale", "locales", "terms", "$schema"]);
+  for (const k of Object.keys(g)) {
+    if (!rootKeys.has(k)) errors.push(`glossary: unknown root key "${k}"`);
+  }
+  for (const [i, term] of g.terms.entries()) {
+    validateTerm(term, i, errors);
+  }
+  return errors;
+}
+
+const glossaryErrors = validateGlossary(glossary);
+if (glossaryErrors.length > 0) {
+  console.error("❌ i18n/glossary.json failed schema validation:");
+  for (const e of glossaryErrors) console.error(`  - ${e}`);
   process.exit(2);
 }
 
