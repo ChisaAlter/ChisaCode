@@ -435,7 +435,14 @@ export class AgentManager {
         });
       },
       onGoalTurnCompleted: (agentId, _cwd, tokensUsed, usedTools) => {
-        this.evaluateGoalContinuation(agentId, tokensUsed, usedTools);
+        // Wrap the goal continuation evaluation so a throw inside judgeTurn (or
+        // any synchronous part of evaluateGoalContinuation) cannot abort the
+        // turn-event pipeline and leave the agent stuck in a non-idle lifecycle.
+        try {
+          this.evaluateGoalContinuation(agentId, tokensUsed, usedTools);
+        } catch (err) {
+          this.logger.warn({ err, agentId }, "Goal continuation evaluation threw");
+        }
       },
     });
     this.sessionRegistration = new AgentSessionRegistrationController({
@@ -1122,11 +1129,22 @@ export class AgentManager {
         }
       }
 
+      // Re-check the goal status before starting another turn: a user cancel
+      // (cancelGoal flips status to "paused" and cancels the in-flight run) can
+      // land while the judge was awaiting. Without this guard the loop would
+      // start a fresh continuation turn for a goal that is no longer active.
+      const preStream = this.goals.get(agentId);
+      if (!preStream || preStream.status !== "active") {
+        this.logger.info({ agentId }, "Goal continuation skipped (no longer active)");
+        return;
+      }
+
       const prompt = buildContinuationPrompt(updated);
       this.logger.info({ agentId }, "Goal auto-continuing");
       try {
         for await (const _event of this.foregroundExecution.stream(agentId, prompt)) {
-          // Drain the stream — events are dispatched internally
+          // Drain the stream — events are dispatched internally. The stream can
+          // be aborted mid-iteration by cancelAgentRun if the user cancels now.
         }
       } catch (err) {
         this.logger.warn({ err, agentId }, "Goal continuation run failed");

@@ -13,7 +13,10 @@ import { summarizeUntrustedLogIdentifier } from "../log-metadata.js";
 import type { GoalState } from "../goal-service.js";
 
 /** The subset of AgentManager the goal RPCs rely on. */
-export type GoalStore = Pick<AgentManager, "setGoal" | "cancelGoal" | "getGoal" | "listGoals">;
+export type GoalStore = Pick<
+  AgentManager,
+  "setGoal" | "cancelGoal" | "getGoal" | "listGoals" | "cancelAgentRun"
+>;
 
 export interface GoalHandlerContext {
   readonly sessionLogger: { error(obj: unknown, msg: string): void };
@@ -80,6 +83,16 @@ export class GoalHandler implements DisposableHandler {
   ): Promise<void> {
     try {
       const goal = this.context.goalStore.cancelGoal(request.agentId);
+      if (goal) {
+        // Abort any in-flight continuation turn so the agent actually stops
+        // instead of running to completion and triggering another judged turn.
+        // cancelAgentRun is best-effort: the agent may already be idle.
+        try {
+          await this.context.goalStore.cancelAgentRun(request.agentId);
+        } catch {
+          // Non-fatal — the goal status is already flipped to paused.
+        }
+      }
       this.context.emit({
         type: "goal/cancel/response",
         payload: {
