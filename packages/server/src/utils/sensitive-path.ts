@@ -156,3 +156,33 @@ export function detectSensitivePath(
   }
   return null;
 }
+
+export interface FilterSensitivePathsResult {
+  /** Paths that passed all detectors (safe to include). */
+  safe: string[];
+  /** Paths a detector flagged, paired with the detector name that matched. */
+  excluded: Array<{ path: string; detector: string }>;
+}
+
+/**
+ * Partition a list of paths into safe and sensitive buckets. Reusable by any
+ * caller that needs to exclude sensitive files before an operation — git
+ * snapshots, agent file downloads, worktree archiving. Each excluded entry
+ * carries the detector name so callers can log/surface why a file was dropped.
+ */
+export function filterSensitivePaths(
+  paths: readonly string[],
+  options: SensitivePathOptions = {},
+): FilterSensitivePathsResult {
+  const safe: string[] = [];
+  const excluded: Array<{ path: string; detector: string }> = [];
+  for (const p of paths) {
+    const detector = detectSensitivePath(p, options);
+    if (detector) {
+      excluded.push({ path: p, detector });
+    } else {
+      safe.push(p);
+    }
+  }
+  return { safe, excluded };
+}

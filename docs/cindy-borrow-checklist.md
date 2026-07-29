@@ -47,14 +47,16 @@
 - **重评**：用户体感最直接，但 RN 端受限大，分两步走
 - **复杂度**：中（Web）/ 高（RN）
 
-### 6. Git Snapshot/Rewind（自动快照回滚）🆕
+### 6. Git Snapshot/Rewind（自动快照回滚）🆕 ✅ 已落地
 
 - **Cindy 实现**：`git-snapshot/`——编辑前后自动创建 snapshot commit（XDT trailer 元数据），文件安全过滤 + secret 脱敏，阻塞检测（merge/rebase 时不快照），配合 file rewind executor 做文件级回滚
 - **ChisaCode 现状**：有 worktree 管理但无自动快照/回滚
 - **建议方案**：daemon 侧在 agent 编辑操作前后自动 `git commit`（独立分支），暴露 rewind MCP tool
-- **可直接参考**：`snapshotFileFilter.ts`（安全过滤）、`snapshotTrailers.ts`（元数据格式）、`secretRedactor.ts`（脱敏）
+- **可直接参考**：`snapshotFileFilter.ts`（安全过滤）、`snapshotTrailers.ts`（元数据格式）、`secretRedactor.ts`（脱敏）——上游 Cindy 仓库 `makecindy/cindy`，参考时请 pin 到具体 commit
 - **复杂度**：中
 - **价值**：高——agent 改错代码时用户能一键回滚
+- **安全前置依赖**：**必须先实现 #17 敏感路径检测，并在 snapshot 前过滤/脱敏；否则不得自动 commit。** ChisaCode 已落地 `packages/server/src/utils/sensitive-path.ts` 并接入 git-snapshot 过滤（见硬化计划 S2/S4）。
+- **落地状态**：`packages/server/src/server/git-snapshot.ts` + `snapshot-handler.ts` + `snapshot/{create,list,rewind,status}` RPC。硬化修复：`commitHash` hex 校验防注入、临时 `GIT_INDEX_FILE` 不动用户暂存区、`cwd` 绑定已注册 workspace。
 
 ## 中优先级
 
@@ -117,13 +119,14 @@
 
 - **重评**：从"中"降到"观察"。ChisaCode 用户场景是管理运行中的 agent，不是翻历史
 
-### 17. 敏感路径检测 🆕
+### 17. 敏感路径检测 🆕 ✅ 已落地
 
-- **Cindy 实现**：`security/sensitivePath.ts`——独立的敏感文件检测器，20+ 种规则（.env、SSH 私钥、.npmrc、.aws/、.kube/、pem/key/p12/jks/keystore 扩展名、gcloud/gh 凭证、secrets/credentials 目录），返回检测器名称，支持 allowEnvTemplates 和 excludeCredentialConfigDirs 选项
+- **Cindy 实现**：`security/sensitivePath.ts`——独立的敏感文件检测器，20+ 种规则（.env、SSH 私钥、.npmrc、.aws/、.kube/、pem/key/p12/jks/keystore 扩展名、gcloud/gh 凭证、secrets/credentials 目录），返回检测器名称，支持 allowEnvTemplates 和 excludeCredentialConfigDirs 选项（上游 `makecindy/cindy`，参考时 pin 到具体 commit）
 - **ChisaCode 现状**：agent 文件操作和 worktree 管理无敏感文件感知
 - **建议方案**：在 `packages/server` 加 `sensitive-path.ts`，用于 git snapshot 过滤、agent 文件下载拦截、worktree 归档警告
 - **可直接参考**：`sensitivePath.ts` 完整实现（~120 行，零依赖，纯函数）
 - **复杂度**：极低
+- **落地状态**：`packages/server/src/utils/sensitive-path.ts` 已落地并接入 git-snapshot 过滤（硬化计划 S2/S4）。剩余接入点（agent 文件下载拦截、worktree 归档警告）作为后续——需先明确 attachment 下载与 worktree 归档的具体代码路径。
 
 ### 18. 定时任务引擎独立化
 

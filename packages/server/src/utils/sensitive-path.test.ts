@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 
-import { detectSensitivePath } from "./sensitive-path.js";
+import { detectSensitivePath, filterSensitivePaths } from "./sensitive-path.js";
 
 describe("detectSensitivePath", () => {
   test("returns null for safe paths", () => {
@@ -129,5 +129,44 @@ describe("detectSensitivePath", () => {
     expect(detectSensitivePath("docs/credentials-guide.md")).toBeNull();
     expect(detectSensitivePath("keynote.txt")).toBeNull();
     expect(detectSensitivePath("environment.ts")).toBeNull();
+  });
+});
+
+describe("filterSensitivePaths", () => {
+  test("partitions safe and sensitive paths, carrying the detector name", () => {
+    const result = filterSensitivePaths([
+      "src/app.ts",
+      ".env",
+      "config/settings.json",
+      ".ssh/id_rsa",
+      "README.md",
+    ]);
+    expect(result.safe).toEqual(["src/app.ts", "config/settings.json", "README.md"]);
+    expect(result.excluded).toHaveLength(2);
+    expect(result.excluded.find((e) => e.path === ".env")?.detector).toBe("env-file");
+    expect(result.excluded.find((e) => e.path === ".ssh/id_rsa")?.detector).toBe(
+      "sensitive-directory",
+    );
+  });
+
+  test("returns all safe when no sensitive paths are present", () => {
+    const result = filterSensitivePaths(["a.ts", "b.ts"]);
+    expect(result.safe).toEqual(["a.ts", "b.ts"]);
+    expect(result.excluded).toEqual([]);
+  });
+
+  test("returns all excluded when every path is sensitive", () => {
+    const result = filterSensitivePaths([".env", "secrets/token.txt"]);
+    expect(result.safe).toEqual([]);
+    expect(result.excluded).toHaveLength(2);
+  });
+
+  test("forwards options to the detector", () => {
+    // allowEnvTemplates=false rejects .env.example, which is allowed by default.
+    const result = filterSensitivePaths([".env.example"], {
+      allowEnvTemplates: false,
+    });
+    expect(result.safe).toEqual([]);
+    expect(result.excluded).toHaveLength(1);
   });
 });
