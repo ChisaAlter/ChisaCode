@@ -606,4 +606,68 @@ describe("dispatch ?? chain routing", () => {
       expect(rpcError).toBeUndefined();
     });
   });
+
+  // S2: snapshot/migration/context carry a client-controlled cwd/workDir and run
+  // git or write files in it; they must only operate on registered workspaces.
+  describe("Cindy workspace binding", () => {
+    it("rejects snapshot/create with rpc_error{workspace_not_found} for an unregistered cwd", async () => {
+      const messages: unknown[] = [];
+      const boundSession = createTestSession(messages);
+      boundSession.updateClientCapabilities({ cindy_modules: true } as any);
+
+      const internals = asSessionInternals(boundSession) as any;
+      // Simulate an unregistered directory: workspace lookup resolves to null.
+      vi.spyOn(internals.workspaceRecordController, "findWorkspaceByDirectory").mockResolvedValue(
+        null,
+      );
+
+      await boundSession.handleMessage({
+        type: "snapshot/create",
+        requestId: "ws-1",
+        cwd: "/tmp/definitely-not-a-registered-workspace",
+      } as any);
+
+      expect(messages).toContainEqual(
+        expect.objectContaining({
+          type: "rpc_error",
+          payload: expect.objectContaining({
+            requestId: "ws-1",
+            requestType: "snapshot/create",
+            code: "workspace_not_found",
+          }),
+        }),
+      );
+    });
+
+    it("dispatches snapshot/create when cwd resolves to a registered workspace", async () => {
+      const messages: unknown[] = [];
+      const boundSession = createTestSession(messages);
+      boundSession.updateClientCapabilities({ cindy_modules: true } as any);
+
+      const internals = asSessionInternals(boundSession) as any;
+      // Mock the workspace lookup to simulate a registered workspace.
+      vi.spyOn(internals.workspaceRecordController, "findWorkspaceByDirectory").mockResolvedValue({
+        workspaceId: "ws-registered",
+      });
+      const snapshotSpy = vi
+        .spyOn(internals.snapshotHandler, "handleSnapshotCreateRequest")
+        .mockResolvedValue(undefined);
+
+      await boundSession.handleMessage({
+        type: "snapshot/create",
+        requestId: "ws-2",
+        cwd: "/tmp/registered",
+      } as any);
+
+      expect(snapshotSpy).toHaveBeenCalledTimes(1);
+      let rpcError: unknown;
+      for (const m of messages) {
+        if ((m as any).type === "rpc_error") {
+          rpcError = m;
+          break;
+        }
+      }
+      expect(rpcError).toBeUndefined();
+    });
+  });
 });

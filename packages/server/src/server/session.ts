@@ -1369,25 +1369,72 @@ export class Session {
     // Old clients that never negotiated the cindy_modules capability cannot handle Cindy RPC responses
     // (the outbound union is closed); reject inbound requests with rpc_error instead of dispatching.
     if (!this.supports(CLIENT_CAPS.cindyModules)) {
-      const request = msg as { requestId?: string; type: string };
-      this.emit({
-        type: "rpc_error",
-        payload: {
-          requestId: request.requestId ?? "",
-          requestType: request.type,
-          error: "Cindy modules not supported by this client",
-          code: "unsupported_feature",
-        },
-      });
+      this.emitCindyUnsupported(msg);
       return undefined;
     }
+    // goal/team/learn operate by agentId and do not touch arbitrary paths.
     if (msg.type.startsWith("goal/")) return this.dispatchGoalMessage(msg);
     if (msg.type.startsWith("team/")) return this.dispatchTeamMessage(msg);
-    if (msg.type.startsWith("context/")) return this.dispatchContextMessage(msg);
+    if (msg.type.startsWith("learn/")) return this.dispatchLearnMessage(msg);
+    // snapshot/migration/context carry a client-controlled cwd/workDir and run git
+    // or write files in it; bind them to a registered workspace before dispatch so a
+    // peer cannot mutate git state or write config files in arbitrary directories.
+    if (
+      msg.type.startsWith("snapshot/") ||
+      msg.type.startsWith("migration/") ||
+      msg.type.startsWith("context/")
+    ) {
+      return this.dispatchCindyWorkspaceBound(msg);
+    }
+    return undefined;
+  }
+
+  /**
+   * Emits an rpc_error indicating the Cindy feature is not negotiated by this client.
+   */
+  private emitCindyUnsupported(msg: SessionInboundMessage): void {
+    const request = msg as { requestId?: string; type: string };
+    this.emit({
+      type: "rpc_error",
+      payload: {
+        requestId: request.requestId ?? "",
+        requestType: request.type,
+        error: "Cindy modules not supported by this client",
+        code: "unsupported_feature",
+      },
+    });
+  }
+
+  /**
+   * Dispatches Cindy RPCs that carry a client-controlled cwd/workDir only after
+   * confirming the directory resolves to a registered workspace. Rejects with
+   * rpc_error{workspace_not_found} otherwise, preventing arbitrary-repo git ops
+   * and arbitrary-dir config writes.
+   */
+  private async dispatchCindyWorkspaceBound(msg: SessionInboundMessage): Promise<void> {
+    const dir =
+      (msg as { cwd?: string; workDir?: string }).cwd ??
+      (msg as { workDir?: string }).workDir ??
+      "";
+    if (dir.length > 0) {
+      const workspace = await this.findWorkspaceByDirectory(dir);
+      if (!workspace) {
+        const request = msg as { requestId?: string; type: string };
+        this.emit({
+          type: "rpc_error",
+          payload: {
+            requestId: request.requestId ?? "",
+            requestType: request.type,
+            error: "Requested directory is not a registered workspace",
+            code: "workspace_not_found",
+          },
+        });
+        return;
+      }
+    }
     if (msg.type.startsWith("snapshot/")) return this.dispatchSnapshotMessage(msg);
     if (msg.type.startsWith("migration/")) return this.dispatchMigrationMessage(msg);
-    if (msg.type.startsWith("learn/")) return this.dispatchLearnMessage(msg);
-    return undefined;
+    if (msg.type.startsWith("context/")) return this.dispatchContextMessage(msg);
   }
 
   private dispatchGoalMessage(msg: SessionInboundMessage): Promise<void> | undefined {

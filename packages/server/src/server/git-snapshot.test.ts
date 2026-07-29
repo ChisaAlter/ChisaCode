@@ -168,4 +168,19 @@ describe("rewindToSnapshot", () => {
     expect(result.ok).toBe(true);
     expect(result.restoredFiles).toContain("code.ts");
   });
+
+  test("rejects non-hex commitHash to prevent git argument injection", async () => {
+    // --output=<path> is a valid git log flag; a hostile commitHash must be
+    // rejected before any git invocation so it cannot overwrite arbitrary files.
+    const hostile = "--output=/tmp/chisacode-injection-test";
+    const result = await rewindToSnapshot(tmpDir, hostile, [], logger);
+    expect(result.ok).toBe(false);
+    expect(result.reason).toMatch(/hex SHA/);
+  });
+
+  test("rejects short non-SHA commitHash", async () => {
+    const result = await rewindToSnapshot(tmpDir, "not-a-sha", [], logger);
+    expect(result.ok).toBe(false);
+    expect(result.reason).toMatch(/hex SHA/);
+  });
 });

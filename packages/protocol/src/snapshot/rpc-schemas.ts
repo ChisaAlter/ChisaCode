@@ -44,7 +44,12 @@ export const SnapshotRewindRequestSchema = z.object({
   type: z.literal("snapshot/rewind"),
   requestId: z.string(),
   cwd: z.string().trim().min(1),
-  commitHash: z.string().trim().min(1),
+  // Hex-only to prevent git argument injection (e.g. --output=<path> writes the
+  // log to an arbitrary file). Accept 40 (sha1) or 64 (sha256) hex chars.
+  commitHash: z
+    .string()
+    .trim()
+    .regex(/^[0-9a-f]{40,64}$/i, "commitHash must be a 40- or 64-char hex SHA"),
 });
 
 export const SnapshotStatusRequestSchema = z.object({

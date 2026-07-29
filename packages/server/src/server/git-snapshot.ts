@@ -225,6 +225,13 @@ export async function rewindToSnapshot(
   logger: Logger,
 ): Promise<RewindResult> {
   try {
+    // Defense-in-depth: the protocol schema already restricts commitHash to
+    // hex SHA, but reject here too so a direct caller (tests, internal code)
+    // cannot perform git argument injection (e.g. --output=<path> writes the
+    // log to an arbitrary file).
+    if (!/^[0-9a-f]{40,64}$/i.test(commitHash)) {
+      return { ok: false, reason: "commitHash must be a 40- or 64-char hex SHA" };
+    }
     // Validate that this is actually a snapshot commit
     const logResult = await runGitCommand(["log", "-1", "--format=%B", commitHash], { cwd });
     const trailers = parseSnapshotTrailers(logResult.stdout ?? "");
