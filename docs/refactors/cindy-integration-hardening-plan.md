@@ -37,19 +37,19 @@
 
 按"阻断合并 → 安全加固 → 正确性 → 收尾与未落地"分四阶段，共 11 个 Slice。建议串行执行，Slice 间互不阻塞的可在 PR 内并行。
 
-| 阶段      | Slice | 标题                                                        | 严重度        | 影响                                        | 预估 |
-| --------- | ----- | ----------------------------------------------------------- | ------------- | ------------------------------------------- | ---- |
-| P0 阻断   | S1    | 协议 `exports` 补齐 + feature gate 真正生效                 | critical      | 外部消费者编译/发布即坏；旧客户端被推送打破 | S    |
-| P0 阻断   | S2    | snapshot `commitHash` 注入 + `cwd`/`workDir` 绑定 workspace | critical/high | 主机级文件覆写 + 任意 repo git 操作         | M    |
-| P1 安全   | S3    | SSH 加固：host key / sshOptions 白名单 / quote / env        | high          | MITM、本地命令执行、远程注入                | M    |
-| P1 安全   | S4    | snapshot 用临时 index + try/finally                         | high          | 误删用户暂存区、index 留脏                  | S    |
-| P1 安全   | S5    | team worker 全局上限 + 结束回收 + spawn 失败处理            | high          | 进程泄漏、孤儿 worker                       | M    |
-| P2 正确性 | S6    | goal 取消传播 + 自续竞争 + judge 可取消                     | high          | 取消无效、双 stream 竞争                    | M    |
-| P2 正确性 | S7    | goal/team/learn 编排路径集成测试 + 状态枚举补全             | high/medium   | 自续循环零覆盖、缺 failed/cancelled         | M    |
-| P2 正确性 | S8    | model-catalog 大小写/回退 + Claude 1M 定价                  | high/medium   | 静默选最贵模型、成本低估                    | S    |
-| P3 收尾   | S9    | 门禁接入 CI：guard + i18n glossary 对齐                     | critical      | 两个守卫从不运行、i18n 对 HEAD 81 处违规    | M    |
-| P3 收尾   | S10   | 消息渲染补全：KaTeX / mermaid / 流式节流                    | —             | 清单高优项只到 diff/CJK/检测                | L    |
-| P3 收尾   | S11   | 同会话 agent 切换 + 其余中低优收尾                          | —             | 配置迁移已做、切换未做                      | M    |
+| 阶段      | Slice | 标题                                                                           | 严重度        | 影响                                        | 预估 |
+| --------- | ----- | ------------------------------------------------------------------------------ | ------------- | ------------------------------------------- | ---- |
+| P0 阻断   | S1 ✅ | 协议 `exports` 补齐 + feature gate 真正生效                                    | critical      | 外部消费者编译/发布即坏；旧客户端被推送打破 | S    |
+| P0 阻断   | S2 ✅ | snapshot `commitHash` 注入 + `cwd`/`workDir` 绑定 workspace                    | critical/high | 主机级文件覆写 + 任意 repo git 操作         | M    |
+| P1 安全   | S3 ✅ | SSH 加固：host key / sshOptions 白名单 / quote / env                           | high          | MITM、本地命令执行、远程注入                | M    |
+| P1 安全   | S4 ✅ | snapshot 用临时 index + try/finally                                            | high          | 误删用户暂存区、index 留脏                  | S    |
+| P1 安全   | S5 ✅ | team worker 回收 + spawn 失败处理 + 队列 mutex（全局上限后续）                 | high          | 进程泄漏、孤儿 worker                       | M    |
+| P2 正确性 | S6 ✅ | goal 取消传播 + 自续 guard + onGoalTurnCompleted try/catch（usedTools 后续）   | high          | 取消无效、双 stream 竞争                    | M    |
+| P2 正确性 | S7 ✅ | GoalStatus 枚举 + goal leak 修复 + learn filename guard（distill cancel 后续） | high/medium   | 缺 failed/cancelled、路径穿越               | M    |
+| P2 正确性 | S8 ✅ | model-catalog 大小写/回退 + Claude 1M 定价 + cost:{}→null                      | high/medium   | 静默选最贵模型、成本低估                    | S    |
+| P3 收尾   | S9 ✅ | 门禁接入 CI：guard 强制 + i18n glossary 校验 + 删副本                          | critical      | 守卫从不运行、glossary 无校验、副本漂移     | M    |
+| P3 收尾   | S10   | 消息渲染补全：KaTeX / mermaid / 流式节流（产品功能，单独立项）                 | —             | 清单高优项只到 diff/CJK/检测                | L    |
+| P3 收尾   | S11   | 同会话 agent 切换 + IM/Webhook + checklist 修订（产品功能，单独立项）          | —             | 配置迁移已做、切换未做                      | M    |
 
 > 预估栏：S≈半天，M≈1-2 天，L≈3+ 天。下文每个 Slice 给出**问题 / 根因 / 方案 / 验收 / 回归风险**。
 
