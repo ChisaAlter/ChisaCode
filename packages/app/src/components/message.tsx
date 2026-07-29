@@ -1426,7 +1426,16 @@ export const AssistantMessage = memo(function AssistantMessage({
     };
   }, [client, fileLinkActions, markdownParser, serverId, workspaceRoot, agentId]);
 
-  const displayMessage = useMemo(() => stripLeadingMarkdownHorizontalRule(message), [message]);
+  // During streaming the agent emits tokens rapidly and `message` changes on
+  // every chunk. Re-parsing + re-rendering the whole markdown tree on each
+  // token janks the main thread. `useDeferredValue` lets React keep showing
+  // the previous parse while it prepares the next one in the background, so
+  // high-frequency stream updates coalesce instead of blocking the UI.
+  const deferredMessage = React.useDeferredValue(message);
+  const displayMessage = useMemo(
+    () => stripLeadingMarkdownHorizontalRule(deferredMessage),
+    [deferredMessage],
+  );
   const blocks = useMemo(() => splitMarkdownBlocks(displayMessage), [displayMessage]);
   const keyedBlocks = useMemo(
     () => blocks.map((block, index) => ({ key: `${index}:${block.slice(0, 32)}`, block })),

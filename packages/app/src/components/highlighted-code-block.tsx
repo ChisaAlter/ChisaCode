@@ -89,13 +89,14 @@ export const HighlightedCodeBlock = React.memo(function HighlightedCodeBlock({
       onPointerEnter={handlePointerEnter}
       onPointerLeave={handlePointerLeave}
     >
-      {renderCodeContent(diffLines, keyedLines, renderedCode, innerTextStyle)}
+      {renderCodeContent(blockKind, diffLines, keyedLines, renderedCode, innerTextStyle)}
       <CopyButton getCode={getCode} visible={controlsVisible} />
     </View>
   );
 });
 
 function renderCodeContent(
+  blockKind: "diff" | "diagram" | "math" | "code",
   diffLines: DiffLine[] | null,
   keyedLines: KeyedLine[] | null,
   renderedCode: string,
@@ -109,8 +110,34 @@ function renderCodeContent(
       <MarkdownTextSpan style={innerTextStyle}>{renderCodeSegments(keyedLines)}</MarkdownTextSpan>
     );
   }
+  // math/diagram blocks have no native renderer (no KaTeX/MathML or mermaid on
+  // RN without heavy native modules). Show them with a distinct label + monospace
+  // block so users can tell they are specialized content, not plain code.
+  if (blockKind === "math" || blockKind === "diagram") {
+    return (
+      <View style={specializedBlockStyles.container}>
+        <MarkdownTextSpan style={specializedBlockStyles.label}>
+          {blockKind === "math" ? "math" : "diagram"}
+        </MarkdownTextSpan>
+        <MarkdownTextSpan style={innerTextStyle}>{renderedCode}</MarkdownTextSpan>
+      </View>
+    );
+  }
   return <MarkdownTextSpan style={innerTextStyle}>{renderedCode}</MarkdownTextSpan>;
 }
+
+const specializedBlockStyles = StyleSheet.create({
+  container: {
+    paddingVertical: 4,
+  },
+  label: {
+    fontSize: 10,
+    opacity: 0.5,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+});
 
 function renderCodeSegments(keyedLines: KeyedLine[]): React.ReactNode[] {
   const segments: React.ReactNode[] = [];
