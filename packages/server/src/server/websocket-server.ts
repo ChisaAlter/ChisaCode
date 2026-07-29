@@ -1090,7 +1090,7 @@ export class VoiceAssistantWebSocketServer {
         agentMcpServerManagement: true,
         // COMPAT(generativeUiWireCapability): added in v0.1.101; remove the gate no earlier than 2027-01-11 when client/daemon floor >= v0.1.101.
         generativeUi: true,
-        // COMPAT(cindyModules): added in v0.1.X, drop the gate when floor >= v0.1.X.
+        // COMPAT(cindyModules): added in v0.1.102, remove no earlier than 2027-07-29 when client/daemon floor >= v0.1.102.
         cindyModules: true,
       },
     };

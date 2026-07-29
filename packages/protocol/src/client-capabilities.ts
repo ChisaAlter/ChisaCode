@@ -7,6 +7,8 @@ export const CLIENT_CAPS = {
   customModeIcons: "custom_mode_icons",
   // COMPAT(generativeUiWireCapability): added in v0.1.101; remove the gate no earlier than 2027-01-11 when client/daemon floor >= v0.1.101.
   generativeUi: "generative_ui",
+  // COMPAT(cindyModules): added in v0.1.102; remove the gate no earlier than 2027-07-29 when client/daemon floor >= v0.1.102.
+  cindyModules: "cindy_modules",
 } as const;
 
 export type ClientCapability = (typeof CLIENT_CAPS)[keyof typeof CLIENT_CAPS];

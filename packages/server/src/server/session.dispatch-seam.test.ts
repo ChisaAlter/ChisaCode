@@ -116,6 +116,7 @@ function createTestSession(messages: unknown[] = [], chatService = asChatService
     agentManager: asAgentManager({
       listAgents: vi.fn(() => []),
       subscribe: vi.fn(() => () => {}),
+      setGoalCompletionJudge: vi.fn(),
     }),
     agentStorage: asAgentStorage({
       list: vi.fn().mockResolvedValue([]),
@@ -159,6 +160,7 @@ function createTestSession(messages: unknown[] = [], chatService = asChatService
         providers: {},
       })),
       onChange: vi.fn(() => () => {}),
+      onFieldChange: vi.fn(() => () => {}),
     }),
     stt: null,
     tts: null,
@@ -543,6 +545,65 @@ describe("dispatch ?? chain routing", () => {
           type: "non_existent_type",
         } as any),
       ).resolves.toBeUndefined();
+    });
+  });
+
+  // COMPAT(cindyModules): added in v0.1.102, remove no earlier than 2027-07-29 when client/daemon floor >= v0.1.102.
+  // Cindy RPC responses are closed-union discriminators; old clients that never negotiated
+  // cindy_modules cannot parse them. The gate must reject inbound Cindy requests with
+  // rpc_error and must never push migration/available to such clients.
+  describe("dispatchCindyMessage capability gate", () => {
+    it("rejects inbound goal/set with rpc_error when cindy_modules not negotiated", async () => {
+      const messages: unknown[] = [];
+      const gateSession = createTestSession(messages);
+      // No updateClientCapabilities call — cindy_modules is absent.
+
+      await gateSession.handleMessage({
+        type: "goal/set",
+        requestId: "gate-1",
+        agentId: "agent-x",
+        objective: "do something",
+      } as any);
+
+      expect(messages).toContainEqual(
+        expect.objectContaining({
+          type: "rpc_error",
+          payload: expect.objectContaining({
+            requestId: "gate-1",
+            requestType: "goal/set",
+            code: "unsupported_feature",
+          }),
+        }),
+      );
+    });
+
+    it("dispatches goal/set to the goal handler when cindy_modules is negotiated", async () => {
+      const messages: unknown[] = [];
+      const gateSession = createTestSession(messages);
+      gateSession.updateClientCapabilities({ cindy_modules: true } as any);
+
+      const internals = asSessionInternals(gateSession) as any;
+      const goalSpy = vi
+        .spyOn(internals.goalHandler, "handleGoalSetRequest")
+        .mockResolvedValue(undefined);
+
+      await gateSession.handleMessage({
+        type: "goal/set",
+        requestId: "gate-2",
+        agentId: "agent-x",
+        objective: "do something",
+      } as any);
+
+      expect(goalSpy).toHaveBeenCalledTimes(1);
+      // No rpc_error should be emitted for a gated-on request.
+      let rpcError: unknown;
+      for (const m of messages) {
+        if ((m as any).type === "rpc_error") {
+          rpcError = m;
+          break;
+        }
+      }
+      expect(rpcError).toBeUndefined();
     });
   });
 });

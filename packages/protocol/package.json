@@ -81,6 +81,10 @@
       "types": "./dist/chat/types.d.ts",
       "default": "./dist/chat/types.js"
     },
+    "./cindy/messages": {
+      "types": "./dist/cindy/messages.d.ts",
+      "default": "./dist/cindy/messages.js"
+    },
     "./chisacode-config-schema": {
       "types": "./dist/chisacode-config-schema.d.ts",
       "default": "./dist/chisacode-config-schema.js"
@@ -121,6 +125,10 @@
       "types": "./dist/git-remote.d.ts",
       "default": "./dist/git-remote.js"
     },
+    "./goal/rpc-schemas": {
+      "types": "./dist/goal/rpc-schemas.d.ts",
+      "default": "./dist/goal/rpc-schemas.js"
+    },
     "./host-connection-schema": {
       "types": "./dist/host-connection-schema.d.ts",
       "default": "./dist/host-connection-schema.js"
@@ -133,6 +141,10 @@
       "types": "./dist/literal-union.d.ts",
       "default": "./dist/literal-union.js"
     },
+    "./learn/rpc-schemas": {
+      "types": "./dist/learn/rpc-schemas.d.ts",
+      "default": "./dist/learn/rpc-schemas.js"
+    },
     "./loop/rpc-schemas": {
       "types": "./dist/loop/rpc-schemas.d.ts",
       "default": "./dist/loop/rpc-schemas.js"
@@ -140,6 +152,10 @@
     "./messages": {
       "types": "./dist/messages.d.ts",
       "default": "./dist/messages.js"
+    },
+    "./migration/rpc-schemas": {
+      "types": "./dist/migration/rpc-schemas.d.ts",
+      "default": "./dist/migration/rpc-schemas.js"
     },
     "./path-utils": {
       "types": "./dist/path-utils.d.ts",
@@ -157,6 +173,10 @@
       "types": "./dist/provider/messages.d.ts",
       "default": "./dist/provider/messages.js"
     },
+    "./project-context/rpc-schemas": {
+      "types": "./dist/project-context/rpc-schemas.d.ts",
+      "default": "./dist/project-context/rpc-schemas.js"
+    },
     "./schedule/rpc-schemas": {
       "types": "./dist/schedule/rpc-schemas.d.ts",
       "default": "./dist/schedule/rpc-schemas.js"
@@ -164,6 +184,10 @@
     "./schedule/types": {
       "types": "./dist/schedule/types.d.ts",
       "default": "./dist/schedule/types.js"
+    },
+    "./snapshot/rpc-schemas": {
+      "types": "./dist/snapshot/rpc-schemas.d.ts",
+      "default": "./dist/snapshot/rpc-schemas.js"
     },
     "./terminal-input-mode": {
       "types": "./dist/terminal-input-mode.d.ts",
@@ -184,6 +208,10 @@
     "./terminal-stream-protocol": {
       "types": "./dist/terminal-stream-protocol.d.ts",
       "default": "./dist/terminal-stream-protocol.js"
+    },
+    "./team/rpc-schemas": {
+      "types": "./dist/team/rpc-schemas.d.ts",
+      "default": "./dist/team/rpc-schemas.js"
     },
     "./tool-call-display": {
       "types": "./dist/tool-call-display.d.ts",

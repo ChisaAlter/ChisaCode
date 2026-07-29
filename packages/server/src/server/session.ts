@@ -3,7 +3,7 @@ import { TTLCache } from "@isaacs/ttlcache";
 import pMemoize from "p-memoize";
 import { z } from "zod/v3";
 
-import type { ClientCapability } from "@chisacode/protocol/client-capabilities";
+import { CLIENT_CAPS, type ClientCapability } from "@chisacode/protocol/client-capabilities";
 import {
   type AgentSnapshotPayload,
   type FirstAgentContext,
@@ -587,6 +587,10 @@ export class Session {
     // Auto-detect config migrations when provider config changes
     this.daemonConfigStore.onFieldChange("providers", () => {
       try {
+        // COMPAT(cindyModules): added in v0.1.102, remove no earlier than 2027-07-29 when client/daemon floor >= v0.1.102.
+        // The migration/available notification is a closed-union discriminator; never push it to clients
+        // that did not negotiate cindy_modules — they would fail to parse the outbound message.
+        if (!this.supports(CLIENT_CAPS.cindyModules)) return;
         const cwd = this.agentManager.listAgents().find((a) => a.lifecycle !== "closed")?.cwd;
         if (!cwd) return;
         for (const target of ["claude-code", "codex"] as const) {
@@ -1361,6 +1365,22 @@ export class Session {
   }
 
   private dispatchCindyMessage(msg: SessionInboundMessage): Promise<void> | undefined {
+    // COMPAT(cindyModules): added in v0.1.102, remove no earlier than 2027-07-29 when client/daemon floor >= v0.1.102.
+    // Old clients that never negotiated the cindy_modules capability cannot handle Cindy RPC responses
+    // (the outbound union is closed); reject inbound requests with rpc_error instead of dispatching.
+    if (!this.supports(CLIENT_CAPS.cindyModules)) {
+      const request = msg as { requestId?: string; type: string };
+      this.emit({
+        type: "rpc_error",
+        payload: {
+          requestId: request.requestId ?? "",
+          requestType: request.type,
+          error: "Cindy modules not supported by this client",
+          code: "unsupported_feature",
+        },
+      });
+      return undefined;
+    }
     if (msg.type.startsWith("goal/")) return this.dispatchGoalMessage(msg);
     if (msg.type.startsWith("team/")) return this.dispatchTeamMessage(msg);
     if (msg.type.startsWith("context/")) return this.dispatchContextMessage(msg);
