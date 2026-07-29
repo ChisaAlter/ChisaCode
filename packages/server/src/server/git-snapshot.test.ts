@@ -126,6 +126,24 @@ describe("createSnapshot", () => {
     expect(result.ok).toBe(false);
     expect(result.reason).toContain("sensitive");
   });
+
+  test("preserves the user's pre-existing staged changes", async () => {
+    // User stages a file BEFORE the snapshot runs.
+    writeFileSync(path.join(tmpDir, "staged-by-user.ts"), "user content");
+    git("add staged-by-user.ts");
+    // Sanity: the file is staged.
+    expect(git("status --porcelain")).toContain("A  staged-by-user.ts");
+
+    // A separate change exists for the snapshot to capture.
+    writeFileSync(path.join(tmpDir, "snapshotted.ts"), "snap content");
+
+    const result = await createSnapshot(tmpDir, { kind: "before-edit" }, logger);
+    expect(result.ok).toBe(true);
+
+    // The user's staged file must STILL be staged after the snapshot — the old
+    // implementation ran `git reset HEAD --` which wiped ALL staging.
+    expect(git("status --porcelain")).toContain("A  staged-by-user.ts");
+  });
 });
 
 describe("listSnapshots", () => {

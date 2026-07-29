@@ -8,7 +8,9 @@
  *
  * Design adapted from Cindy's git-snapshot/ (Apache-2.0).
  */
-import { existsSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
 
 import type { Logger } from "pino";
 
@@ -52,6 +54,33 @@ export interface RewindResult {
 
 const TRAILER_PREFIX = "XDT";
 const SNAPSHOT_BRANCH = "chisacode-snapshots";
+
+/**
+ * Per-cwd serialization chains for snapshot creation. Snapshotting mutates a
+ * temporary git index file; without serialization, concurrent snapshots on the
+ * same repo (e.g. agent turn end + manual snapshot) would race on the index
+ * file and produce corrupt or empty trees. Each cwd gets its own promise chain
+ * so independent repos are not serialized against each other.
+ */
+const snapshotLocks = new Map<string, Promise<unknown>>();
+
+function withSnapshotLock<T>(cwd: string, task: () => Promise<T>): Promise<T> {
+  const previous = snapshotLocks.get(cwd) ?? Promise.resolve();
+  const chained = previous.then(task, task);
+  // Store a sentinel that resolves after the task so the map entry can be
+  // compared; once settled, remove it so the map only tracks in-flight chains.
+  const sentinel = chained.then(
+    () => undefined,
+    () => undefined,
+  );
+  snapshotLocks.set(cwd, sentinel);
+  sentinel.finally(() => {
+    if (snapshotLocks.get(cwd) === sentinel) {
+      snapshotLocks.delete(cwd);
+    }
+  });
+  return chained;
+}
 
 // ── Blocking state detection ───────────────────────────────────────────────
 
@@ -121,11 +150,24 @@ export function parseSnapshotTrailers(message: string): {
  * Create a git snapshot of the current workspace state.
  *
  * Uses git plumbing commands (write-tree + commit-tree + update-ref) to
- * create a snapshot commit without touching HEAD, the current branch, or
- * the staging area. The snapshot is stored under refs/chisacode-snapshots/
+ * create a snapshot commit without touching HEAD, the current branch, or the
+ * staging area. The snapshot is stored under refs/chisacode-snapshots/
  * and can be listed/rewound later.
+ *
+ * The staging step runs against a temporary `GIT_INDEX_FILE` so the user's real
+ * index is never mutated — even on crash, no `git reset` is needed and the
+ * user's pre-existing staged changes are preserved. Snapshot creation for a
+ * given cwd is serialized to avoid concurrent index races.
  */
 export async function createSnapshot(
+  cwd: string,
+  meta: SnapshotMeta,
+  logger: Logger,
+): Promise<SnapshotResult> {
+  return withSnapshotLock(cwd, () => createSnapshotUnlocked(cwd, meta, logger));
+}
+
+async function createSnapshotUnlocked(
   cwd: string,
   meta: SnapshotMeta,
   logger: Logger,
@@ -136,6 +178,11 @@ export async function createSnapshot(
     return { ok: false, reason: `git ${blocked.reason} in progress` };
   }
 
+  // Temporary index file so the user's real staging area is never touched.
+  // Created in the system tmp dir (not inside the repo) to avoid polluting the
+  // workspace; cleaned up in finally regardless of success/failure.
+  const tmpDir = mkdtempSync(path.join(os.tmpdir(), "chisacode-snap-idx-"));
+  const tmpIndex = path.join(tmpDir, "index");
   try {
     // 2. Get list of changed files
     const statusResult = await runGitCommand(["status", "--porcelain", "-z"], { cwd });
@@ -159,21 +206,21 @@ export async function createSnapshot(
       return { ok: false, reason: "all changed files are sensitive", excludedFiles };
     }
 
-    // 4. Stage safe files (temporarily modifies the index)
-    await runGitCommand(["add", "--", ...safeFiles], { cwd });
+    // 4. Stage safe files into the TEMPORARY index (user's real index untouched).
+    //    GIT_INDEX_FILE redirects git's staging area to the temp file for this
+    //    command only.
+    const indexEnv = { GIT_INDEX_FILE: tmpIndex };
+    await runGitCommand(["add", "--", ...safeFiles], { cwd, envOverlay: indexEnv });
 
-    // 5. Create a tree object from the current index
-    const treeResult = await runGitCommand(["write-tree"], { cwd });
+    // 5. Create a tree object from the TEMPORARY index.
+    const treeResult = await runGitCommand(["write-tree"], { cwd, envOverlay: indexEnv });
     const treeHash = treeResult.stdout?.trim();
-
-    // 6. Restore the index to HEAD (unstage the files we just added)
-    await runGitCommand(["reset", "HEAD", "--"], { cwd });
 
     if (!treeHash) {
       return { ok: false, reason: "failed to create tree object" };
     }
 
-    // 7. Create a commit object pointing at the tree (does NOT touch HEAD)
+    // 6. Create a commit object pointing at the tree (does NOT touch HEAD)
     const message = buildSnapshotCommitMessage(meta);
     const headResult = await runGitCommand(["rev-parse", "HEAD"], { cwd });
     const parentHash = headResult.stdout?.trim();
@@ -188,7 +235,7 @@ export async function createSnapshot(
       return { ok: false, reason: "failed to create commit object" };
     }
 
-    // 8. Store the snapshot ref for later listing/rewind
+    // 7. Store the snapshot ref for later listing/rewind
     try {
       await runGitCommand(
         ["update-ref", `refs/${SNAPSHOT_BRANCH}/${commitHash.slice(0, 12)}`, commitHash],
@@ -209,6 +256,13 @@ export async function createSnapshot(
     const message = error instanceof Error ? error.message : String(error);
     logger.error({ err: error }, "snapshot creation failed");
     return { ok: false, reason: message };
+  } finally {
+    // Always remove the temp index dir, even on crash/SIGKILL mid-snapshot.
+    try {
+      rmSync(tmpDir, { recursive: true, force: true });
+    } catch {
+      // Non-fatal: OS tmp reaper will eventually clean it up.
+    }
   }
 }
 
