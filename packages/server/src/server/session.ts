@@ -570,6 +570,16 @@ export class Session {
         return agent.id;
       },
       sendToAgent: (agentId, message) => this.deliverToTeamAgent(agentId, message),
+      terminateWorker: async (agentId) => {
+        // Stop any in-flight run, then close the agent session so the spawned
+        // worker process (Claude/Codex CLI) is reaped instead of outliving the team.
+        try {
+          await this.agentManager.cancelAgentRun(agentId);
+        } catch {
+          // Agent may already be idle/closed; cancel is best-effort.
+        }
+        await this.agentManager.closeAgent(agentId);
+      },
     });
     this.projectContextHandler = new ProjectContextHandler({
       sessionLogger: this.sessionLogger,

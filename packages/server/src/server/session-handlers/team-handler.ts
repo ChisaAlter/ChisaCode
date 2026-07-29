@@ -29,6 +29,14 @@ export class TeamManager {
   private team: TeamState | null = null;
   private workers: WorkerState[] = [];
   private messageQueue: QueuedMessage[] = [];
+  /**
+   * Per-worker serialization chains for queue mutations. Without this, a
+   * concurrent enqueue (lead sends a message) and drain (worker went idle)
+   * race on `messageQueue` reassignment: the enqueue pushes onto the old array
+   * reference, then the drain's `consumeMessage` reassigns to a new array and
+   * the enqueued message is silently lost.
+   */
+  private readonly queueLocks = new Map<string, Promise<unknown>>();
 
   getTeam(): TeamState | null {
     return this.team;
@@ -84,6 +92,22 @@ export class TeamManager {
     return this.workers.find((w) => w.id === workerId) ?? null;
   }
 
+  /**
+   * Returns the live agent sessionId backing a worker (if any), so callers can
+   * terminate the agent when the worker is archived or the team ends. Workers
+   * created without a real spawn (no spawnWorker callback) have a synthetic
+   * sessionId indistinguishable from a real one — callers should only terminate
+   * when spawnWorker was used. We expose the sessionId and let the caller decide.
+   */
+  getWorkerSessionId(workerId: string): string | null {
+    return this.workers.find((w) => w.id === workerId)?.sessionId ?? null;
+  }
+
+  /** SessionIds of all non-archived workers, for endActiveTeam teardown. */
+  getActiveWorkerSessionIds(): string[] {
+    return this.workers.filter((w) => w.status !== "archived").map((w) => w.sessionId);
+  }
+
   enqueueMessage(workerId: string, content: string, now: number): QueuedMessage {
     const msg = queueMessage(randomUUID(), workerId, content, now);
     this.messageQueue.push(msg);
@@ -99,18 +123,41 @@ export class TeamManager {
   }
 
   /**
+   * Serialize a queue-touching async operation per worker so concurrent
+   * enqueue-vs-drain mutations cannot drop messages or interleave half-delivered.
+   */
+  private withWorkerQueueLock<T>(workerId: string, task: () => Promise<T>): Promise<T> {
+    const previous = this.queueLocks.get(workerId) ?? Promise.resolve();
+    const chained = previous.then(task, task);
+    const sentinel = chained.then(
+      () => undefined,
+      () => undefined,
+    );
+    this.queueLocks.set(workerId, sentinel);
+    sentinel.finally(() => {
+      if (this.queueLocks.get(workerId) === sentinel) {
+        this.queueLocks.delete(workerId);
+      }
+    });
+    return chained;
+  }
+
+  /**
    * Deliver every unconsumed queued message for a worker, marking each consumed
-   * once `deliver` resolves. Returns the number of messages delivered.
+   * once `deliver` resolves. Returns the number of messages delivered. Serialized
+   * per worker so a concurrent enqueue cannot push onto a stale array reference.
    */
   async flushQueue(workerId: string, deliver: (content: string) => Promise<void>): Promise<number> {
-    const pending = listQueuedMessages(this.messageQueue, workerId);
-    let delivered = 0;
-    for (const message of pending) {
-      await deliver(message.content);
-      this.messageQueue = consumeMessage(this.messageQueue, message.id);
-      delivered++;
-    }
-    return delivered;
+    return this.withWorkerQueueLock(workerId, async () => {
+      const pending = listQueuedMessages(this.messageQueue, workerId);
+      let delivered = 0;
+      for (const message of pending) {
+        await deliver(message.content);
+        this.messageQueue = consumeMessage(this.messageQueue, message.id);
+        delivered++;
+      }
+      return delivered;
+    });
   }
 }
 
@@ -134,6 +181,12 @@ export interface TeamHandlerContext {
   }): Promise<string>;
   /** Send a message to a running worker agent. */
   sendToAgent?(agentId: string, message: string): Promise<void>;
+  /**
+   * Terminate a worker agent session when its worker is archived or the team
+   * ends, so spawned agent processes (Claude/Codex CLI) do not outlive the team
+   * and leak handles/ports. Best-effort: errors are logged and swallowed.
+   */
+  terminateWorker?(agentId: string): Promise<void>;
 }
 
 /** Handles team collaboration RPC operations. */
@@ -199,6 +252,20 @@ export class TeamHandler implements DisposableHandler {
     request: Extract<SessionInboundMessage, { type: "team/end" }>,
   ): Promise<void> {
     try {
+      // Terminate all live worker agent sessions before ending the team so
+      // spawned processes do not leak past team lifecycle.
+      if (this.context.terminateWorker) {
+        for (const sessionId of this.context.teamManager.getActiveWorkerSessionIds()) {
+          try {
+            await this.context.terminateWorker(sessionId);
+          } catch (err) {
+            this.context.sessionLogger.error(
+              { err, sessionId },
+              "Failed to terminate worker agent on team end",
+            );
+          }
+        }
+      }
       const team = this.context.teamManager.endActiveTeam(
         request.status ?? "completed",
         Date.now(),
@@ -220,6 +287,7 @@ export class TeamHandler implements DisposableHandler {
 
       // Spawn a real agent session if the callback is available
       let agentId: string | null = null;
+      let spawnError: string | null = null;
       if (this.context.spawnWorker) {
         try {
           agentId = await this.context.spawnWorker({
@@ -234,11 +302,27 @@ export class TeamHandler implements DisposableHandler {
             { label: request.label, agentId },
             "Team worker agent spawned",
           );
-        } catch (spawnError) {
+        } catch (spawnError_) {
+          // Record the failure and surface it in the response. Do NOT fall back
+          // to a fake sessionId — an orphan worker record pointing at no real
+          // agent would queue messages forever with nothing to drain them.
+          spawnError =
+            spawnError_ instanceof Error ? spawnError_.message : "Failed to spawn worker agent";
           this.context.sessionLogger.error(
-            { err: spawnError, label: request.label },
+            { err: spawnError_, label: request.label },
             "Failed to spawn worker agent",
           );
+          this.context.emit({
+            type: "team/create-worker/response",
+            payload: {
+              requestId: request.requestId,
+              worker: null,
+              softLimitExceeded: false,
+              queuedMessageId: null,
+              error: spawnError,
+            },
+          });
+          return;
         }
       }
 
@@ -364,6 +448,21 @@ export class TeamHandler implements DisposableHandler {
     request: Extract<SessionInboundMessage, { type: "team/archive-worker" }>,
   ): Promise<void> {
     try {
+      // Terminate the live agent session before archiving so the worker process
+      // does not keep running after the user removes it from the team.
+      if (this.context.terminateWorker) {
+        const sessionId = this.context.teamManager.getWorkerSessionId(request.workerId);
+        if (sessionId) {
+          try {
+            await this.context.terminateWorker(sessionId);
+          } catch (err) {
+            this.context.sessionLogger.error(
+              { err, workerId: request.workerId },
+              "Failed to terminate worker agent on archive",
+            );
+          }
+        }
+      }
       const worker = this.context.teamManager.archiveWorker(request.workerId, Date.now());
       this.context.emit({
         type: "team/archive-worker/response",
