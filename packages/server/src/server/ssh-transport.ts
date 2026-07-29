@@ -40,10 +40,75 @@ export interface SSHSpawnOptions {
 // ── SSH command building ───────────────────────────────────────────────────
 
 /**
+ * SSH options that are safe to pass through `-o key=value`. Anything outside
+ * this allowlist is rejected to prevent option-injection gadgets — in particular
+ * `ProxyCommand`/`RemoteCommand`/`LocalCommand` run arbitrary local commands,
+ * `PKCS11Provider` loads a native shared library into the ssh client, and
+ * `ControlMaster`/`ControlPath` allow connection hijacking.
+ */
+const SAFE_SSH_OPTION_KEYS = new Set([
+  "BatchMode",
+  "ConnectTimeout",
+  "ServerAliveInterval",
+  "ServerAliveCountMax",
+  "Compression",
+  "LogLevel",
+  "UserKnownHostsFile",
+]);
+
+/**
+ * Option key prefixes that must never be weakened by a caller. Host-key
+ * verification defaults are forced below; letting a peer disable them would
+ * allow a man-in-the-middle on the NDJSON ACP channel.
+ */
+const FORBIDDEN_SSH_OPTION_KEYS = new Set([
+  "StrictHostKeyChecking",
+  "UserKnownHostsFile",
+  "ProxyCommand",
+  "ProxyJump",
+  "RemoteCommand",
+  "LocalCommand",
+  "PermitLocalCommand",
+  "PKCS11Provider",
+  "ControlMaster",
+  "ControlPath",
+  "ControlPersist",
+  "IdentityAgent",
+  "CertificateFile",
+  "SendEnv",
+  "SetEnv",
+]);
+
+function parseOptionKey(opt: string): string {
+  // -o key=value → key; reject anything that is not a simple key=value pair.
+  const eq = opt.indexOf("=");
+  if (eq <= 0) {
+    throw new Error(`Invalid SSH option (expected key=value): "${opt}"`);
+  }
+  return opt.slice(0, eq).trim();
+}
+
+function assertSafeSSHOptions(sshOptions: string[] | undefined): void {
+  if (!sshOptions) return;
+  for (const opt of sshOptions) {
+    const key = parseOptionKey(opt);
+    if (FORBIDDEN_SSH_OPTION_KEYS.has(key)) {
+      throw new Error(`Forbidden SSH option "${key}" is not allowed via sshOptions`);
+    }
+    if (!SAFE_SSH_OPTION_KEYS.has(key)) {
+      throw new Error(`Unknown SSH option "${key}" is not in the safe allowlist`);
+    }
+  }
+}
+
+/**
  * Build the SSH command arguments for spawning a remote process.
  * Exported for testing — the actual spawn is done by {@link createSSHSpawner}.
  */
 export function buildSSHArgs(config: SSHConnectionConfig, options: SSHSpawnOptions): string[] {
+  // Reject dangerous caller-supplied options before anything reaches ssh.
+  assertSafeSSHOptions(config.sshOptions);
+
   const args: string[] = [];
 
   // Port
@@ -56,7 +121,7 @@ export function buildSSHArgs(config: SSHConnectionConfig, options: SSHSpawnOptio
     args.push("-i", config.identityFile);
   }
 
-  // Additional SSH options
+  // Caller-supplied safe SSH options (validated above).
   if (config.sshOptions) {
     for (const opt of config.sshOptions) {
       args.push("-o", opt);
@@ -65,6 +130,13 @@ export function buildSSHArgs(config: SSHConnectionConfig, options: SSHSpawnOptio
 
   // Disable pseudo-terminal (we need raw stdio for NDJSON)
   args.push("-T");
+
+  // Hardened host-key verification defaults. We set these AFTER caller options
+  // so they cannot be weakened — assertSafeSSHOptions already rejected any
+  // caller attempt to set these keys. accept-new trusts keys on first sight
+  // but refuses to connect if a known key changes (MITM detection).
+  args.push("-o", "StrictHostKeyChecking=accept-new");
+  args.push("-o", "UserKnownHostsFile=~/.ssh/known_hosts");
 
   // Batch mode (no interactive prompts)
   args.push("-o", "BatchMode=yes");
@@ -90,6 +162,11 @@ export function buildSSHArgs(config: SSHConnectionConfig, options: SSHSpawnOptio
       // Validate key is a safe shell variable name (prevent command injection)
       if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) {
         throw new Error(`Invalid environment variable name: "${key}"`);
+      }
+      // Newlines in env values would break out of the quoted region in the
+      // `&&`-chained remote command and inject a separate command.
+      if (value.includes("\n") || value.includes("\0")) {
+        throw new Error(`SSH env value for "${key}" must not contain newlines`);
       }
       commandParts.push(`export ${key}=${shellQuote(value)}`);
     }
@@ -130,8 +207,16 @@ export function createSSHSpawner(
 
     return spawn("ssh", sshArgs, {
       stdio: ["pipe", "pipe", "pipe"],
-      // Don't inherit local env — remote env is set via the command
-      env: { ...process.env },
+      // Pass only the minimal env ssh needs to locate binaries and keys; do NOT
+      // spread process.env — that would leak daemon secrets (API keys, daemon
+      // password) into the ssh child process environment.
+      env: {
+        PATH: process.env.PATH ?? "",
+        HOME: process.env.HOME ?? "",
+        LANG: process.env.LANG ?? "",
+        // ssh reads GIT_SSH_* / TERM for its own behavior, not for the remote.
+        TERM: process.env.TERM ?? "dumb",
+      },
     });
   };
 }
@@ -185,6 +270,13 @@ export async function testSSHConnection(
 // ── Internals ──────────────────────────────────────────────────────────────
 
 function shellQuote(value: string): string {
-  if (/^[a-zA-Z0-9._/-]+$/.test(value)) return value;
+  // Values starting with `-` would be parsed as an option by the remote shell
+  // (e.g. `cd -rf /`); force-quoting them keeps them positional. Newlines/NUL
+  // would break out of the quoted region in the `&&`-chained remote command.
+  if (value.length === 0 || value.startsWith("-") || value.includes("\n") || value.includes("\0")) {
+    // Empty string and control-char values must be quoted to be safe.
+    return `'${value.replace(/'/g, "'\\''")}'`;
+  }
+  if (/^[a-zA-Z0-9._/]+$/.test(value)) return value;
   return `'${value.replace(/'/g, "'\\''")}'`;
 }

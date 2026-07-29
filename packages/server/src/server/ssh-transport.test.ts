@@ -37,13 +37,45 @@ describe("buildSSHArgs", () => {
     expect(args).toContain("~/.ssh/id_ed25519");
   });
 
-  test("includes additional SSH options", () => {
+  test("rejects dangerous sshOptions (ProxyCommand, StrictHostKeyChecking, PKCS11Provider)", () => {
+    expect(() =>
+      buildSSHArgs({ host: "srv", sshOptions: ["ProxyCommand=evil"] }, { remoteCommand: "ls" }),
+    ).toThrow(/Forbidden SSH option/);
+    expect(() =>
+      buildSSHArgs(
+        { host: "srv", sshOptions: ["StrictHostKeyChecking=no"] },
+        { remoteCommand: "ls" },
+      ),
+    ).toThrow(/Forbidden SSH option/);
+    expect(() =>
+      buildSSHArgs(
+        { host: "srv", sshOptions: ["PKCS11Provider=/tmp/evil.so"] },
+        { remoteCommand: "ls" },
+      ),
+    ).toThrow(/Forbidden SSH option/);
+  });
+
+  test("rejects unknown sshOptions not in the safe allowlist", () => {
+    expect(() =>
+      buildSSHArgs({ host: "srv", sshOptions: ["LocalCommand=rm -rf /"] }, { remoteCommand: "ls" }),
+    ).toThrow(/Forbidden SSH option/);
+    expect(() =>
+      buildSSHArgs({ host: "srv", sshOptions: ["BogusOption=yes"] }, { remoteCommand: "ls" }),
+    ).toThrow(/Unknown SSH option/);
+  });
+
+  test("accepts safe allowlisted sshOptions", () => {
     const args = buildSSHArgs(
-      { host: "srv", sshOptions: ["StrictHostKeyChecking=no"] },
+      { host: "srv", sshOptions: ["Compression=yes"] },
       { remoteCommand: "ls" },
     );
-    expect(args).toContain("-o");
-    expect(args).toContain("StrictHostKeyChecking=no");
+    expect(args).toContain("Compression=yes");
+  });
+
+  test("forces hardened host-key verification defaults", () => {
+    const args = buildSSHArgs(minimal, { remoteCommand: "ls" });
+    expect(args).toContain("StrictHostKeyChecking=accept-new");
+    expect(args).toContain("UserKnownHostsFile=~/.ssh/known_hosts");
   });
 
   test("includes BatchMode and ConnectTimeout", () => {
@@ -89,6 +121,22 @@ describe("buildSSHArgs", () => {
     expect(remoteCmd).toContain("'hello world'");
   });
 
+  test("rejects newlines in remoteEnv values", () => {
+    expect(() =>
+      buildSSHArgs(
+        { host: "srv" },
+        { remoteCommand: "agent", remoteEnv: { EVIL: "line1\nline2" } },
+      ),
+    ).toThrow(/newlines/);
+  });
+
+  test("quotes remoteCwd starting with - so it is not parsed as an option", () => {
+    const args = buildSSHArgs(minimal, { remoteCommand: "cd", remoteCwd: "-rf /" });
+    const remoteCmd = args[args.length - 1];
+    // The cwd must be single-quoted, not passed bare as `cd -rf /`.
+    expect(remoteCmd).toContain("cd '-rf /'");
+  });
+
   test("chains cd + env + command with &&", () => {
     const args = buildSSHArgs(minimal, {
       remoteCommand: "claude",
@@ -97,6 +145,8 @@ describe("buildSSHArgs", () => {
       remoteEnv: { KEY: "val" },
     });
     const remoteCmd = args[args.length - 1];
-    expect(remoteCmd).toBe("cd /app && export KEY=val && claude --acp");
+    // --acp starts with `-` so it is quoted to stay positional; the remote shell
+    // strips the quotes and claude still receives `--acp`.
+    expect(remoteCmd).toBe("cd /app && export KEY=val && claude '--acp'");
   });
 });
