@@ -14,7 +14,9 @@ export const LearnRunStatusSchema = z.enum([
 ]);
 
 export const LearnProposalSchema = z.object({
-  filename: z.string(),
+  // Bound the length so a hallucinating distill agent cannot emit a huge path
+  // string; path-traversal (`..`) is rejected by deriveSkillName at staging time.
+  filename: z.string().max(256),
   content: z.string(),
   fingerprint: z.string(),
 });

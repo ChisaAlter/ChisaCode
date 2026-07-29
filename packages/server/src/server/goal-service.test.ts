@@ -151,4 +151,11 @@ describe("TERMINAL_GOAL_STATUSES", () => {
     expect(TERMINAL_GOAL_STATUSES.has("active")).toBe(false);
     expect(TERMINAL_GOAL_STATUSES.has("paused")).toBe(false);
   });
+
+  test("includes failed and cancelled terminal states", () => {
+    // Agent crashes and user cancellations must be terminal so the continuation
+    // loop stops and listGoals does not resurrect them.
+    expect(TERMINAL_GOAL_STATUSES.has("failed")).toBe(true);
+    expect(TERMINAL_GOAL_STATUSES.has("cancelled")).toBe(true);
+  });
 });

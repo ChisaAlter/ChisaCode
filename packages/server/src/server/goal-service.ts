@@ -11,11 +11,20 @@
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
-export type GoalStatus = "active" | "paused" | "blocked" | "complete" | "budgetLimited";
+export type GoalStatus =
+  | "active"
+  | "paused"
+  | "blocked"
+  | "complete"
+  | "budgetLimited"
+  | "failed"
+  | "cancelled";
 
 export const TERMINAL_GOAL_STATUSES: ReadonlySet<GoalStatus> = new Set([
   "complete",
   "budgetLimited",
+  "failed",
+  "cancelled",
 ]);
 
 /** Safety guardrail limits. All nullable (null = no limit). */

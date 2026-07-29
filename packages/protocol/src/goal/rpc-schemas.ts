@@ -8,6 +8,13 @@ export const GoalStatusSchema = z.enum([
   "blocked",
   "complete",
   "budgetLimited",
+  // Terminal failure/cancellation states. A goal whose agent crashed or was
+  // cancelled by the user now has a dedicated literal instead of being
+  // mislabeled as "blocked" or "paused". Additive over the prior enum, so old
+  // clients that switch on status simply get an unknown branch they must
+  // default-handle (no parse failure — zod enum widen is forward-compatible).
+  "failed",
+  "cancelled",
 ]);
 
 export const GoalLimitsSchema = z.object({

@@ -568,6 +568,12 @@ export class AgentManager {
       deletePreviousStatus: (agentId) => {
         this.previousStatuses.delete(agentId);
       },
+      deleteGoal: (agentId) => {
+        // Clear the goal state when the agent is torn down so a long-running
+        // daemon does not accumulate GoalState entries for archived agents and
+        // listGoals() does not return goals for agents that no longer exist.
+        this.goals.delete(agentId);
+      },
       emitState: (agent, emitOptions) => this.emitState(agent, emitOptions),
       foregroundRuns: this.foregroundRuns,
       getAgent: (agentId) => this.requireSessionAgent(agentId),
@@ -1062,7 +1068,9 @@ export class AgentManager {
     if (!goal) return null;
     const cancelled: GoalState = {
       ...goal,
-      status: "paused",
+      // Use the dedicated "cancelled" terminal state so UI logic can branch on
+      // user-initiated cancellation distinct from a judge pause or a budget limit.
+      status: "cancelled",
       lastReason: "Cancelled by user",
       updatedAt: Date.now(),
     };

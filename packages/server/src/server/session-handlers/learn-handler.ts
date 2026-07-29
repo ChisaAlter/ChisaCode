@@ -376,9 +376,27 @@ function serializeRun(run: LearnRun) {
   };
 }
 
-/** Derive a valid skill directory name from a proposed filename. */
-function deriveSkillName(filename: string): string {
+/**
+ * Derive a valid skill directory name from a proposed filename.
+ *
+ * Rejects path-traversal inputs (`..`, `/`, `\`) BEFORE the staging write so an
+ * LLM-hallucinated filename like `"..md"` cannot escape the temp staging dir
+ * via `path.join(stagingDir, "..")`. Mirrors the `validSkillName` rules used by
+ * the skill installer, but applied at the staging boundary (the installer's
+ * own check runs only AFTER the file has already been written).
+ */
+export function deriveSkillName(filename: string): string {
   const base = filename.replace(/\\/g, "/").split("/").pop() ?? filename;
   const stripped = base.replace(/\.md$/i, "").trim();
-  return stripped.length > 0 ? stripped : "learned-skill";
+  const name = stripped.length > 0 ? stripped : "learned-skill";
+  if (
+    name.length === 0 ||
+    name === "." ||
+    name === ".." ||
+    name.includes("/") ||
+    name.includes("\\")
+  ) {
+    throw new Error(`Invalid skill directory name derived from filename: "${filename}"`);
+  }
+  return name;
 }
