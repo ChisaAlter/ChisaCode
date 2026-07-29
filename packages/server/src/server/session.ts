@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { TTLCache } from "@isaacs/ttlcache";
 import pMemoize from "p-memoize";
+import { z } from "zod/v3";
 
 import type { ClientCapability } from "@chisacode/protocol/client-capabilities";
 import {
@@ -15,6 +16,7 @@ import {
   type WorkspaceSetupSnapshot,
   type WorkspaceDescriptorPayload,
 } from "./messages.js";
+import { detectMigrations } from "../utils/config-migration.js";
 import type { TerminalManager } from "../terminal/terminal-manager.js";
 import { TerminalSessionController } from "../terminal/terminal-session-controller.js";
 import { type TerminalStreamFrame } from "@chisacode/protocol/binary-frames/index";
@@ -43,7 +45,12 @@ import {
   appendTimelineItemIfAgentKnown,
   emitLiveTimelineItemIfAgentKnown,
 } from "./agent/timeline-append.js";
-import type { StructuredGenerationDaemonConfig } from "./agent/structured-generation-providers.js";
+import {
+  resolveStructuredGenerationProviders,
+  type StructuredGenerationDaemonConfig,
+} from "./agent/structured-generation-providers.js";
+import { generateStructuredAgentResponseWithFallback } from "./agent/agent-response-loop.js";
+import type { GoalCompletionJudge } from "./goal-service.js";
 import type { AgentSessionConfig } from "./agent/agent-sdk-types.js";
 import type { StoredAgentRecord } from "./agent/agent-storage.js";
 import type { AgentStorage } from "./agent/agent-storage.js";
@@ -106,6 +113,14 @@ import {
   TerminalScriptHandler,
   VoiceDictationHandler,
   WorkspaceProjectHandler,
+  GoalHandler,
+  TeamHandler,
+  TeamManager,
+  ProjectContextHandler,
+  SnapshotHandler,
+  MigrationHandler,
+  LearnHandler,
+  LearnManager,
   type SessionContext,
 } from "./session-handlers/index.js";
 import { summarizeUntrustedLogIdentifier } from "./log-metadata.js";
@@ -276,6 +291,8 @@ export class Session {
   private readonly terminalController: TerminalSessionController;
   private inflightRequests = 0;
   private peakInflightRequests = 0;
+  /** Agents whose team message queue is currently being drained (re-entrancy guard). */
+  private readonly teamQueueFlushInProgress = new Set<string>();
   private readonly availableEditorTargetsCache = new TTLCache<
     string,
     EditorTargetDescriptorPayload[]
@@ -315,6 +332,12 @@ export class Session {
   private readonly agentLifecycleHandler: AgentLifecycleHandler;
   private readonly generativeUiHandler: GenerativeUiHandler;
   private readonly voiceDictationHandler: VoiceDictationHandler;
+  private readonly goalHandler: GoalHandler;
+  private readonly teamHandler: TeamHandler;
+  private readonly projectContextHandler: ProjectContextHandler;
+  private readonly snapshotHandler: SnapshotHandler;
+  private readonly migrationHandler: MigrationHandler;
+  private readonly learnHandler: LearnHandler;
 
   constructor(options: SessionOptions) {
     const {
@@ -449,6 +472,8 @@ export class Session {
       readDaemonConfig: () => this.readStructuredGenerationDaemonConfig(),
       getCurrentSelection: (cwd) => this.getFocusedAgentSelectionForCwd(cwd),
     });
+    // LLM judge that lets the goal continuation loop stop when the objective is met.
+    this.agentManager.setGoalCompletionJudge(this.buildGoalCompletionJudge());
     this.workspaceGitObserverController = new WorkspaceGitObserverController({
       workspaceGitService: this.workspaceGitService,
       sessionLogger: this.sessionLogger,
@@ -509,6 +534,133 @@ export class Session {
       this.agentDirectoryHandler,
     );
     this.generativeUiHandler = new GenerativeUiHandler(sessionContext);
+
+    // Cindy-module handlers (goal, team, context, snapshot, migration, learn).
+    this.goalHandler = new GoalHandler({
+      sessionLogger: this.sessionLogger,
+      goalStore: this.agentManager,
+      emit: (message) => this.emit(message as SessionOutboundMessage),
+    });
+    const teamManager = new TeamManager();
+    this.teamHandler = new TeamHandler({
+      sessionLogger: this.sessionLogger,
+      teamManager,
+      sessionId: this.sessionId,
+      emit: (message) => this.emit(message as SessionOutboundMessage),
+      spawnWorker: async (workerOptions) => {
+        // Resolve cwd from the lead agent (first available agent) instead of process.cwd()
+        const resolvedCwd =
+          this.agentManager.listAgents().find((a) => a.lifecycle !== "closed")?.cwd ??
+          workerOptions.cwd;
+        const agent = await this.agentManager.createAgent(
+          {
+            provider: (workerOptions.provider ?? "claude") as never,
+            model: workerOptions.model ?? undefined,
+            cwd: resolvedCwd,
+          },
+          undefined,
+          {
+            labels: {
+              "chisacode/team-role": workerOptions.role,
+              "chisacode/team-label": workerOptions.label,
+            },
+            initialPrompt: workerOptions.initialPrompt,
+          },
+        );
+        return agent.id;
+      },
+      sendToAgent: (agentId, message) => this.deliverToTeamAgent(agentId, message),
+    });
+    this.projectContextHandler = new ProjectContextHandler({
+      sessionLogger: this.sessionLogger,
+      chisacodeHome: this.chisacodeHome,
+      emit: (message) => this.emit(message as SessionOutboundMessage),
+    });
+    this.snapshotHandler = new SnapshotHandler({
+      sessionLogger: this.sessionLogger,
+      emit: (message) => this.emit(message as SessionOutboundMessage),
+    });
+    this.migrationHandler = new MigrationHandler({
+      sessionLogger: this.sessionLogger,
+      emit: (message) => this.emit(message as SessionOutboundMessage),
+    });
+    // Auto-detect config migrations when provider config changes
+    this.daemonConfigStore.onFieldChange("providers", () => {
+      try {
+        const cwd = this.agentManager.listAgents().find((a) => a.lifecycle !== "closed")?.cwd;
+        if (!cwd) return;
+        for (const target of ["claude-code", "codex"] as const) {
+          const result = detectMigrations(cwd, target);
+          if (result.items.length > 0) {
+            this.emit({
+              type: "migration/available",
+              payload: { items: result.items, workDir: cwd, targetAgent: target },
+            });
+          }
+        }
+      } catch {
+        // Non-fatal — migration detection is best-effort
+      }
+    });
+    const learnManager = new LearnManager();
+    this.learnHandler = new LearnHandler({
+      sessionLogger: this.sessionLogger,
+      learnManager,
+      emit: (message) => this.emit(message as SessionOutboundMessage),
+      distill: async ({ diff, files, context }) => {
+        const prompt = [
+          "You are a skill extraction agent. Analyze the following code changes and extract reusable rules or skills.",
+          "Return a JSON array of proposals, each with: filename (suggested .md filename), content (markdown with frontmatter), fingerprint (short hash).",
+          "",
+          `Files changed: ${files.join(", ")}`,
+          context ? `Context: ${context}` : "",
+          "",
+          "```diff",
+          diff,
+          "```",
+          "",
+          "Respond with ONLY the JSON array, no other text.",
+        ]
+          .filter(Boolean)
+          .join("\n");
+        const resolvedCwd =
+          this.agentManager.listAgents().find((a) => a.lifecycle !== "closed")?.cwd ??
+          process.cwd();
+        const agent = await this.agentManager.createAgent(
+          { provider: "claude" as never, cwd: resolvedCwd },
+          undefined,
+          { labels: { "chisacode/learn": "distill" } },
+        );
+        // Run the prompt once and extract proposals from the agent's output.
+        const events = this.agentManager.streamAgent(agent.id, prompt);
+        let lastText = "";
+        for await (const event of events) {
+          if (event.type === "timeline" && event.item.type === "assistant_message") {
+            lastText = event.item.text;
+          }
+        }
+        try {
+          const jsonMatch = lastText.match(/\[[\s\S]*\]/);
+          if (jsonMatch) {
+            const parsed: unknown = JSON.parse(jsonMatch[0]);
+            if (Array.isArray(parsed)) {
+              return parsed.filter(
+                (item): item is { filename: string; content: string; fingerprint: string } =>
+                  typeof item === "object" &&
+                  item !== null &&
+                  typeof (item as Record<string, unknown>).filename === "string" &&
+                  typeof (item as Record<string, unknown>).content === "string" &&
+                  typeof (item as Record<string, unknown>).fingerprint === "string",
+              );
+            }
+          }
+        } catch {
+          // Fall through to empty proposals
+        }
+        return [];
+      },
+    });
+
     this.agentEventForwarder = new AgentEventForwarder({
       agentManager: this.agentManager,
       sessionLogger: this.sessionLogger,
@@ -748,6 +900,56 @@ export class Session {
     return readStructuredGenerationDaemonConfigFunc(this.daemonConfigStore);
   }
 
+  /** Max chars of the agent's recent output fed to the goal completion judge. */
+  private static readonly GOAL_JUDGE_OUTPUT_BUDGET = 8000;
+
+  /**
+   * Build the goal completion judge. Uses the shared structured-generation
+   * policy (same path as commit-message / PR generation) to ask whether the
+   * objective is met. Returns `null` on any failure so the continuation loop
+   * falls back to its guardrails instead of stalling.
+   */
+  private buildGoalCompletionJudge(): GoalCompletionJudge {
+    return async ({ agentId, objective, recentOutput }) => {
+      const cwd = this.agentManager.getAgent(agentId)?.cwd;
+      if (!cwd) return null;
+      const boundedOutput =
+        recentOutput.length > Session.GOAL_JUDGE_OUTPUT_BUDGET
+          ? `${recentOutput.slice(-Session.GOAL_JUDGE_OUTPUT_BUDGET)}`
+          : recentOutput;
+      const prompt = [
+        "You are judging whether an AI coding agent has fully met its objective.",
+        `Objective: ${objective}`,
+        "",
+        "The agent's most recent output:",
+        boundedOutput.length > 0 ? boundedOutput : "(no output)",
+        "",
+        "Based only on this, decide whether the objective is completely satisfied.",
+        'Return JSON only: { "complete": boolean, "reason": string }.',
+      ].join("\n");
+      try {
+        return await generateStructuredAgentResponseWithFallback({
+          manager: this.agentManager,
+          cwd,
+          prompt,
+          schema: z.object({ complete: z.boolean(), reason: z.string() }),
+          schemaName: "GoalCompletion",
+          maxRetries: 2,
+          providers: await resolveStructuredGenerationProviders({
+            cwd,
+            providerSnapshotManager: this.providerSnapshotManager,
+            daemonConfig: this.readStructuredGenerationDaemonConfig(),
+            currentSelection: this.getFocusedAgentSelectionForCwd(cwd),
+          }),
+          persistSession: false,
+          agentConfigOverrides: { title: "Goal judge", internal: true },
+        });
+      } catch {
+        return null;
+      }
+    };
+  }
+
   /** Get current runtime metrics (inflight requests, peak, subscriptions). */
   public getRuntimeMetrics(): SessionRuntimeMetrics {
     const terminalMetrics = this.terminalController.getMetrics();
@@ -884,6 +1086,32 @@ export class Session {
 
   private async forwardAgentUpdate(agent: ManagedAgent): Promise<void> {
     await this.agentDirectoryHandler.publishAgentUpdate(agent);
+    // When a team worker agent goes idle, deliver any buffered lead messages.
+    if (agent.lifecycle === "idle") {
+      this.drainTeamWorkerQueue(agent.id);
+    }
+  }
+
+  /** Send a message to a team worker agent, draining its foreground stream. */
+  private async deliverToTeamAgent(agentId: string, message: string): Promise<void> {
+    const events = this.agentManager.streamAgent(agentId, message);
+    for await (const _event of events) {
+      // Drain — events are dispatched internally
+    }
+  }
+
+  /** Fire-and-forget drain of a team worker's queued messages when it goes idle. */
+  private drainTeamWorkerQueue(agentId: string): void {
+    if (this.teamQueueFlushInProgress.has(agentId)) return;
+    this.teamQueueFlushInProgress.add(agentId);
+    void this.teamHandler
+      .flushWorkerQueueByAgent(agentId, (content) => this.deliverToTeamAgent(agentId, content))
+      .catch((error) => {
+        this.sessionLogger.warn({ err: error, agentId }, "Team queue drain failed");
+      })
+      .finally(() => {
+        this.teamQueueFlushInProgress.delete(agentId);
+      });
   }
   /**
    * Main entry point for processing session messages
@@ -965,6 +1193,7 @@ export class Session {
       this.dispatchProviderMessage(msg) ??
       this.dispatchTerminalMessage(msg) ??
       this.dispatchChatScheduleLoopMessage(msg) ??
+      this.dispatchCindyMessage(msg) ??
       this.dispatchMiscMessage(msg);
     if (promise) await promise;
   }
@@ -1126,6 +1355,116 @@ export class Session {
         return this.chatScheduleLoopHandler.handleScheduleRunOnceRequest(msg);
       case "schedule/update":
         return this.chatScheduleLoopHandler.handleScheduleUpdateRequest(msg);
+      default:
+        return undefined;
+    }
+  }
+
+  private dispatchCindyMessage(msg: SessionInboundMessage): Promise<void> | undefined {
+    if (msg.type.startsWith("goal/")) return this.dispatchGoalMessage(msg);
+    if (msg.type.startsWith("team/")) return this.dispatchTeamMessage(msg);
+    if (msg.type.startsWith("context/")) return this.dispatchContextMessage(msg);
+    if (msg.type.startsWith("snapshot/")) return this.dispatchSnapshotMessage(msg);
+    if (msg.type.startsWith("migration/")) return this.dispatchMigrationMessage(msg);
+    if (msg.type.startsWith("learn/")) return this.dispatchLearnMessage(msg);
+    return undefined;
+  }
+
+  private dispatchGoalMessage(msg: SessionInboundMessage): Promise<void> | undefined {
+    switch (msg.type) {
+      case "goal/set":
+        return this.goalHandler.handleGoalSetRequest(msg);
+      case "goal/cancel":
+        return this.goalHandler.handleGoalCancelRequest(msg);
+      case "goal/inspect":
+        return this.goalHandler.handleGoalInspectRequest(msg);
+      case "goal/list":
+        return this.goalHandler.handleGoalListRequest(msg);
+      default:
+        return undefined;
+    }
+  }
+
+  private dispatchTeamMessage(msg: SessionInboundMessage): Promise<void> | undefined {
+    switch (msg.type) {
+      case "team/start":
+        return this.teamHandler.handleTeamStartRequest(msg);
+      case "team/end":
+        return this.teamHandler.handleTeamEndRequest(msg);
+      case "team/create-worker":
+        return this.teamHandler.handleTeamCreateWorkerRequest(msg);
+      case "team/list-workers":
+        return this.teamHandler.handleTeamListWorkersRequest(msg);
+      case "team/send-to-worker":
+        return this.teamHandler.handleTeamSendToWorkerRequest(msg);
+      case "team/list-queue":
+        return this.teamHandler.handleTeamListQueueRequest(msg);
+      case "team/cancel-message":
+        return this.teamHandler.handleTeamCancelMessageRequest(msg);
+      case "team/archive-worker":
+        return this.teamHandler.handleTeamArchiveWorkerRequest(msg);
+      case "team/switch-focus":
+        return this.teamHandler.handleTeamSwitchFocusRequest(msg);
+      case "team/worker-status":
+        return this.teamHandler.handleTeamWorkerStatusRequest(msg);
+      default:
+        return undefined;
+    }
+  }
+
+  private dispatchContextMessage(msg: SessionInboundMessage): Promise<void> | undefined {
+    switch (msg.type) {
+      case "context/build":
+        return this.projectContextHandler.handleContextBuildRequest(msg);
+      case "context/inspect":
+        return this.projectContextHandler.handleContextInspectRequest(msg);
+      case "context/invalidate":
+        return this.projectContextHandler.handleContextInvalidateRequest(msg);
+      default:
+        return undefined;
+    }
+  }
+
+  private dispatchSnapshotMessage(msg: SessionInboundMessage): Promise<void> | undefined {
+    switch (msg.type) {
+      case "snapshot/create":
+        return this.snapshotHandler.handleSnapshotCreateRequest(msg);
+      case "snapshot/list":
+        return this.snapshotHandler.handleSnapshotListRequest(msg);
+      case "snapshot/rewind":
+        return this.snapshotHandler.handleSnapshotRewindRequest(msg);
+      case "snapshot/status":
+        return this.snapshotHandler.handleSnapshotStatusRequest(msg);
+      default:
+        return undefined;
+    }
+  }
+
+  private dispatchMigrationMessage(msg: SessionInboundMessage): Promise<void> | undefined {
+    switch (msg.type) {
+      case "migration/detect":
+        return this.migrationHandler.handleMigrationDetectRequest(msg);
+      case "migration/apply":
+        return this.migrationHandler.handleMigrationApplyRequest(msg);
+      default:
+        return undefined;
+    }
+  }
+
+  private dispatchLearnMessage(msg: SessionInboundMessage): Promise<void> | undefined {
+    switch (msg.type) {
+      case "learn/start":
+        return this.learnHandler.handleLearnStartRequest(msg);
+      case "learn/list":
+        return this.learnHandler.handleLearnListRequest(msg);
+      case "learn/inspect":
+        return this.learnHandler.handleLearnInspectRequest(msg);
+      case "learn/apply":
+        return this.learnHandler.handleLearnApplyRequest(msg);
+      case "learn/discard":
+        return this.learnHandler.handleLearnDiscardRequest(msg);
+      case "learn/cancel":
+        return this.learnHandler.handleLearnCancelRequest(msg);
       default:
         return undefined;
     }

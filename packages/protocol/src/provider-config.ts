@@ -62,6 +62,16 @@ export const ProviderProfileModelSchema = z
   })
   .strict();
 
+export const ProviderSSHConfigSchema = z
+  .object({
+    host: z.string().min(1),
+    user: z.string().optional(),
+    port: z.number().int().positive().optional(),
+    identityFile: z.string().optional(),
+    sshOptions: z.array(z.string()).optional(),
+  })
+  .strict();
+
 export const ProviderOverrideSchema = z
   .object({
     extends: z.string().optional(),
@@ -74,6 +84,7 @@ export const ProviderOverrideSchema = z
     disallowedTools: z.array(z.string()).optional(),
     enabled: z.boolean().optional(),
     order: z.number().optional(),
+    ssh: ProviderSSHConfigSchema.optional(),
   })
   .strict();
 

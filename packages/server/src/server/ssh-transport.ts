@@ -9,6 +9,7 @@
  * Design adapted from Cindy's maker-remote-ssh + maker-cc-manager (Apache-2.0).
  */
 import { type ChildProcess, spawn } from "node:child_process";
+import type { SpawnProcessOptions } from "../utils/spawn.js";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -118,21 +119,13 @@ export function buildSSHArgs(config: SSHConnectionConfig, options: SSHSpawnOptio
  */
 export function createSSHSpawner(
   config: SSHConnectionConfig,
-): (
-  command: string,
-  args: string[],
-  opts: { cwd?: string; env?: Record<string, string> },
-) => ChildProcess {
-  return (
-    command: string,
-    args: string[],
-    opts?: { cwd?: string; env?: Record<string, string> },
-  ) => {
+): (command: string, args: string[], opts: SpawnProcessOptions) => ChildProcess {
+  return (command: string, args: string[], opts?: SpawnProcessOptions) => {
     const sshArgs = buildSSHArgs(config, {
       remoteCommand: command,
       remoteArgs: args,
-      remoteCwd: opts?.cwd,
-      remoteEnv: opts?.env,
+      remoteCwd: opts?.cwd as string | undefined,
+      remoteEnv: opts?.env as Record<string, string> | undefined,
     });
 
     return spawn("ssh", sshArgs, {

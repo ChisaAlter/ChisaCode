@@ -27,6 +27,15 @@ interface AgentTurnEventControllerOptions {
   timeline: AgentTimelineController;
   trackBackgroundTask(task: Promise<void>): void;
   usageStore?: UsageStore;
+  /** Called at turn start/end to create git snapshots for file-edit protection. */
+  snapshotOnTurn?: (cwd: string, kind: "before-edit" | "after-edit", agentId: string) => void;
+  /** Called after turn completion to evaluate goal continuation. */
+  onGoalTurnCompleted?: (
+    agentId: string,
+    cwd: string,
+    tokensUsed: number,
+    usedTools: boolean,
+  ) => void;
 }
 
 /** Owns turn lifecycle event projection, usage recording, and terminal error messages. */
@@ -57,6 +66,16 @@ export class AgentTurnEventController {
       this.recordUsageEvent(agent, event, eventTurnId);
     }
     agent.lastError = undefined;
+    // Auto-snapshot after agent edits (no-op if no changes since last snapshot)
+    if (!fromHistory && this.options.snapshotOnTurn && agent.cwd) {
+      this.options.snapshotOnTurn(agent.cwd, "after-edit", agent.id);
+    }
+    // Goal continuation: evaluate whether to auto-continue after this turn
+    if (!fromHistory && this.options.onGoalTurnCompleted && agent.cwd) {
+      const tokensUsed = (event.usage?.inputTokens ?? 0) + (event.usage?.outputTokens ?? 0);
+      const usedTools = agent.currentTurnToolCallCount > 0;
+      this.options.onGoalTurnCompleted(agent.id, agent.cwd, tokensUsed, usedTools);
+    }
     if (!isForegroundEvent && agent.lifecycle !== "idle" && !agent.pendingReplacement) {
       (agent as ActiveManagedAgent).lifecycle = "idle";
       this.options.emitState(agent);
@@ -150,9 +169,15 @@ export class AgentTurnEventController {
       },
       "agent.manager.turn.started",
     );
+    // Reset per-turn tool call counter for goal evaluation
+    agent.currentTurnToolCallCount = 0;
     if (!isForegroundEvent) {
       agent.lifecycle = "running";
       this.options.emitState(agent);
+    }
+    // Auto-snapshot before agent edits (no-op if no changes since last snapshot)
+    if (this.options.snapshotOnTurn && agent.cwd) {
+      this.options.snapshotOnTurn(agent.cwd, "before-edit", agent.id);
     }
   }
 

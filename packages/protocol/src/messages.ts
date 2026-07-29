@@ -36,6 +36,7 @@ import {
   DaemonStatusPayloadSchemas,
 } from "./daemon/messages.js";
 import { UsageInboundMessageSchemas, UsageOutboundMessageSchemas } from "./usage/messages.js";
+import { CindyInboundMessageSchemas, CindyOutboundMessageSchemas } from "./cindy/messages.js";
 import {
   ServerVoiceCapabilitiesSchema,
   VoiceInboundMessageSchemas,
@@ -58,6 +59,7 @@ export * from "./usage/messages.js";
 export * from "./voice/messages.js";
 export * from "./checkout/messages.js";
 export * from "./workspace/messages.js";
+export * from "./cindy/messages.js";
 import {
   ChisaCodeConfigRawSchema,
   ChisaCodeLifecycleCommandRawSchema,
@@ -168,6 +170,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   RegisterPushTokenMessageSchema,
   ...TerminalInboundMessageSchemas,
   ...AutomationInboundMessageSchemas,
+  ...CindyInboundMessageSchemas,
   GenerativeUiActionRequestSchema,
   // COMPAT(generativeUiActionFlatRpc): added in v0.1.101; remove after 2027-01-11 once the client floor is >= v0.1.101.
   LegacyGenerativeUiActionRequestSchema,
@@ -275,6 +278,8 @@ export const ServerInfoStatusPayloadSchema = z
         daemonDiagnostics: z.boolean().optional(),
         // COMPAT(generativeUiWireCapability): added in v0.1.101; remove the gate no earlier than 2027-01-11 when client/daemon floor >= v0.1.101.
         generativeUi: z.boolean().optional(),
+        // COMPAT(cindyModules): added in v0.1.X, drop the gate when floor >= v0.1.X.
+        cindyModules: z.boolean().optional(),
       })
       .optional(),
   })
@@ -411,6 +416,7 @@ type SessionOutboundMessageSchemaOptions = [
   ...typeof AgentExtensionOutboundMessageSchemas,
   ...typeof TerminalOutboundMessageSchemas,
   ...typeof AutomationOutboundMessageSchemas,
+  ...typeof CindyOutboundMessageSchemas,
   typeof GenerativeUiActionResponseSchema,
 ];
 
@@ -437,6 +443,7 @@ export const SessionOutboundMessageSchema: z.ZodDiscriminatedUnion<
   ...AgentExtensionOutboundMessageSchemas,
   ...TerminalOutboundMessageSchemas,
   ...AutomationOutboundMessageSchemas,
+  ...CindyOutboundMessageSchemas,
   GenerativeUiActionResponseSchema,
 ]);
 

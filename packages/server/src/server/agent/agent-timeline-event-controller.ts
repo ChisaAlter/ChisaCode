@@ -55,6 +55,9 @@ export class AgentTimelineEventController {
       agent.lastUserMessageAt = new Date();
       this.options.emitState(agent);
     }
+    if (event.item.type === "tool_call") {
+      agent.currentTurnToolCallCount++;
+    }
     return { shouldDispatchEvent: false, shouldNotifyWaiters: true };
   }
 

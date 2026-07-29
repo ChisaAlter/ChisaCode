@@ -61,7 +61,7 @@ const SNAPSHOT_BRANCH = "chisacode-snapshots";
  */
 export async function detectBlockedGitState(
   cwd: string,
-  logger: Logger,
+  _logger: Logger,
 ): Promise<SnapshotBlockedState | null> {
   const checks: Array<{ file: string; reason: SnapshotBlockedState["reason"] }> = [
     { file: "MERGE_HEAD", reason: "merge" },
@@ -73,7 +73,7 @@ export async function detectBlockedGitState(
 
   for (const { file, reason } of checks) {
     try {
-      const result = await runGitCommand(["rev-parse", "--git-path", file], { cwd }, logger);
+      const result = await runGitCommand(["rev-parse", "--git-path", file], { cwd });
       const gitPath = result.stdout?.trim();
       if (!gitPath) continue;
 
@@ -138,7 +138,7 @@ export async function createSnapshot(
 
   try {
     // 2. Get list of changed files
-    const statusResult = await runGitCommand(["status", "--porcelain", "-z"], { cwd }, logger);
+    const statusResult = await runGitCommand(["status", "--porcelain", "-z"], { cwd });
     const changedFiles = parseStatusPorcelain(statusResult.stdout ?? "");
     if (changedFiles.length === 0) {
       return { ok: false, reason: "no changes to snapshot" };
@@ -160,14 +160,14 @@ export async function createSnapshot(
     }
 
     // 4. Stage safe files (temporarily modifies the index)
-    await runGitCommand(["add", "--", ...safeFiles], { cwd }, logger);
+    await runGitCommand(["add", "--", ...safeFiles], { cwd });
 
     // 5. Create a tree object from the current index
-    const treeResult = await runGitCommand(["write-tree"], { cwd }, logger);
+    const treeResult = await runGitCommand(["write-tree"], { cwd });
     const treeHash = treeResult.stdout?.trim();
 
     // 6. Restore the index to HEAD (unstage the files we just added)
-    await runGitCommand(["reset", "HEAD", "--"], { cwd }, logger);
+    await runGitCommand(["reset", "HEAD", "--"], { cwd });
 
     if (!treeHash) {
       return { ok: false, reason: "failed to create tree object" };
@@ -175,13 +175,13 @@ export async function createSnapshot(
 
     // 7. Create a commit object pointing at the tree (does NOT touch HEAD)
     const message = buildSnapshotCommitMessage(meta);
-    const headResult = await runGitCommand(["rev-parse", "HEAD"], { cwd }, logger);
+    const headResult = await runGitCommand(["rev-parse", "HEAD"], { cwd });
     const parentHash = headResult.stdout?.trim();
 
     const commitArgs = parentHash
       ? ["commit-tree", treeHash, "-p", parentHash, "-m", message]
       : ["commit-tree", treeHash, "-m", message];
-    const commitResult = await runGitCommand(commitArgs, { cwd }, logger);
+    const commitResult = await runGitCommand(commitArgs, { cwd });
     const commitHash = commitResult.stdout?.trim();
 
     if (!commitHash) {
@@ -193,7 +193,6 @@ export async function createSnapshot(
       await runGitCommand(
         ["update-ref", `refs/${SNAPSHOT_BRANCH}/${commitHash.slice(0, 12)}`, commitHash],
         { cwd },
-        logger,
       );
     } catch (refError) {
       // Non-fatal: commit object exists but isn't easily discoverable
@@ -227,18 +226,14 @@ export async function rewindToSnapshot(
 ): Promise<RewindResult> {
   try {
     // Validate that this is actually a snapshot commit
-    const logResult = await runGitCommand(
-      ["log", "-1", "--format=%B", commitHash],
-      { cwd },
-      logger,
-    );
+    const logResult = await runGitCommand(["log", "-1", "--format=%B", commitHash], { cwd });
     const trailers = parseSnapshotTrailers(logResult.stdout ?? "");
     if (!trailers.kind) {
       return { ok: false, reason: `commit ${commitHash} is not a snapshot (no XDT trailer)` };
     }
 
     const targets = files.length > 0 ? files : ["."];
-    await runGitCommand(["checkout", commitHash, "--", ...targets], { cwd }, logger);
+    await runGitCommand(["checkout", commitHash, "--", ...targets], { cwd });
 
     logger.info({ commitHash, files: targets.length }, "rewind completed");
     return { ok: true, restoredFiles: targets };
@@ -254,33 +249,41 @@ export async function rewindToSnapshot(
  */
 export async function listSnapshots(
   cwd: string,
-  logger: Logger,
+  _logger: Logger,
   maxCount = 50,
-): Promise<Array<{ hash: string; message: string; kind?: string }>> {
+): Promise<Array<{ hash: string; message: string; kind?: string; createdAt: number }>> {
   try {
-    // Get the list of snapshot refs
+    // Get the list of snapshot refs with their creation timestamp (unix seconds).
     const refsResult = await runGitCommand(
       [
         "for-each-ref",
         `--count=${maxCount}`,
         "--sort=-creatordate",
-        "--format=%(objectname)",
+        "--format=%(objectname)%09%(creatordate:unix)",
         `refs/${SNAPSHOT_BRANCH}/`,
       ],
       { cwd },
-      logger,
     );
-    const hashes = (refsResult.stdout ?? "").trim().split("\n").filter(Boolean);
-    if (hashes.length === 0) return [];
+    const lines = (refsResult.stdout ?? "").trim().split("\n").filter(Boolean);
+    if (lines.length === 0) return [];
 
     // Read each commit message individually (avoids git log format parsing issues)
-    const results: Array<{ hash: string; message: string; kind?: string }> = [];
-    for (const hash of hashes) {
+    const results: Array<{ hash: string; message: string; kind?: string; createdAt: number }> = [];
+    for (const line of lines) {
+      const [rawHash, rawCreatedAt] = line.split("\t");
+      const hash = rawHash?.trim();
+      if (!hash) continue;
+      const createdAt = Number.parseInt(rawCreatedAt ?? "", 10);
       try {
-        const msgResult = await runGitCommand(["log", "-1", "--format=%B", hash], { cwd }, logger);
+        const msgResult = await runGitCommand(["log", "-1", "--format=%B", hash], { cwd });
         const message = (msgResult.stdout ?? "").trim();
         const trailers = parseSnapshotTrailers(message);
-        results.push({ hash: hash.trim(), message, kind: trailers.kind });
+        results.push({
+          hash,
+          message,
+          kind: trailers.kind,
+          createdAt: Number.isFinite(createdAt) ? createdAt : 0,
+        });
       } catch {
         // Skip unreadable commits
       }

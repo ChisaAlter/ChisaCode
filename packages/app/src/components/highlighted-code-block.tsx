@@ -10,6 +10,7 @@ import { isNative, isWeb } from "@/constants/platform";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { syntaxTokenStyleFor } from "@/styles/syntax-token-styles";
 import { highlightToKeyedLines, type KeyedLine } from "@/utils/highlight-cache";
+import { classifyCodeBlock, parseDiffLines, type DiffLine } from "@/utils/markdown-utils";
 
 interface HighlightedCodeBlockProps {
   code: string;
@@ -60,10 +61,19 @@ export const HighlightedCodeBlock = React.memo(function HighlightedCodeBlock({
     [inheritedStyles, textStyle],
   );
   const renderedCode = useMemo(() => stripTerminalFenceNewline(code), [code]);
+  const blockKind = useMemo(() => classifyCodeBlock(language ?? undefined), [language]);
 
   const keyedLines = useMemo<KeyedLine[] | null>(
-    () => highlightToKeyedLines(renderedCode, fenceLanguageToExtension(language)),
-    [renderedCode, language],
+    () =>
+      blockKind === "code"
+        ? highlightToKeyedLines(renderedCode, fenceLanguageToExtension(language))
+        : null,
+    [renderedCode, language, blockKind],
+  );
+
+  const diffLines = useMemo<DiffLine[] | null>(
+    () => (blockKind === "diff" ? parseDiffLines(renderedCode) : null),
+    [renderedCode, blockKind],
   );
 
   const isCompact = useIsCompactFormFactor();
@@ -79,15 +89,28 @@ export const HighlightedCodeBlock = React.memo(function HighlightedCodeBlock({
       onPointerEnter={handlePointerEnter}
       onPointerLeave={handlePointerLeave}
     >
-      {keyedLines ? (
-        <MarkdownTextSpan style={innerTextStyle}>{renderCodeSegments(keyedLines)}</MarkdownTextSpan>
-      ) : (
-        <MarkdownTextSpan style={innerTextStyle}>{renderedCode}</MarkdownTextSpan>
-      )}
+      {renderCodeContent(diffLines, keyedLines, renderedCode, innerTextStyle)}
       <CopyButton getCode={getCode} visible={controlsVisible} />
     </View>
   );
 });
+
+function renderCodeContent(
+  diffLines: DiffLine[] | null,
+  keyedLines: KeyedLine[] | null,
+  renderedCode: string,
+  innerTextStyle: StyleProp<TextStyle>,
+): React.ReactNode {
+  if (diffLines) {
+    return <View>{renderDiffLines(diffLines, innerTextStyle)}</View>;
+  }
+  if (keyedLines) {
+    return (
+      <MarkdownTextSpan style={innerTextStyle}>{renderCodeSegments(keyedLines)}</MarkdownTextSpan>
+    );
+  }
+  return <MarkdownTextSpan style={innerTextStyle}>{renderedCode}</MarkdownTextSpan>;
+}
 
 function renderCodeSegments(keyedLines: KeyedLine[]): React.ReactNode[] {
   const segments: React.ReactNode[] = [];
@@ -102,6 +125,51 @@ function renderCodeSegments(keyedLines: KeyedLine[]): React.ReactNode[] {
   }
   return segments;
 }
+
+function renderDiffLines(
+  diffLines: DiffLine[],
+  textStyle: StyleProp<TextStyle>,
+): React.ReactNode[] {
+  return diffLines.map((line, index) => {
+    const bgStyle = diffLineBgStyle(line.kind);
+    const diffKey = `${line.kind}-${line.oldLine ?? "x"}-${line.newLine ?? "x"}-${index}`;
+    return (
+      <View key={diffKey} style={bgStyle}>
+        <MarkdownTextSpan style={textStyle}>{line.raw}</MarkdownTextSpan>
+      </View>
+    );
+  });
+}
+
+function diffLineBgStyle(kind: DiffLine["kind"]): ViewStyle | undefined {
+  switch (kind) {
+    case "add":
+      return diffStyles.lineAdd;
+    case "delete":
+      return diffStyles.lineDelete;
+    case "header":
+      return diffStyles.lineHeader;
+    case "meta":
+      return diffStyles.lineMeta;
+    default:
+      return undefined;
+  }
+}
+
+const diffStyles = StyleSheet.create((theme) => ({
+  lineAdd: {
+    backgroundColor: theme.colors.statusSuccess + "22",
+  },
+  lineDelete: {
+    backgroundColor: theme.colors.statusDanger + "22",
+  },
+  lineHeader: {
+    backgroundColor: theme.colors.accent + "18",
+  },
+  lineMeta: {
+    opacity: 0.6,
+  },
+}));
 
 interface TokenSpanProps {
   token: HighlightToken;

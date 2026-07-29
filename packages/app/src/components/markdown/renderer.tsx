@@ -35,6 +35,7 @@ import {
 } from "@/styles/markdown-styles";
 import type { Theme } from "@/styles/theme";
 import { openExternalUrl } from "@/utils/open-external-url";
+import { truncateCjkUrl } from "@/utils/markdown-utils";
 import {
   splitHtmlishMarkdown,
   type MarkdownDisplayPart,
@@ -554,7 +555,10 @@ function SharedMarkdownLink({
 
 function getMarkdownLinkHref(node: ASTNode): string {
   const href = node.attributes?.href;
-  return typeof href === "string" ? href : "";
+  if (typeof href !== "string") return "";
+  // GFM autolink may swallow CJK/fullwidth characters into the URL.
+  const [cleanUrl] = truncateCjkUrl(href);
+  return cleanUrl;
 }
 
 export function createSharedMarkdownRules(): RenderRules {

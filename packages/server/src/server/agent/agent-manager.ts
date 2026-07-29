@@ -8,6 +8,14 @@ import type { EffectiveMcpServersResult } from "./mcp-server-management.js";
 import type { Logger } from "pino";
 import { z } from "zod/v3";
 import type { TerminalManager } from "../../terminal/terminal-manager.js";
+import { createSnapshot } from "../git-snapshot.js";
+import {
+  createGoalState,
+  judgeTurn,
+  buildContinuationPrompt,
+  type GoalState,
+  type GoalCompletionJudge,
+} from "../goal-service.js";
 
 import {
   getAgentStreamEventTurnId,
@@ -213,6 +221,8 @@ interface ManagedAgentBase {
    */
   labels: Record<string, string>;
   relation?: AgentRelation;
+  /** Count of tool_call timeline items in the current turn (reset on turn start). */
+  currentTurnToolCallCount: number;
 }
 
 type ManagedAgentWithSession = ManagedAgentBase & {
@@ -330,6 +340,8 @@ export class AgentManager {
   private readonly idFactory: () => string;
   private readonly registry?: AgentStorage;
   private readonly previousStatuses = new Map<string, AgentLifecycleStatus>();
+  private readonly goals = new Map<string, GoalState>();
+  private goalCompletionJudge?: GoalCompletionJudge;
   private readonly backgroundTasks = new Set<Promise<void>>();
   private readonly agentStreamCoalescer: AgentStreamCoalescer;
   private readonly generativeUiActionQueue: GenerativeUiActionQueue;
@@ -417,6 +429,14 @@ export class AgentManager {
       timeline: this.timeline,
       trackBackgroundTask: (task) => this.trackBackgroundTask(task),
       usageStore: options.usageStore,
+      snapshotOnTurn: (cwd, kind, agentId) => {
+        void createSnapshot(cwd, { kind, agentId }, this.logger).catch((err) => {
+          this.logger.debug({ err, agentId, kind }, "Auto-snapshot skipped");
+        });
+      },
+      onGoalTurnCompleted: (agentId, _cwd, tokensUsed, usedTools) => {
+        this.evaluateGoalContinuation(agentId, tokensUsed, usedTools);
+      },
     });
     this.sessionRegistration = new AgentSessionRegistrationController({
       addAgent: (agent) => {
@@ -1011,6 +1031,118 @@ export class AgentManager {
     options?: AgentRunOptions,
   ): AsyncGenerator<AgentStreamEvent> {
     return this.runControl.replace(agentId, prompt, options);
+  }
+
+  // ── Goal management ────────────────────────────────────────────────────────
+
+  setGoal(
+    agentId: string,
+    objective: string,
+    limits?: {
+      maxTurns?: number | null;
+      budgetTokens?: number | null;
+      noProgressLimit?: number | null;
+    },
+  ): GoalState {
+    const goal = createGoalState({ sessionId: agentId, objective, limits }, Date.now());
+    this.goals.set(agentId, goal);
+    this.logger.info({ agentId, objective }, "Goal set");
+    return goal;
+  }
+
+  cancelGoal(agentId: string): GoalState | null {
+    const goal = this.goals.get(agentId);
+    if (!goal) return null;
+    const cancelled: GoalState = {
+      ...goal,
+      status: "paused",
+      lastReason: "Cancelled by user",
+      updatedAt: Date.now(),
+    };
+    this.goals.set(agentId, cancelled);
+    return cancelled;
+  }
+
+  getGoal(agentId: string): GoalState | null {
+    return this.goals.get(agentId) ?? null;
+  }
+
+  listGoals(): GoalState[] {
+    return Array.from(this.goals.values());
+  }
+
+  /** Set the LLM judge that decides whether an active goal is already met. */
+  setGoalCompletionJudge(judge: GoalCompletionJudge | undefined): void {
+    this.goalCompletionJudge = judge;
+  }
+
+  private evaluateGoalContinuation(agentId: string, tokensUsed: number, usedTools: boolean): void {
+    const goal = this.goals.get(agentId);
+    if (!goal || goal.status !== "active") return;
+
+    const { verdict, updated } = judgeTurn(goal, { usedTools, tokensUsed }, Date.now());
+    this.goals.set(agentId, updated);
+
+    this.logger.info(
+      { agentId, action: verdict.action, reason: verdict.reason, turnsUsed: updated.turnsUsed },
+      "Goal turn judged",
+    );
+
+    if (verdict.action !== "continue") {
+      if (verdict.action === "complete" || verdict.action === "budgetLimited") {
+        this.logger.info({ agentId, reason: verdict.reason }, "Goal finished");
+      }
+      return;
+    }
+
+    const task = (async () => {
+      // Optional LLM completion judge: stop early if the objective is already met.
+      if (this.goalCompletionJudge) {
+        try {
+          const judgment = await this.goalCompletionJudge({
+            agentId,
+            objective: updated.objective,
+            recentOutput: this.lastAssistantText(agentId),
+          });
+          if (judgment?.complete) {
+            const current = this.goals.get(agentId);
+            if (current && current.status === "active") {
+              this.goals.set(agentId, {
+                ...current,
+                status: "complete",
+                lastReason: judgment.reason,
+                updatedAt: Date.now(),
+              });
+              this.logger.info({ agentId, reason: judgment.reason }, "Goal completed by judge");
+              return;
+            }
+          }
+        } catch (err) {
+          this.logger.warn({ err, agentId }, "Goal completion judge failed; continuing");
+        }
+      }
+
+      const prompt = buildContinuationPrompt(updated);
+      this.logger.info({ agentId }, "Goal auto-continuing");
+      try {
+        for await (const _event of this.foregroundExecution.stream(agentId, prompt)) {
+          // Drain the stream — events are dispatched internally
+        }
+      } catch (err) {
+        this.logger.warn({ err, agentId }, "Goal continuation run failed");
+      }
+    })();
+    this.trackBackgroundTask(task);
+  }
+
+  /** Most recent assistant message text for an agent ("" if none). */
+  private lastAssistantText(agentId: string): string {
+    const items = this.timeline.getItems(agentId);
+    for (let i = items.length - 1; i >= 0; i--) {
+      const item = items[i];
+      if (item && item.type === "assistant_message") return item.text;
+    }
+    return "";
   }
 
   async waitForAgentRunStart(agentId: string, options?: WaitForAgentStartOptions): Promise<void> {

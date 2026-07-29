@@ -8,7 +8,9 @@ import {
   deriveModelDefinitionsFromACP,
   deriveModesFromACP,
   type SessionStateResponse,
+  type SpawnedACPProcess,
 } from "./acp-agent.js";
+import { spawnInitializedACPProcess, type ACPProcessSpawner } from "./acp/process-runtime.js";
 import {
   formatDiagnosticStatus,
   formatProviderDiagnostic,
@@ -28,12 +30,15 @@ interface GenericACPAgentClientOptions {
   label?: string;
   waitForInitialCommands?: boolean;
   initialCommandsWaitTimeoutMs?: number;
+  /** Custom process spawner (e.g. SSH transport for remote agents). */
+  spawn?: ACPProcessSpawner;
 }
 
 export class GenericACPAgentClient extends ACPAgentClient {
   private readonly command: [string, ...string[]];
   private readonly providerId?: string;
   private readonly label?: string;
+  private readonly customSpawn?: ACPProcessSpawner;
 
   constructor(options: GenericACPAgentClientOptions) {
     super({
@@ -50,6 +55,24 @@ export class GenericACPAgentClient extends ACPAgentClient {
     this.command = options.command;
     this.providerId = options.providerId;
     this.label = options.label;
+    this.customSpawn = options.spawn;
+  }
+
+  protected override async spawnProcess(
+    launchEnv?: Record<string, string>,
+    options?: { initializeTimeoutMs?: number },
+  ): Promise<SpawnedACPProcess> {
+    return spawnInitializedACPProcess({
+      launch: await this.resolveLaunchCommand(),
+      cwd: process.cwd(),
+      runtimeSettings: this.runtimeSettings,
+      launchEnv,
+      logger: this.logger,
+      provider: this.provider,
+      clientFactory: () => this.buildProbeClient(),
+      initializeTimeoutMs: options?.initializeTimeoutMs,
+      spawn: this.customSpawn,
+    });
   }
 
   protected override async resolveLaunchCommand(): Promise<{ command: string; args: string[] }> {

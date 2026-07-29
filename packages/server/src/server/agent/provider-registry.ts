@@ -40,6 +40,7 @@ import { KimiCodeAgentClient } from "./providers/kimi-code-agent.js";
 import { MimoCodeAgentClient, OpenCodeAgentClient } from "./providers/opencode-agent.js";
 import { PiRpcAgentClient } from "./providers/pi/agent.js";
 import { GenericACPAgentClient } from "./providers/generic-acp-agent.js";
+import { createSSHSpawner } from "../ssh-transport.js";
 import { MockLoadTestAgentClient } from "./providers/mock-load-test-agent.js";
 import { MockSlowProviderClient } from "./providers/mock-slow-provider.js";
 import {
@@ -623,6 +624,7 @@ function addResolvedCustomProviders(
 
     if (extendsProvider === "acp") {
       const command = requireAcpCommand(providerId, override);
+      const sshSpawner = override.ssh ? createSSHSpawner(override.ssh) : undefined;
       resolvedProviders.set(providerId, {
         definition: buildCustomAcpDefinition(providerId, override, label),
         runtimeSettings: overrideRuntimeSettings,
@@ -639,6 +641,7 @@ function addResolvedCustomProviders(
             env: overrideRuntimeSettings?.env,
             providerId,
             label,
+            spawn: sshSpawner,
           }),
       });
       continue;

@@ -225,6 +225,7 @@ export class AgentArchiveController {
       attention: { requiresAttention: false },
       internal: record.internal,
       labels: record.labels,
+      currentTurnToolCallCount: 0,
     });
   }
 

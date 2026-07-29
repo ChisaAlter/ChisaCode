@@ -160,6 +160,7 @@ export class AgentSessionRegistrationController {
       internal: config.internal ?? false,
       labels: options?.labels ?? {},
       relation: options?.relation,
+      currentTurnToolCallCount: 0,
     } as ActiveManagedAgent;
   }
 

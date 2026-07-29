@@ -76,6 +76,23 @@ export interface GoalCompletionSummary {
   reason: string | null;
 }
 
+/** Result of judging whether a goal's objective has been met. */
+export interface GoalCompletionJudgment {
+  complete: boolean;
+  reason: string;
+}
+
+/**
+ * Judges whether an active goal's objective has already been met, so the
+ * continuation loop can stop instead of spending another turn. Returns `null`
+ * when no judgment could be produced (treated as "not complete — keep going").
+ */
+export type GoalCompletionJudge = (input: {
+  agentId: string;
+  objective: string;
+  recentOutput: string;
+}) => Promise<GoalCompletionJudgment | null>;
+
 // ── Default limits ─────────────────────────────────────────────────────────
 
 export const DEFAULT_GOAL_LIMITS: GoalLimits = {

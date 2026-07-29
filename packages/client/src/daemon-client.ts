@@ -92,6 +92,7 @@ import { ConfigCommandClient } from "./daemon-client-config-commands.js";
 import { ProviderCommandClient } from "./daemon-client-provider-commands.js";
 import { AgentExtensionCommandClient } from "./daemon-client-agent-extension-commands.js";
 import { AutomationCommandClient } from "./daemon-client-automation-commands.js";
+import { CindyCommandClient } from "./daemon-client-cindy-commands.js";
 import { WorkspaceCommandClient } from "./daemon-client-workspace-commands.js";
 import {
   QueryCommandClient,
@@ -542,6 +543,7 @@ export class DaemonClient {
   private readonly providerCommands: ProviderCommandClient;
   private readonly agentExtensionCommands: AgentExtensionCommandClient;
   private readonly automationCommands: AutomationCommandClient;
+  private readonly cindyCommands: CindyCommandClient;
   private readonly workspaceCommands: WorkspaceCommandClient;
   private readonly queryCommands: QueryCommandClient;
   private readonly terminalClient: TerminalClient;
@@ -588,6 +590,9 @@ export class DaemonClient {
       request: (params) => this.requests.requestSession(params),
     });
     this.automationCommands = new AutomationCommandClient({
+      request: (params) => this.requests.requestSession(params),
+    });
+    this.cindyCommands = new CindyCommandClient({
       request: (params) => this.requests.requestSession(params),
     });
     this.workspaceCommands = new WorkspaceCommandClient({
@@ -1750,6 +1755,11 @@ export class DaemonClient {
 
   async loopStop(options: string | StopLoopOptions): Promise<LoopStopPayload> {
     return this.automationCommands.loopStop(options);
+  }
+
+  /** Cindy-module commands: goal, team, context, snapshot, migration, learn. */
+  get cindy(): CindyCommandClient {
+    return this.cindyCommands;
   }
 
   onTerminalStreamEvent(handler: (event: TerminalStreamEvent) => void): () => void {

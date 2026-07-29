@@ -22,6 +22,7 @@ import {
   useHostRuntimeSnapshot,
   useHosts,
 } from "@/runtime/host-runtime";
+import { CindyModulesSection } from "@/screens/settings/cindy-modules-section";
 import { CustomModelsSection } from "@/screens/settings/custom-models-section";
 import { ProvidersSection } from "@/screens/settings/providers-section";
 import { SettingsSection } from "@/screens/settings/settings-section";
@@ -120,6 +121,12 @@ export function HostPage({ serverId, onHostRemoved }: HostPageProps) {
     (state) => state.sessions[serverId]?.serverInfo?.version ?? null,
   );
 
+  // COMPAT(cindyModules): only show the Agent Intelligence section when the daemon
+  // advertises the Cindy modules. Drop the gate when floor >= v0.1.X.
+  const cindyModulesEnabled = useSessionStore(
+    (state) => state.sessions[serverId]?.serverInfo?.features?.cindyModules === true,
+  );
+
   const connectionStatus = snapshot?.connectionStatus ?? "connecting";
   const activeConnection = snapshot?.activeConnection ?? null;
   const lastError = snapshot?.lastError ?? null;
@@ -205,6 +212,8 @@ export function HostPage({ serverId, onHostRemoved }: HostPageProps) {
       <ProvidersSection serverId={serverId} />
 
       <CustomModelsSection serverId={serverId} />
+
+      {cindyModulesEnabled ? <CindyModulesSection serverId={serverId} /> : null}
 
       <RemoveHostSection host={host} onRemoved={onHostRemoved} />
     </View>

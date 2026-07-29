@@ -18,6 +18,7 @@ import type {
 } from "./agent-sdk-types.js";
 import type { EffectiveMcpServersResult } from "./mcp-server-management.js";
 import type { AgentProviderController } from "./agent-provider-controller.js";
+import { loadProjectContext } from "../project-context.js";
 
 interface AgentLaunchConfigControllerOptions {
   appendSystemPrompt: string;
@@ -81,7 +82,8 @@ export class AgentLaunchConfigController {
   ): Promise<AgentSessionConfig> {
     const mcpConfig = this.applyDaemonMcpServers(config, agentId);
     const skillConfig = this.applyDaemonSkillPolicy(mcpConfig, agentId);
-    return this.applyDaemonAppendSystemPrompt(await this.normalizeConfig(skillConfig));
+    const normalized = await this.normalizeConfig(skillConfig);
+    return this.applyDaemonAppendSystemPrompt(normalized);
   }
 
   async normalizeConfig(config: AgentSessionConfig): Promise<AgentSessionConfig> {
@@ -226,9 +228,12 @@ export class AgentLaunchConfigController {
     };
   }
 
-  private applyDaemonAppendSystemPrompt(config: AgentSessionConfig): AgentSessionConfig {
+  private async applyDaemonAppendSystemPrompt(
+    config: AgentSessionConfig,
+  ): Promise<AgentSessionConfig> {
     const genUiSection = generateComponentPromptSection();
-    const parts = [this.appendSystemPrompt.trim(), genUiSection].filter(Boolean);
+    const projectToc = this.resolveProjectContextToc(config.cwd);
+    const parts = [this.appendSystemPrompt.trim(), projectToc, genUiSection].filter(Boolean);
     const daemonAppendSystemPrompt = parts.join("\n\n");
     const next = { ...config };
     delete next.daemonAppendSystemPrompt;
@@ -239,6 +244,29 @@ export class AgentLaunchConfigController {
           daemonAppendSystemPrompt,
         }
       : next;
+  }
+
+  /** Max TOC size injected into system prompt (8 KB). Larger contexts are truncated. */
+  private static readonly MAX_TOC_BYTES = 8192;
+
+  private resolveProjectContextToc(cwd: string | undefined): string {
+    if (!cwd) return "";
+    try {
+      const context = loadProjectContext(cwd, resolve(cwd, ".chisacode-context"));
+      if (context.toc) {
+        let toc = context.toc;
+        if (Buffer.byteLength(toc, "utf8") > AgentLaunchConfigController.MAX_TOC_BYTES) {
+          toc = Buffer.from(toc, "utf8")
+            .subarray(0, AgentLaunchConfigController.MAX_TOC_BYTES)
+            .toString("utf8");
+          toc += "\n[truncated — project context too large]";
+        }
+        return `<project-context>\n${toc}\n</project-context>`;
+      }
+    } catch {
+      // Non-fatal — project context is best-effort
+    }
+    return "";
   }
 
   private purgeExpiredCompanionTokens(now: number): void {
