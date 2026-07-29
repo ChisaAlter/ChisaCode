@@ -25,8 +25,13 @@ const CLAUDE_ULTRACODE_THINKING_OPTIONS = [
   { id: "ultracode", label: "Ultracode" },
 ] as const;
 
+// Pricing per 1M tokens, in USD. Sources: Anthropic pricing page (claude.com/pricing),
+// verified 2026-07. 1M-context variants carry a premium tier (~2x input, ~1.5x output
+// over the 200K rate) — reusing the 200K cost for them under-reports spend by ~50%.
 const OPUS_COST = { input: 15, output: 75, cacheRead: 1.875, cacheWrite: 18.75 };
+const OPUS_1M_COST = { input: 30, output: 112.5, cacheRead: 3.75, cacheWrite: 37.5 };
 const SONNET_COST = { input: 3, output: 15, cacheRead: 0.375, cacheWrite: 3.75 };
+const SONNET_1M_COST = { input: 6, output: 22.5, cacheRead: 0.75, cacheWrite: 7.5 };
 const HAIKU_COST = { input: 0.8, output: 4, cacheRead: 0.08, cacheWrite: 1 };
 
 const CLAUDE_MODELS: AgentModelDefinition[] = [
@@ -37,7 +42,7 @@ const CLAUDE_MODELS: AgentModelDefinition[] = [
     description: "Opus 4.8 with 1M context window",
     contextWindowMaxTokens: 1_000_000,
     supportsImages: true,
-    cost: OPUS_COST,
+    cost: OPUS_1M_COST,
     thinkingOptions: [...CLAUDE_ULTRACODE_THINKING_OPTIONS],
   },
   {
@@ -58,7 +63,7 @@ const CLAUDE_MODELS: AgentModelDefinition[] = [
     description: "Opus 4.7 with 1M context window",
     contextWindowMaxTokens: 1_000_000,
     supportsImages: true,
-    cost: OPUS_COST,
+    cost: OPUS_1M_COST,
     thinkingOptions: [...CLAUDE_OPUS_EXTENDED_THINKING_OPTIONS],
   },
   {
@@ -78,7 +83,7 @@ const CLAUDE_MODELS: AgentModelDefinition[] = [
     description: "Opus 4.6 with 1M context window",
     contextWindowMaxTokens: 1_000_000,
     supportsImages: true,
-    cost: OPUS_COST,
+    cost: OPUS_1M_COST,
     thinkingOptions: [...CLAUDE_THINKING_OPTIONS],
   },
   {
@@ -98,7 +103,7 @@ const CLAUDE_MODELS: AgentModelDefinition[] = [
     description: "Sonnet 4.6 with 1M context window",
     contextWindowMaxTokens: 1_000_000,
     supportsImages: true,
-    cost: SONNET_COST,
+    cost: SONNET_1M_COST,
     thinkingOptions: [...CLAUDE_THINKING_OPTIONS],
   },
   {

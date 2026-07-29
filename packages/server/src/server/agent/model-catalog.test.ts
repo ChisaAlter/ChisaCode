@@ -134,4 +134,39 @@ describe("estimateTurnCost", () => {
     });
     expect(result).toBe(22.125); // 3 + 15 + 0.375 + 3.75
   });
+
+  test("returns null for empty cost object (unknown pricing, not free)", () => {
+    // A defined-but-empty cost means "no pricing info"; the UI must show "—"
+    // rather than reporting $0.00.
+    expect(estimateTurnCost({}, { input: 1_000_000, output: 1_000_000 })).toBeNull();
+  });
+
+  test("applies a zero cacheRead rate instead of skipping it", () => {
+    // A literal 0 rate (free cache reads) must not be skipped by a truthy check.
+    const cost = { input: 3, output: 15, cacheRead: 0, cacheWrite: 3.75 };
+    const result = estimateTurnCost(cost, {
+      input: 1_000_000,
+      output: 1_000_000,
+      cacheRead: 1_000_000,
+      cacheWrite: 0,
+    });
+    // 3 (input) + 15 (output) + 0 (cacheRead) + 0 (no cacheWrite) = 18
+    expect(result).toBe(18);
+  });
+});
+
+describe("findCatalogModel case sensitivity", () => {
+  test("matches case-insensitively on the model id", () => {
+    const catalog = buildModelCatalog([
+      { provider: "claude", models: [model({ id: "claude-opus-4-8" })] },
+    ]);
+    // Provider drift sends mixed-case ids; the lookup must still resolve.
+    expect(findCatalogModel(catalog, "claude", "Claude-Opus-4-8")?.id).toBe("claude-opus-4-8");
+    expect(findCatalogModel(catalog, "claude", "CLAUDE-OPUS-4-8")?.id).toBe("claude-opus-4-8");
+  });
+
+  test("returns undefined for unknown id (caller must handle the miss)", () => {
+    const catalog = buildModelCatalog([{ provider: "claude", models: [model({ id: "a" })] }]);
+    expect(findCatalogModel(catalog, "claude", "missing")).toBeUndefined();
+  });
 });

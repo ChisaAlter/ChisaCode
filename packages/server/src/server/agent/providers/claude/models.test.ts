@@ -77,6 +77,21 @@ describe("getClaudeModels", () => {
     expect(a).not.toBe(b);
     expect(a[0]).not.toBe(b[0]);
   });
+
+  it("prices 1M-context variants higher than their 200K counterparts", () => {
+    // Reusing the 200K rate for 1M models under-reports spend by ~50%; the 1M
+    // variants must carry their own premium cost object.
+    const models = getClaudeModels();
+    const opus200k = models.find((m) => m.id === "claude-opus-4-8");
+    const opus1m = models.find((m) => m.id === "claude-opus-4-8[1m]");
+    expect(opus200k?.cost?.input).toBe(15);
+    expect(opus1m?.cost?.input).toBe(30);
+    expect(opus1m?.cost?.input).toBeGreaterThan(opus200k!.cost!.input);
+
+    const sonnet200k = models.find((m) => m.id === "claude-sonnet-4-6");
+    const sonnet1m = models.find((m) => m.id === "claude-sonnet-4-6[1m]");
+    expect(sonnet1m?.cost?.input).toBeGreaterThan(sonnet200k!.cost!.input);
+  });
 });
 
 describe("ClaudeAgentClient.listModels", () => {

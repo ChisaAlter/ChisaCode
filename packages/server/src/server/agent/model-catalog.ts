@@ -45,13 +45,17 @@ export function buildModelCatalog(
   return { models, assembledAt: Date.now() };
 }
 
-/** Look up a model by (provider, id). Returns undefined when not found. */
+/** Look up a model by (provider, id). Case-insensitive on the id to tolerate
+ * provider drift (e.g. "Claude-Opus-4-8" vs "claude-opus-4-8"). Returns undefined
+ * when not found — callers MUST handle the miss explicitly instead of relying
+ * on a silent fallback, which could pick the most expensive model in the catalog. */
 export function findCatalogModel(
   catalog: ModelCatalogSnapshot,
   provider: string,
   modelId: string,
 ): CatalogModelEntry | undefined {
-  return catalog.models.find((m) => m.provider === provider && m.id === modelId);
+  const needle = modelId.toLowerCase();
+  return catalog.models.find((m) => m.provider === provider && m.id.toLowerCase() === needle);
 }
 
 /** All models for a specific provider. */
@@ -62,7 +66,10 @@ export function modelsForProvider(
   return catalog.models.filter((m) => m.provider === provider);
 }
 
-/** The default model for a provider (first with isDefault, or first overall). */
+/** The default model for a provider. Returns the first model flagged isDefault.
+ * Returns undefined when no model is flagged and there are no provider models —
+ * callers must handle the undefined case explicitly rather than silently falling
+ * back to an arbitrary (potentially expensive) first-listed model. */
 export function defaultModelForProvider(
   catalog: ModelCatalogSnapshot,
   provider: string,
@@ -95,7 +102,14 @@ export function estimateTurnCost(
   cost: ModelCost | undefined,
   tokens: { input: number; output: number; cacheRead?: number; cacheWrite?: number },
 ): number | null {
-  if (!cost) return null;
+  // A cost object that exists but has no numeric fields (e.g. `{}`) means
+  // "unknown pricing", not "free". Return null so the UI shows "—" instead of $0.00.
+  if (
+    !cost ||
+    (cost.input == null && cost.output == null && cost.cacheRead == null && cost.cacheWrite == null)
+  ) {
+    return null;
+  }
   const input = Math.max(0, tokens.input);
   const output = Math.max(0, tokens.output);
   const cacheRead = Math.max(0, tokens.cacheRead ?? 0);
@@ -103,7 +117,10 @@ export function estimateTurnCost(
   let total = 0;
   if (cost.input) total += (input / 1_000_000) * cost.input;
   if (cost.output) total += (output / 1_000_000) * cost.output;
-  if (cost.cacheRead && cacheRead) total += (cacheRead / 1_000_000) * cost.cacheRead;
-  if (cost.cacheWrite && cacheWrite) total += (cacheWrite / 1_000_000) * cost.cacheWrite;
+  // Use != null so a literal 0 rate (free cache reads) is still applied rather
+  // than silently skipped by a truthy check.
+  if (cost.cacheRead != null && cacheRead > 0) total += (cacheRead / 1_000_000) * cost.cacheRead;
+  if (cost.cacheWrite != null && cacheWrite > 0)
+    total += (cacheWrite / 1_000_000) * cost.cacheWrite;
   return total;
 }
