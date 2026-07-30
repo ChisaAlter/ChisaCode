@@ -37,7 +37,19 @@ export function ThemedIconColorHost({
   strokeWidth?: number;
   Icon: ComponentType<IconLeafProps>;
 }) {
-  return <Icon color={color} size={size} fill={fill} strokeWidth={strokeWidth} />;
+  // Only forward optional attrs when set. Lucide spreads unknown/rest props onto
+  // the SVG after defaultAttributes (`fill: "none"`). Passing `fill={undefined}`
+  // still places `fill: undefined` in that rest object, which overwrites
+  // `"none"` and leaves the SVG with no fill — browsers then paint the default
+  // black fill, so every outline icon turns into a solid black silhouette.
+  return (
+    <Icon
+      color={color}
+      size={size}
+      {...(fill !== undefined ? { fill } : null)}
+      {...(strokeWidth !== undefined ? { strokeWidth } : null)}
+    />
+  );
 }
 
 export const ThemedIconHost = withUnistyles(ThemedIconColorHost);
