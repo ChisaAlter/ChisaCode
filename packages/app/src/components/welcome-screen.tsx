@@ -18,16 +18,27 @@ import { openExternalUrl } from "@/utils/open-external-url";
 import { isWeb, isNative } from "@/constants/platform";
 import { SPACING, type Theme } from "@/styles/theme";
 
-const ThemedExternalLink = withUnistyles(ExternalLink);
-const ThemedQrCode = withUnistyles(QrCode);
-const ThemedLink2 = withUnistyles(Link2);
-const ThemedClipboardPaste = withUnistyles(ClipboardPaste);
-
-const accentColorMapping = (theme: Theme) => ({ color: theme.colors.accent });
-const accentForegroundColorMapping = (theme: Theme) => ({
+// Bake theme colors into withUnistyles mappers — do NOT pass `uniProps` at the
+// call site. On web/Electron, lucide icons forward unknown props onto DOM
+// nodes, which triggers: React does not recognize the `uniProps` prop.
+const ThemedExternalLink = withUnistyles(ExternalLink, (theme: Theme) => ({
+  color: theme.colors.accent,
+}));
+const ThemedQrCode = withUnistyles(QrCode, (theme: Theme) => ({
+  color: theme.colors.foreground,
+}));
+const ThemedQrCodePrimary = withUnistyles(QrCode, (theme: Theme) => ({
   color: theme.colors.accentForeground,
-});
-const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
+}));
+const ThemedLink2 = withUnistyles(Link2, (theme: Theme) => ({
+  color: theme.colors.foreground,
+}));
+const ThemedLink2Primary = withUnistyles(Link2, (theme: Theme) => ({
+  color: theme.colors.accentForeground,
+}));
+const ThemedClipboardPaste = withUnistyles(ClipboardPaste, (theme: Theme) => ({
+  color: theme.colors.foreground,
+}));
 
 interface WelcomeAction {
   key: "scan-qr" | "direct-connection" | "paste-pairing-link";
@@ -236,7 +247,7 @@ export function WelcomeScreen({ onHostAdded }: WelcomeScreenProps) {
           label: t("onboarding.directConnection"),
           testID: "welcome-direct-connection",
           primary: true,
-          icon: ThemedLink2,
+          icon: ThemedLink2Primary,
           onPress: handleOpenDirect,
         },
         {
@@ -254,7 +265,7 @@ export function WelcomeScreen({ onHostAdded }: WelcomeScreenProps) {
           label: t("onboarding.scanQr"),
           testID: "welcome-scan-qr",
           primary: true,
-          icon: ThemedQrCode,
+          icon: ThemedQrCodePrimary,
           onPress: handleScanQr,
         },
         {
@@ -296,7 +307,7 @@ export function WelcomeScreen({ onHostAdded }: WelcomeScreenProps) {
             {isNative ? (
               <Pressable style={styles.setupLink} onPress={handleOpenChisaCodeSite}>
                 <Text style={styles.setupLinkText}>chisacode.sh</Text>
-                <ThemedExternalLink size={14} uniProps={accentColorMapping} />
+                <ThemedExternalLink size={14} />
               </Pressable>
             ) : null}
           </View>
@@ -350,13 +361,9 @@ function WelcomeActionButton({ action }: WelcomeActionButtonProps) {
     () => [styles.actionText, action.primary ? styles.actionTextPrimary : null],
     [action.primary],
   );
-  let iconColorMapping = foregroundColorMapping;
-  if (action.primary) {
-    iconColorMapping = accentForegroundColorMapping;
-  }
   return (
     <Pressable style={buttonStyle} onPress={action.onPress} testID={action.testID}>
-      <Icon size={18} uniProps={iconColorMapping} />
+      <Icon size={18} />
       <Text style={textStyle}>{action.label}</Text>
     </Pressable>
   );

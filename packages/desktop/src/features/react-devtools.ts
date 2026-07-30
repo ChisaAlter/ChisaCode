@@ -74,13 +74,29 @@ export async function loadReactDevTools(): Promise<void> {
 
     const buffer = await new Promise<Buffer>((resolve, reject) => {
       const request = net.request(crxUrl);
+      // Bound the Web Store fetch so an unreachable/slow network (common on
+      // restricted networks) never leaves this promise pending forever. The
+      // DevTools extension is optional; a timeout just skips it for this run.
+      const timeout = setTimeout(() => {
+        request.abort();
+        reject(new Error("React DevTools download timed out"));
+      }, 15_000);
       request.on("response", (response) => {
         const chunks: Buffer[] = [];
         response.on("data", (chunk) => chunks.push(chunk));
-        response.on("end", () => resolve(Buffer.concat(chunks)));
-        response.on("error", reject);
+        response.on("end", () => {
+          clearTimeout(timeout);
+          resolve(Buffer.concat(chunks));
+        });
+        response.on("error", (err) => {
+          clearTimeout(timeout);
+          reject(err);
+        });
       });
-      request.on("error", reject);
+      request.on("error", (err) => {
+        clearTimeout(timeout);
+        reject(err);
+      });
       request.end();
     });
 

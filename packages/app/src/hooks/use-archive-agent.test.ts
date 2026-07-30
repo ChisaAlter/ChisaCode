@@ -17,6 +17,7 @@ import {
   applyArchivedAgentCloseResults,
   ARCHIVE_AGENT_SUPPRESSED_QUERY_KEY,
   isAgentArchiving,
+  isArchiveAgentNotFoundError,
   removeAgentFromListPayload,
   resolveArchiveAgentClient,
   selectSuppressedArchiveAgentIds,
@@ -173,7 +174,8 @@ describe("useArchiveAgent", () => {
   it("uses the host runtime client when the session store has not attached one yet", () => {
     const runtimeClient = {
       archiveAgent: vi.fn(),
-    } as Pick<DaemonClient, "archiveAgent">;
+      closeItems: vi.fn(),
+    } as Pick<DaemonClient, "archiveAgent" | "closeItems">;
 
     expect(
       resolveArchiveAgentClient({
@@ -447,5 +449,48 @@ describe("useArchiveAgent", () => {
       ],
       pageParams: [null],
     });
+  });
+
+  it("swallows the post-archive storage-not-found message from already-archived agents", async () => {
+    // Server post-archive guard emits "Agent not found in storage after archive:"
+    // (no colon after "found"). The old regex only matched "Agent not found:", so
+    // re-archiving a stale already-archived row popped a toast.
+    const queryClient = createQueryClient();
+    const archiveAgent = vi
+      .fn()
+      .mockRejectedValue(
+        new Error(
+          "Request failed: Agent not found in storage after archive: agent-1 requestType=archive_agent_request code=handler_error",
+        ),
+      );
+    useSessionStore.getState().initializeSession("server-a", {
+      archiveAgent,
+    } as unknown as DaemonClient);
+    const { result } = renderHook(() => useArchiveAgent(), {
+      wrapper: createQueryClientWrapper(queryClient),
+    });
+
+    await act(async () => {
+      await expect(
+        result.current.archiveAgent({
+          serverId: "server-a",
+          agentId: "agent-1",
+        }),
+      ).resolves.toBeUndefined();
+    });
+
+    expect(
+      selectSuppressedArchiveAgentIds(
+        queryClient.getQueryData(ARCHIVE_AGENT_SUPPRESSED_QUERY_KEY) ?? {},
+        "server-a",
+      ),
+    ).toEqual(new Set(["agent-1"]));
+  });
+
+  it("does not treat batch closeItems count mismatches as not-found swallowable errors", () => {
+    // Guard the public helper still only applies to archive_agent_request paths.
+    expect(isArchiveAgentNotFoundError(new Error("server-a: failed to archive 2 session(s)"))).toBe(
+      false,
+    );
   });
 });

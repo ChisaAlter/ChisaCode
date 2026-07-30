@@ -127,15 +127,21 @@ export function resolveStartupRedirectRoute(input: ResolveStartupRedirectInput):
   if (!isIndexPathname(input.pathname)) {
     return null;
   }
-  if (!input.isWorkspaceSelectionLoaded) {
+
+  // Soft Home startup (index) always passes workspaceSelection: null and no
+  // longer restores a workspace tab. Only block on AsyncStorage hydration when
+  // a selection may actually be restored — otherwise a hung/slow hydrate leaves
+  // the splash logo frozen forever (even after the give-up timer fires).
+  const mayRestoreWorkspaceSelection = input.workspaceSelection !== null;
+  if (mayRestoreWorkspaceSelection && !input.isWorkspaceSelectionLoaded) {
     return null;
   }
 
   if (input.anyOnlineHostServerId) {
-    if (resolveStartupWorkspaceSelection(input)) {
+    if (input.isWorkspaceSelectionLoaded && resolveStartupWorkspaceSelection(input)) {
       return null;
     }
-    if (input.isWorkspaceSelectionValidationPending === true) {
+    if (input.isWorkspaceSelectionLoaded && input.isWorkspaceSelectionValidationPending === true) {
       return null;
     }
     return buildHostRootRoute(input.anyOnlineHostServerId);

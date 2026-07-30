@@ -19,6 +19,7 @@ import {
   TerminalSquare,
 } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import { ThemedIconHost } from "@/components/themed-icon-host";
 import { useCommandCenter } from "@/hooks/use-command-center";
 import type { AggregatedAgent } from "@/hooks/use-aggregated-agents";
 import { formatTimeAgo } from "@/utils/time";
@@ -29,17 +30,8 @@ import type { Theme } from "@/styles/theme";
 
 import { useTranslation } from "react-i18next";
 
-// Lucide icons only accept `color` (a non-style prop), so wrap each one with
-// `withUnistyles` and feed the theme-reactive color through `uniProps`. Only the
-// icon node re-renders on theme changes — the surrounding row tree does not.
-const ThemedPlus = withUnistyles(Plus);
-const ThemedSettings = withUnistyles(Settings);
-const ThemedHome = withUnistyles(Home);
-const ThemedMessagesSquare = withUnistyles(MessagesSquare);
-const ThemedGitCompare = withUnistyles(GitCompare);
-const ThemedPanelRight = withUnistyles(PanelRight);
-const ThemedTerminalSquare = withUnistyles(TerminalSquare);
-const ThemedBot = withUnistyles(Bot);
+// Inject theme colors via ThemedIconHost so call-site `uniProps` never reaches
+// lucide leaves (web withUnistyles merges props onto the child).
 // `TextInput.placeholderTextColor` is a non-style prop Unistyles does not track
 // via the `style` prop, so wrap TextInput and map it through `uniProps`.
 const ThemedTextInput = withUnistyles(TextInput);
@@ -148,31 +140,77 @@ function CommandCenterActionRow({
   const action = item.action;
   let actionIcon: React.ReactNode = null;
   if (action.icon === "plus") {
-    actionIcon = <ThemedPlus size={16} strokeWidth={2.4} uniProps={foregroundMutedColorMapping} />;
+    actionIcon = (
+      <ThemedIconHost
+        Icon={Plus}
+        size={16}
+        strokeWidth={2.4}
+        uniProps={foregroundMutedColorMapping}
+      />
+    );
   } else if (action.icon === "settings") {
     actionIcon = (
-      <ThemedSettings size={16} strokeWidth={2.2} uniProps={foregroundMutedColorMapping} />
+      <ThemedIconHost
+        Icon={Settings}
+        size={16}
+        strokeWidth={2.2}
+        uniProps={foregroundMutedColorMapping}
+      />
     );
   } else if (action.icon === "home") {
-    actionIcon = <ThemedHome size={16} strokeWidth={2.2} uniProps={foregroundMutedColorMapping} />;
+    actionIcon = (
+      <ThemedIconHost
+        Icon={Home}
+        size={16}
+        strokeWidth={2.2}
+        uniProps={foregroundMutedColorMapping}
+      />
+    );
   } else if (action.icon === "sessions") {
     actionIcon = (
-      <ThemedMessagesSquare size={16} strokeWidth={2.2} uniProps={foregroundMutedColorMapping} />
+      <ThemedIconHost
+        Icon={MessagesSquare}
+        size={16}
+        strokeWidth={2.2}
+        uniProps={foregroundMutedColorMapping}
+      />
     );
   } else if (action.icon === "changes") {
     actionIcon = (
-      <ThemedGitCompare size={16} strokeWidth={2.2} uniProps={foregroundMutedColorMapping} />
+      <ThemedIconHost
+        Icon={GitCompare}
+        size={16}
+        strokeWidth={2.2}
+        uniProps={foregroundMutedColorMapping}
+      />
     );
   } else if (action.icon === "environment") {
     actionIcon = (
-      <ThemedPanelRight size={16} strokeWidth={2.2} uniProps={foregroundMutedColorMapping} />
+      <ThemedIconHost
+        Icon={PanelRight}
+        size={16}
+        strokeWidth={2.2}
+        uniProps={foregroundMutedColorMapping}
+      />
     );
   } else if (action.icon === "terminal") {
     actionIcon = (
-      <ThemedTerminalSquare size={16} strokeWidth={2.2} uniProps={foregroundMutedColorMapping} />
+      <ThemedIconHost
+        Icon={TerminalSquare}
+        size={16}
+        strokeWidth={2.2}
+        uniProps={foregroundMutedColorMapping}
+      />
     );
   } else if (action.icon === "agent") {
-    actionIcon = <ThemedBot size={16} strokeWidth={2.2} uniProps={foregroundMutedColorMapping} />;
+    actionIcon = (
+      <ThemedIconHost
+        Icon={Bot}
+        size={16}
+        strokeWidth={2.2}
+        uniProps={foregroundMutedColorMapping}
+      />
+    );
   }
   const titleStyle = useMemo(() => [styles.title, active && styles.titleActive], [active]);
   const subtitleStyle = useMemo(() => [styles.subtitle], []);

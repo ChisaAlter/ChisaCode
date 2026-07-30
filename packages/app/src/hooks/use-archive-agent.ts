@@ -15,7 +15,7 @@ export interface ArchiveAgentInput {
   agentId: string;
 }
 
-export type ArchiveAgentClient = Pick<DaemonClient, "archiveAgent">;
+export type ArchiveAgentClient = Pick<DaemonClient, "archiveAgent" | "closeItems">;
 
 type ArchiveAgentState = Record<string, true>;
 
@@ -120,7 +120,107 @@ export function resolveArchiveAgentClient(input: {
 
 export function isArchiveAgentNotFoundError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
-  return /Agent not found:/i.test(message) && /archive_agent_request/i.test(message);
+  // Match both server-side "not found" messages that can surface when an
+  // already-archived agent's storage record is gone:
+  //   - "Agent not found: <id>"                (lifecycle-command.ts archiveStoredAgent)
+  //   - "Agent not found in storage after archive: <id>"  (post-archive guard)
+  // Without matching the second one, re-archiving an already-archived session
+  // whose record was cleared throws an unswallowed error and pops a toast.
+  const isNotFound = /Agent not found( in storage after archive)?:/i.test(message);
+  return isNotFound && /archive_agent_request/i.test(message);
+}
+
+function groupArchiveInputsByServer(inputs: ArchiveAgentInput[]): Map<string, string[]> {
+  const byServer = new Map<string, string[]>();
+  for (const input of inputs) {
+    const serverId = input.serverId.trim();
+    const agentId = input.agentId.trim();
+    if (!serverId || !agentId) {
+      continue;
+    }
+    const existing = byServer.get(serverId);
+    if (existing) {
+      existing.push(agentId);
+    } else {
+      byServer.set(serverId, [agentId]);
+    }
+  }
+  return byServer;
+}
+
+async function archiveAgentsOnServer(input: {
+  serverId: string;
+  agentIds: string[];
+  queryClient: QueryClient;
+  archiveMutateAsync: (value: ArchiveAgentInput) => Promise<{ archivedAt: string }>;
+}): Promise<string | null> {
+  const { serverId, queryClient, archiveMutateAsync } = input;
+  const uniqueAgentIds = [...new Set(input.agentIds)];
+  const client = resolveArchiveAgentClient({
+    serverId,
+    sessionClient: useSessionStore.getState().sessions[serverId]?.client ?? null,
+    runtimeClient: getHostRuntimeStore().getClient(serverId),
+  });
+  if (!client) {
+    return `${serverId}: Daemon client not available`;
+  }
+
+  await cancelArchivedAgentListQueries(queryClient, serverId);
+  const archivedAt = new Date().toISOString();
+  applyArchivedAgentCloseResults({
+    queryClient,
+    serverId,
+    results: uniqueAgentIds.map((agentId) => ({ agentId, archivedAt })),
+    invalidateQueries: false,
+  });
+  for (const agentId of uniqueAgentIds) {
+    setAgentArchiving({
+      queryClient,
+      serverId,
+      agentId,
+      isArchiving: true,
+    });
+  }
+
+  try {
+    // Prefer the batch close_items RPC (one round-trip) when available.
+    // Fall back to sequential single archives if the client surface is
+    // missing closeItems (older runtime / tests).
+    if (typeof client.closeItems !== "function") {
+      for (const agentId of uniqueAgentIds) {
+        await archiveMutateAsync({ serverId, agentId });
+      }
+      return null;
+    }
+
+    const result = await client.closeItems({ agentIds: uniqueAgentIds });
+    applyArchivedAgentCloseResults({
+      queryClient,
+      serverId,
+      results: result.agents,
+      invalidateQueries: false,
+    });
+    if (result.agents.length >= uniqueAgentIds.length) {
+      return null;
+    }
+    const archivedIds = new Set(result.agents.map((entry) => entry.agentId));
+    const missingCount = uniqueAgentIds.filter((agentId) => !archivedIds.has(agentId)).length;
+    return missingCount > 0 ? `${serverId}: failed to archive ${missingCount} session(s)` : null;
+  } catch (error) {
+    // On batch failure, revalidate from the server so the UI converges
+    // to the real archived/unarchived state instead of a half-applied
+    // optimistic cache.
+    return error instanceof Error ? error.message : String(error);
+  } finally {
+    for (const agentId of uniqueAgentIds) {
+      clearArchiveAgentPending({ queryClient, serverId, agentId });
+    }
+    void queryClient.invalidateQueries({ queryKey: ["sidebarAgentsList", serverId] });
+    void queryClient.invalidateQueries({ queryKey: ["allAgents", serverId] });
+    for (const queryKey of agentHistoryQueryKeys(serverId)) {
+      void queryClient.invalidateQueries({ queryKey });
+    }
+  }
 }
 
 export function setAgentArchiving(input: SetAgentArchivingInput): void {
@@ -597,6 +697,42 @@ export function useArchiveAgent() {
     [archiveMutateAsync],
   );
 
+  const archiveAgents = useCallback(
+    async (inputs: ArchiveAgentInput[]): Promise<void> => {
+      if (inputs.length === 0) {
+        return;
+      }
+      if (inputs.length === 1) {
+        await archiveMutateAsync(inputs[0]!);
+        return;
+      }
+
+      // Group by server so we can issue one close_items_request per host.
+      // Parallel single-agent archive RPCs routinely exceed the 10s client
+      // timeout under load (daemon logs show 10–12s per archive_agent_request
+      // with peakInflightRequests ~15), causing optimistic removals to roll
+      // back and already-archived sessions to reappear.
+      const byServer = groupArchiveInputsByServer(inputs);
+      const failures: string[] = [];
+      for (const [serverId, agentIds] of byServer) {
+        const failure = await archiveAgentsOnServer({
+          serverId,
+          agentIds,
+          queryClient,
+          archiveMutateAsync,
+        });
+        if (failure) {
+          failures.push(failure);
+        }
+      }
+
+      if (failures.length > 0) {
+        throw new Error(failures[0] ?? "Failed to archive sessions");
+      }
+    },
+    [archiveMutateAsync, queryClient],
+  );
+
   const isArchivingAgent = useCallback(
     (input: ArchiveAgentInput): boolean => {
       const key = toArchiveKey(input);
@@ -610,6 +746,7 @@ export function useArchiveAgent() {
 
   return {
     archiveAgent,
+    archiveAgents,
     isArchivingAgent,
   };
 }

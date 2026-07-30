@@ -45,7 +45,8 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import { StyleSheet } from "react-native-unistyles";
+import { ThemedIconHost } from "@/components/themed-icon-host";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { useTranslation } from "react-i18next";
 import { TitlebarDragRegion } from "@/components/desktop/titlebar-drag-region";
@@ -505,7 +506,6 @@ function FooterIconButton({
   icon: LucideIcon;
   variant?: "mobile" | "desktop";
 }) {
-  const ThemedIcon = useMemo(() => withUnistyles(Icon), [Icon]);
   const buttonStyle = useCallback(
     ({ hovered, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
       styles.footerIconButton,
@@ -526,7 +526,11 @@ function FooterIconButton({
       onPress={onPress}
     >
       {({ hovered }) => (
-        <ThemedIcon size={ICON_SIZE.md} uniProps={footerIconColorMapping(Boolean(hovered))} />
+        <ThemedIconHost
+          Icon={Icon}
+          size={ICON_SIZE.md}
+          uniProps={footerIconColorMapping(Boolean(hovered))}
+        />
       )}
     </Pressable>
   );
@@ -597,7 +601,6 @@ function SidebarTopAction({
   onPress: () => void;
   testID: string;
 }) {
-  const ThemedIcon = useMemo(() => withUnistyles(Icon), [Icon]);
   const actionStyle = useCallback(
     ({ hovered, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
       styles.sidebarTopAction,
@@ -616,7 +619,8 @@ function SidebarTopAction({
     >
       {({ hovered, pressed }) => (
         <View style={styles.sidebarTopActionIconSlot}>
-          <ThemedIcon
+          <ThemedIconHost
+            Icon={Icon}
             size={ICON_SIZE.sm}
             uniProps={footerIconColorMapping(Boolean(hovered) || Boolean(pressed))}
           />
@@ -864,7 +868,6 @@ function MobileQuickActionButton({
   variant?: "primary" | "secondary";
   onPress: () => void;
 }) {
-  const ThemedIcon = useMemo(() => withUnistyles(Icon), [Icon]);
   const resolveIconColorMapping = useCallback(
     (hovered?: boolean, pressed?: boolean) => {
       if (variant === "primary" || hovered || pressed) {
@@ -902,7 +905,11 @@ function MobileQuickActionButton({
       {({ hovered, pressed }) => (
         <>
           <View style={styles.mobileQuickActionIcon}>
-            <ThemedIcon size={ICON_SIZE.sm} uniProps={resolveIconColorMapping(hovered, pressed)} />
+            <ThemedIconHost
+              Icon={Icon}
+              size={ICON_SIZE.sm}
+              uniProps={resolveIconColorMapping(hovered, pressed)}
+            />
           </View>
           <Text style={textStyle} numberOfLines={1} ellipsizeMode="tail">
             {label}

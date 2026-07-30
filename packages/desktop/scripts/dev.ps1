@@ -1,4 +1,4 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $DesktopDir = (Resolve-Path "$ScriptDir\..").Path
@@ -14,6 +14,29 @@ $env:EXPO_PORT = (npx get-port-cli 8081 8082 8083 8084 8085).Trim()
 
 # Set EXPO_DEV_URL in the environment so Electron inherits it
 $env:EXPO_DEV_URL = "http://localhost:$($env:EXPO_PORT)"
+
+# --- Isolated, seeded dev daemon home + listen port ---
+# The desktop Electron main spawns its own daemon via startDaemon(), inheriting
+# this process env. Without an isolated CHISACODE_HOME + CHISACODE_LISTEN the dev
+# daemon would collide with any already-running production daemon on
+# localhost:6767 (~/.chisacode) and either adopt the production daemon (which
+# rejects the Metro dev origin) or fight over the pid lock. We seed a stable
+# copy of the production home so the dev daemon registers the same model-gateway
+# face providers and sees the same persisted agents. Shared logic with the root
+# dev scripts lives in scripts/dev-home.ps1.
+$RootScriptsDir = (Resolve-Path "$DesktopDir\..\..\scripts").Path
+. (Join-Path $RootScriptsDir "dev-home.ps1")
+Write-Host "  Desktop dev home:"
+Resolve-DevChisacodeHome
+
+# Pick a free daemon port (above the production 6767 default and the root
+# dev.ps1 6767-6776 range) so desktop dev and root dev:win can coexist.
+$DaemonPort = (npx get-port-cli 6770 6771 6772 6773 6774 6775 6776 6777 6778 6779 6780 6781 6782 6783 6784 6785).Trim()
+if (-not $DaemonPort) {
+    Write-Error "无法确定空闲 dev daemon 端口（6770-6785）。"
+    exit 1
+}
+$env:CHISACODE_LISTEN = "localhost:$DaemonPort"
 
 $RemoteDebuggingPort = if ($env:CHISACODE_ELECTRON_REMOTE_DEBUGGING_PORT) {
     $env:CHISACODE_ELECTRON_REMOTE_DEBUGGING_PORT

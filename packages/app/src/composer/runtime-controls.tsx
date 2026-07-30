@@ -7,7 +7,8 @@ import {
 } from "react";
 import { ActivityIndicator, Text, View, type PressableStateCallbackType } from "react-native";
 import { AudioLines, Square } from "lucide-react-native";
-import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import { StyleSheet } from "react-native-unistyles";
+import { ThemedIconHost } from "@/components/themed-icon-host";
 import { useTranslation } from "react-i18next";
 
 import { ContextWindowMeter } from "@/components/context-window-meter";
@@ -232,7 +233,7 @@ function ComposerVoiceModeButton({
         return <ActivityIndicator size="small" color="white" />;
       }
       const colorMapping = hovered ? iconForegroundMapping : iconForegroundMutedMapping;
-      return <ThemedAudioLines size={buttonIconSize} uniProps={colorMapping} />;
+      return <ThemedIconHost Icon={AudioLines} size={buttonIconSize} uniProps={colorMapping} />;
     },
     [buttonIconSize, isVoiceSwitching],
   );
@@ -451,8 +452,6 @@ const styles = StyleSheet.create((theme: Theme) => ({
     opacity: 0.5,
   },
 })) as unknown as Record<string, object>;
-
-const ThemedAudioLines = withUnistyles(AudioLines);
 
 const iconForegroundMapping = (theme: Theme) => ({ color: theme.colors.foreground });
 const iconForegroundMutedMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });

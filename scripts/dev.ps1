@@ -1,4 +1,4 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProjectRoot = Resolve-Path "$ScriptDir\.."
@@ -20,28 +20,13 @@ if (-not $concurrentlyPath) {
     exit 1
 }
 
-# --- Derive CHISACODE_HOME ---
-
-if (-not $env:CHISACODE_HOME) {
-    $GitDir = git rev-parse --git-dir 2>$null
-    $GitCommonDir = git rev-parse --git-common-dir 2>$null
-
-    if ($GitDir -and $GitCommonDir -and ($GitDir -ne $GitCommonDir)) {
-        # Inside a worktree — derive a stable home from the worktree name
-        $WorktreeRoot = git rev-parse --show-toplevel
-        $WorktreeName = (Split-Path -Leaf $WorktreeRoot).ToLower() -replace '[^a-z0-9-]', '-' -replace '-+', '-' -replace '^-|-$', ''
-        $env:CHISACODE_HOME = "$env:USERPROFILE\.chisacode-$WorktreeName"
-        New-Item -ItemType Directory -Force -Path $env:CHISACODE_HOME | Out-Null
-    } else {
-        $env:CHISACODE_HOME = Join-Path ([System.IO.Path]::GetTempPath()) "chisacode-dev-$([System.Guid]::NewGuid().ToString('N').Substring(0,6))"
-        New-Item -ItemType Directory -Force -Path $env:CHISACODE_HOME | Out-Null
-        # Register cleanup on exit
-        $TempChisaCodeHome = $env:CHISACODE_HOME
-        Register-EngineEvent PowerShell.Exiting -Action {
-            Remove-Item -Recurse -Force $TempChisaCodeHome -ErrorAction SilentlyContinue
-        } | Out-Null
-    }
-}
+# --- Derive + seed CHISACODE_HOME ---
+# Dev home is a stable, seeded copy of the production home so the dev daemon
+# registers the same model-gateway face providers and sees the same persisted
+# agents (instead of an empty temp dir that filters every agent out). Shared
+# logic lives in scripts/dev-home.ps1.
+. (Join-Path $ScriptDir "dev-home.ps1")
+Resolve-DevChisacodeHome
 
 # --- Share speech models ---
 

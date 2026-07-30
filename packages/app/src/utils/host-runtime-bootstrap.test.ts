@@ -137,14 +137,37 @@ describe("resolveStartupRedirectRoute", () => {
     ).toBeNull();
   });
 
-  it("waits while the persisted workspace selection has not finished loading", () => {
+  it("does not wait on workspace selection hydration when no selection will be restored", () => {
+    // Soft Home startup always passes workspaceSelection: null. Blocking on
+    // AsyncStorage hydrate here freezes the splash forever if hydrate hangs.
     expect(
       resolveStartupRedirectRoute({
         ...baseInput,
         anyOnlineHostServerId: "server-1",
         isWorkspaceSelectionLoaded: false,
       }),
+    ).toBe("/h/server-1");
+  });
+
+  it("still waits on hydration only when a workspace selection may be restored", () => {
+    expect(
+      resolveStartupRedirectRoute({
+        ...baseInput,
+        anyOnlineHostServerId: "server-1",
+        workspaceSelection: { serverId: "server-1", workspaceId: "workspace-a" },
+        isWorkspaceSelectionLoaded: false,
+      }),
     ).toBeNull();
+  });
+
+  it("still redirects to welcome after give-up even when workspace selection is not hydrated", () => {
+    expect(
+      resolveStartupRedirectRoute({
+        ...baseInput,
+        isWorkspaceSelectionLoaded: false,
+        hasGivenUpWaitingForHost: true,
+      }),
+    ).toBe(WELCOME_ROUTE);
   });
 
   it("waits while no host is online and the give-up timer has not fired", () => {

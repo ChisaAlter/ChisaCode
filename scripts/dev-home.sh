@@ -79,6 +79,10 @@ configure_dev_chisacode_home() {
     return
   fi
 
-  CHISACODE_HOME="$(mktemp -d "${TMPDIR:-/tmp}/chisacode-dev.XXXXXX")"
-  trap "rm -rf '$CHISACODE_HOME'" EXIT
+  # Main checkout — stable seeded home, kept across restarts so the seed
+  # (model-gateway config + agent/project metadata) persists. Seeding lets the
+  # dev daemon register the same face providers as production instead of an
+  # empty home that filters every persisted agent out of the list.
+  CHISACODE_HOME="$HOME/.chisacode-dev"
+  seed_worktree_chisacode_home "$CHISACODE_HOME"
 }

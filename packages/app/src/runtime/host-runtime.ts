@@ -94,6 +94,14 @@ export function isHostRuntimeDirectoryLoading(snapshot: HostRuntimeSnapshot | nu
   ) {
     return true;
   }
+  // An error before the first successful load must NOT be treated as "loading":
+  // otherwise the sidebar/conversation list shows an infinite initial-load
+  // spinner with no escape (the bootstrap catch only logs and does not retry,
+  // and hasEverLoadedAgentDirectory stays false). Treat it as not-loading so
+  // consumers fall through to an empty/error state instead of freezing.
+  if (snapshot.agentDirectoryStatus === "error_before_first_success") {
+    return false;
+  }
   return (
     !snapshot.hasEverLoadedAgentDirectory &&
     (snapshot.connectionStatus === "connecting" || snapshot.connectionStatus === "online")
@@ -1253,6 +1261,10 @@ export class HostRuntimeStore {
   private deps: HostRuntimeControllerDeps;
   private lastConnectionStatusByServer = new Map<string, HostRuntimeConnectionStatus>();
   private agentDirectoryBootstrapInFlight = new Map<string, Promise<void>>();
+  // Bounded auto-retry counts for agent-directory bootstrap so a transient
+  // first-load error (e.g. an rpc_error during startup) recovers instead of
+  // leaving the conversation list frozen on an infinite initial-load spinner.
+  private agentDirectoryBootstrapAttempts = new Map<string, number>();
   private agentDirectoryRefreshInFlight = new Map<
     string,
     Promise<{
@@ -1435,6 +1447,7 @@ export class HostRuntimeStore {
 
     rekeyMap(this.lastConnectionStatusByServer, oldServerId, newServerId);
     rekeyMap(this.agentDirectoryBootstrapInFlight, oldServerId, newServerId);
+    rekeyMap(this.agentDirectoryBootstrapAttempts, oldServerId, newServerId);
     rekeyMap(this.agentDirectoryRefreshInFlight, oldServerId, newServerId);
 
     const listeners = this.serverListeners.get(oldServerId);
@@ -1801,6 +1814,10 @@ export class HostRuntimeStore {
       return;
     }
 
+    const attempts = this.agentDirectoryBootstrapAttempts.get(serverId) ?? 0;
+    const MAX_BOOTSTRAP_ATTEMPTS = 5;
+    const BASE_RETRY_DELAY_MS = 1500;
+
     const bootstrap = Promise.resolve()
       .then(() =>
         this.refreshAgentDirectory({
@@ -1815,8 +1832,29 @@ export class HostRuntimeStore {
           serverId,
           error: toErrorMessage(error),
         });
+        // Bounded auto-retry: schedule another bootstrap attempt with a growing
+        // delay so a transient startup rpc_error doesn't freeze the sidebar on
+        // an infinite initial-load spinner. The directory-loading selector now
+        // treats error_before_first_success as not-loading, so the UI can show
+        // content/empty/error while the retry runs in the background.
+        if (attempts + 1 < MAX_BOOTSTRAP_ATTEMPTS) {
+          this.agentDirectoryBootstrapAttempts.set(serverId, attempts + 1);
+          const retryDelay = BASE_RETRY_DELAY_MS * Math.pow(2, attempts);
+          void delay(retryDelay).then(() => {
+            // Only re-trigger if still online and not already in flight.
+            const current = this.controllers.get(serverId)?.getSnapshot();
+            if (current?.connectionStatus === "online") {
+              this.maybeAutoBootstrapAgentDirectory(serverId);
+            }
+            return undefined;
+          });
+        }
       })
       .finally(() => {
+        // On success, clear the retry counter.
+        if (controller.getSnapshot().hasEverLoadedAgentDirectory) {
+          this.agentDirectoryBootstrapAttempts.delete(serverId);
+        }
         const inFlight = this.agentDirectoryBootstrapInFlight.get(serverId);
         if (inFlight === bootstrap) {
           this.agentDirectoryBootstrapInFlight.delete(serverId);

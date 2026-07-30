@@ -90,11 +90,15 @@ export class ClaudeQueryLifecycle {
   }
 
   async ensureQuery(): Promise<Query> {
-    if (this.query && !this.restartNeeded) {
+    // Require both query and input. Compatibility setters / interrupt recovery
+    // can leave query non-null while input is null; returning early in that
+    // state makes send() hit `null.push` → "Cannot read properties of null
+    // (reading 'push')" which surfaces as a [System Error] timeline message.
+    if (this.query && this.input && !this.restartNeeded) {
       return this.query;
     }
 
-    if (this.restartNeeded && this.query) {
+    if ((this.restartNeeded || (this.query && !this.input)) && this.query) {
       await this.restartCurrentQuery();
     }
     this.restartNeeded = false;
@@ -135,11 +139,14 @@ export class ClaudeQueryLifecycle {
 
   async send(message: SDKUserMessage): Promise<void> {
     await this.ensureQuery();
-    if (!this.input) {
+    // Capture the input stream after ensureQuery so a concurrent restart that
+    // nulls `this.input` between the check and push cannot throw TypeError.
+    const input = this.input;
+    if (!input) {
       throw new Error("Claude session input stream not initialized");
     }
     this.startPump();
-    this.input.push(message);
+    input.push(message);
   }
 
   private startPump(): void {

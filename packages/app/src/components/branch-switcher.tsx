@@ -13,12 +13,15 @@ import { ScreenTitle } from "@/components/headers/screen-title";
 import { useTranslation } from "react-i18next";
 import type { Theme } from "@/styles/theme";
 
-const ThemedGitBranch = withUnistyles(GitBranch);
-const ThemedChevronDown = withUnistyles(ChevronDown);
-
-const foregroundMutedColorMapping = (theme: Theme) => ({
+// Bake color into mappers. On web, withUnistyles merges call-site props onto the
+// child, so passing `uniProps` leaks onto lucide/DOM nodes and triggers:
+// "React does not recognize the `uniProps` prop on a DOM element".
+const ThemedGitBranch = withUnistyles(GitBranch, (theme: Theme) => ({
   color: theme.colors.foregroundMuted,
-});
+}));
+const ThemedChevronDown = withUnistyles(ChevronDown, (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+}));
 
 interface BranchSwitcherProps {
   currentBranchName: string | null;
@@ -67,7 +70,7 @@ export function BranchSwitcher({
     </Text>
   ) : (
     <View style={styles.titleRow}>
-      {isGitCheckout ? <ThemedGitBranch size={14} uniProps={foregroundMutedColorMapping} /> : null}
+      {isGitCheckout ? <ThemedGitBranch size={14} /> : null}
       <ScreenTitle testID="workspace-header-title">{title}</ScreenTitle>
     </View>
   );
@@ -83,10 +86,7 @@ export function BranchSwitcher({
     [isSoftPill],
   );
 
-  const branchLeadingSlot = useMemo(
-    () => <ThemedGitBranch size={14} uniProps={foregroundMutedColorMapping} />,
-    [],
-  );
+  const branchLeadingSlot = useMemo(() => <ThemedGitBranch size={14} />, []);
 
   const renderBranchOption = useCallback<NonNullable<ComboboxProps["renderOption"]>>(
     ({ option, selected, active, onPress }) => (
@@ -119,9 +119,7 @@ export function BranchSwitcher({
         accessibilityLabel={t("branches.currentBranchLabel", { branch: currentBranchName })}
       >
         {titleContent}
-        {!isCompact || isSoftPill ? (
-          <ThemedChevronDown size={12} uniProps={foregroundMutedColorMapping} />
-        ) : null}
+        {!isCompact || isSoftPill ? <ThemedChevronDown size={12} /> : null}
       </Pressable>
       <Combobox
         options={branchOptions}

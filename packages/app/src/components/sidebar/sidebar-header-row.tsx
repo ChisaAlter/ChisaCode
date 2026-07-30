@@ -1,12 +1,13 @@
 import { useCallback, useMemo, type ReactNode } from "react";
 import { Pressable, Text, View, type PressableStateCallbackType } from "react-native";
-import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import { StyleSheet } from "react-native-unistyles";
 import type { LucideIcon } from "lucide-react-native";
 import {
   HEADER_INNER_HEIGHT,
   HEADER_INNER_HEIGHT_MOBILE,
   SETTINGS_DESKTOP_BACK_HEIGHT,
 } from "@/constants/layout";
+import { ThemedIconHost } from "@/components/themed-icon-host";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 
 interface SidebarHeaderRowProps {
@@ -43,8 +44,6 @@ export function SidebarHeaderRow({
   trailing,
   compact = false,
 }: SidebarHeaderRowProps) {
-  const ThemedIcon = useMemo(() => withUnistyles(Icon), [Icon]);
-
   const buttonStyle = useCallback(
     ({ hovered }: PressableStateCallbackType & { hovered?: boolean }) => [
       styles.button,
@@ -60,7 +59,8 @@ export function SidebarHeaderRow({
       return (
         <>
           <View style={styles.titleGroup}>
-            <ThemedIcon
+            <ThemedIconHost
+              Icon={Icon}
               size={ICON_SIZE.md}
               uniProps={isHighlighted ? foregroundColorMapping : foregroundMutedColorMapping}
             />
@@ -70,7 +70,7 @@ export function SidebarHeaderRow({
         </>
       );
     },
-    [ThemedIcon, compact, isActive, label, trailing],
+    [Icon, compact, isActive, label, trailing],
   );
 
   const containerStyle = useMemo(

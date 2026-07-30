@@ -2,7 +2,8 @@ import { useCallback, useMemo, type ReactElement } from "react";
 import { Image, Pressable, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { ArrowUp, CircleDot, GitPullRequest, Pencil } from "lucide-react-native";
-import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import { StyleSheet } from "react-native-unistyles";
+import { ThemedIconHost } from "@/components/themed-icon-host";
 import type { GitHubSearchItem } from "@chisacode/protocol/messages";
 
 import { AttachmentPill } from "@/components/attachment-pill";
@@ -160,7 +161,7 @@ function QueuedMessageRow({ item, onEdit, onSendNow }: QueuedMessageRowProps) {
           accessibilityLabel={t("composer.editQueuedMessage")}
           accessibilityRole="button"
         >
-          <ThemedPencil size={ICON_SIZE.sm} uniProps={iconForegroundMapping} />
+          <ThemedIconHost Icon={Pencil} size={ICON_SIZE.sm} uniProps={iconForegroundMapping} />
         </Pressable>
         <Pressable
           onPress={handleSendNow}
@@ -168,7 +169,11 @@ function QueuedMessageRow({ item, onEdit, onSendNow }: QueuedMessageRowProps) {
           accessibilityLabel={t("composer.sendQueuedMessageNow")}
           accessibilityRole="button"
         >
-          <ThemedArrowUp size={ICON_SIZE.sm} uniProps={iconAccentForegroundMapping} />
+          <ThemedIconHost
+            Icon={ArrowUp}
+            size={ICON_SIZE.sm}
+            uniProps={iconAccentForegroundMapping}
+          />
         </Pressable>
       </View>
     </View>
@@ -250,9 +255,17 @@ function GithubAttachmentPill({
       <View style={styles.githubPillBody}>
         <View style={styles.githubPillIcon}>
           {item.kind === "pr" ? (
-            <ThemedGitPullRequest size={ICON_SIZE.sm} uniProps={iconForegroundMutedMapping} />
+            <ThemedIconHost
+              Icon={GitPullRequest}
+              size={ICON_SIZE.sm}
+              uniProps={iconForegroundMutedMapping}
+            />
           ) : (
-            <ThemedCircleDot size={ICON_SIZE.sm} uniProps={iconForegroundMutedMapping} />
+            <ThemedIconHost
+              Icon={CircleDot}
+              size={ICON_SIZE.sm}
+              uniProps={iconForegroundMutedMapping}
+            />
           )}
         </View>
         <Text style={styles.githubPillText} numberOfLines={1}>
@@ -277,9 +290,17 @@ export function GithubPickerOption({
   const leadingSlot = useMemo(
     () =>
       item.kind === "pr" ? (
-        <ThemedGitPullRequest size={ICON_SIZE.sm} uniProps={iconForegroundMutedMapping} />
+        <ThemedIconHost
+          Icon={GitPullRequest}
+          size={ICON_SIZE.sm}
+          uniProps={iconForegroundMutedMapping}
+        />
       ) : (
-        <ThemedCircleDot size={ICON_SIZE.sm} uniProps={iconForegroundMutedMapping} />
+        <ThemedIconHost
+          Icon={CircleDot}
+          size={ICON_SIZE.sm}
+          uniProps={iconForegroundMutedMapping}
+        />
       ),
     [item.kind],
   );
@@ -380,11 +401,6 @@ const styles = StyleSheet.create((theme: Theme) => ({
 })) as unknown as Record<string, object>;
 
 const QUEUE_SEND_BUTTON_STYLE = [styles.queueActionButton, styles.queueSendButton];
-
-const ThemedPencil = withUnistyles(Pencil);
-const ThemedArrowUp = withUnistyles(ArrowUp);
-const ThemedGitPullRequest = withUnistyles(GitPullRequest);
-const ThemedCircleDot = withUnistyles(CircleDot);
 
 const iconForegroundMapping = (theme: Theme) => ({ color: theme.colors.foreground });
 const iconForegroundMutedMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });

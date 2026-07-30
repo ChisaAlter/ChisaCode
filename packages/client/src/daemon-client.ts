@@ -1656,11 +1656,15 @@ export class DaemonClient {
       terminalIds: input.terminalIds ?? [],
       requestId: resolvedRequestId,
     });
+    // Bulk archive can take well over 10s for multi-agent batches (each
+    // archive_agent_request alone often runs 5–12s under load). Give the
+    // batched close_items path enough headroom so the UI does not time out
+    // and roll back optimistic removals.
     return this.requests.requestCorrelated({
       requestId: resolvedRequestId,
       message,
       responseType: "close_items_response",
-      timeout: 10000,
+      timeout: 60_000,
       options: { skipQueue: true },
     });
   }

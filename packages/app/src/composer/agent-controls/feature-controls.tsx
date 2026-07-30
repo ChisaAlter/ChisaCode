@@ -29,24 +29,33 @@ interface FeatureItemProps {
   onSetFeature?: (featureId: string, value: unknown) => void;
 }
 
-// Lucide icons only accept `color` (a non-style prop), so wrap each one with
-// `withUnistyles` and feed the theme-reactive color through `uniProps`. Icon
-// sizes are static (`ICON_SIZE`), imported directly from the theme module.
-// Only the icon node re-renders on theme changes. See docs/unistyles.md.
-const ThemedChevronDown = withUnistyles(ChevronDown);
-const ThemedListTodo = withUnistyles(ListTodo);
-const ThemedSettings2 = withUnistyles(Settings2);
-const ThemedShieldCheck = withUnistyles(ShieldCheck);
-const ThemedZap = withUnistyles(Zap);
+// Lucide icons only accept `color`. On web, withUnistyles merges call-site
+// `uniProps` onto the child and lucide forwards unknown props to the DOM SVG.
+// Inject color via a host that only passes `color`/`size` to lucide.
+type LucideIconComponent = typeof Zap;
 
-const FEATURE_ICONS: Record<string, typeof ThemedZap> = {
-  "list-todo": ThemedListTodo,
-  "shield-check": ThemedShieldCheck,
-  zap: ThemedZap,
+function LucideIconHost({
+  color,
+  size,
+  Icon,
+}: {
+  color: string;
+  size: number;
+  Icon: LucideIconComponent;
+}) {
+  return <Icon color={color} size={size} />;
+}
+
+const ThemedLucideIconHost = withUnistyles(LucideIconHost);
+
+const FEATURE_ICONS: Record<string, LucideIconComponent> = {
+  "list-todo": ListTodo,
+  "shield-check": ShieldCheck,
+  zap: Zap,
 };
 
-function getFeatureIcon(icon?: string) {
-  return (icon && FEATURE_ICONS[icon]) || ThemedSettings2;
+function getFeatureIcon(icon?: string): LucideIconComponent {
+  return (icon && FEATURE_ICONS[icon]) || Settings2;
 }
 
 type IconColorMapping = (theme: Theme) => { color: string };
@@ -157,7 +166,8 @@ export function DesktopFeatureItem({
             accessibilityLabel={tooltip}
             testID={`agent-feature-${feature.id}`}
           >
-            <FeatureIcon
+            <ThemedLucideIconHost
+              Icon={FeatureIcon}
               size={ICON_SIZE.md}
               uniProps={getFeatureIconColorMapping(feature.id, feature.value)}
             />
@@ -183,9 +193,17 @@ export function DesktopFeatureItem({
               accessibilityLabel={tooltip}
               testID={`agent-feature-${feature.id}`}
             >
-              <FeatureIcon size={ICON_SIZE.md} uniProps={foregroundMutedColorMapping} />
+              <ThemedLucideIconHost
+                Icon={FeatureIcon}
+                size={ICON_SIZE.md}
+                uniProps={foregroundMutedColorMapping}
+              />
               <Text style={styles.modeBadgeText}>{resolveFeatureDisplayLabel(feature)}</Text>
-              <ThemedChevronDown size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
+              <ThemedLucideIconHost
+                Icon={ChevronDown}
+                size={ICON_SIZE.sm}
+                uniProps={foregroundMutedColorMapping}
+              />
             </DropdownMenuTrigger>
           </TooltipTrigger>
           <TooltipContent side="top" align="center" offset={8}>
@@ -242,7 +260,8 @@ export function SheetFeatureItem({
           accessibilityLabel={tooltip}
           testID={`agent-feature-${feature.id}`}
         >
-          <FeatureIcon
+          <ThemedLucideIconHost
+            Icon={FeatureIcon}
             size={ICON_SIZE.md}
             uniProps={getFeatureIconColorMapping(feature.id, feature.value)}
           />
@@ -270,7 +289,11 @@ export function SheetFeatureItem({
             testID={`agent-feature-${feature.id}`}
           >
             <Text style={styles.sheetSelectText}>{resolveFeatureDisplayLabel(feature)}</Text>
-            <ThemedChevronDown size={ICON_SIZE.md} uniProps={foregroundMutedColorMapping} />
+            <ThemedLucideIconHost
+              Icon={ChevronDown}
+              size={ICON_SIZE.md}
+              uniProps={foregroundMutedColorMapping}
+            />
           </DropdownMenuTrigger>
           <DropdownMenuContent side="top" align="start">
             {feature.options.map((option) => (

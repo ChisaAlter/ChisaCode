@@ -80,16 +80,27 @@ import {
 import { findCheckoutHintPrAttachment, syncPickerPrAttachment } from "./new-workspace-picker-state";
 import { useTranslation } from "react-i18next";
 
-const ThemedGitPullRequest = withUnistyles(GitPullRequest);
-const ThemedGitBranch = withUnistyles(GitBranch);
-const ThemedChevronDown = withUnistyles(ChevronDown);
-const ThemedCheck = withUnistyles(Check);
-const ThemedX = withUnistyles(X);
-const ThemedFolder = withUnistyles(Folder);
-
-const foregroundMutedColorMapping = (theme: Theme) => ({
+// Bake theme colors into withUnistyles mappers — do NOT pass `uniProps` at the
+// call site. On web/Electron, lucide icons forward unknown props onto DOM
+// nodes, which triggers: React does not recognize the `uniProps` prop.
+const ThemedGitPullRequest = withUnistyles(GitPullRequest, (theme: Theme) => ({
   color: theme.colors.foregroundMuted,
-});
+}));
+const ThemedGitBranch = withUnistyles(GitBranch, (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+}));
+const ThemedChevronDown = withUnistyles(ChevronDown, (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+}));
+const ThemedCheck = withUnistyles(Check, (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+}));
+const ThemedX = withUnistyles(X, (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+}));
+const ThemedFolder = withUnistyles(Folder, (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+}));
 
 function resolveCheckoutRequest(
   selectedItem: PickerItem | null,
@@ -138,15 +149,15 @@ function RefPickerBadgeContent({
     <>
       <View style={styles.badgeIconBox}>
         {selectedItem?.kind === "github-pr" ? (
-          <ThemedGitPullRequest size={iconSize} uniProps={foregroundMutedColorMapping} />
+          <ThemedGitPullRequest size={iconSize} />
         ) : (
-          <ThemedGitBranch size={iconSize} uniProps={foregroundMutedColorMapping} />
+          <ThemedGitBranch size={iconSize} />
         )}
       </View>
       <Text style={styles.badgeText} numberOfLines={1}>
         {triggerLabel}
       </Text>
-      <ThemedChevronDown size={iconSize} uniProps={foregroundMutedColorMapping} />
+      <ThemedChevronDown size={iconSize} />
     </>
   );
 }
@@ -219,7 +230,7 @@ function CheckoutHintBadge({
         accessibilityRole="button"
         accessibilityLabel={t("workspace.checkoutPr", { number: prNumber })}
       >
-        <ThemedCheck size={iconSize} uniProps={foregroundMutedColorMapping} />
+        <ThemedCheck size={iconSize} />
       </Pressable>
       <Pressable
         testID="new-workspace-checkout-hint-dismiss"
@@ -228,7 +239,7 @@ function CheckoutHintBadge({
         accessibilityRole="button"
         accessibilityLabel={t("workspace.dismissCheckoutHint", { number: prNumber })}
       >
-        <ThemedX size={iconSize} uniProps={foregroundMutedColorMapping} />
+        <ThemedX size={iconSize} />
       </Pressable>
     </View>
   );
@@ -264,12 +275,12 @@ function DirectoryTrigger({
           accessibilityLabel={t("workspace.directoryPicker.select")}
         >
           <View style={styles.badgeIconBox}>
-            <ThemedFolder size={iconSize} uniProps={foregroundMutedColorMapping} />
+            <ThemedFolder size={iconSize} />
           </View>
           <Text style={styles.badgeText} numberOfLines={1}>
             {label}
           </Text>
-          <ThemedChevronDown size={iconSize} uniProps={foregroundMutedColorMapping} />
+          <ThemedChevronDown size={iconSize} />
         </Pressable>
       </TooltipTrigger>
       <TooltipContent side="top" align="center" offset={8}>
@@ -469,11 +480,7 @@ function PickerOptionItem({
   const leadingSlot = useMemo(
     () => (
       <View style={styles.rowIconBox}>
-        {isBranch ? (
-          <ThemedGitBranch size={iconSize} uniProps={foregroundMutedColorMapping} />
-        ) : (
-          <ThemedGitPullRequest size={iconSize} uniProps={foregroundMutedColorMapping} />
-        )}
+        {isBranch ? <ThemedGitBranch size={iconSize} /> : <ThemedGitPullRequest size={iconSize} />}
       </View>
     ),
     [isBranch, iconSize],

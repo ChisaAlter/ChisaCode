@@ -29,6 +29,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import { ThemedIconHost } from "@/components/themed-icon-host";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { DraggableList, type DraggableRenderItemInfo } from "@/components/draggable-list";
 import type { AggregatedAgent } from "@/hooks/use-aggregated-agents";
@@ -121,19 +122,21 @@ interface SidebarPinnedCacheSnapshot {
   agentHistory: AgentHistoryCachePayload | undefined;
 }
 
-const ThemedCopy = withUnistyles(Copy);
-const ThemedPin = withUnistyles(Pin);
-const ThemedPencil = withUnistyles(Pencil);
-const ThemedArchive = withUnistyles(Archive);
-const ThemedTrash2 = withUnistyles(Trash2);
-const ThemedMoreHorizontal = withUnistyles(MoreHorizontal);
-const ThemedFolder = withUnistyles(Folder);
-const ThemedFolderOpen = withUnistyles(FolderOpen);
-const ThemedCheckCheck = withUnistyles(CheckCheck);
-const ThemedSquarePen = withUnistyles(SquarePen);
-const ThemedChevronRight = withUnistyles(ChevronRight);
-const ThemedChevronDown = withUnistyles(ChevronDown);
-const ThemedRefreshControl = withUnistyles(RefreshControl);
+// Route theme colors through ThemedIconHost so call-site `uniProps` never
+// reaches lucide leaves (web withUnistyles merges props onto the child).
+function RefreshControlHost({
+  tintColor,
+  refreshing,
+  onRefresh,
+}: {
+  tintColor: string;
+  refreshing: boolean;
+  onRefresh: () => void;
+}) {
+  return <RefreshControl tintColor={tintColor} refreshing={refreshing} onRefresh={onRefresh} />;
+}
+
+const ThemedRefreshControlHost = withUnistyles(RefreshControlHost);
 
 const foregroundMutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
@@ -439,6 +442,12 @@ function buildRenderGroups(agentGroups: SidebarSessionGroup[]): SidebarSessionRe
   }));
 }
 
+// Hover fade mask width for desktop quick actions. Implemented as a CSS
+// linear-gradient View (web-only) so we never wrap a DOM View with
+// withUnistyles + uniProps — that leaked `uniProps` onto the DOM and threw
+// "React does not recognize the `uniProps` prop on a DOM element".
+const DESKTOP_ROW_FADE_MASK_WIDTH = 72;
+
 // eslint-disable-next-line complexity -- Cross-platform row owns desktop hover, desktop context menu, and compact menu parity.
 function SidebarSessionRow({
   agent,
@@ -472,7 +481,6 @@ function SidebarSessionRow({
   const isCompact = useIsCompactFormFactor();
   const agentActionKey = getAgentActionKey(agent);
   const ProviderIcon = getProviderIcon(agent.provider);
-  const ThemedProviderIcon = useMemo(() => withUnistyles(ProviderIcon), [ProviderIcon]);
   const isSelected = selectedAgentId === `${agent.serverId}:${agent.id}`;
   const isPinned = isSidebarAgentPinned(agent);
   const [isHovered, setIsHovered] = useState(false);
@@ -557,23 +565,23 @@ function SidebarSessionRow({
     });
   }, [agent.id, t, toast]);
   const copyLeading = useMemo(
-    () => <ThemedCopy size={16} uniProps={foregroundMutedColorMapping} />,
+    () => <ThemedIconHost Icon={Copy} size={16} uniProps={foregroundMutedColorMapping} />,
     [],
   );
   const pinLeading = useMemo(
-    () => <ThemedPin size={16} uniProps={foregroundMutedColorMapping} />,
+    () => <ThemedIconHost Icon={Pin} size={16} uniProps={foregroundMutedColorMapping} />,
     [],
   );
   const renameLeading = useMemo(
-    () => <ThemedPencil size={16} uniProps={foregroundMutedColorMapping} />,
+    () => <ThemedIconHost Icon={Pencil} size={16} uniProps={foregroundMutedColorMapping} />,
     [],
   );
   const archiveLeading = useMemo(
-    () => <ThemedArchive size={16} uniProps={foregroundMutedColorMapping} />,
+    () => <ThemedIconHost Icon={Archive} size={16} uniProps={foregroundMutedColorMapping} />,
     [],
   );
   const deleteLeading = useMemo(
-    () => <ThemedTrash2 size={16} uniProps={foregroundMutedColorMapping} />,
+    () => <ThemedIconHost Icon={Trash2} size={16} uniProps={foregroundMutedColorMapping} />,
     [],
   );
   const handleQuickPin = useCallback(
@@ -610,12 +618,20 @@ function SidebarSessionRow({
     () => [rowQuickActionsStyle, !showQuickActions && styles.rowQuickHidden],
     [rowQuickActionsStyle, showQuickActions],
   );
+  const desktopRowFadeMaskStyle = useMemo(
+    () => [
+      styles.desktopRowFadeMask,
+      isSelected ? styles.desktopRowFadeMaskSelected : styles.desktopRowFadeMaskHovered,
+    ],
+    [isSelected],
+  );
 
   const rowMainContent = (
     <>
       {isSelected ? <View style={selectedIndicatorStyle} /> : null}
       <View style={rowLeadingStyle}>
-        <ThemedProviderIcon
+        <ThemedIconHost
+          Icon={ProviderIcon}
           size={ICON_SIZE.sm}
           uniProps={rowProviderIconColorMapping(isSelected)}
         />
@@ -642,7 +658,11 @@ function SidebarSessionRow({
         accessibilityLabel={t("sidebar.sessionActions")}
         style={menuButtonStyle}
       >
-        <ThemedMoreHorizontal size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
+        <ThemedIconHost
+          Icon={MoreHorizontal}
+          size={ICON_SIZE.sm}
+          uniProps={foregroundMutedColorMapping}
+        />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" width={220}>
         <DropdownMenuItem
@@ -718,7 +738,7 @@ function SidebarSessionRow({
         onPress={handleQuickPin}
         disabled={isPinning}
       >
-        <ThemedPin size={ICON_SIZE.sm} uniProps={pinIconColorMapping(isPinned)} />
+        <ThemedIconHost Icon={Pin} size={ICON_SIZE.sm} uniProps={pinIconColorMapping(isPinned)} />
       </Pressable>
       <Pressable
         accessibilityRole="button"
@@ -728,7 +748,7 @@ function SidebarSessionRow({
         onPress={handleQuickArchive}
         disabled={isArchiving || Boolean(agent.archivedAt)}
       >
-        <ThemedArchive size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
+        <ThemedIconHost Icon={Archive} size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
       </Pressable>
     </View>
   );
@@ -770,6 +790,7 @@ function SidebarSessionRow({
           accessibilityState={rowAccessibilityState}
         >
           {rowMainContent}
+          {showQuickActions ? <View pointerEvents="none" style={desktopRowFadeMaskStyle} /> : null}
         </ContextMenuTrigger>
         {desktopTrailingContent}
       </View>
@@ -910,31 +931,49 @@ function SidebarSessionGroupHeader({
   const handlePointerEnter = useCallback(() => setIsHovered(true), []);
   const handlePointerLeave = useCallback(() => setIsHovered(false), []);
   const copyPathLeading = useMemo(
-    () => <ThemedCopy size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />,
+    () => <ThemedIconHost Icon={Copy} size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />,
     [],
   );
   const pinLeading = useMemo(
-    () => <ThemedPin size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />,
+    () => <ThemedIconHost Icon={Pin} size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />,
     [],
   );
   const openLeading = useMemo(
-    () => <ThemedFolderOpen size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />,
+    () => (
+      <ThemedIconHost
+        Icon={FolderOpen}
+        size={ICON_SIZE.sm}
+        uniProps={foregroundMutedColorMapping}
+      />
+    ),
     [],
   );
   const renameLeading = useMemo(
-    () => <ThemedPencil size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />,
+    () => (
+      <ThemedIconHost Icon={Pencil} size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
+    ),
     [],
   );
   const readLeading = useMemo(
-    () => <ThemedCheckCheck size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />,
+    () => (
+      <ThemedIconHost
+        Icon={CheckCheck}
+        size={ICON_SIZE.sm}
+        uniProps={foregroundMutedColorMapping}
+      />
+    ),
     [],
   );
   const archiveLeading = useMemo(
-    () => <ThemedArchive size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />,
+    () => (
+      <ThemedIconHost Icon={Archive} size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
+    ),
     [],
   );
   const removeLeading = useMemo(
-    () => <ThemedTrash2 size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />,
+    () => (
+      <ThemedIconHost Icon={Trash2} size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
+    ),
     [],
   );
   const actionsStyle = useMemo(
@@ -977,7 +1016,8 @@ function SidebarSessionGroupHeader({
       >
         {collapseIndicator}
         {presentation.showWorkspaceIcon && group.cwd ? (
-          <ThemedFolder
+          <ThemedIconHost
+            Icon={Folder}
             size={ICON_SIZE.md}
             uniProps={workspaceFolderColorMapping(isWorkspaceGroup)}
           />
@@ -1000,7 +1040,11 @@ function SidebarSessionGroupHeader({
               style={addButtonStyle}
               testID={`sidebar-session-group-menu-${group.key}`}
             >
-              <ThemedMoreHorizontal size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
+              <ThemedIconHost
+                Icon={MoreHorizontal}
+                size={ICON_SIZE.sm}
+                uniProps={foregroundMutedColorMapping}
+              />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" width={220}>
               <DropdownMenuItem
@@ -1070,7 +1114,11 @@ function SidebarSessionGroupHeader({
             style={addButtonStyle}
             testID={`sidebar-session-group-new-${serverId}-${group.key}`}
           >
-            <ThemedSquarePen size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
+            <ThemedIconHost
+              Icon={SquarePen}
+              size={ICON_SIZE.sm}
+              uniProps={foregroundMutedColorMapping}
+            />
           </Pressable>
         </View>
       ) : null}
@@ -1087,9 +1135,17 @@ function renderSidebarGroupCollapseIndicator(input: {
     return null;
   }
   return input.collapsed ? (
-    <ThemedChevronRight size={ICON_SIZE.xs} uniProps={foregroundSubtleTextColorMapping} />
+    <ThemedIconHost
+      Icon={ChevronRight}
+      size={ICON_SIZE.xs}
+      uniProps={foregroundSubtleTextColorMapping}
+    />
   ) : (
-    <ThemedChevronDown size={ICON_SIZE.xs} uniProps={foregroundSubtleTextColorMapping} />
+    <ThemedIconHost
+      Icon={ChevronDown}
+      size={ICON_SIZE.xs}
+      uniProps={foregroundSubtleTextColorMapping}
+    />
   );
 }
 
@@ -1288,7 +1344,7 @@ export function SidebarSessionList({
   const isCompact = useIsCompactFormFactor();
   const queryClient = useQueryClient();
   const toast = useToast();
-  const { archiveAgent, isArchivingAgent } = useArchiveAgent();
+  const { archiveAgent, archiveAgents, isArchivingAgent } = useArchiveAgent();
   const suppressedArchiveAgentIds = useSuppressedArchiveAgentIds(serverId ?? "");
   const [renamingAgent, setRenamingAgent] = useState<AggregatedAgent | null>(null);
   const [renamingProjectGroup, setRenamingProjectGroup] =
@@ -1409,7 +1465,7 @@ export function SidebarSessionList({
   const refreshControl = useMemo(
     () =>
       onRefresh ? (
-        <ThemedRefreshControl
+        <ThemedRefreshControlHost
           refreshing={isRefreshing}
           onRefresh={onRefresh}
           uniProps={refreshTintColorMapping}
@@ -1507,18 +1563,27 @@ export function SidebarSessionList({
           return;
         }
         setArchivingProjectGroupKey(group.key);
-        const results = await Promise.allSettled(
-          group.agents.map((agent) =>
-            archiveAgent({ serverId: agent.serverId, agentId: agent.id }),
-          ),
-        );
-        setArchivingProjectGroupKey(null);
-        if (results.some((result) => result.status === "rejected")) {
+        try {
+          // Skip agents that are already archived — the server's close_items
+          // silently drops any archive that fails (including idempotent
+          // re-archives whose storage record is gone), which makes the client's
+          // count check throw "failed to archive N session(s)" and pop a toast.
+          // Pre-filtering avoids sending already-archived ids in the batch.
+          const toArchive = group.agents
+            .filter((agent) => !agent.archivedAt)
+            .map((agent) => ({ serverId: agent.serverId, agentId: agent.id }));
+          if (toArchive.length === 0) {
+            return;
+          }
+          await archiveAgents(toArchive);
+        } catch {
           toast.error(t("sidebar.archiveProjectSessionsFailed"));
+        } finally {
+          setArchivingProjectGroupKey(null);
         }
       })();
     },
-    [archiveAgent, t, toast],
+    [archiveAgents, t, toast],
   );
 
   const handleRemoveProject = useCallback(
@@ -2043,6 +2108,10 @@ const styles = StyleSheet.create((theme) => ({
     flexShrink: 0,
   },
   // Soft .sess: min ~34, radius 10, quiet padding.
+  // No right padding reserve: hover quick actions (pin/archive) are absolutely
+  // positioned and float over the trailing text on hover, so the title can fill
+  // the full row width when not hovered. `overflow: hidden` clips the hover
+  // fade mask to the rounded corners.
   desktopRow: {
     minHeight: 34,
     flexDirection: "row",
@@ -2050,8 +2119,9 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[2],
     paddingVertical: 7,
     paddingLeft: 10,
-    paddingRight: 68,
+    paddingRight: 10,
     borderRadius: 10,
+    overflow: "hidden",
   },
   desktopRowContainer: {
     position: "relative",
@@ -2160,6 +2230,33 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[1],
     flexShrink: 0,
   },
+  // Hover fade mask: anchored to the row's right edge, sits under the quick
+  // action icons so the trailing title text fades into the row background.
+  desktopRowFadeMask: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    width: DESKTOP_ROW_FADE_MASK_WIDTH,
+  },
+  // Soft row hover wash: transparent → surfaceSidebarHover.
+  desktopRowFadeMaskHovered: isWeb
+    ? ({
+        backgroundImage: `linear-gradient(to right, transparent 0%, ${theme.colors.surfaceSidebarHover} 55%, ${theme.colors.surfaceSidebarHover} 100%)`,
+      } as object)
+    : {
+        backgroundColor: theme.colors.surfaceSidebarHover,
+        opacity: 0.92,
+      },
+  // Soft selected chip: transparent → surface0.
+  desktopRowFadeMaskSelected: isWeb
+    ? ({
+        backgroundImage: `linear-gradient(to right, transparent 0%, ${theme.colors.surface0} 55%, ${theme.colors.surface0} 100%)`,
+      } as object)
+    : {
+        backgroundColor: theme.colors.surface0,
+        opacity: 0.92,
+      },
   desktopRowQuickButton: {
     width: 28,
     height: 28,

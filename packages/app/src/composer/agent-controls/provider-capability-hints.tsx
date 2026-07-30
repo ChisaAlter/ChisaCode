@@ -2,7 +2,8 @@ import { useMemo } from "react";
 import { Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { ShieldCheck } from "lucide-react-native";
-import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import { StyleSheet } from "react-native-unistyles";
+import { ThemedIconHost } from "@/components/themed-icon-host";
 
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
@@ -12,8 +13,6 @@ import {
   type ProviderCapabilityHint,
 } from "@/utils/provider-capability-hints";
 import { type Theme } from "@/styles/theme";
-
-const ThemedShieldCheck = withUnistyles(ShieldCheck);
 
 const statusSuccessColorMapping = (theme: Theme) => ({
   color: theme.colors.statusSuccess,
@@ -62,7 +61,7 @@ export function ProviderCapabilityHints({ provider }: { provider: string | null 
           style={badgeStyle}
           testID="provider-capability-hints"
         >
-          <ThemedShieldCheck size={14} uniProps={iconColorMapping} />
+          <ThemedIconHost Icon={ShieldCheck} size={14} uniProps={iconColorMapping} />
           <Text style={styles.capabilityHintBadgeText} numberOfLines={1} ellipsizeMode="tail">
             {t("providerCapabilities.shortLabelWithCount", {
               supported: summary.supportedCount,

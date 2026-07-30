@@ -58,15 +58,6 @@ function useDaemonStartLastError(): string | null {
   );
 }
 
-function useDaemonStartIsRunning(): boolean {
-  const service = getDaemonStartService({ store: getHostRuntimeStore() });
-  return useSyncExternalStore(
-    (listener) => service.subscribe(listener),
-    () => service.isRunning(),
-    () => service.isRunning(),
-  );
-}
-
 const STARTUP_GIVE_UP_TIMEOUT_MS = 5_000;
 
 async function shouldStartBuiltInDaemon(): Promise<boolean> {
@@ -91,19 +82,16 @@ function HostRuntimeBootstrapProvider({ children }: { children: ReactNode }) {
 
   const anyOnlineHostServerId = useEarliestOnlineHostServerId();
   const daemonStartError = useDaemonStartLastError();
-  const daemonStartIsRunning = useDaemonStartIsRunning();
   const waitForConfiguredLocalDaemon =
     hasConfiguredLocalDaemonOverride() && !shouldUseDesktopDaemon();
 
   const [hasGivenUpWaitingForHost, setHasGivenUpWaitingForHost] = useState(false);
+  // Arm the give-up timer once on mount. Do not reset it when daemon-start
+  // flapping or host probes re-render this provider — resetting was a common
+  // way to keep the pure-logo splash on screen forever. Online host / error
+  // still unlatch storeReady immediately via isCurrentlyStoreReady below.
   useEffect(() => {
-    if (
-      anyOnlineHostServerId ||
-      daemonStartError ||
-      daemonStartIsRunning ||
-      waitForConfiguredLocalDaemon ||
-      hasGivenUpWaitingForHost
-    ) {
+    if (waitForConfiguredLocalDaemon) {
       return;
     }
     const handle = setTimeout(() => {
@@ -112,13 +100,7 @@ function HostRuntimeBootstrapProvider({ children }: { children: ReactNode }) {
     return () => {
       clearTimeout(handle);
     };
-  }, [
-    anyOnlineHostServerId,
-    daemonStartError,
-    daemonStartIsRunning,
-    waitForConfiguredLocalDaemon,
-    hasGivenUpWaitingForHost,
-  ]);
+  }, [waitForConfiguredLocalDaemon]);
 
   const retry = useCallback(() => {
     const daemonStartService = getDaemonStartService({ store: getHostRuntimeStore() });

@@ -2,7 +2,7 @@ import { type CSSProperties, type ReactNode, useCallback, useMemo } from "react"
 import { Pressable, View, type PressableStateCallbackType } from "react-native";
 import { usePathname } from "expo-router";
 import { PanelLeft } from "lucide-react-native";
-import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import { StyleSheet } from "react-native-unistyles";
 import { getIsElectronRuntime, useIsCompactFormFactor } from "@/constants/layout";
 import { isNative } from "@/constants/platform";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
@@ -17,6 +17,7 @@ import { toggleDesktopSidebarsWithCheckoutIntent } from "@/utils/desktop-sidebar
 import { useWindowControlsPadding } from "@/utils/desktop-window";
 import { resolveActiveHost } from "@/utils/active-host";
 import { LeftSidebar } from "@/components/left-sidebar";
+import { ThemedIconHost } from "@/components/themed-icon-host";
 import { DesktopWindowControls } from "@/components/desktop/window-controls";
 import { LiquidNeonBackdrop } from "@/components/liquid-neon-backdrop";
 import { FloatingPanelPortalHost } from "@/components/ui/floating-panel-portal";
@@ -46,8 +47,6 @@ export const THEME_CYCLE_ORDER: readonly ThemeName[] = ACTIVE_THEME_NAMES;
 const DESKTOP_WORKBENCH_FONT_CSS = `[data-testid="app-surface"] * {
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
 }`;
-
-const ThemedPanelLeft = withUnistyles(PanelLeft);
 
 const foregroundColorMapping = (theme: Theme) => ({
   color: theme.colors.foreground,
@@ -165,7 +164,7 @@ function AppContainer({
               if (hovered || pressed) {
                 iconMapping = foregroundColorMapping;
               }
-              return <ThemedPanelLeft size={20} uniProps={iconMapping} />;
+              return <ThemedIconHost Icon={PanelLeft} size={20} uniProps={iconMapping} />;
             }}
           </Pressable>
         </View>

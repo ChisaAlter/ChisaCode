@@ -582,13 +582,29 @@ async function createMainWindow(): Promise<void> {
     });
   });
 
-  mainWindow.once("ready-to-show", () => {
+  // In dev, show immediately so a stuck/white renderer is visible for debugging
+  // instead of hiding behind a ready-to-show that may never fire. In packaged
+  // builds, keep the flash-free ready-to-show behavior.
+  if (app.isPackaged) {
+    mainWindow.once("ready-to-show", () => {
+      mainWindow.show();
+    });
+  } else {
     mainWindow.show();
-  });
+    mainWindow.webContents.on("did-fail-load", (_e, code, desc, url) => {
+      log.error("[dev] did-fail-load", code, desc, url);
+    });
+  }
 
   if (!app.isPackaged) {
-    const { loadReactDevTools } = await import("./features/react-devtools.js");
-    await loadReactDevTools();
+    // Load React DevTools without blocking the window: the extension is fetched
+    // from the Chrome Web Store on first run, which can hang or be unreachable
+    // on restricted networks. A blocked `await` here would delay
+    // `mainWindow.loadURL(DEV_SERVER_URL)` indefinitely and leave the window
+    // white. The DevTools are optional — never let their load gate the UI.
+    import("./features/react-devtools.js")
+      .then(({ loadReactDevTools }) => loadReactDevTools())
+      .catch((err) => console.warn("[DevTools] failed to initialize:", err));
     await mainWindow.loadURL(DEV_SERVER_URL);
     return;
   }

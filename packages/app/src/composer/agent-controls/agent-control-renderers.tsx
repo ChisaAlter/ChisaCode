@@ -110,13 +110,24 @@ interface SheetAgentControlsContentProps {
 
 const DESKTOP_SEARCH_THRESHOLD = 6;
 
-// Lucide icons only accept `color` (a non-style prop), so wrap each one with
-// `withUnistyles` and feed the theme-reactive color through `uniProps`. Icon
-// sizes are static (`ICON_SIZE`), imported directly from the theme module.
-// Only the icon node re-renders on theme changes. See docs/unistyles.md.
-const ThemedBrain = withUnistyles(Brain);
-const ThemedChevronDown = withUnistyles(ChevronDown);
-const ThemedSettings2 = withUnistyles(Settings2);
+// Lucide icons only accept `color` (a non-style prop). On web, withUnistyles
+// merges call-site `uniProps` onto the child and lucide forwards unknown props
+// to the DOM SVG. Inject color via a host that only passes `color`/`size`.
+type LucideIconComponent = typeof Brain;
+
+function LucideIconHost({
+  color,
+  size,
+  Icon,
+}: {
+  color: string;
+  size: number;
+  Icon: LucideIconComponent;
+}) {
+  return <Icon color={color} size={size} />;
+}
+
+const ThemedLucideIconHost = withUnistyles(LucideIconHost);
 
 const foregroundColorMapping = (theme: Theme) => ({
   color: theme.colors.foreground,
@@ -151,7 +162,7 @@ function ThinkingComboboxOption({
   onPress: () => void;
 }) {
   const leadingSlot = useMemo(
-    () => <ThemedBrain size={16} uniProps={foregroundColorMapping} />,
+    () => <ThemedLucideIconHost Icon={Brain} size={16} uniProps={foregroundColorMapping} />,
     [],
   );
   return (
@@ -258,7 +269,11 @@ export function DesktopAgentControlsContent(props: DesktopAgentControlsContentPr
             testID="agent-provider-selector"
           >
             <Text style={styles.modeBadgeText}>{displayProvider}</Text>
-            <ThemedChevronDown size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
+            <ThemedLucideIconHost
+              Icon={ChevronDown}
+              size={ICON_SIZE.sm}
+              uniProps={foregroundMutedColorMapping}
+            />
           </Pressable>
           <Combobox
             options={comboboxProviderOptions}
@@ -315,9 +330,17 @@ export function DesktopAgentControlsContent(props: DesktopAgentControlsContentPr
                 accessibilityLabel={selectThinkingLabel}
                 testID="agent-thinking-selector"
               >
-                <ThemedBrain size={ICON_SIZE.md} uniProps={foregroundMutedColorMapping} />
+                <ThemedLucideIconHost
+                  Icon={Brain}
+                  size={ICON_SIZE.md}
+                  uniProps={foregroundMutedColorMapping}
+                />
                 <Text style={styles.modeBadgeText}>{displayThinking}</Text>
-                <ThemedChevronDown size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
+                <ThemedLucideIconHost
+                  Icon={ChevronDown}
+                  size={ICON_SIZE.sm}
+                  uniProps={foregroundMutedColorMapping}
+                />
               </Pressable>
             </TooltipTrigger>
             <TooltipContent side="top" align="center" offset={8}>
@@ -380,13 +403,6 @@ export function SheetAgentControlsContent(props: SheetAgentControlsContentProps)
   } = props;
 
   const thinkingAnchorRef = useRef<View | null>(null);
-  // Provider icons are dynamic per provider; wrap with `withUnistyles` so the
-  // theme-reactive `color` flows through `uniProps` without a `useUnistyles`
-  // hook. See docs/unistyles.md.
-  const ThemedProviderIcon = useMemo(
-    () => (ProviderIcon ? withUnistyles(ProviderIcon) : null),
-    [ProviderIcon],
-  );
   const renderThinkingOption = useThinkingOptionRenderer();
   const hasThinking = comboboxThinkingOptions.length > 0;
   const hasFeatures = Boolean(features && features.length > 0);
@@ -415,15 +431,19 @@ export function SheetAgentControlsContent(props: SheetAgentControlsContentProps)
       isOpen: boolean;
     }) => (
       <View pointerEvents="none" style={styles.prefsButton} testID="agent-controls-model">
-        {ThemedProviderIcon ? (
-          <ThemedProviderIcon size={ICON_SIZE.lg} uniProps={foregroundMutedColorMapping} />
+        {ProviderIcon ? (
+          <ThemedLucideIconHost
+            Icon={ProviderIcon as LucideIconComponent}
+            size={ICON_SIZE.lg}
+            uniProps={foregroundMutedColorMapping}
+          />
         ) : null}
         <Text style={styles.prefsButtonText} numberOfLines={1}>
           {formatCompactModelLabel(selectedModelLabel)}
         </Text>
       </View>
     ),
-    [ThemedProviderIcon],
+    [ProviderIcon],
   );
 
   const thinkingButtonStyle = makeBadgePressableStyle(
@@ -471,7 +491,11 @@ export function SheetAgentControlsContent(props: SheetAgentControlsContentProps)
           accessibilityLabel={selectThinkingLabel}
           testID="agent-controls-thinking"
         >
-          <ThemedBrain size={ICON_SIZE.md} uniProps={foregroundMutedColorMapping} />
+          <ThemedLucideIconHost
+            Icon={Brain}
+            size={ICON_SIZE.md}
+            uniProps={foregroundMutedColorMapping}
+          />
         </Pressable>
       ) : null}
 
@@ -484,7 +508,11 @@ export function SheetAgentControlsContent(props: SheetAgentControlsContentProps)
           accessibilityLabel={openFeaturesLabel}
           testID="agent-controls-features"
         >
-          <ThemedSettings2 size={ICON_SIZE.md} uniProps={foregroundMutedColorMapping} />
+          <ThemedLucideIconHost
+            Icon={Settings2}
+            size={ICON_SIZE.md}
+            uniProps={foregroundMutedColorMapping}
+          />
         </Pressable>
       ) : null}
 

@@ -45,23 +45,32 @@ function shouldRenderForPlacement(placement: AgentModeControlPlacement, isCompac
   return placement === "footer" ? isCompact : !isCompact;
 }
 
-// Lucide icons only accept `color` (a non-style prop), so wrap each one with
-// `withUnistyles` and feed the theme-reactive color through `uniProps`. Icon
-// sizes are static (`ICON_SIZE`), imported directly from the theme module.
-// Only the icon node re-renders on theme changes. See docs/unistyles.md.
-const ThemedBot = withUnistyles(Bot);
-const ThemedShieldCheck = withUnistyles(ShieldCheck);
-const ThemedShieldAlert = withUnistyles(ShieldAlert);
-const ThemedShieldOff = withUnistyles(ShieldOff);
-const ThemedShieldQuestionMark = withUnistyles(ShieldQuestionMark);
-const ThemedChevronDown = withUnistyles(ChevronDown);
+// Lucide icons only accept `color` (a non-style prop). On web, withUnistyles
+// merges call-site `uniProps` onto the child, and lucide spreads unknown props
+// onto the DOM SVG — which triggers "React does not recognize the `uniProps`
+// prop". Route theme color through a host that does NOT spread extras to lucide.
+type LucideIconComponent = typeof Bot;
 
-const MODE_ICONS: Record<string, typeof ThemedBot> = {
-  Bot: ThemedBot,
-  ShieldCheck: ThemedShieldCheck,
-  ShieldAlert: ThemedShieldAlert,
-  ShieldOff: ThemedShieldOff,
-  ShieldQuestionMark: ThemedShieldQuestionMark,
+function LucideIconHost({
+  color,
+  size,
+  Icon,
+}: {
+  color: string;
+  size: number;
+  Icon: LucideIconComponent;
+}) {
+  return <Icon color={color} size={size} />;
+}
+
+const ThemedLucideIconHost = withUnistyles(LucideIconHost);
+
+const MODE_ICONS: Record<string, LucideIconComponent> = {
+  Bot,
+  ShieldCheck,
+  ShieldAlert,
+  ShieldOff,
+  ShieldQuestionMark,
 };
 
 type IconColorMapping = (theme: Theme) => { color: string };
@@ -101,7 +110,10 @@ function ModeComboboxOption({
   const visuals = getModeVisuals(provider, option.id, providerDefinitions);
   const IconComponent = visuals?.icon ? MODE_ICONS[visuals.icon] : undefined;
   const leadingSlot = useMemo(
-    () => (IconComponent ? <IconComponent size={16} uniProps={iconColorMapping} /> : null),
+    () =>
+      IconComponent ? (
+        <ThemedLucideIconHost Icon={IconComponent} size={16} uniProps={iconColorMapping} />
+      ) : null,
     [IconComponent, iconColorMapping],
   );
   return (
@@ -262,9 +274,19 @@ function AgentModeControlView({
         })}
         testID="mode-control"
       >
-        {Icon ? <Icon size={ICON_SIZE.md} uniProps={triggerIconColorMapping} /> : null}
+        {Icon ? (
+          <ThemedLucideIconHost
+            Icon={Icon}
+            size={ICON_SIZE.md}
+            uniProps={triggerIconColorMapping}
+          />
+        ) : null}
         <Text style={labelStyle}>{selectedModeLabel}</Text>
-        <ThemedChevronDown size={ICON_SIZE.sm} uniProps={triggerIconColorMapping} />
+        <ThemedLucideIconHost
+          Icon={ChevronDown}
+          size={ICON_SIZE.sm}
+          uniProps={triggerIconColorMapping}
+        />
       </Pressable>
       <Combobox
         options={options}

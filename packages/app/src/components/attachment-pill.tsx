@@ -1,12 +1,11 @@
 import { type ReactNode, useCallback, useMemo, useState } from "react";
 import { Pressable, View } from "react-native";
-import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import { StyleSheet } from "react-native-unistyles";
+import { ThemedIconHost } from "@/components/themed-icon-host";
 import { X } from "lucide-react-native";
 import { isNative } from "@/constants/platform";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import type { Theme } from "@/styles/theme";
-
-const ThemedX = withUnistyles(X);
 
 const closeIconColorMapping = (theme: Theme) => ({
   color: theme.colors.foregroundMuted,
@@ -68,7 +67,7 @@ export function AttachmentPill({
         accessibilityLabel={removeAccessibilityLabel}
         style={closeButtonStyle}
       >
-        <ThemedX size={12} uniProps={closeIconColorMapping} />
+        <ThemedIconHost Icon={X} size={12} uniProps={closeIconColorMapping} />
       </Pressable>
     </View>
   );

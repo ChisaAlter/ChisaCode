@@ -4,8 +4,11 @@ import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { Import as ImportIcon } from "lucide-react-native";
 import type { Theme } from "@/styles/theme";
 
-const ThemedImportIcon = withUnistyles(ImportIcon);
-const iconColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
+// Bake color into the mapper. On web, withUnistyles merges call-site props
+// onto the child, so passing `uniProps` leaks onto lucide/DOM nodes.
+const ThemedImportIcon = withUnistyles(ImportIcon, (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+}));
 
 interface ComposerImportPillProps {
   onPress: () => void;
@@ -29,7 +32,7 @@ export function ComposerImportPill({ onPress, disabled = false }: ComposerImport
         onHoverOut={handleHoverOut}
         style={bodyStyle}
       >
-        <ThemedImportIcon size={14} uniProps={iconColorMapping} />
+        <ThemedImportIcon size={14} />
         <Text style={styles.label} numberOfLines={1}>
           导入会话
         </Text>

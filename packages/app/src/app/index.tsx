@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Redirect, usePathname } from "expo-router";
 import { StartupSplashScreen } from "@/screens/startup-splash-screen";
 import { useEarliestOnlineHostServerId, useHostRuntimeBootstrapState } from "@/app/_layout";
@@ -11,8 +11,12 @@ import {
 import { useSessionStore } from "@/stores/session-store";
 import { shouldUseDesktopDaemon } from "@/desktop/daemon/desktop-daemon";
 import { resolveWorkspaceMapKeyByIdentity } from "@/utils/workspace-execution";
+import { buildHostRootRoute } from "@/utils/host-routes";
 
 const isDesktop = shouldUseDesktopDaemon();
+const HARD_ESCAPE_TIMEOUT_MS = 8_000;
+const HARD_ESCAPE_SPLASH_ERROR =
+  "Timed out waiting for the local daemon. Tap retry or check that the desktop daemon is running.";
 
 export default function Index() {
   const pathname = usePathname();
@@ -68,8 +72,44 @@ export default function Index() {
     hasGivenUpWaitingForHost: bootstrapState.hasGivenUpWaitingForHost,
   });
 
+  // Hard escape hatch: if bootstrap never unlatches (hung hydrate / hung
+  // daemon-start / missed give-up), leave the pure-logo splash after a short
+  // absolute timeout so the user is never stuck with no UI.
+  const [hardEscape, setHardEscape] = useState(false);
+  useEffect(() => {
+    if (redirectRoute || hardEscape) {
+      return;
+    }
+    const handle = setTimeout(() => {
+      setHardEscape(true);
+    }, HARD_ESCAPE_TIMEOUT_MS);
+    return () => {
+      clearTimeout(handle);
+    };
+  }, [redirectRoute, hardEscape]);
+
+  const hardEscapeBootstrapState = useMemo(
+    () => ({
+      ...bootstrapState,
+      splashError: bootstrapState.splashError ?? HARD_ESCAPE_SPLASH_ERROR,
+    }),
+    [bootstrapState],
+  );
+
   if (redirectRoute) {
     return <Redirect href={redirectRoute} />;
+  }
+
+  if (hardEscape) {
+    if (anyOnlineHostServerId) {
+      return <Redirect href={buildHostRootRoute(anyOnlineHostServerId)} />;
+    }
+    if (bootstrapState.storeReady) {
+      return <Redirect href="/welcome" />;
+    }
+    // storeReady is still false so /welcome is Stack.Protected — show a
+    // retryable error on the splash instead of an infinite pure logo.
+    return <StartupSplashScreen bootstrapState={hardEscapeBootstrapState} />;
   }
 
   return <StartupSplashScreen bootstrapState={isDesktop ? bootstrapState : undefined} />;
