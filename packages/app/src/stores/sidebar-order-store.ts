@@ -21,6 +21,20 @@ interface SidebarOrderStoreState {
   setSessionGroupPinned: (serverId: string, groupKey: string, pinned: boolean) => void;
   getHiddenSessionGroupKeys: (serverId: string) => string[];
   setSessionGroupHidden: (serverId: string, groupKey: string, hidden: boolean) => void;
+  /**
+   * Replace the full hidden-group key list for a server. Used by the sidebar
+   * reconcile effect to prune keys whose groups now contain agents again, and
+   * by the "show hidden projects" entry to clear the list entirely.
+   * @param serverId The host server id
+   * @param keys The complete next list of hidden group keys
+   */
+  setHiddenSessionGroupKeys: (serverId: string, keys: string[]) => void;
+  /**
+   * Clear every hidden-group key for a server so all workspace groups become
+   * visible again. Used by the empty-state "show hidden projects" action.
+   * @param serverId The host server id
+   */
+  clearHiddenSessionGroupKeys: (serverId: string) => void;
 }
 
 function normalizeKeys(keys: string[]): string[] {
@@ -181,6 +195,50 @@ export const useSidebarOrderStore = create<SidebarOrderStoreState>()(
             hiddenSessionGroupKeysByServerId: {
               ...state.hiddenSessionGroupKeysByServerId,
               [serverKey]: next,
+            },
+          };
+        });
+      },
+      setHiddenSessionGroupKeys: (serverId, keys) => {
+        const serverKey = serverId.trim();
+        if (!serverKey) {
+          return;
+        }
+        const normalized = normalizeKeys(keys);
+        set((state) => {
+          const current = state.hiddenSessionGroupKeysByServerId[serverKey] ?? [];
+          // Avoid a no-op state update when the normalized list is unchanged —
+          // reconcile runs in an effect every render, so a spurious set would
+          // loop. Compare by length + membership (normalizeKeys already
+          // dedupes and preserves order, so equal length + every-key match is
+          // a stable equality check).
+          if (
+            current.length === normalized.length &&
+            current.every((key, i) => key === normalized[i])
+          ) {
+            return state;
+          }
+          return {
+            hiddenSessionGroupKeysByServerId: {
+              ...state.hiddenSessionGroupKeysByServerId,
+              [serverKey]: normalized,
+            },
+          };
+        });
+      },
+      clearHiddenSessionGroupKeys: (serverId) => {
+        const serverKey = serverId.trim();
+        if (!serverKey) {
+          return;
+        }
+        set((state) => {
+          if ((state.hiddenSessionGroupKeysByServerId[serverKey] ?? []).length === 0) {
+            return state;
+          }
+          return {
+            hiddenSessionGroupKeysByServerId: {
+              ...state.hiddenSessionGroupKeysByServerId,
+              [serverKey]: [],
             },
           };
         });

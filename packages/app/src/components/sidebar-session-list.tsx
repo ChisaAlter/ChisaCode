@@ -1374,6 +1374,12 @@ export function SidebarSessionList({
   );
   const setSessionGroupPinned = useSidebarOrderStore((state) => state.setSessionGroupPinned);
   const setSessionGroupHidden = useSidebarOrderStore((state) => state.setSessionGroupHidden);
+  const setHiddenSessionGroupKeys = useSidebarOrderStore(
+    (state) => state.setHiddenSessionGroupKeys,
+  );
+  const clearHiddenSessionGroupKeys = useSidebarOrderStore(
+    (state) => state.clearHiddenSessionGroupKeys,
+  );
   const visibleAgents = useMemo(
     () => agents.filter((agent) => !agent.archivedAt && !suppressedArchiveAgentIds.has(agent.id)),
     [agents, suppressedArchiveAgentIds],
@@ -1442,25 +1448,54 @@ export function SidebarSessionList({
         setSessionOrder(serverId, group.key, nextOrder);
       }
     }
+    // Reconcile hidden group keys: a group is only meaningfully hidden when it
+    // currently has no agents. If a previously-removed project reappears (new
+    // conversation, re-opened workspace, server re-seeding), un-hide its group
+    // so the sidebar never stays permanently blank. "Remove project" is a
+    // one-way action with no restore entry — without this prune the hidden
+    // blacklist grows monotonically and can hide every active group.
+    const storedHidden = hiddenSessionGroupKeysByServerId[serverId] ?? [];
+    if (storedHidden.length > 0) {
+      const activeGroupKeySet = new Set(currentGroupKeys);
+      const nextHidden = storedHidden.filter((key) => !activeGroupKeySet.has(key));
+      if (nextHidden.length !== storedHidden.length) {
+        setHiddenSessionGroupKeys(serverId, nextHidden);
+      }
+    }
   }, [
     activitySortedGroups,
     getSessionOrder,
+    hiddenSessionGroupKeysByServerId,
     serverId,
     setSessionGroupOrder,
     setSessionOrder,
+    setHiddenSessionGroupKeys,
     storedGroupOrder,
   ]);
   const pinnedGroup = useMemo(
     () => groups.find((group) => group.key === PINNED_SIDEBAR_SESSION_GROUP_KEY) ?? null,
     [groups],
   );
-  const workspaceGroups = useMemo(
+  const visibleWorkspaceGroups = useMemo(
     () =>
       groups.filter(
         (group) =>
           group.key !== PINNED_SIDEBAR_SESSION_GROUP_KEY && !hiddenProjectGroupKeys.has(group.key),
       ),
     [groups, hiddenProjectGroupKeys],
+  );
+  // Safety net: if every active group is hidden but there are visible agents
+  // (e.g. a hidden key matches the only active workspace, or reconcile has not
+  // yet run on first paint), fall back to showing all non-pinned groups so the
+  // sidebar never renders a "no sessions" empty state while the store holds
+  // real agents. The reconcile effect above normally un-hides these, this
+  // guards the window before it runs and any edge case it misses.
+  const workspaceGroups = useMemo(
+    () =>
+      visibleWorkspaceGroups.length === 0 && !pinnedGroup && visibleAgents.length > 0
+        ? groups.filter((group) => group.key !== PINNED_SIDEBAR_SESSION_GROUP_KEY)
+        : visibleWorkspaceGroups,
+    [groups, pinnedGroup, visibleAgents.length, visibleWorkspaceGroups],
   );
   const refreshControl = useMemo(
     () =>
@@ -1473,6 +1508,11 @@ export function SidebarSessionList({
       ) : undefined,
     [isRefreshing, onRefresh],
   );
+  const handleShowHiddenProjects = useCallback(() => {
+    if (serverId) {
+      clearHiddenSessionGroupKeys(serverId);
+    }
+  }, [clearHiddenSessionGroupKeys, serverId]);
   const renamingClient = useSessionStore((state) =>
     renamingAgent?.serverId ? (state.sessions[renamingAgent.serverId]?.client ?? null) : null,
   );
@@ -1820,6 +1860,8 @@ export function SidebarSessionList({
   }
 
   if (!pinnedGroup && workspaceGroups.length === 0) {
+    const hasHiddenProjects =
+      !!serverId && (hiddenSessionGroupKeysByServerId[serverId] ?? []).length > 0;
     return (
       <ScrollView
         style={styles.container}
@@ -1832,6 +1874,11 @@ export function SidebarSessionList({
           {onAddProject ? (
             <Button variant="ghost" size="sm" onPress={onAddProject}>
               {t("sidebar.addProject")}
+            </Button>
+          ) : null}
+          {hasHiddenProjects ? (
+            <Button variant="ghost" size="sm" onPress={handleShowHiddenProjects}>
+              {t("sidebar.showHiddenProjects")}
             </Button>
           ) : null}
         </View>
