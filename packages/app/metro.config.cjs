@@ -30,7 +30,7 @@ config.resolver.extraNodeModules = {
   "react/jsx-dev-runtime": path.join(appNodeModulesRoot, "react/jsx-dev-runtime"),
 };
 config.resolver.blockList = new RegExp(
-  `(^${escapedAppSrcRoot}${pathSeparatorPattern}.*\\.(test|spec)\\.(ts|tsx)$|${pathSeparatorPattern}__tests__${pathSeparatorPattern}.*)$`,
+  `(^${escapedAppSrcRoot}${pathSeparatorPattern}.*\\.(test|spec)\\.(ts|tsx|js|jsx)$|${pathSeparatorPattern}__tests__${pathSeparatorPattern}.*)$`,
 );
 
 function isLocalModuleImport(moduleName) {
