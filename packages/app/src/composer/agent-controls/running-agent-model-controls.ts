@@ -74,22 +74,79 @@ function resolveProviderModels(input: {
   return input.runtimeEntry?.models ?? input.selectedEntry?.models ?? null;
 }
 
+function resolveProviderFamilyId(
+  agentProvider: string | undefined,
+  snapshotEntries: ProviderSnapshotEntry[] | undefined,
+): string | undefined {
+  if (!agentProvider) {
+    return undefined;
+  }
+  return (
+    snapshotEntries?.find((entry) => entry.provider === agentProvider)?.derivedFromProviderId ??
+    agentProvider
+  );
+}
+
+function remapSelectorProviderForAgent(
+  provider: ProviderSelectorProvider,
+  agentProvider: string,
+): ProviderSelectorProvider {
+  if (provider.modelSelection.kind !== "models") {
+    return { ...provider, id: agentProvider };
+  }
+  return {
+    ...provider,
+    id: agentProvider,
+    modelSelection: {
+      kind: "models",
+      rows: provider.modelSelection.rows.map((row) => ({ ...row, agentProvider })),
+    },
+  };
+}
+
 /**
- * Gateway snapshot entries are folded into their base provider id for draft
- * selection (e.g. "grok-4-5-codex" → models under "codex"). Running sessions
- * store agent.provider as the generated gateway id, so filter matches must also
- * accept providers that only appear via rows with that runtimeProvider.
+ * Resolves the provider family for a running agent before projecting selectable rows.
+ * Derived provider ids are runtime identities, not separate model families.
  */
 function filterProvidersForRunningAgent(
   providers: ProviderSelectorProvider[],
   agentProvider: string | undefined,
+  snapshotEntries?: ProviderSnapshotEntry[],
 ): ProviderSelectorProvider[] {
   if (!agentProvider) {
     return providers;
   }
-  const exact = providers.filter((provider) => provider.id === agentProvider);
-  if (exact.length > 0) {
-    return exact;
+
+  const familyProviderId = resolveProviderFamilyId(agentProvider, snapshotEntries);
+  const familyProvider = providers.find((provider) => provider.id === familyProviderId);
+  const exactProvider = providers.find((provider) => provider.id === agentProvider);
+  if (familyProvider && exactProvider && familyProvider !== exactProvider) {
+    if (
+      familyProvider.modelSelection.kind === "models" &&
+      exactProvider.modelSelection.kind === "models"
+    ) {
+      return [
+        remapSelectorProviderForAgent(
+          {
+            ...familyProvider,
+            modelSelection: {
+              kind: "models",
+              rows: [...familyProvider.modelSelection.rows, ...exactProvider.modelSelection.rows],
+            },
+          },
+          agentProvider,
+        ),
+      ];
+    }
+    return [remapSelectorProviderForAgent(familyProvider, agentProvider)];
+  }
+  if (familyProvider) {
+    return [remapSelectorProviderForAgent(familyProvider, agentProvider)];
+  }
+
+  const exact = exactProvider;
+  if (exact) {
+    return [exact];
   }
 
   const matched: ProviderSelectorProvider[] = [];
@@ -106,14 +163,15 @@ function filterProvidersForRunningAgent(
     if (rows.length === 0) {
       continue;
     }
-    matched.push({
-      id: agentProvider,
-      label: provider.label,
-      modelSelection: {
-        kind: "models",
-        rows: rows.map((row) => Object.assign({}, row, { agentProvider })),
-      },
-    });
+    matched.push(
+      remapSelectorProviderForAgent(
+        {
+          ...provider,
+          modelSelection: { kind: "models", rows },
+        },
+        agentProvider,
+      ),
+    );
   }
   return matched;
 }
@@ -200,13 +258,15 @@ function buildRunningAgentModelSelectorProviders(input: {
   // model picker must still list every model under that base provider so the
   // user can switch back to native GPT models; do not filter the list down to
   // only the currently active runtime gateway.
+  const selectorProviders = buildSelectableProviderSelectorProviders(input.snapshotEntries, {
+    defaultModelLabel: input.copy.defaultModelLabel,
+    unavailable: input.copy.unavailable,
+    unknownError: input.copy.unknownError,
+  });
   const groupedProviders = filterProvidersForRunningAgent(
-    buildSelectableProviderSelectorProviders(input.snapshotEntries, {
-      defaultModelLabel: input.copy.defaultModelLabel,
-      unavailable: input.copy.unavailable,
-      unknownError: input.copy.unknownError,
-    }),
+    selectorProviders,
     input.agentProvider,
+    input.snapshotEntries,
   );
   if (groupedProviders.length > 0) {
     return groupedProviders;

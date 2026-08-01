@@ -219,6 +219,52 @@ describe("resolveRunningAgentModelControls", () => {
     });
   });
 
+  it("keeps the base family when runtimeProvider points to a derived Claude provider", () => {
+    const snapshotEntries: ProviderSnapshotEntry[] = [
+      {
+        provider: "claude",
+        label: "Claude",
+        enabled: true,
+        status: "ready",
+        models: [{ id: "claude-opus-4-8", provider: "claude", label: "Opus 4.8" }],
+      },
+      {
+        provider: "custom-claude",
+        label: "Custom Claude",
+        enabled: true,
+        status: "ready",
+        derivedFromProviderId: "claude",
+        modelGatewayId: "custom-gateway",
+        models: [{ id: "custom-model", provider: "custom-claude", label: "Custom model" }],
+      },
+    ];
+
+    const result = resolveRunningAgentModelControls({
+      agent: {
+        provider: "claude",
+        runtimeProvider: "custom-claude",
+        runtimeModelId: "custom-model",
+        model: "custom-model",
+        thinkingOptionId: null,
+      },
+      snapshotEntries,
+      defaultModelLabel: "Default",
+      unavailable: "Unavailable",
+      unknownError: "Unknown error",
+    });
+
+    expect(result.agentModelSelectorProviders).toHaveLength(1);
+    expect(result.agentModelSelectorProviders[0]?.id).toBe("claude");
+    expect(result.agentModelSelectorProviders[0]?.modelSelection).toEqual({
+      kind: "models",
+      rows: expect.arrayContaining([
+        expect.objectContaining({ modelId: "claude-opus-4-8", runtimeProvider: "claude" }),
+        expect.objectContaining({ modelId: "custom-model", runtimeProvider: "custom-claude" }),
+      ]),
+    });
+    expect(result.modelOptions).toEqual([{ id: "custom-model", label: "Custom model" }]);
+  });
+
   it("lists models when only the gateway snapshot entry is available", () => {
     const snapshotEntries: ProviderSnapshotEntry[] = [
       {

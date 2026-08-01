@@ -9,7 +9,12 @@
 
 ## 进行中
 
-### Cindy 集成硬化与收尾（2026-07-29 启动）
+### Provider family model selector regression (2026-08-01 completed)
+
+- **问题**：运行中会话的模型选择器在 derived/gateway provider 命中 exact provider 或基础 provider snapshot 处于 loading/error 时，可能用应用配置模型覆盖原生 Claude/Codex family 模型；snapshot refresh 也会在刷新期间清空已有模型
+- **影响范围**：`packages/app/src/provider-selection`、`packages/app/src/composer/agent-controls`、`packages/server/src/server/agent/provider-snapshot-manager.ts`
+- **修复**：选择器先按 `derivedFromProviderId` 解析 provider family，再追加 runtime rows；active runtime model/options 与 family selectable rows 分离；snapshot refresh/loading 保留旧 models/modes/fetchedAt，避免临时状态造成 native 模型消失；新增 Claude family/gateway 与 runtime identity 回归测试
+- **状态**：完成。App 26 个模型选择断言、server provider snapshot 25 个断言、全仓 typecheck、改动文件 lint 和格式检查通过
 
 - **问题**：`origin/cn-main`（领先本地 14 提交、67 文件、约 8500 行）把 Cindy 的 6 个高优借鉴项几乎全部"形"上落地，但对抗性审查发现几乎所有项都带着 high/critical 缺陷一起落地，两个门禁只写代码未接 CI，消息渲染只到 diff/CJK/检测，同会话 agent 切换未做。详见 [cindy-integration-hardening-plan.md](cindy-integration-hardening-plan.md)。
 - **影响范围**：`packages/protocol`（exports/gate/schema）、`packages/server`（ssh-transport/git-snapshot/team-handler/goal-service/learn-service/project-context/model-catalog/session）、`packages/client`+`packages/app`（cindy 命令/UI/markdown 渲染）、`scripts`（guard/i18n 门禁）。

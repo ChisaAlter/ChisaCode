@@ -7,6 +7,7 @@ import {
   buildSelectedTriggerLabel,
   filterAndRankModelRows,
   filterProviderSelectorProvidersByRuntimeProvider,
+  getProviderModelRows,
   matchesModelSearch,
   resolveSelectedModelLabel,
   resolveSubmissionReadiness,
@@ -563,6 +564,64 @@ describe("combined model selector data", () => {
         isLoading: false,
       }),
     ).toBe("Error");
+  });
+
+  it("preserves native Claude models when a derived gateway is present", () => {
+    const providers = buildSelectableProviderSelectorProviders([
+      snapshotEntry({
+        provider: "claude",
+        label: "Claude",
+        status: "ready",
+        models: [
+          { provider: "claude", id: "claude-opus-4-8", label: "Opus 4.8" },
+          { provider: "claude", id: "claude-sonnet-4-6", label: "Sonnet 4.6" },
+        ],
+      }),
+      snapshotEntry({
+        provider: "custom-claude",
+        label: "Custom Claude",
+        derivedFromProviderId: "claude",
+        modelGatewayId: "custom-gateway",
+        status: "ready",
+        models: [{ provider: "custom-claude", id: "custom-model", label: "Custom model" }],
+      } as Partial<ProviderSnapshotEntry> & Pick<ProviderSnapshotEntry, "provider">),
+    ]);
+
+    expect(providers).toHaveLength(1);
+    expect(providers[0]?.id).toBe("claude");
+    expect(getProviderModelRows(providers[0]!)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ modelId: "claude-opus-4-8", runtimeProvider: "claude" }),
+        expect.objectContaining({ modelId: "claude-sonnet-4-6", runtimeProvider: "claude" }),
+        expect.objectContaining({ modelId: "custom-model", runtimeProvider: "custom-claude" }),
+      ]),
+    );
+  });
+
+  it("keeps cached native models while the base provider refreshes", () => {
+    const providers = buildSelectableProviderSelectorProviders([
+      snapshotEntry({
+        provider: "claude",
+        label: "Claude",
+        status: "loading",
+        models: [{ provider: "claude", id: "claude-opus-4-8", label: "Opus 4.8" }],
+      }),
+      snapshotEntry({
+        provider: "custom-claude",
+        label: "Custom Claude",
+        derivedFromProviderId: "claude",
+        modelGatewayId: "custom-gateway",
+        status: "ready",
+        models: [{ provider: "custom-claude", id: "custom-model", label: "Custom model" }],
+      } as Partial<ProviderSnapshotEntry> & Pick<ProviderSnapshotEntry, "provider">),
+    ]);
+
+    expect(getProviderModelRows(providers[0]!)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ modelId: "claude-opus-4-8" }),
+        expect.objectContaining({ modelId: "custom-model" }),
+      ]),
+    );
   });
 
   it("returns observable submission readiness reasons", () => {

@@ -218,7 +218,7 @@ export class ProviderSnapshotManager {
   async refreshSnapshotForCwd(options: ProviderSnapshotRefreshOptions): Promise<void> {
     const snapshotCwd = resolveSnapshotCwd(options.cwd);
     const providers = this.resolveRefreshProviders(options.providers);
-    this.resetSnapshotToLoading(snapshotCwd, providers, { preserveExisting: false });
+    this.resetSnapshotToLoading(snapshotCwd, providers, { preserveExisting: true });
     this.emitChange(snapshotCwd);
     await this.refreshProviders(snapshotCwd, providers ?? this.getProviderIds());
   }
@@ -231,7 +231,7 @@ export class ProviderSnapshotManager {
     const providersToRefresh = providers ?? this.getProviderIds();
 
     this.clearCachedProviders(providers);
-    this.resetSnapshotToLoading(homeCwd, providers, { preserveExisting: false });
+    this.resetSnapshotToLoading(homeCwd, providers, { preserveExisting: true });
     this.emitChange(homeCwd);
     await this.refreshProviders(homeCwd, providersToRefresh);
   }
@@ -593,7 +593,6 @@ export class ProviderSnapshotManager {
 
   private clearCachedProviders(providers?: AgentProvider[]): void {
     const providerSet = providers ? new Set(providers) : null;
-    const loadingEntries = this.createLoadingEntries();
 
     for (const [cwd, providerLoads] of Array.from(this.providerLoads.entries())) {
       if (!providerSet) {
@@ -606,28 +605,6 @@ export class ProviderSnapshotManager {
       }
       if (providerLoads.size === 0) {
         this.providerLoads.delete(cwd);
-      }
-    }
-
-    for (const [cwd, snapshot] of this.snapshots.entries()) {
-      if (!providerSet) {
-        snapshot.clear();
-        for (const [provider, entry] of loadingEntries) {
-          snapshot.set(provider, entry);
-        }
-        this.emitChange(cwd);
-        continue;
-      }
-
-      let changed = false;
-      for (const provider of providerSet) {
-        const loadingEntry = loadingEntries.get(provider);
-        if (!loadingEntry) continue;
-        snapshot.set(provider, loadingEntry);
-        changed = true;
-      }
-      if (changed) {
-        this.emitChange(cwd);
       }
     }
   }
