@@ -8,10 +8,13 @@ import type { AggregatedAgent } from "@/hooks/use-aggregated-agents";
 import { SidebarSessionList } from "@/components/sidebar-session-list";
 import { navigateToAgent } from "@/utils/navigate-to-agent";
 
+const noopClick = () => undefined;
+
 const {
   theme,
   routerPushMock,
   archiveAgentMock,
+  archiveAgentsMock,
   updateAgentMock,
   clearAgentAttentionMock,
   renameProjectMock,
@@ -71,6 +74,7 @@ const {
   },
   routerPushMock: vi.fn(),
   archiveAgentMock: vi.fn(),
+  archiveAgentsMock: vi.fn(),
   updateAgentMock: vi.fn(),
   clearAgentAttentionMock: vi.fn(),
   renameProjectMock: vi.fn(),
@@ -102,6 +106,7 @@ vi.mock("react-native-unistyles", () => ({
     create: (factory: unknown) => (typeof factory === "function" ? factory(theme) : factory),
     absoluteFillObject: {},
   },
+  withUnistyles: <T,>(component: T) => component,
   useUnistyles: () => ({ theme }),
 }));
 
@@ -236,9 +241,9 @@ vi.mock("@/components/ui/button", () => ({
 vi.mock("@/components/ui/dropdown-menu", () => ({
   DropdownMenu: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   DropdownMenuTrigger: ({ children, testID }: { children: React.ReactNode; testID?: string }) => (
-    <button type="button" data-testid={testID}>
+    <div data-testid={testID} role="button" tabIndex={0} onClick={noopClick}>
       {children}
-    </button>
+    </div>
   ),
   DropdownMenuContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   DropdownMenuItem: ({
@@ -252,9 +257,15 @@ vi.mock("@/components/ui/dropdown-menu", () => ({
     disabled?: boolean;
     testID?: string;
   }) => (
-    <button type="button" data-testid={testID} disabled={disabled} onClick={onSelect}>
+    <div
+      data-testid={testID}
+      role="button"
+      aria-disabled={disabled ? "true" : undefined}
+      tabIndex={disabled ? -1 : 0}
+      onClick={disabled ? undefined : onSelect}
+    >
       {children}
-    </button>
+    </div>
   ),
 }));
 
@@ -355,6 +366,7 @@ vi.mock("@tanstack/react-query", () => ({
 vi.mock("@/hooks/use-archive-agent", () => ({
   useArchiveAgent: () => ({
     archiveAgent: archiveAgentMock,
+    archiveAgents: archiveAgentsMock,
     isArchivingAgent: () => false,
   }),
   useSuppressedArchiveAgentIds: (serverId: string) => pendingArchiveAgentIdsMock(serverId),
@@ -492,6 +504,8 @@ describe("SidebarSessionList", () => {
     routerPushMock.mockReset();
     archiveAgentMock.mockReset();
     archiveAgentMock.mockResolvedValue(undefined);
+    archiveAgentsMock.mockReset();
+    archiveAgentsMock.mockResolvedValue(undefined);
     updateAgentMock.mockReset();
     updateAgentMock.mockResolvedValue(undefined);
     clearAgentAttentionMock.mockReset();
@@ -608,7 +622,10 @@ describe("SidebarSessionList", () => {
     fireEvent.click(screen.getByTestId("sidebar-session-group-archive-/repo/project"));
 
     await waitFor(() => {
-      expect(archiveAgentMock).toHaveBeenCalledTimes(2);
+      expect(archiveAgentsMock).toHaveBeenCalledWith([
+        { serverId: "server-1", agentId: "agent-1" },
+        { serverId: "server-1", agentId: "agent-2" },
+      ]);
     });
 
     fireEvent.click(screen.getByTestId("sidebar-session-group-remove-/repo/project"));

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   Pressable,
   RefreshControl,
@@ -128,12 +128,18 @@ function RefreshControlHost({
   tintColor,
   refreshing,
   onRefresh,
+  children,
 }: {
   tintColor: string;
   refreshing: boolean;
   onRefresh: () => void;
+  children?: ReactNode;
 }) {
-  return <RefreshControl tintColor={tintColor} refreshing={refreshing} onRefresh={onRefresh} />;
+  return (
+    <RefreshControl tintColor={tintColor} refreshing={refreshing} onRefresh={onRefresh}>
+      {children}
+    </RefreshControl>
+  );
 }
 
 const ThemedRefreshControlHost = withUnistyles(RefreshControlHost);
@@ -614,14 +620,19 @@ function SidebarSessionRow({
     ],
     [rowQuickButtonActiveStyle, rowQuickButtonPressedStyle, rowQuickButtonStyle],
   );
+  const pointerEventsStyle = useMemo(
+    () => ({ pointerEvents: showQuickActions ? ("auto" as const) : ("none" as const) }),
+    [showQuickActions],
+  );
   const quickActionsStyle = useMemo(
-    () => [rowQuickActionsStyle, !showQuickActions && styles.rowQuickHidden],
-    [rowQuickActionsStyle, showQuickActions],
+    () => [rowQuickActionsStyle, !showQuickActions && styles.rowQuickHidden, pointerEventsStyle],
+    [pointerEventsStyle, rowQuickActionsStyle, showQuickActions],
   );
   const desktopRowFadeMaskStyle = useMemo(
     () => [
       styles.desktopRowFadeMask,
       isSelected ? styles.desktopRowFadeMaskSelected : styles.desktopRowFadeMaskHovered,
+      styles.pointerEventsNone,
     ],
     [isSelected],
   );
@@ -722,7 +733,6 @@ function SidebarSessionRow({
 
   const desktopTrailingContent = (
     <View
-      pointerEvents={showQuickActions ? "auto" : "none"}
       style={quickActionsStyle}
       testID={`sidebar-session-quick-actions-${agent.serverId}-${agent.id}`}
     >
@@ -790,7 +800,7 @@ function SidebarSessionRow({
           accessibilityState={rowAccessibilityState}
         >
           {rowMainContent}
-          {showQuickActions ? <View pointerEvents="none" style={desktopRowFadeMaskStyle} /> : null}
+          {showQuickActions ? <View style={desktopRowFadeMaskStyle} /> : null}
         </ContextMenuTrigger>
         {desktopTrailingContent}
       </View>
@@ -976,9 +986,17 @@ function SidebarSessionGroupHeader({
     ),
     [],
   );
-  const actionsStyle = useMemo(
-    () => [styles.groupActions, !actionsVisible && styles.groupActionsHidden],
+  const groupActionsPointerEventsStyle = useMemo(
+    () => ({ pointerEvents: actionsVisible ? ("auto" as const) : ("none" as const) }),
     [actionsVisible],
+  );
+  const actionsStyle = useMemo(
+    () => [
+      styles.groupActions,
+      !actionsVisible && styles.groupActionsHidden,
+      groupActionsPointerEventsStyle,
+    ],
+    [actionsVisible, groupActionsPointerEventsStyle],
   );
   const headerStyle =
     presentation.variant === "workbench" ? styles.desktopGroupHeader : styles.groupHeader;
@@ -1027,11 +1045,7 @@ function SidebarSessionGroupHeader({
         </Text>
       </Pressable>
       {canOpenDraft ? (
-        <View
-          pointerEvents={actionsVisible ? "auto" : "none"}
-          style={actionsStyle}
-          testID={`sidebar-session-group-actions-${group.key}`}
-        >
+        <View style={actionsStyle} testID={`sidebar-session-group-actions-${group.key}`}>
           <DropdownMenu>
             <DropdownMenuTrigger
               accessibilityRole={isWeb ? undefined : "button"}
@@ -2250,6 +2264,9 @@ const styles = StyleSheet.create((theme) => ({
   },
   rowQuickHidden: {
     opacity: 0,
+  },
+  pointerEventsNone: {
+    pointerEvents: "none",
   },
   rowQuickButton: {
     width: 24,
