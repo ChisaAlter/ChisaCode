@@ -499,9 +499,6 @@ function SidebarSessionRow({
   const rowLeadingStyle = isCompact ? styles.rowLeading : styles.desktopRowLeading;
   const rowContentStyle = isCompact ? styles.rowContent : styles.desktopRowContent;
   const rowTitleStyle = isCompact ? styles.rowTitle : styles.desktopRowTitle;
-  const rowTitleSelectedStyle = isCompact
-    ? styles.rowTitleSelected
-    : styles.desktopRowTitleSelected;
   const rowQuickActionsStyle = isCompact ? styles.rowQuickActions : styles.desktopRowQuickActions;
   const rowQuickButtonStyle = isCompact ? styles.rowQuickButton : styles.desktopRowQuickButton;
   const rowQuickButtonActiveStyle = isCompact
@@ -525,10 +522,7 @@ function SidebarSessionRow({
     ],
     [isDragging, isSelected, rowBaseStyle, rowHoveredStyle, rowPressedStyle, rowSelectedStyle],
   );
-  const titleStyle = useMemo(
-    () => [rowTitleStyle, isSelected && rowTitleSelectedStyle],
-    [isSelected, rowTitleSelectedStyle, rowTitleStyle],
-  );
+  const titleStyle = rowTitleStyle;
   const rowAccessibilityState = useMemo(() => ({ selected: isSelected }), [isSelected]);
   const showQuickActions = isCompact || isHovered || isPinning || isArchiving;
   const handlePointerEnter = useCallback(() => setIsHovered(true), []);

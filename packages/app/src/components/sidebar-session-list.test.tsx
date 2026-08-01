@@ -930,6 +930,22 @@ describe("SidebarSessionList", () => {
     ).toBe("true");
   });
 
+  it("keeps desktop session typography unchanged when selected", () => {
+    const agents = [agent({ id: "agent-1", cwd: "/repo/project", title: "First session" })];
+
+    renderSidebarSessionList({
+      serverId: "server-1",
+      agents,
+      selectedAgentId: "server-1:agent-1",
+    });
+
+    const title = screen.getByText("First session");
+    expect(title.style.fontSize).toBe("12.5px");
+    expect(title.style.lineHeight).toBe("18px");
+    expect(title.style.paddingTop).toBe("");
+    expect(title.style.transform).toBe("");
+  });
+
   it("does not invent a selected session when the route provides none", () => {
     const agents = [agent({ id: "agent-1", cwd: "/repo/project", title: "Only session" })];
 

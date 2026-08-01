@@ -14,7 +14,18 @@
 - **问题**：运行中会话的模型选择器在 derived/gateway provider 命中 exact provider 或基础 provider snapshot 处于 loading/error 时，可能用应用配置模型覆盖原生 Claude/Codex family 模型；snapshot refresh 也会在刷新期间清空已有模型
 - **影响范围**：`packages/app/src/provider-selection`、`packages/app/src/composer/agent-controls`、`packages/server/src/server/agent/provider-snapshot-manager.ts`
 - **修复**：选择器先按 `derivedFromProviderId` 解析 provider family，再追加 runtime rows；active runtime model/options 与 family selectable rows 分离；snapshot refresh/loading 保留旧 models/modes/fetchedAt，避免临时状态造成 native 模型消失；新增 Claude family/gateway 与 runtime identity 回归测试
-- **状态**：完成。App 26 个模型选择断言、server provider snapshot 25 个断言、全仓 typecheck、改动文件 lint 和格式检查通过
+- **长期不变量**：`provider` 表示基础/provider family，`runtimeProvider` 表示实际执行 provider；derived/gateway provider 只能追加可选模型，不能覆盖 family 的 native/settings rows；刷新 loading/error 期间不能把已有缓存模型改为空列表；运行态 model/thinking options 只能来自实际 runtime provider
+- **防回归门禁**：修改 provider snapshot、provider selection、agent model projection 时，必须同时覆盖 native + gateway 共存、缓存刷新保留、legacy runtime identity 和相同 model ID 的稳定 key/选择态；必须运行对应 Vitest、typecheck、改动文件 lint/format，并完成真实 Electron packaged build 验证
+- **状态**：完成。App 26 个模型选择断言、server provider snapshot 25 个断言、全仓 typecheck、改动文件 lint 和格式检查、Electron packaged build 通过
+
+### Sidebar selection typography regression (2026-08-01 completed)
+
+- **问题**：侧栏会话行选中后复用了单独的标题样式，导致 font size、line height、padding 或 transform 随选中状态改变，产生左侧文本间距跳变
+- **影响范围**：`packages/app/src/components/sidebar-session-list.tsx`
+- **修复**：选中态只保留行背景和其他选择反馈，不再替换会话标题 typography；compact 与 desktop 标题继续使用各自固定的基础样式
+- **长期不变量**：选中/未选中只能改变选择反馈，不能改变会话标题的字体、行高、内边距、位移或其他布局尺寸；新增选中态视觉效果时必须明确证明不会引起文字和相邻行重排
+- **防回归门禁**：保留 desktop selected typography 测试，断言 `fontSize`、`lineHeight`、`paddingTop` 和 `transform`；同时保留 compact typography 测试和 selected row background 测试；涉及侧栏布局的改动必须运行 `sidebar-session-list.test.tsx`，并在 packaged Electron 中确认选中会话前后文字位置不跳变
+- **状态**：完成。侧栏测试 45/45、改动文件 lint、全仓 typecheck 和 Electron packaged build 通过
 
 - **问题**：`origin/cn-main`（领先本地 14 提交、67 文件、约 8500 行）把 Cindy 的 6 个高优借鉴项几乎全部"形"上落地，但对抗性审查发现几乎所有项都带着 high/critical 缺陷一起落地，两个门禁只写代码未接 CI，消息渲染只到 diff/CJK/检测，同会话 agent 切换未做。详见 [cindy-integration-hardening-plan.md](cindy-integration-hardening-plan.md)。
 - **影响范围**：`packages/protocol`（exports/gate/schema）、`packages/server`（ssh-transport/git-snapshot/team-handler/goal-service/learn-service/project-context/model-catalog/session）、`packages/client`+`packages/app`（cindy 命令/UI/markdown 渲染）、`scripts`（guard/i18n 门禁）。
