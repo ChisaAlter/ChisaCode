@@ -129,6 +129,7 @@ const THOUGHT_COLLAPSE_PROVIDER_COVERAGE = [
   "mimocode",
   "pi",
   "kimi",
+  "grokbuild",
   "mock",
   "mock-slow",
 ] as const;
@@ -532,6 +533,7 @@ describe("collapseCompletedTurnThoughtsForDisplay", () => {
       "mimocode",
       "pi",
       "kimi",
+      "grokbuild",
       "mock",
       "mock-slow",
     ]);

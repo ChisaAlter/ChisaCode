@@ -167,7 +167,7 @@ describe("combined model selector data", () => {
   });
 
   it("groups MiMo gateway models under every generated agent provider", () => {
-    const agentIds = ["claude", "codex", "opencode", "mimocode", "pi", "kimi"];
+    const agentIds = ["claude", "codex", "opencode", "mimocode", "pi", "kimi", "grokbuild"];
     const entries = [
       ...agentIds.map((provider) =>
         snapshotEntry({

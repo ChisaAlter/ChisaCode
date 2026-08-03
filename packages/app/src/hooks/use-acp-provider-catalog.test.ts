@@ -2,7 +2,15 @@ import { describe, expect, it } from "vitest";
 import { ACP_PROVIDER_CATALOG } from "@/data/acp-provider-catalog";
 import { buildAcpProviderConfigPatch, getAcpProviderCatalog } from "./use-acp-provider-catalog";
 
-const SUPPORTED_PROVIDER_IDS = ["claude", "codex", "opencode", "mimocode", "pi", "kimi"] as const;
+const SUPPORTED_PROVIDER_IDS = [
+  "claude",
+  "codex",
+  "opencode",
+  "mimocode",
+  "pi",
+  "kimi",
+  "grokbuild",
+] as const;
 
 function findProvider(id: string) {
   const entry = getAcpProviderCatalog().find((provider) => provider.id === id);
@@ -51,6 +59,17 @@ describe("provider catalog", () => {
           label: "Kimi Code",
           description: "Moonshot AI's open-source terminal coding agent via ACP",
           command: ["kimi", "acp"],
+          env: {},
+        },
+      },
+    });
+    expect(buildAcpProviderConfigPatch(findProvider("grokbuild"))).toEqual({
+      providers: {
+        grokbuild: {
+          enabled: true,
+          label: "Grok Build",
+          description: "xAI's terminal coding agent via ACP",
+          command: ["grok", "agent", "stdio"],
           env: {},
         },
       },

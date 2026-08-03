@@ -57,4 +57,12 @@ export const ACP_PROVIDER_CATALOG: AcpProviderCatalogEntry[] = [
     installLink: "https://github.com/MoonshotAI/kimi-code",
     command: ["kimi", "acp"],
   },
+  {
+    id: "grokbuild",
+    title: "Grok Build",
+    description: "xAI's terminal coding agent via ACP",
+    version: "latest",
+    installLink: "https://x.ai/cli",
+    command: ["grok", "agent", "stdio"],
+  },
 ];

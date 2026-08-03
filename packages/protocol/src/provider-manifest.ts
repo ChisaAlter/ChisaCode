@@ -220,6 +220,13 @@ export const AGENT_PROVIDER_DEFINITIONS: AgentProviderDefinition[] = [
     defaultModeId: "default",
     modes: KIMI_MODES,
   },
+  {
+    id: "grokbuild",
+    label: "Grok Build",
+    description: "xAI's terminal coding agent via ACP",
+    defaultModeId: null,
+    modes: [],
+  },
 ];
 
 export const DEV_AGENT_PROVIDER_DEFINITIONS: AgentProviderDefinition[] = [
