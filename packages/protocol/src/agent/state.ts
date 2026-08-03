@@ -282,7 +282,8 @@ export const AgentTimelineItemPayloadSchema: z.ZodType<AgentTimelineItem, z.ZodT
     }),
     z.object({
       type: z.literal("compaction"),
-      status: z.enum(["loading", "completed"]),
+      status: z.enum(["loading", "completed", "failed"]),
+      error: z.string().optional(),
       trigger: z.enum(["auto", "manual"]).optional(),
       preTokens: z.number().optional(),
     }),

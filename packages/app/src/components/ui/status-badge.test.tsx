@@ -13,11 +13,12 @@ const { theme } = vi.hoisted(() => ({
     fontWeight: { normal: "400" },
     shadow: { sm: {} },
     colors: {
-      borderAccent: "#666",
+      border: "#666",
       foregroundMuted: "#aaa",
       statusDanger: "#ef4444",
       statusSuccess: "#22c55e",
       statusWarning: "#f59e0b",
+      surfaceWorkspace: "#111",
       surface2: "#222",
     },
   },
@@ -122,7 +123,7 @@ describe("StatusBadge", () => {
     });
 
     const style = container?.querySelector("[role='text']")?.getAttribute("data-style") ?? "";
-    expect(style).toContain(theme.colors.borderAccent);
+    expect(style).toContain(theme.colors.border);
     expect(style).not.toContain(theme.colors.statusDanger);
   });
 });

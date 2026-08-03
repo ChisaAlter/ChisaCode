@@ -51,6 +51,8 @@ export class PiSessionEventController {
   private activeAskUserDialog: ActiveAskUserDialog | null = null;
   private pendingCombinedAskUserResponse: PendingCombinedAskUserResponse | null = null;
   private currentActiveTurnId: string | null = null;
+  private closed = false;
+  private readonly finalizedTurnIds = new Set<string>();
   private readonly runtimeSession: Pick<PiRuntimeSession, "respondToExtensionUiRequest">;
   private readonly extensionHistory: PiExtensionHistoryController;
   private readonly emit: (event: AgentStreamEvent) => void;
@@ -72,14 +74,24 @@ export class PiSessionEventController {
   }
 
   beginTurn(turnId: string): void {
+    if (this.closed) {
+      throw new Error("Pi session is closed");
+    }
     if (this.currentActiveTurnId) {
       throw new Error("A Pi turn is already active");
     }
+    this.finalizedTurnIds.delete(turnId);
     this.currentActiveTurnId = turnId;
   }
 
   finishTurn(event: PiTerminalTurnEvent): void {
-    this.currentActiveTurnId = null;
+    if (this.closed || !event.turnId || this.finalizedTurnIds.has(event.turnId)) {
+      return;
+    }
+    this.finalizedTurnIds.add(event.turnId);
+    if (this.currentActiveTurnId === event.turnId) {
+      this.currentActiveTurnId = null;
+    }
     this.emit(event);
   }
 
@@ -118,6 +130,9 @@ export class PiSessionEventController {
   }
 
   handleRuntimeEvent(event: PiRuntimeEvent): void {
+    if (this.closed) {
+      return;
+    }
     if (event.type === "extension_ui_request") {
       this.handleExtensionUiRequest(event);
       return;
@@ -129,7 +144,36 @@ export class PiSessionEventController {
     this.handleSessionEvent(event);
   }
 
-  close(error: Error): void {
+  close(error: Error, terminalEvent?: PiTerminalTurnEvent): void {
+    if (this.closed) {
+      return;
+    }
+    const activeTurnId = this.currentActiveTurnId;
+    if (activeTurnId) {
+      this.finalizedTurnIds.add(activeTurnId);
+      this.currentActiveTurnId = null;
+      this.emit(
+        terminalEvent ?? {
+          type: "turn_canceled",
+          provider: PI_PROVIDER,
+          turnId: activeTurnId,
+          reason: error.message,
+        },
+      );
+    }
+    this.closed = true;
+    for (const request of this.pendingExtensionUiRequests.values()) {
+      try {
+        this.runtimeSession.respondToExtensionUiRequest(request.id, { cancelled: true });
+      } catch {
+        // The runtime may already have lost its transport while the session closes.
+      }
+    }
+    this.pendingExtensionUiRequests.clear();
+    this.activeToolCalls.clear();
+    this.activeAskUserDialog = null;
+    this.pendingCombinedAskUserResponse = null;
+    this.currentActiveTurnId = null;
     this.extensionHistory.close(error);
   }
 
@@ -200,16 +244,18 @@ export class PiSessionEventController {
   }
 
   private handleProcessExit(error: string): void {
-    this.extensionHistory.close(new Error(error));
-    if (!this.currentActiveTurnId) {
-      return;
-    }
-    this.finishTurn({
-      type: "turn_failed",
-      provider: PI_PROVIDER,
-      turnId: this.currentActiveTurnId,
-      error,
-    });
+    const turnId = this.currentActiveTurnId;
+    this.close(
+      new Error(error),
+      turnId
+        ? {
+            type: "turn_failed",
+            provider: PI_PROVIDER,
+            turnId,
+            error,
+          }
+        : undefined,
+    );
   }
 
   private handleSessionEvent(event: PiAgentSessionEvent): void {
@@ -238,61 +284,14 @@ export class PiSessionEventController {
       case "message_update":
         this.handleMessageUpdate(event, turnId);
         return;
-      case "tool_execution_start": {
-        const toolCall = parseToolArgs(event.toolName, event.args);
-        this.activeToolCalls.set(event.toolCallId, toolCall);
-        this.activeAskUserDialog = readActiveAskUserDialog(event.toolName, event.args);
-        this.emitToolCallEvent(event.toolCallId, toolCall, "running", null, null);
+      case "tool_execution_start":
+      case "tool_execution_update":
+      case "tool_execution_end":
+        this.handleToolExecutionEvent(event);
         return;
-      }
-      case "tool_execution_update": {
-        const toolCall = this.activeToolCalls.get(event.toolCallId);
-        if (!toolCall) {
-          return;
-        }
-
-        const partialResult = parseToolResult(event.partialResult);
-        this.emitToolCallEvent(event.toolCallId, toolCall, "running", partialResult, null);
-        return;
-      }
-      case "tool_execution_end": {
-        const toolCall =
-          this.activeToolCalls.get(event.toolCallId) ?? parseToolArgs(event.toolName, null);
-        this.activeToolCalls.delete(event.toolCallId);
-
-        if (event.toolName === "ask_user") {
-          this.activeAskUserDialog = null;
-          this.pendingCombinedAskUserResponse = null;
-        }
-
-        const result = parseToolResult(event.result);
-        const error = event.isError ? event.result : null;
-        const status = event.isError ? "failed" : "completed";
-        this.emitToolCallEvent(event.toolCallId, toolCall, status, result, error);
-        return;
-      }
       case "compaction_start":
-        this.emit({
-          type: "timeline",
-          provider: PI_PROVIDER,
-          turnId,
-          item: {
-            type: "compaction",
-            status: "loading",
-            trigger: event.reason === "manual" ? "manual" : "auto",
-          },
-        });
-        return;
       case "compaction_end":
-        this.emit({
-          type: "timeline",
-          provider: PI_PROVIDER,
-          turnId,
-          item: {
-            type: "compaction",
-            status: "completed",
-          },
-        });
+        this.handleCompactionEvent(event, turnId);
         return;
       case "agent_end":
         this.completeTurn(turnId, event.messages ?? []);
@@ -300,6 +299,80 @@ export class PiSessionEventController {
       default:
         return;
     }
+  }
+
+  private handleToolExecutionEvent(
+    event: Extract<
+      PiAgentSessionEvent,
+      { type: "tool_execution_start" | "tool_execution_update" | "tool_execution_end" }
+    >,
+  ): void {
+    if (event.type === "tool_execution_start") {
+      const toolCall = parseToolArgs(event.toolName, event.args);
+      this.activeToolCalls.set(event.toolCallId, toolCall);
+      this.activeAskUserDialog = readActiveAskUserDialog(event.toolName, event.args);
+      this.emitToolCallEvent(event.toolCallId, toolCall, "running", null, null);
+      return;
+    }
+
+    if (event.type === "tool_execution_update") {
+      const toolCall = this.activeToolCalls.get(event.toolCallId);
+      if (!toolCall) {
+        return;
+      }
+      const partialResult = parseToolResult(event.partialResult);
+      this.emitToolCallEvent(event.toolCallId, toolCall, "running", partialResult, null);
+      return;
+    }
+
+    const toolCall =
+      this.activeToolCalls.get(event.toolCallId) ?? parseToolArgs(event.toolName, null);
+    this.activeToolCalls.delete(event.toolCallId);
+
+    if (event.toolName === "ask_user") {
+      this.activeAskUserDialog = null;
+      this.pendingCombinedAskUserResponse = null;
+    }
+
+    const result = parseToolResult(event.result);
+    const error = event.isError ? event.result : null;
+    const status = event.isError ? "failed" : "completed";
+    this.emitToolCallEvent(event.toolCallId, toolCall, status, result, error);
+  }
+
+  private handleCompactionEvent(
+    event: Extract<PiAgentSessionEvent, { type: "compaction_start" | "compaction_end" }>,
+    turnId: string | undefined,
+  ): void {
+    if (event.type === "compaction_start") {
+      this.emit({
+        type: "timeline",
+        provider: PI_PROVIDER,
+        turnId,
+        item: {
+          type: "compaction",
+          status: "loading",
+          trigger: event.reason === "manual" ? "manual" : "auto",
+        },
+      });
+      return;
+    }
+
+    const error = event.errorMessage?.trim();
+    let status: "failed" | "completed" = "completed";
+    if (event.aborted || error) {
+      status = "failed";
+    }
+    this.emit({
+      type: "timeline",
+      provider: PI_PROVIDER,
+      turnId,
+      item: {
+        type: "compaction",
+        status,
+        ...(error ? { error } : {}),
+      },
+    });
   }
 
   private handleMessageUpdate(
@@ -373,10 +446,12 @@ export class PiSessionEventController {
   }
 
   private completeTurn(turnId: string | undefined, messages: PiAgentMessage[]): void {
-    this.currentActiveTurnId = null;
+    if (!turnId || this.finalizedTurnIds.has(turnId)) {
+      return;
+    }
     const errorMessage = this.resolveTurnError(messages);
     if (typeof errorMessage === "string" && errorMessage.length > 0) {
-      this.emit({
+      this.finishTurn({
         type: "turn_failed",
         provider: PI_PROVIDER,
         turnId,
@@ -384,7 +459,7 @@ export class PiSessionEventController {
       });
       return;
     }
-    this.emit({
+    this.finishTurn({
       type: "turn_completed",
       provider: PI_PROVIDER,
       turnId,

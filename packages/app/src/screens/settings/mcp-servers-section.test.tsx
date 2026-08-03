@@ -85,6 +85,8 @@ vi.mock("react-native-unistyles", () => ({
     create: (styles: unknown) => (typeof styles === "function" ? styles(theme) : styles),
   },
   useUnistyles: () => ({ theme }),
+  UnistylesRuntime: { pixelRatio: 1 },
+  withUnistyles: (Component: unknown) => Component,
 }));
 
 vi.mock("react-i18next", () => ({

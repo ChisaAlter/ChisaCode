@@ -11,6 +11,8 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { $ } from "zx";
+import { installZxWindowsPathCompat } from "./helpers/zx-path-compat.ts";
+installZxWindowsPathCompat();
 import { getAvailablePort } from "./helpers/network.ts";
 
 $.verbose = false;
@@ -122,6 +124,11 @@ function waitForProcessExit(processRef: ChildProcess, timeoutMs: number): Promis
 }
 
 console.log("=== Daemon SIGINT (supervisor regression) ===\n");
+
+if (process.platform === "win32") {
+  console.log("Skipping SIGINT supervisor regression on Windows (SIGINT maps to TerminateProcess)");
+  process.exit(0);
+}
 
 const port = await getAvailablePort();
 const chisacodeHome = await mkdtemp(join(tmpdir(), "chisacode-sigint-supervisor-"));

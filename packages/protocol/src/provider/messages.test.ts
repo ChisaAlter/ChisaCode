@@ -11,6 +11,7 @@ import {
   ProviderInboundMessageSchemas,
   ProviderOutboundMessageSchemas,
   ProviderSnapshotEntrySchema,
+  GetProvidersSnapshotResponseMessageSchema,
 } from "./messages.js";
 
 function schemaTypes(schemas: readonly { shape: { type: { value: string } } }[]): string[] {
@@ -56,6 +57,47 @@ describe("provider message domain", () => {
         maxLogLines: 201,
       }).success,
     ).toBe(false);
+  });
+
+  test("accepts structured snapshot reasons and canonical workspace scope", () => {
+    const response = GetProvidersSnapshotResponseMessageSchema.parse({
+      type: "get_providers_snapshot_response",
+      payload: {
+        cwd: "C:\\workspace\\project",
+        entries: [
+          {
+            provider: "pi",
+            status: "unavailable",
+            statusReason: "command_unavailable",
+            enabled: true,
+          },
+        ],
+        generatedAt: "2026-01-01T00:00:00.000Z",
+        requestId: "snapshot-1",
+      },
+    });
+
+    expect(response.payload.cwd).toBe("C:\\workspace\\project");
+    expect(response.payload.entries[0]?.statusReason).toBe("command_unavailable");
+  });
+  test("keeps old snapshot responses valid when new fields are absent", () => {
+    expect(
+      GetProvidersSnapshotResponseMessageSchema.parse({
+        type: "get_providers_snapshot_response",
+        payload: {
+          entries: [],
+          generatedAt: "2026-01-01T00:00:00.000Z",
+          requestId: "legacy-1",
+        },
+      }),
+    ).toEqual({
+      type: "get_providers_snapshot_response",
+      payload: {
+        entries: [],
+        generatedAt: "2026-01-01T00:00:00.000Z",
+        requestId: "legacy-1",
+      },
+    });
   });
 
   test("keeps the legacy messages export wired to provider schemas", () => {

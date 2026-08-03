@@ -1,4 +1,5 @@
 import { mkdtempSync, rmSync } from "node:fs";
+import { rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test, vi } from "vitest";
@@ -235,7 +236,7 @@ interface Harness {
   client: TestAgentClient;
   events: AgentManagerEvent[];
   workdir: string;
-  cleanup: () => void;
+  cleanup: () => Promise<void>;
 }
 
 function createHarness(options?: { provider?: AgentProvider }): Harness {
@@ -254,7 +255,15 @@ function createHarness(options?: { provider?: AgentProvider }): Harness {
     client,
     events,
     workdir,
-    cleanup: () => rmSync(workdir, { recursive: true, force: true }),
+    cleanup: async () => {
+      for (const agent of manager.listAgents()) {
+        if (agent.lifecycle !== "closed") {
+          await manager.closeAgent(agent.id).catch(() => undefined);
+        }
+      }
+      await manager.flush();
+      await rm(workdir, { recursive: true, force: true, maxRetries: 30, retryDelay: 50 });
+    },
   };
 }
 
@@ -408,7 +417,7 @@ describe("target coalesced behavior", () => {
       expectContiguousRowSeqs(rows, [1]);
       expectContiguousLiveSeqs(events, [1]);
     } finally {
-      harness.cleanup();
+      await harness.cleanup();
     }
   });
 
@@ -432,7 +441,7 @@ describe("target coalesced behavior", () => {
       expectContiguousRowSeqs(rows, [1]);
       expectContiguousLiveSeqs(events, [1]);
     } finally {
-      harness.cleanup();
+      await harness.cleanup();
     }
   });
 
@@ -478,7 +487,7 @@ describe("target coalesced behavior", () => {
       expectContiguousRowSeqs(rows, [1, 2, 3]);
       expectContiguousLiveSeqs(events, [1, 2, 3]);
     } finally {
-      harness.cleanup();
+      await harness.cleanup();
     }
   });
 
@@ -506,7 +515,7 @@ describe("target coalesced behavior", () => {
       expectContiguousRowSeqs(rows, [1]);
       expectContiguousLiveSeqs(events, [1]);
     } finally {
-      harness.cleanup();
+      await harness.cleanup();
     }
   });
 
@@ -534,7 +543,7 @@ describe("target coalesced behavior", () => {
       expectContiguousRowSeqs(rows, [1, 2]);
       expectContiguousLiveSeqs(events, [1, 2]);
     } finally {
-      harness.cleanup();
+      await harness.cleanup();
     }
   });
 
@@ -567,7 +576,7 @@ describe("target coalesced behavior", () => {
       expect(await harness.manager.getTimelineRows(agentId)).toHaveLength(2);
       expect(getTimelineStreamEvents(harness.events, agentId)).toHaveLength(2);
     } finally {
-      harness.cleanup();
+      await harness.cleanup();
     }
   });
 
@@ -598,7 +607,7 @@ describe("target coalesced behavior", () => {
       expectContiguousRowSeqs(rows, [1, 2, 3, 4]);
       expectContiguousLiveSeqs(events, [1, 2, 3, 4]);
     } finally {
-      harness.cleanup();
+      await harness.cleanup();
     }
   });
 
@@ -627,7 +636,7 @@ describe("target coalesced behavior", () => {
       expectContiguousRowSeqs(rows, [1, 2, 3]);
       expectContiguousLiveSeqs(events, [1, 2, 3]);
     } finally {
-      harness.cleanup();
+      await harness.cleanup();
     }
   });
 
@@ -670,7 +679,7 @@ describe("target coalesced behavior", () => {
         Array.from({ length: 10 }, (_, index) => index + 1),
       );
     } finally {
-      harness.cleanup();
+      await harness.cleanup();
     }
   });
 
@@ -710,7 +719,7 @@ describe("target coalesced behavior", () => {
       expectContiguousLiveSeqs(secondEvents, [1]);
       rmSync(secondWorkdir, { recursive: true, force: true });
     } finally {
-      harness.cleanup();
+      await harness.cleanup();
     }
   });
 
@@ -743,7 +752,7 @@ describe("target coalesced behavior", () => {
       expectContiguousRowSeqs(rows, [1, 2]);
       expectContiguousLiveSeqs(events, [1, 2]);
     } finally {
-      harness.cleanup();
+      await harness.cleanup();
     }
   });
 
@@ -782,7 +791,7 @@ describe("target coalesced behavior", () => {
       expectContiguousRowSeqs(rows, [1, 2]);
       expectContiguousLiveSeqs(events, [1, 2]);
     } finally {
-      harness.cleanup();
+      await harness.cleanup();
     }
   });
 
@@ -807,7 +816,7 @@ describe("target coalesced behavior", () => {
       expectContiguousRowSeqs(rows, [1]);
       expectContiguousLiveSeqs(events, [1]);
     } finally {
-      harness.cleanup();
+      await harness.cleanup();
     }
   });
 
@@ -863,7 +872,7 @@ describe("target coalesced behavior", () => {
           expectedTimelineEventCount,
         );
       } finally {
-        harness.cleanup();
+        await harness.cleanup();
       }
     }
   });
@@ -886,7 +895,7 @@ describe("target coalesced behavior", () => {
         seq: 1,
       });
     } finally {
-      closeHarness.cleanup();
+      await closeHarness.cleanup();
     }
 
     const reloadHarness = createHarness();
@@ -901,7 +910,7 @@ describe("target coalesced behavior", () => {
       expect(getTimelineItems(rows)).toEqual([{ type: "assistant_message", text: "reload" }]);
       expect(getTimelineStreamEvents(reloadHarness.events, agentId)).toHaveLength(1);
     } finally {
-      reloadHarness.cleanup();
+      await reloadHarness.cleanup();
     }
 
     const deletionHarness = createHarness();
@@ -915,7 +924,7 @@ describe("target coalesced behavior", () => {
       expect(deletionHarness.manager.getAgent(agentId)).toBeNull();
       expect(getTimelineStreamEvents(deletionHarness.events, agentId)).toHaveLength(1);
     } finally {
-      deletionHarness.cleanup();
+      await deletionHarness.cleanup();
     }
   });
 
@@ -935,7 +944,7 @@ describe("target coalesced behavior", () => {
       ]);
       expect(getTimelineStreamEvents(reloadHarness.events, agentId)).toHaveLength(1);
     } finally {
-      reloadHarness.cleanup();
+      await reloadHarness.cleanup();
     }
 
     const reuseHarness = createHarness();
@@ -973,7 +982,7 @@ describe("target coalesced behavior", () => {
       ]);
       rmSync(nextWorkdir, { recursive: true, force: true });
     } finally {
-      reuseHarness.cleanup();
+      await reuseHarness.cleanup();
     }
   });
 
@@ -1002,7 +1011,7 @@ describe("target coalesced behavior", () => {
       expectContiguousRowSeqs(rows, [1, 2, 3]);
       expectContiguousLiveSeqs(timelineEvents, [1, 2, 3]);
     } finally {
-      idempotencyHarness.cleanup();
+      await idempotencyHarness.cleanup();
     }
 
     const reentryHarness = createHarness();
@@ -1052,7 +1061,7 @@ describe("target coalesced behavior", () => {
       expectContiguousLiveSeqs(timelineEvents, [1, 2]);
       expect(didPushDuringFlush).toBe(true);
     } finally {
-      reentryHarness.cleanup();
+      await reentryHarness.cleanup();
     }
   });
 
@@ -1077,7 +1086,7 @@ describe("target coalesced behavior", () => {
       expect(await harness.manager.getTimelineRows(agentId)).toHaveLength(1);
       expect(getTimelineStreamEvents(harness.events, agentId)).toHaveLength(1);
     } finally {
-      harness.cleanup();
+      await harness.cleanup();
     }
   });
 
@@ -1108,7 +1117,7 @@ describe("target coalesced behavior", () => {
         { type: "reasoning", text: "r2" },
       ]);
     } finally {
-      harness.cleanup();
+      await harness.cleanup();
     }
   });
 
@@ -1156,7 +1165,7 @@ describe("target coalesced behavior", () => {
         event: { type: "turn_completed" },
       });
     } finally {
-      harness.cleanup();
+      await harness.cleanup();
     }
   });
 
@@ -1194,7 +1203,7 @@ describe("target coalesced behavior", () => {
       ]);
       expect(getTimelineStreamEvents(harness.events, agentId)).toHaveLength(3);
     } finally {
-      harness.cleanup();
+      await harness.cleanup();
     }
   });
 });

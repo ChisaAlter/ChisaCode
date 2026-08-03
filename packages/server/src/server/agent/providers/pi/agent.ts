@@ -34,6 +34,7 @@ import {
   type ResolvedProviderLaunch,
 } from "../../provider-launch-config.js";
 import { renderPromptAttachmentAsText } from "../../prompt-attachments.js";
+import { withTimeout } from "../../../../utils/promise-timeout.js";
 import {
   buildBinaryDiagnosticRows,
   formatDiagnosticStatus,
@@ -60,7 +61,9 @@ import type { PiRuntime, PiRuntimeSession } from "./runtime.js";
 import type { PiAgentMessage, PiImageContent, PiModel, PiThinkingLevel } from "./rpc-types.js";
 
 const PI_PROVIDER = "pi";
-const PI_BINARY_COMMAND = process.env.PI_COMMAND ?? process.env.PI_ACP_PI_COMMAND ?? "pi";
+function resolvePiDefaultBinary(): string {
+  return process.env.PI_COMMAND ?? process.env.PI_ACP_PI_COMMAND ?? "pi";
+}
 
 const PI_CAPABILITIES: AgentCapabilityFlags = {
   supportsStreaming: true,
@@ -436,11 +439,33 @@ export class PiRpcAgentSession implements AgentSession {
   }
 
   async interrupt(): Promise<void> {
-    await this.runtimeSession.abort();
-    // replaceRunning aborts then immediately startTurns the next prompt.
-    // Pi can still report isStreaming until agent_end settles; wait so the
-    // replacement prompt is accepted as idle (or at least with followUp queue).
+    const activeTurnId = this.sessionEvents.activeTurnId;
+    try {
+      await withTimeout(
+        this.runtimeSession.abort(),
+        PI_IDLE_WAIT_TIMEOUT_MS,
+        `Timed out aborting Pi turn after ${PI_IDLE_WAIT_TIMEOUT_MS}ms`,
+      );
+    } catch (error) {
+      if (activeTurnId) {
+        this.sessionEvents.finishTurn({
+          type: "turn_canceled",
+          provider: PI_PROVIDER,
+          turnId: activeTurnId,
+          reason: toDiagnosticErrorMessage(error),
+        });
+      }
+      throw error;
+    }
     await waitForPiIdle(this.runtimeSession);
+    if (activeTurnId && this.sessionEvents.activeTurnId === activeTurnId) {
+      this.sessionEvents.finishTurn({
+        type: "turn_canceled",
+        provider: PI_PROVIDER,
+        turnId: activeTurnId,
+        reason: "Interrupted by user",
+      });
+    }
   }
 
   async revertConversation(input: { messageId: string }): Promise<void> {
@@ -553,20 +578,10 @@ export class PiRpcAgentClient implements AgentClient {
   async isAvailable(): Promise<boolean> {
     const launch = await this.resolvePiLaunch();
     const availability = await checkProviderLaunchAvailable(launch);
-    if (!availability.available) {
-      return false;
-    }
-    const runtimeSession = await this.runtime.startSession({ cwd: homedir() }).catch(() => null);
-    if (!runtimeSession) {
-      return false;
-    }
-    try {
-      return (await runtimeSession.getAvailableModels()).length > 0;
-    } catch {
-      return false;
-    } finally {
-      await runtimeSession.close().catch(() => undefined);
-    }
+    // Availability answers whether the configured Pi executable can be launched.
+    // Authentication and model discovery are independent runtime concerns and
+    // are reported by listModels()/diagnostics instead of hiding the provider.
+    return availability.available;
   }
 
   async getDiagnostic(): Promise<{ diagnostic: string }> {
@@ -640,7 +655,7 @@ export class PiRpcAgentClient implements AgentClient {
   private async resolvePiLaunch(): Promise<ResolvedProviderLaunch> {
     return resolveProviderLaunch({
       commandConfig: this.runtimeSettings?.command,
-      defaultBinary: PI_BINARY_COMMAND,
+      defaultBinary: resolvePiDefaultBinary(),
     });
   }
 }

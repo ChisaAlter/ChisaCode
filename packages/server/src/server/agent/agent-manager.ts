@@ -430,9 +430,12 @@ export class AgentManager {
       trackBackgroundTask: (task) => this.trackBackgroundTask(task),
       usageStore: options.usageStore,
       snapshotOnTurn: (cwd, kind, agentId) => {
-        void createSnapshot(cwd, { kind, agentId }, this.logger).catch((err) => {
-          this.logger.debug({ err, agentId, kind }, "Auto-snapshot skipped");
-        });
+        const task = createSnapshot(cwd, { kind, agentId }, this.logger)
+          .then(() => undefined)
+          .catch((err) => {
+            this.logger.debug({ err, agentId, kind }, "Auto-snapshot skipped");
+          });
+        this.trackBackgroundTask(task);
       },
       onGoalTurnCompleted: (agentId, _cwd, tokensUsed, usedTools) => {
         // Wrap the goal continuation evaluation so a throw inside judgeTurn (or

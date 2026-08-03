@@ -197,8 +197,8 @@ try {
   }
 } finally {
   await ctx.stop();
-  await rm(ctx.chisacodeHome, { recursive: true, force: true });
-  await rm(ctx.workDir, { recursive: true, force: true });
+  await rm(ctx.chisacodeHome, { recursive: true, force: true, maxRetries: 30, retryDelay: 50 });
+  await rm(ctx.workDir, { recursive: true, force: true, maxRetries: 30, retryDelay: 50 });
 }
 
 console.log("=== Loop And Schedule Command Tests Passed ===");

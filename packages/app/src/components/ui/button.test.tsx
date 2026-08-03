@@ -16,12 +16,15 @@ const { theme } = vi.hoisted(() => ({
       accent: "#0a84ff",
       accentForeground: "#fff",
       borderAccent: "#666",
+      border: "#555",
       destructive: "#ef4444",
       foreground: "#fff",
       foregroundMuted: "#aaa",
       palette: { white: "#fff" },
+      surface0: "#222",
       surface1: "#111",
       surface2: "#222",
+      surfaceWorkspace: "#111",
     },
   },
 }));
@@ -73,6 +76,7 @@ vi.mock("react-native-unistyles", () => ({
     create: (factory: unknown) => (typeof factory === "function" ? factory(theme) : factory),
   },
   useUnistyles: () => ({ theme }),
+  withUnistyles: (Component: unknown) => Component,
 }));
 
 describe("Button", () => {

@@ -187,6 +187,9 @@ export class ProviderSnapshotManager {
   }
 
   getSnapshot(cwd?: string): ProviderSnapshotEntry[] {
+    if (this.destroyed) {
+      return [];
+    }
     const resolvedCwd = resolveSnapshotCwd(cwd);
     const entries = this.snapshots.get(resolvedCwd);
     if (!entries) {
@@ -216,6 +219,9 @@ export class ProviderSnapshotManager {
   }
 
   async refreshSnapshotForCwd(options: ProviderSnapshotRefreshOptions): Promise<void> {
+    if (this.destroyed) {
+      return;
+    }
     const snapshotCwd = resolveSnapshotCwd(options.cwd);
     const providers = this.resolveRefreshProviders(options.providers);
     this.resetSnapshotToLoading(snapshotCwd, providers, { preserveExisting: true });
@@ -226,17 +232,26 @@ export class ProviderSnapshotManager {
   async refreshSettingsSnapshot(
     options: Omit<ProviderSnapshotRefreshOptions, "cwd"> = {},
   ): Promise<void> {
+    if (this.destroyed) {
+      return;
+    }
     const homeCwd = resolveSnapshotCwd();
     const providers = this.resolveRefreshProviders(options.providers);
     const providersToRefresh = providers ?? this.getProviderIds();
 
     this.clearCachedProviders(providers);
-    this.resetSnapshotToLoading(homeCwd, providers, { preserveExisting: true });
-    this.emitChange(homeCwd);
-    await this.refreshProviders(homeCwd, providersToRefresh);
+    const scopes = new Set([...this.snapshots.keys(), homeCwd]);
+    for (const cwd of scopes) {
+      this.resetSnapshotToLoading(cwd, providers, { preserveExisting: true });
+      this.emitChange(cwd);
+    }
+    await Promise.all(Array.from(scopes, (cwd) => this.refreshProviders(cwd, providersToRefresh)));
   }
 
   async warmUpSnapshotForCwd(options: ProviderSnapshotRefreshOptions): Promise<void> {
+    if (this.destroyed) {
+      return;
+    }
     const snapshotCwd = resolveSnapshotCwd(options.cwd);
     const providers = this.resolveRefreshProviders(options.providers);
     if (options.providers && providers?.length === 0) {
@@ -429,6 +444,10 @@ export class ProviderSnapshotManager {
     mutableProviders: MutableDaemonConfig["providers"] | undefined,
     modelGateways?: MutableDaemonConfig["modelGateways"] | undefined,
   ): AgentManagerProviderState {
+    if (this.destroyed) {
+      return this.getAgentManagerProviderState();
+    }
+    const previousClients = this.providerClients;
     this.providerOverrides = applyMutableProviderConfigToOverrides(
       this.baseProviderOverrides,
       mutableProviders,
@@ -436,6 +455,12 @@ export class ProviderSnapshotManager {
     this.modelGateways = modelGateways;
     this.providerRegistry = this.buildRegistry();
     this.providerClients = { ...this.extraClients } as Record<AgentProvider, AgentClient>;
+
+    const nextClients = new Set(Object.values(this.providerClients));
+    const replacedClients = Object.values(previousClients).filter(
+      (client): client is AgentClient => client !== undefined && !nextClients.has(client),
+    );
+    void shutdownAgentClients(replacedClients, this.logger);
 
     for (const cwd of this.snapshots.keys()) {
       this.providerLoads.delete(cwd);
@@ -559,18 +584,22 @@ export class ProviderSnapshotManager {
         modelGatewayId: definition?.modelGatewayId ?? null,
       };
 
-      if (!definition?.enabled || !current || current.status === "loading") {
+      if (!definition?.enabled) {
         entries.set(provider, {
           ...metadata,
           status: "unavailable",
-          enabled: definition?.enabled ?? true,
+          statusReason: "disabled",
+          enabled: false,
         });
         continue;
       }
 
       entries.set(provider, {
-        ...current,
         ...metadata,
+        status: "loading",
+        statusReason: "configuration_changed",
+        enabled: true,
+        ...preservedProviderSnapshotData(current),
       });
     }
 
@@ -578,6 +607,9 @@ export class ProviderSnapshotManager {
   }
 
   private async warmUp(cwd: string, providers?: AgentProvider[]): Promise<void> {
+    if (this.destroyed) {
+      return;
+    }
     const providersToRefresh = providers ?? this.getProviderIds();
 
     await this.loadProviders({
@@ -588,6 +620,9 @@ export class ProviderSnapshotManager {
   }
 
   private async refreshProviders(cwd: string, providers: AgentProvider[]): Promise<void> {
+    if (this.destroyed) {
+      return;
+    }
     await this.loadProviders({ cwd, providers, force: true });
   }
 
@@ -616,6 +651,9 @@ export class ProviderSnapshotManager {
   }
 
   private loadProvider(options: ProviderLoadOptions & { provider: AgentProvider }): Promise<void> {
+    if (this.destroyed) {
+      return Promise.resolve();
+    }
     const definition = this.providerRegistry[options.provider];
     if (!definition) {
       return Promise.resolve();
@@ -670,12 +708,16 @@ export class ProviderSnapshotManager {
       modelGatewayId: definition.modelGatewayId,
     };
     const setEntry = async (entry: ProviderSnapshotEntry) => {
-      if (!this.isCurrentProviderLoad(cwd, provider, load)) {
+      if (this.destroyed || !this.isCurrentProviderLoad(cwd, provider, load)) {
+        return false;
+      }
+      const tooling = await this.resolveToolingMetadata(provider);
+      if (this.destroyed || !this.isCurrentProviderLoad(cwd, provider, load)) {
         return false;
       }
       snapshot.set(provider, {
         ...entry,
-        ...(await this.resolveToolingMetadata(provider)),
+        ...tooling,
       });
       this.emitChange(cwd);
       return true;
@@ -683,42 +725,89 @@ export class ProviderSnapshotManager {
 
     try {
       if (!definition.enabled) {
-        await setEntry({ ...base, status: "unavailable", enabled: false });
+        await setEntry({
+          ...base,
+          status: "unavailable",
+          statusReason: "disabled",
+          enabled: false,
+          ...preservedProviderSnapshotData(snapshot.get(provider)),
+        });
         return;
       }
 
       const client = this.ensureClient(provider, definition);
-      const available = await withTimeout(
-        client.isAvailable(),
-        this.refreshTimeoutMs,
-        `Timed out checking ${definition.label} availability after ${this.refreshTimeoutMs}ms`,
-      );
+      let available: boolean;
+      try {
+        available = await withTimeout(
+          client.isAvailable(),
+          this.refreshTimeoutMs,
+          `Timed out checking ${definition.label} availability after ${this.refreshTimeoutMs}ms`,
+        );
+      } catch (error) {
+        const emitted = await setEntry({
+          ...base,
+          status: "error",
+          statusReason: "runtime_unavailable",
+          enabled: true,
+          error: toErrorMessage(error),
+          ...preservedProviderSnapshotData(snapshot.get(provider)),
+        });
+        if (emitted) {
+          this.logger.warn({ err: error, provider, cwd }, "Failed to check provider availability");
+        }
+        return;
+      }
       if (!available) {
-        await setEntry({ ...base, status: "unavailable", enabled: true });
+        await setEntry({
+          ...base,
+          status: "unavailable",
+          statusReason: "command_unavailable",
+          enabled: true,
+          ...preservedProviderSnapshotData(snapshot.get(provider)),
+        });
         return;
       }
 
-      const [models, modes] = await withTimeout(
-        Promise.all([
-          definition.fetchModels({ cwd, force }),
-          definition.fetchModes({ cwd, force }),
-        ]),
-        this.refreshTimeoutMs,
-        `Timed out refreshing ${definition.label} after ${this.refreshTimeoutMs}ms`,
-      );
+      try {
+        const [models, modes] = await withTimeout(
+          Promise.all([
+            definition.fetchModels({ cwd, force }),
+            definition.fetchModes({ cwd, force }),
+          ]),
+          this.refreshTimeoutMs,
+          `Timed out refreshing ${definition.label} after ${this.refreshTimeoutMs}ms`,
+        );
 
-      await setEntry({
-        ...base,
-        status: "ready",
-        enabled: true,
-        models,
-        modes,
-        fetchedAt: new Date().toISOString(),
-      });
+        await setEntry({
+          ...base,
+          status: "ready",
+          statusReason: undefined,
+          enabled: true,
+          models,
+          modes,
+          fetchedAt: new Date().toISOString(),
+        });
+      } catch (error) {
+        const message = toErrorMessage(error);
+        const emitted = await setEntry({
+          ...base,
+          status: "error",
+          statusReason: message.startsWith("Timed out refreshing")
+            ? "refresh_failed"
+            : "model_discovery_failed",
+          enabled: true,
+          error: message,
+          ...preservedProviderSnapshotData(snapshot.get(provider)),
+        });
+        if (emitted) {
+          this.logger.warn({ err: error, provider, cwd }, "Failed to refresh provider models");
+        }
+      }
     } catch (error) {
       const emitted = await setEntry({
         ...base,
         status: "error",
+        statusReason: "model_discovery_failed",
         enabled: true,
         error: toErrorMessage(error),
       });
@@ -806,7 +895,14 @@ export class ProviderSnapshotManager {
     if (!snapshot) {
       return;
     }
-    this.events.emit("change", entriesToArray(snapshot), cwdKey);
+    const entries = entriesToArray(snapshot);
+    for (const listener of this.events.listeners("change")) {
+      try {
+        listener(entries, cwdKey);
+      } catch (error) {
+        this.logger.warn({ err: error, cwd: cwdKey }, "Provider snapshot change listener failed");
+      }
+    }
   }
 
   private getOrCreateSnapshot(cwdKey: string): Map<AgentProvider, ProviderSnapshotEntry> {
@@ -867,6 +963,19 @@ export class ProviderSnapshotManager {
     const providerIds = new Set(this.getProviderIds());
     return Array.from(new Set(providers)).filter((provider) => providerIds.has(provider));
   }
+}
+
+function preservedProviderSnapshotData(
+  current: ProviderSnapshotEntry | undefined,
+): Partial<ProviderSnapshotEntry> {
+  if (!current) {
+    return {};
+  }
+  return {
+    ...(current.models ? { models: current.models } : {}),
+    ...(current.modes ? { modes: current.modes } : {}),
+    ...(current.fetchedAt ? { fetchedAt: current.fetchedAt } : {}),
+  };
 }
 
 export function resolveSnapshotCwd(cwd?: string | null): string {

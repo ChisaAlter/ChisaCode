@@ -507,6 +507,7 @@ function createSessionForWorkspaceTests(
       daemonConfigStore: asDaemonConfigStore({
         get: () => ({ mcp: { injectIntoAgents: false }, providers: {} }),
         onChange: () => () => {},
+        onFieldChange: () => () => {},
       }),
       mcpBaseUrl: null,
       stt: null,
@@ -617,6 +618,7 @@ test("create_agent_request keeps requested child cwd when grouped under an exist
         daemonConfigStore: asDaemonConfigStore({
           get: () => ({ mcp: { injectIntoAgents: false }, providers: {} }),
           onChange: () => () => {},
+          onFieldChange: () => () => {},
         }),
         mcpBaseUrl: null,
         stt: null,
@@ -999,6 +1001,7 @@ test("archive emits an authoritative agent_update upsert for subscribed clients"
       daemonConfigStore: asDaemonConfigStore({
         get: () => ({ mcp: { injectIntoAgents: false }, providers: {} }),
         onChange: () => () => {},
+        onFieldChange: () => () => {},
       }),
       mcpBaseUrl: null,
       stt: null,
@@ -1165,6 +1168,7 @@ test("close_items_request archives agents and kills terminals in one batch", asy
       daemonConfigStore: asDaemonConfigStore({
         get: () => ({ mcp: { injectIntoAgents: false }, providers: {} }),
         onChange: () => () => {},
+        onFieldChange: () => () => {},
       }),
       mcpBaseUrl: null,
       stt: null,
@@ -1354,6 +1358,7 @@ test("close_items_request archives stored agents that are not currently loaded",
       daemonConfigStore: asDaemonConfigStore({
         get: () => ({ mcp: { injectIntoAgents: false }, providers: {} }),
         onChange: () => () => {},
+        onFieldChange: () => () => {},
       }),
       mcpBaseUrl: null,
       stt: null,
@@ -1504,6 +1509,7 @@ test("close_items_request continues after an archive failure", async () => {
       daemonConfigStore: asDaemonConfigStore({
         get: () => ({ mcp: { injectIntoAgents: false }, providers: {} }),
         onChange: () => () => {},
+        onFieldChange: () => () => {},
       }),
       mcpBaseUrl: null,
       stt: null,
@@ -2389,6 +2395,7 @@ test("workspace update stream keeps persisted workspace visible after agents sto
       daemonConfigStore: asDaemonConfigStore({
         get: () => ({ mcp: { injectIntoAgents: false }, providers: {} }),
         onChange: () => () => {},
+        onFieldChange: () => () => {},
       }),
       mcpBaseUrl: null,
       stt: null,

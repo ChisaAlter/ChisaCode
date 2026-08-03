@@ -282,7 +282,6 @@ export class Session {
   private readonly terminalManager: TerminalManager | null;
   private readonly providerSnapshotManager: ProviderSnapshotManager;
   private readonly agentPresetStore: AgentPresetStore;
-  private unsubscribeProviderSnapshotEvents: (() => void) | null = null;
   private readonly scriptRouteStore: ScriptRouteStore | null;
   private readonly scriptRuntimeStore: WorkspaceScriptRuntimeStore | null;
   private readonly getDaemonTcpPort: (() => number | null) | null;
@@ -526,6 +525,7 @@ export class Session {
     this.chatScheduleLoopHandler = new ChatScheduleLoopHandler(sessionContext);
     this.configControlHandler = new ConfigControlHandler(sessionContext);
     this.providerHandler = new ProviderHandler(sessionContext);
+    this.providerHandler.start();
     this.terminalScriptHandler = new TerminalScriptHandler(sessionContext);
     this.workspaceProjectHandler = new WorkspaceProjectHandler(sessionContext);
     this.agentDirectoryHandler = new AgentDirectoryHandler(sessionContext);
@@ -2170,10 +2170,6 @@ export class Session {
     this.sessionLogger.trace({}, "agent.session.lifecycle.cleanup");
 
     this.agentEventForwarder.dispose();
-    if (this.unsubscribeProviderSnapshotEvents) {
-      this.unsubscribeProviderSnapshotEvents();
-      this.unsubscribeProviderSnapshotEvents = null;
-    }
 
     // Abort any ongoing operations
     this.operationAbortController.abort();

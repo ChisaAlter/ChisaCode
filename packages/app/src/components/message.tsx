@@ -1785,7 +1785,8 @@ export const ActivityLog = memo(function ActivityLog({
 });
 
 interface CompactionMarkerProps {
-  status: "loading" | "completed";
+  status: "loading" | "completed" | "failed";
+  error?: string;
   trigger?: "auto" | "manual";
   preTokens?: number;
 }
@@ -1810,11 +1811,12 @@ const compactionStylesheet = StyleSheet.create((theme) => ({
 
 export const CompactionMarker = memo(function CompactionMarker({
   status,
+  error,
   trigger,
   preTokens,
 }: CompactionMarkerProps) {
   const { t } = useTranslation();
-  const generatedLabel = getCompactionMarkerLabel({ status, trigger, preTokens });
+  const generatedLabel = getCompactionMarkerLabel({ status, error, trigger, preTokens });
   const label =
     generatedLabel === "Context compacted" ? t("message.compactedContext") : generatedLabel;
 

@@ -37,6 +37,7 @@ import type {
 import { ClaudeAgentClient } from "./providers/claude/agent.js";
 import { CodexAppServerAgentClient } from "./providers/codex-app-server-agent.js";
 import { KimiCodeAgentClient } from "./providers/kimi-code-agent.js";
+import { GrokBuildAgentClient } from "./providers/grok-build-agent.js";
 import { MimoCodeAgentClient, OpenCodeAgentClient } from "./providers/opencode-agent.js";
 import { PiRpcAgentClient } from "./providers/pi/agent.js";
 import { GenericACPAgentClient } from "./providers/generic-acp-agent.js";
@@ -139,6 +140,13 @@ const PROVIDER_CLIENT_FACTORIES: Record<string, ProviderClientFactory> = {
       providerId: options?.customProvider?.id ?? "kimi",
       label: options?.customProvider?.label ?? "Kimi Code",
       models: [...(options?.profileModels ?? []), ...(options?.additionalModels ?? [])],
+    }),
+  grokbuild: (logger, runtimeSettings, options) =>
+    new GrokBuildAgentClient({
+      logger,
+      runtimeSettings,
+      providerId: options?.customProvider?.id,
+      label: options?.customProvider?.label,
     }),
   mock: (logger) => new MockLoadTestAgentClient(logger),
   "mock-slow": () => new MockSlowProviderClient(),

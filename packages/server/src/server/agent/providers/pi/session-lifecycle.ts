@@ -12,6 +12,7 @@ import type {
   McpServerConfig,
 } from "../../agent-sdk-types.js";
 import { composeSystemPromptParts } from "../../system-prompt.js";
+import { withTimeout } from "../../../../utils/promise-timeout.js";
 import {
   CHISACODE_PI_CAPTURE_EXTENSION_COMMAND,
   CHISACODE_PI_COMMAND_RESULT_MARKER,
@@ -25,6 +26,8 @@ import {
   DEFAULT_PI_THINKING_LEVEL,
   normalizePiThinkingOption,
 } from "./session-runtime.js";
+
+const PI_MCP_PROBE_TIMEOUT_MS = 5_000;
 
 interface PiPersistenceMetadata {
   cwd?: string;
@@ -482,7 +485,11 @@ export class PiSessionLifecycle {
       return false;
     }
     try {
-      return (await runtimeSession.getCommands()).some(isPiMcpAdapterCommand);
+      return await withTimeout(
+        runtimeSession.getCommands().then((commands) => commands.some(isPiMcpAdapterCommand)),
+        PI_MCP_PROBE_TIMEOUT_MS,
+        `Timed out probing Pi MCP adapter after ${PI_MCP_PROBE_TIMEOUT_MS}ms`,
+      );
     } catch (error) {
       this.options.logger.debug({ err: error, cwd }, "Pi MCP adapter probe failed");
       return false;

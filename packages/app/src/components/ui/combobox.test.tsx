@@ -79,9 +79,11 @@ vi.mock("react-native-unistyles", () => ({
     create: (factory: unknown) => (typeof factory === "function" ? factory(theme) : factory),
   },
   useUnistyles: () => ({ theme }),
+  withUnistyles: (Component: unknown) => Component,
 }));
 
 vi.mock("@/constants/layout", () => ({
+  WORKBENCH_ENVIRONMENT_PANEL_SHADOW: "none",
   useIsCompactFormFactor: () => false,
 }));
 

@@ -10,6 +10,7 @@
 
 import { spawn } from "child_process";
 import { $ } from "zx";
+import { createRequire } from "node:module";
 import { mkdtemp, readFile, readdir, rm, writeFile } from "fs/promises";
 import { tmpdir } from "os";
 import { join, dirname, delimiter, relative, sep } from "path";
@@ -21,6 +22,11 @@ const repoRoot = join(__dirname, "..", "..", "..");
 // npm workspace scripts only add the local node_modules/.bin to PATH; hoisted
 // packages live in the root. Prepend it so `npx chisacode` resolves locally.
 const rootNodeModulesBin = join(repoRoot, "node_modules", ".bin");
+// Run child test processes with the current Node executable and resolved CLI
+// entries instead of `npx`, so Windows never depends on cmd.exe shims.
+const require = createRequire(import.meta.url);
+const tsxCliEntry = require.resolve("tsx/cli");
+const vitestCliEntry = join(dirname(require.resolve("vitest/package.json")), "vitest.mjs");
 const args = process.argv.slice(2);
 const testEnvDefaults = {
   CHISACODE_LOCAL_SPEECH_AUTO_DOWNLOAD: process.env.CHISACODE_LOCAL_SPEECH_AUTO_DOWNLOAD ?? "0",
@@ -255,8 +261,9 @@ async function runSingleTest(testFile: TestEntry): Promise<TestOutcome> {
 
   try {
     return await new Promise<TestOutcome>((resolve) => {
-      const command = testFile.kind === "script" ? ["tsx", testPath] : ["vitest", "run", testPath];
-      const proc = spawn("npx", command, {
+      const command =
+        testFile.kind === "script" ? [tsxCliEntry, testPath] : [vitestCliEntry, "run", testPath];
+      const proc = spawn(process.execPath, command, {
         env: {
           ...process.env,
           PATH: [rootNodeModulesBin, process.env.PATH].filter(Boolean).join(delimiter),

@@ -10,6 +10,8 @@
  */
 
 import { $, ProcessPromise, sleep } from "zx";
+import { installZxWindowsPathCompat } from "./helpers/zx-path-compat.ts";
+installZxWindowsPathCompat();
 import { mkdtemp, rm } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";

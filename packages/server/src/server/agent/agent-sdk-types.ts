@@ -52,6 +52,13 @@ export interface AgentMode {
 }
 
 export type ProviderStatus = "ready" | "loading" | "error" | "unavailable";
+export type ProviderStatusReason =
+  | "disabled"
+  | "command_unavailable"
+  | "runtime_unavailable"
+  | "model_discovery_failed"
+  | "refresh_failed"
+  | "configuration_changed";
 
 export interface AgentModelDefinition {
   provider: AgentProvider;
@@ -96,6 +103,7 @@ export function normalizeAgentModelDefinition(model: AgentModelDefinition): Agen
 export interface ProviderSnapshotEntry {
   provider: AgentProvider;
   status: ProviderStatus;
+  statusReason?: ProviderStatusReason;
   enabled: boolean;
   error?: string;
   models?: AgentModelDefinition[];
@@ -358,7 +366,8 @@ export type ToolCallTimelineItem =
 export interface CompactionTimelineItem {
   [key: string]: unknown;
   type: "compaction";
-  status: "loading" | "completed";
+  status: "loading" | "completed" | "failed";
+  error?: string;
   trigger?: "auto" | "manual";
   preTokens?: number;
 }

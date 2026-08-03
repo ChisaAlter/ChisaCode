@@ -232,6 +232,7 @@ function createSessionForTest(options: SessionForTestOptions = {}): Session {
   return new Session({
     clientId: "test-client",
     appVersion: options.appVersion ?? null,
+    clientCapabilities: { cindy_modules: true },
     onMessage: (message) => messages.push(message),
     onBinaryMessage: createBinaryMessageHandler(options.binaryMessages),
     logger,
@@ -241,6 +242,7 @@ function createSessionForTest(options: SessionForTestOptions = {}): Session {
     agentManager: asAgentManager({
       listAgents: vi.fn(() => []),
       subscribe: vi.fn(() => () => {}),
+      setGoalCompletionJudge: vi.fn(),
     }),
     agentStorage: asAgentStorage({
       list: vi.fn().mockResolvedValue([]),
@@ -270,6 +272,7 @@ function createSessionForTest(options: SessionForTestOptions = {}): Session {
         providers: {},
       })),
       onChange: vi.fn(() => () => {}),
+      onFieldChange: vi.fn(() => () => {}),
     }),
     stt: options.stt ?? null,
     tts: null,
@@ -714,7 +717,7 @@ describe("session provider refresh cwd routing", () => {
     });
 
     expect(refreshSnapshotForCwd).toHaveBeenCalledWith({
-      cwd: "/tmp/workspace-refresh",
+      cwd: resolvePath("/tmp/workspace-refresh"),
       providers: ["codex"],
     });
     expect(refreshSettingsSnapshot).not.toHaveBeenCalled();

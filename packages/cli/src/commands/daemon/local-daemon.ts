@@ -608,6 +608,16 @@ async function requestLifecycleShutdown(
     await client.shutdownServer();
     return { requested: true };
   } catch (error) {
+    // The daemon can terminate the socket mid-request once shutdown takes
+    // effect, so a lost response is not a failed shutdown. Wait briefly for
+    // the daemon PID to exit before falling back to a process signal.
+    const daemonPid = state.pidInfo?.pid;
+    if (daemonPid !== undefined && daemonPid !== null) {
+      const exited = await waitForPidExit(daemonPid, Math.min(2000, timeoutMs));
+      if (exited) {
+        return { requested: true };
+      }
+    }
     return {
       requested: false,
       reason: `daemon lifecycle shutdown request failed (${getErrorMessage(

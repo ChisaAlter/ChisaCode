@@ -33,7 +33,10 @@ export function asSessionLogger(stub: {
 export function asAgentManager(stub: {
   [K in keyof SessionOptions["agentManager"]]?: unknown;
 }): SessionOptions["agentManager"] {
-  return createStub<SessionOptions["agentManager"]>(stub);
+  return createStub<SessionOptions["agentManager"]>({
+    setGoalCompletionJudge: vi.fn(),
+    ...stub,
+  });
 }
 
 export function asAgentStorage(stub: {
@@ -160,6 +163,18 @@ export interface ProviderSnapshotManagerSpies {
     typeof vi.fn<[AgentProvider], Promise<ProviderDiagnosticResult>>
   >;
   applyMutableProviderConfig: ReturnType<typeof vi.fn<[unknown], AgentManagerProviderState>>;
+  on: ReturnType<
+    typeof vi.fn<
+      ["change", (entries: ProviderSnapshotEntry[], cwd: string) => void],
+      ProviderSnapshotManager
+    >
+  >;
+  off: ReturnType<
+    typeof vi.fn<
+      ["change", (entries: ProviderSnapshotEntry[], cwd: string) => void],
+      ProviderSnapshotManager
+    >
+  >;
   destroy: ReturnType<typeof vi.fn<[], void>>;
 }
 
@@ -246,6 +261,8 @@ export function createProviderSnapshotManagerStub(): {
     resolveDefaultModel,
     getProviderDiagnostic,
     applyMutableProviderConfig,
+    on,
+    off,
     destroy,
   };
 }

@@ -42,6 +42,13 @@ describe("ScheduleService", () => {
   let tempDir: string;
   let agentStorage: AgentStorage;
   let now: Date;
+  let managers: AgentManager[];
+
+  function createScheduleTestManager(options: ConstructorParameters<typeof AgentManager>[0]) {
+    const manager = new AgentManager(options);
+    managers.push(manager);
+    return manager;
+  }
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "schedule-service-test-"));
@@ -49,20 +56,32 @@ describe("ScheduleService", () => {
     agentStorage = new AgentStorage(join(tempDir, "agents"), createTestLogger());
     await agentStorage.initialize();
     now = new Date("2026-01-01T00:00:00.000Z");
+    managers = [];
   });
 
   afterEach(async () => {
+    for (const manager of managers) {
+      for (const agent of manager.listAgents()) {
+        if (agent.lifecycle !== "closed") {
+          await manager.closeAgent(agent.id).catch(() => undefined);
+        }
+      }
+      await manager.flush();
+    }
     // Drain pending background persists before deleting the dir to avoid
     // ENOTEMPTY races when AgentManager flushes a snapshot mid-cleanup.
     await agentStorage.flush();
-    await rm(tempDir, { recursive: true, force: true });
+    // Windows may briefly retain an atomic-write handle after the final flush.
+    // Let fs retry the OS-level lock a bounded number of times; this is cleanup
+    // only and does not change any test assertions or production behavior.
+    await rm(tempDir, { recursive: true, force: true, maxRetries: 30, retryDelay: 50 });
   });
 
   test("ticks due schedules and records run history on disk", async () => {
     const service = new ScheduleService({
       chisacodeHome: tempDir,
       logger: createTestLogger(),
-      agentManager: new AgentManager({ logger: createTestLogger() }),
+      agentManager: createScheduleTestManager({ logger: createTestLogger() }),
       agentStorage,
       now: () => now,
       runner: async (schedule) => ({
@@ -100,7 +119,7 @@ describe("ScheduleService", () => {
     const service = new ScheduleService({
       chisacodeHome: tempDir,
       logger: createTestLogger(),
-      agentManager: new AgentManager({ logger: createTestLogger() }),
+      agentManager: createScheduleTestManager({ logger: createTestLogger() }),
       agentStorage,
       now: () => now,
       runner: async () => ({
@@ -135,7 +154,7 @@ describe("ScheduleService", () => {
     const service = new ScheduleService({
       chisacodeHome: tempDir,
       logger: createTestLogger(),
-      agentManager: new AgentManager({ logger: createTestLogger() }),
+      agentManager: createScheduleTestManager({ logger: createTestLogger() }),
       agentStorage,
       now: () => now,
       runner: async () => ({
@@ -166,7 +185,7 @@ describe("ScheduleService", () => {
   });
 
   test("executes new-agent schedules through AgentManager with real fake clients", async () => {
-    const manager = new AgentManager({
+    const manager = createScheduleTestManager({
       logger: createTestLogger(),
       clients: createTestAgentClients(),
       registry: agentStorage,
@@ -195,6 +214,7 @@ describe("ScheduleService", () => {
 
     now = new Date("2026-01-01T00:01:00.000Z");
     await service.tick();
+    await manager.flush();
 
     const inspected = await service.inspect(created.id);
     expect(inspected.runs).toHaveLength(1);
@@ -340,7 +360,7 @@ describe("ScheduleService", () => {
     }
 
     const client = new CountingScheduleClient();
-    const manager = new AgentManager({
+    const manager = createScheduleTestManager({
       logger: createTestLogger(),
       clients: { claude: client },
       registry: agentStorage,
@@ -381,7 +401,7 @@ describe("ScheduleService", () => {
   });
 
   test("defaults new-agent modeId to provider's unattended mode", async () => {
-    const manager = new AgentManager({
+    const manager = createScheduleTestManager({
       logger: createTestLogger(),
       clients: createTestAgentClients(),
       registry: agentStorage,
@@ -423,7 +443,7 @@ describe("ScheduleService", () => {
     const service1 = new ScheduleService({
       chisacodeHome: tempDir,
       logger: createTestLogger(),
-      agentManager: new AgentManager({ logger: createTestLogger() }),
+      agentManager: createScheduleTestManager({ logger: createTestLogger() }),
       agentStorage,
       now: () => now,
       runner: async () => ({ agentId: null, output: "ok" }),
@@ -447,7 +467,7 @@ describe("ScheduleService", () => {
     const service2 = new ScheduleService({
       chisacodeHome: tempDir,
       logger: createTestLogger(),
-      agentManager: new AgentManager({ logger: createTestLogger() }),
+      agentManager: createScheduleTestManager({ logger: createTestLogger() }),
       agentStorage,
       now: () => now,
       runner: async () => ({ agentId: null, output: "ok" }),
@@ -472,7 +492,7 @@ describe("ScheduleService", () => {
     const service = new ScheduleService({
       chisacodeHome: tempDir,
       logger: createTestLogger(),
-      agentManager: new AgentManager({ logger: createTestLogger() }),
+      agentManager: createScheduleTestManager({ logger: createTestLogger() }),
       agentStorage,
       now: () => now,
       runner: async () => {
@@ -516,7 +536,7 @@ describe("ScheduleService", () => {
   });
 
   test("rejects archived target agents before loading them", async () => {
-    const manager = new AgentManager({ logger: createTestLogger() });
+    const manager = createScheduleTestManager({ logger: createTestLogger() });
     const service = new ScheduleService({
       chisacodeHome: tempDir,
       logger: createTestLogger(),
@@ -577,7 +597,7 @@ describe("ScheduleService", () => {
     const service = new ScheduleService({
       chisacodeHome: tempDir,
       logger: createTestLogger(),
-      agentManager: new AgentManager({ logger: createTestLogger() }),
+      agentManager: createScheduleTestManager({ logger: createTestLogger() }),
       agentStorage,
       now: () => now,
       runner: async () => ({ agentId: null, output: "ok" }),
@@ -599,7 +619,7 @@ describe("ScheduleService", () => {
     const service = new ScheduleService({
       chisacodeHome: tempDir,
       logger: createTestLogger(),
-      agentManager: new AgentManager({ logger: createTestLogger() }),
+      agentManager: createScheduleTestManager({ logger: createTestLogger() }),
       agentStorage,
       now: () => now,
       runner: async () => ({ agentId: null, output: "ok" }),
@@ -622,7 +642,7 @@ describe("ScheduleService", () => {
     const service = new ScheduleService({
       chisacodeHome: tempDir,
       logger: createTestLogger(),
-      agentManager: new AgentManager({ logger: createTestLogger() }),
+      agentManager: createScheduleTestManager({ logger: createTestLogger() }),
       agentStorage,
       now: () => now,
       runner: async () => ({ agentId: null, output: "ok" }),
@@ -644,7 +664,7 @@ describe("ScheduleService", () => {
     const service = new ScheduleService({
       chisacodeHome: tempDir,
       logger: createTestLogger(),
-      agentManager: new AgentManager({ logger: createTestLogger() }),
+      agentManager: createScheduleTestManager({ logger: createTestLogger() }),
       agentStorage,
       now: () => now,
       runner: async () => ({ agentId: null, output: "ok" }),
@@ -667,7 +687,7 @@ describe("ScheduleService", () => {
     const service = new ScheduleService({
       chisacodeHome: tempDir,
       logger: createTestLogger(),
-      agentManager: new AgentManager({ logger: createTestLogger() }),
+      agentManager: createScheduleTestManager({ logger: createTestLogger() }),
       agentStorage,
       now: () => now,
       runner: async (schedule) => ({
@@ -702,7 +722,7 @@ describe("ScheduleService", () => {
     const service = new ScheduleService({
       chisacodeHome: tempDir,
       logger: createTestLogger(),
-      agentManager: new AgentManager({ logger: createTestLogger() }),
+      agentManager: createScheduleTestManager({ logger: createTestLogger() }),
       agentStorage,
       now: () => now,
       runner: async () => ({ agentId: null, output: "ok" }),
@@ -754,7 +774,7 @@ describe("ScheduleService", () => {
     const service = new ScheduleService({
       chisacodeHome: tempDir,
       logger: createTestLogger(),
-      agentManager: new AgentManager({ logger: createTestLogger() }),
+      agentManager: createScheduleTestManager({ logger: createTestLogger() }),
       agentStorage,
       now: () => now,
       runner: async () => ({ agentId: null, output: "ok" }),
@@ -786,7 +806,7 @@ describe("ScheduleService", () => {
     const service = new ScheduleService({
       chisacodeHome: tempDir,
       logger: createTestLogger(),
-      agentManager: new AgentManager({ logger: createTestLogger() }),
+      agentManager: createScheduleTestManager({ logger: createTestLogger() }),
       agentStorage,
       now: () => now,
       runner: async () => ({ agentId: null, output: "ran" }),
@@ -817,7 +837,7 @@ describe("ScheduleService", () => {
     const service = new ScheduleService({
       chisacodeHome: tempDir,
       logger: createTestLogger(),
-      agentManager: new AgentManager({ logger: createTestLogger() }),
+      agentManager: createScheduleTestManager({ logger: createTestLogger() }),
       agentStorage,
       now: () => now,
       runner: async () => ({ agentId: null, output: "ok" }),
@@ -842,7 +862,7 @@ describe("ScheduleService", () => {
     const service = new ScheduleService({
       chisacodeHome: tempDir,
       logger: createTestLogger(),
-      agentManager: new AgentManager({ logger: createTestLogger() }),
+      agentManager: createScheduleTestManager({ logger: createTestLogger() }),
       agentStorage,
       now: () => now,
       runner: async () => ({ agentId: null, output: "ok" }),
@@ -866,7 +886,7 @@ describe("ScheduleService", () => {
     const service = new ScheduleService({
       chisacodeHome: tempDir,
       logger: createTestLogger(),
-      agentManager: new AgentManager({ logger: createTestLogger() }),
+      agentManager: createScheduleTestManager({ logger: createTestLogger() }),
       agentStorage,
       now: () => now,
       runner: async () => ({ agentId: null, output: "ok" }),
@@ -910,7 +930,7 @@ describe("ScheduleService", () => {
     const service = new ScheduleService({
       chisacodeHome: tempDir,
       logger: createTestLogger(),
-      agentManager: new AgentManager({ logger: createTestLogger() }),
+      agentManager: createScheduleTestManager({ logger: createTestLogger() }),
       agentStorage,
       now: () => now,
       runner: async () => ({ agentId: null, output: "ok" }),
@@ -940,7 +960,7 @@ describe("ScheduleService", () => {
     const service = new ScheduleService({
       chisacodeHome: tempDir,
       logger: createTestLogger(),
-      agentManager: new AgentManager({ logger: createTestLogger() }),
+      agentManager: createScheduleTestManager({ logger: createTestLogger() }),
       agentStorage,
       now: () => now,
       runner: async () => ({ agentId: null, output: "ok" }),
@@ -965,7 +985,7 @@ describe("ScheduleService", () => {
     const service = new ScheduleService({
       chisacodeHome: tempDir,
       logger: createTestLogger(),
-      agentManager: new AgentManager({ logger: createTestLogger() }),
+      agentManager: createScheduleTestManager({ logger: createTestLogger() }),
       agentStorage,
       now: () => now,
       runner: async () => ({ agentId: null, output: "ok" }),

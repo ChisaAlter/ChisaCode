@@ -2,7 +2,7 @@ import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { EventEmitter } from "node:events";
 import { PassThrough } from "node:stream";
 import pino from "pino";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 
 import { PiCliRuntime } from "./cli-runtime.js";
 import type { PiRuntimeLaunch } from "./runtime.js";
@@ -25,6 +25,7 @@ function createPiChild(): PiChild {
   }) as PiChild;
   child.kill = ((signal?: NodeJS.Signals | number) => {
     child.killedSignals.push(signal);
+    child.signalCode = typeof signal === "string" ? signal : null;
     queueMicrotask(() => child.emit("exit", null, signal ?? null));
     return true;
   }) as ChildProcessWithoutNullStreams["kill"];
@@ -40,6 +41,12 @@ function createRuntime(child: PiChild, launches: PiRuntimeLaunch[] = []): PiCliR
       return child;
     },
   });
+}
+
+function invokeAsyncWriteError(callback: unknown): void {
+  if (typeof callback === "function") {
+    queueMicrotask(() => (callback as (error: Error) => void)(new Error("stdin write failed")));
+  }
 }
 
 function replyToCommands(
@@ -212,5 +219,44 @@ describe("PiCliRuntime", () => {
     await session.close();
 
     expect(child.killedSignals).toContain("SIGTERM");
+  });
+
+  test("memoizes concurrent close and rejects pending requests before termination", async () => {
+    const child = createPiChild();
+    const session = await createRuntime(child).startSession({ cwd: "/workspace/project" });
+    const pending = session.getState();
+
+    const firstClose = session.close();
+    const secondClose = session.close();
+
+    await expect(pending).rejects.toThrow("Pi RPC session is closed");
+    await Promise.all([firstClose, secondClose]);
+    expect(child.killedSignals).toContain("SIGTERM");
+    expect(child.killedSignals).toHaveLength(1);
+    await expect(session.getState()).rejects.toThrow("Pi RPC session is closed");
+  });
+
+  test("does not emit process_exit during intentional close", async () => {
+    const child = createPiChild();
+    const session = await createRuntime(child).startSession({ cwd: "/workspace/project" });
+    const events: unknown[] = [];
+    session.onEvent((event) => events.push(event));
+
+    await session.close();
+    await Promise.resolve();
+
+    expect(events).toEqual([]);
+  });
+
+  test("handles asynchronous stdin write callback failures", async () => {
+    const child = createPiChild();
+    const originalWrite = child.stdin.write.bind(child.stdin);
+    vi.spyOn(child.stdin, "write").mockImplementation(((chunk: unknown, callback?: unknown) => {
+      invokeAsyncWriteError(callback);
+      return originalWrite(chunk as never);
+    }) as typeof child.stdin.write);
+    const session = await createRuntime(child).startSession({ cwd: "/workspace/project" });
+
+    await expect(session.getState()).rejects.toThrow("stdin write failed");
   });
 });

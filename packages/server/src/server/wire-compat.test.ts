@@ -145,6 +145,8 @@ class InMemoryAgentManager {
     return [];
   }
 
+  setGoalCompletionJudge() {}
+
   subscribe(callback: (event: AgentManagerEvent) => void) {
     this.subscriber = callback;
     return () => {
@@ -200,6 +202,10 @@ class EmptyDaemonConfigStore {
   }
 
   onChange() {
+    return () => {};
+  }
+
+  onFieldChange() {
     return () => {};
   }
 }

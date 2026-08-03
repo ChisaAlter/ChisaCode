@@ -6,9 +6,9 @@ import {
   mkdtempSync,
   readFileSync,
   realpathSync,
-  rmSync,
   writeFileSync,
 } from "node:fs";
+import { rm } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { beforeEach, afterEach, describe, expect, test, vi } from "vitest";
 import type {
@@ -230,6 +230,13 @@ describe("LoopService", () => {
   let chisacodeHome: string;
   let workspaceDir: string;
   let storage: AgentStorage;
+  let managers: AgentManager[];
+
+  function createLoopTestManager(options: ConstructorParameters<typeof AgentManager>[0]) {
+    const manager = new AgentManager(options);
+    managers.push(manager);
+    return manager;
+  }
 
   beforeEach(() => {
     tmpDir = realpathSync.native(mkdtempSync(path.join(os.tmpdir(), "loop-service-")));
@@ -238,10 +245,20 @@ describe("LoopService", () => {
     storage = new AgentStorage(path.join(tmpDir, "agents"), logger);
     mkdirSync(workspaceDir, { recursive: true });
     workspaceDir = realpathSync.native(workspaceDir);
+    managers = [];
   });
 
-  afterEach(() => {
-    rmSync(tmpDir, { recursive: true, force: true });
+  afterEach(async () => {
+    for (const manager of managers) {
+      for (const agent of manager.listAgents()) {
+        if (agent.lifecycle !== "closed") {
+          await manager.closeAgent(agent.id).catch(() => undefined);
+        }
+      }
+      await manager.flush();
+    }
+    await storage.flush();
+    await rm(tmpDir, { recursive: true, force: true, maxRetries: 30, retryDelay: 50 });
     vi.useRealTimers();
   });
 
@@ -252,7 +269,7 @@ describe("LoopService", () => {
       const state = { workerRuns: 0 };
       const verifyScriptPath = path.join(workspaceDir, "verify-check.cjs");
       writeFileSync(verifyScriptPath, 'require("fs").accessSync("done.txt");\n');
-      const manager = new AgentManager({
+      const manager = createLoopTestManager({
         clients: {
           claude: new ScriptedAgentClient("claude", {
             async onRun({ config }) {
@@ -304,7 +321,7 @@ describe("LoopService", () => {
   test("uses worker and verifier provider-model settings when provided", async () => {
     const workerConfigs: AgentSessionConfig[] = [];
     const verifierConfigs: AgentSessionConfig[] = [];
-    const manager = new AgentManager({
+    const manager = createLoopTestManager({
       clients: {
         codex: new ScriptedAgentClient("codex", {
           async onRun({ config }) {
@@ -364,7 +381,7 @@ describe("LoopService", () => {
 
   test("archives worker and verifier agents after each iteration when requested", async () => {
     const archivedAgentIds: string[] = [];
-    const manager = new AgentManager({
+    const manager = createLoopTestManager({
       clients: {
         claude: new ScriptedAgentClient("claude", {
           async onRun({ config }) {
@@ -417,7 +434,7 @@ describe("LoopService", () => {
   });
 
   test("uses verifier prompt when provided", async () => {
-    const manager = new AgentManager({
+    const manager = createLoopTestManager({
       clients: {
         claude: new ScriptedAgentClient("claude", {
           async onRun({ config }) {
@@ -461,7 +478,7 @@ describe("LoopService", () => {
   test("defaults worker and verifier modeId to provider's unattended mode", async () => {
     const workerConfigs: AgentSessionConfig[] = [];
     const verifierConfigs: AgentSessionConfig[] = [];
-    const manager = new AgentManager({
+    const manager = createLoopTestManager({
       clients: {
         claude: new ScriptedAgentClient("claude", {
           async onRun({ config }) {
@@ -497,7 +514,7 @@ describe("LoopService", () => {
   test("explicit modeId wins over unattended default", async () => {
     const workerConfigs: AgentSessionConfig[] = [];
     const verifierConfigs: AgentSessionConfig[] = [];
-    const manager = new AgentManager({
+    const manager = createLoopTestManager({
       clients: {
         claude: new ScriptedAgentClient("claude", {
           async onRun({ config }) {
@@ -537,7 +554,7 @@ describe("LoopService", () => {
     const blocker = new Promise<void>((resolve) => {
       release = resolve;
     });
-    const manager = new AgentManager({
+    const manager = createLoopTestManager({
       clients: {
         claude: new ScriptedAgentClient("claude", {
           async onRun({ config }) {
@@ -607,7 +624,7 @@ describe("LoopService", () => {
         signal.addEventListener("abort", rejectOnAbort, { once: true });
       });
     };
-    const manager = new AgentManager({
+    const manager = createLoopTestManager({
       clients: {
         claude: new ScriptedAgentClient("claude", {
           async onRun() {
@@ -687,7 +704,9 @@ describe("LoopService", () => {
     const runVerifyCommand: NonNullable<
       ConstructorParameters<typeof LoopService>[0]["runVerifyCommand"]
     > = async () => ({ stdout: "verified", stderr: "" });
-    const manager = createWorkerOnlyManager(storage, logger);
+    const manager = createWorkerOnlyManager(storage, logger, (createdManager) =>
+      managers.push(createdManager),
+    );
     const service = new LoopService({
       chisacodeHome,
       agentManager: manager,
@@ -744,7 +763,9 @@ describe("LoopService", () => {
         }
         return { passed: true, reason: "late verifier pass" };
       };
-      const manager = createWorkerOnlyManager(storage, logger);
+      const manager = createWorkerOnlyManager(storage, logger, (createdManager) =>
+        managers.push(createdManager),
+      );
       const service = new LoopService({
         chisacodeHome,
         agentManager: manager,
@@ -817,7 +838,9 @@ describe("LoopService", () => {
         await persistRelease;
       }
     };
-    const manager = createWorkerOnlyManager(storage, logger);
+    const manager = createWorkerOnlyManager(storage, logger, (createdManager) =>
+      managers.push(createdManager),
+    );
     const service = new LoopService({
       chisacodeHome,
       agentManager: manager,
@@ -861,7 +884,7 @@ describe("LoopService", () => {
       verifyTimeouts.push(timeoutMs);
       return { stdout: "", stderr: "" };
     };
-    const manager = new AgentManager({
+    const manager = createLoopTestManager({
       clients: {
         claude: new ScriptedAgentClient("claude", {
           async onRun() {
@@ -904,7 +927,7 @@ describe("LoopService", () => {
       verifyCommands.push(command);
       return { stdout: "", stderr: "" };
     };
-    const manager = new AgentManager({
+    const manager = createLoopTestManager({
       clients: {
         claude: new ScriptedAgentClient("claude", {
           async onRun() {
@@ -949,7 +972,7 @@ describe("LoopService", () => {
     const startedAtMs = Date.parse("2026-01-01T00:00:00.000Z");
     vi.setSystemTime(startedAtMs);
     const createdConfigs: AgentSessionConfig[] = [];
-    const manager = new AgentManager({
+    const manager = createLoopTestManager({
       clients: {
         claude: new ScriptedAgentClient("claude", {
           onCreate(config) {
@@ -1000,7 +1023,9 @@ describe("LoopService", () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     const startedAtMs = Date.parse("2026-01-01T00:00:00.000Z");
     vi.setSystemTime(startedAtMs);
-    const manager = createWorkerOnlyManager(storage, logger);
+    const manager = createWorkerOnlyManager(storage, logger, (createdManager) =>
+      managers.push(createdManager),
+    );
     const service = new LoopService({
       chisacodeHome,
       agentManager: manager,
@@ -1051,7 +1076,9 @@ describe("LoopService", () => {
     const verifyAttempted = new Promise<void>((resolve) => {
       markVerifyAttempted = resolve;
     });
-    const manager = createWorkerOnlyManager(storage, logger);
+    const manager = createWorkerOnlyManager(storage, logger, (createdManager) =>
+      managers.push(createdManager),
+    );
     const service = new LoopService({
       chisacodeHome,
       agentManager: manager,
@@ -1110,7 +1137,9 @@ describe("LoopService", () => {
       stdout: "deadline stdout",
       terminationReason: "maxBuffer",
     });
-    const manager = createWorkerOnlyManager(storage, logger);
+    const manager = createWorkerOnlyManager(storage, logger, (createdManager) =>
+      managers.push(createdManager),
+    );
     const service = new LoopService({
       chisacodeHome,
       agentManager: manager,
@@ -1181,7 +1210,7 @@ describe("LoopService", () => {
       markVerifyAttempted?.();
       throw createError(timeout);
     };
-    const manager = new AgentManager({
+    const manager = createLoopTestManager({
       clients: {
         claude: new ScriptedAgentClient("claude", {
           async onRun() {
@@ -1256,8 +1285,9 @@ function hasLogText(entries: Array<{ text: string }>, text: string): boolean {
 function createWorkerOnlyManager(
   storage: AgentStorage,
   logger: ReturnType<typeof createTestLogger>,
-) {
-  return new AgentManager({
+  register?: (manager: AgentManager) => void,
+): AgentManager {
+  const manager = new AgentManager({
     clients: {
       claude: new ScriptedAgentClient("claude", {
         async onRun() {
@@ -1268,6 +1298,8 @@ function createWorkerOnlyManager(
     registry: storage,
     logger,
   });
+  register?.(manager);
+  return manager;
 }
 
 function createCapturingLoopLogger(loggedErrors: unknown[]) {

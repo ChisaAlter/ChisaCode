@@ -22,7 +22,13 @@ These provider IDs come from ChisaCode's shared provider manifest and appear in 
 | `opencode`  | [OpenCode](https://opencode.ai/docs/)                               | `opencode`       |
 | `mimocode`  | [MiMoCode](https://github.com/XiaomiMiMo/MiMo-Code)                 | `mimo`           |
 | `pi`        | [Pi](https://www.npmjs.com/package/@earendil-works/pi-coding-agent) | `pi`             |
-| `kimi`      | [Kimi Code](https://github.com/MoonshotAI/kimi-code)                | `kimi acp`       |
+
+### Pi notes
+
+Install the Pi CLI, then authenticate it using Pi's normal `~/.pi/agent/auth.json` configuration. Pi's configured model providers and gateway profiles determine the discovered model list. In ChisaCode Settings, `Available` with zero models means the command was found but Pi reported no models; `Unavailable` means the command could not be launched, while `Error` means runtime or model discovery failed. Use Refresh/Retry and the provider Diagnostic action before reinstalling. ChisaCode does not expose credentials in diagnostics.
+
+| `kimi` | [Kimi Code](https://github.com/MoonshotAI/kimi-code) | `kimi acp` |
+| `grokbuild` | [Grok Build](https://x.ai/cli) | `grok agent stdio` |
 
 ## Custom ACP providers
 

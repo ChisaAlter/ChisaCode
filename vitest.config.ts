@@ -57,7 +57,7 @@ export default defineConfig({
     ],
   },
   test: {
-    exclude: [...configDefaults.exclude, "**/.claude/**"],
+    exclude: [...configDefaults.exclude, "**/.claude/**", "**/build/**", "**/dist/**"],
     setupFiles: [path.resolve(__dirname, "vitest.setup.ts")],
     // v8 coverage provider. Thresholds are intentionally NOT enforced here so
     // `vitest run` without `--coverage` stays green; run `vitest run --coverage`

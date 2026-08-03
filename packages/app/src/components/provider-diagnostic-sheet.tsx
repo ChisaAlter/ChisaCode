@@ -165,6 +165,7 @@ function ProviderInstallationSection({
   toolingOutput,
   onInstall,
   onUpdate,
+  error,
 }: {
   providerEntry: ProviderSnapshotEntry | undefined;
   modelsRefreshing: boolean;
@@ -173,12 +174,12 @@ function ProviderInstallationSection({
   toolingOutput: string | null;
   onInstall: () => void;
   onUpdate: () => void;
+  error: string | null;
 }) {
   const { t } = useTranslation();
   const installDisabled = toolingAction !== null || modelsRefreshing || !clientAvailable;
-  const canInstall =
-    providerEntry?.installAvailable === true || providerEntry?.status === "unavailable";
-  const canUpdate = providerEntry?.updateAvailable === true;
+  const canInstall = providerEntry?.enabled === true && providerEntry.installAvailable === true;
+  const canUpdate = providerEntry?.enabled === true && providerEntry.updateAvailable === true;
 
   return (
     <View style={sheetStyles.section}>
@@ -225,6 +226,7 @@ function ProviderInstallationSection({
             </Button>
           </View>
         </View>
+        {error ? <Text style={sheetStyles.errorText}>{error}</Text> : null}
         {toolingOutput ? (
           <Text style={sheetStyles.toolingOutput} selectable>
             {toolingOutput}
@@ -342,19 +344,32 @@ function DiagnosticSubSheet({
 }) {
   const { t } = useTranslation();
   const client = useHostRuntimeClient(serverId);
-  const [diagnostic, setDiagnostic] = useState<string | null>(null);
+  const [diagnosticState, setDiagnosticState] = useState<
+    { kind: "success"; text: string } | { kind: "error"; text: string } | null
+  >(null);
+  const requestSequence = useRef(0);
   const [loading, setLoading] = useState(false);
 
   const fetchDiagnostic = useCallback(async () => {
     if (!client) return;
+    const sequence = ++requestSequence.current;
     setLoading(true);
     try {
       const result = await client.getProviderDiagnostic(provider);
-      setDiagnostic(result.diagnostic);
+      if (sequence === requestSequence.current) {
+        setDiagnosticState({ kind: "success", text: result.diagnostic });
+      }
     } catch (err) {
-      setDiagnostic(err instanceof Error ? err.message : t("providerDiagnostics.diagnosticFailed"));
+      if (sequence === requestSequence.current) {
+        setDiagnosticState({
+          kind: "error",
+          text: err instanceof Error ? err.message : t("providerDiagnostics.diagnosticFailed"),
+        });
+      }
     } finally {
-      setLoading(false);
+      if (sequence === requestSequence.current) {
+        setLoading(false);
+      }
     }
   }, [client, provider, t]);
 
@@ -362,7 +377,8 @@ function DiagnosticSubSheet({
     if (visible) {
       void fetchDiagnostic();
     } else {
-      setDiagnostic(null);
+      requestSequence.current += 1;
+      setDiagnosticState(null);
     }
   }, [visible, fetchDiagnostic]);
 
@@ -380,9 +396,9 @@ function DiagnosticSubSheet({
   }, [fetchDiagnostic]);
 
   const handleCopyPress = useCallback(async () => {
-    if (!diagnostic) return;
-    await Clipboard.setStringAsync(diagnostic);
-  }, [diagnostic]);
+    if (diagnosticState?.kind !== "success") return;
+    await Clipboard.setStringAsync(diagnosticState.text);
+  }, [diagnosticState]);
 
   const header = useMemo<SheetHeader>(
     () => ({
@@ -391,7 +407,7 @@ function DiagnosticSubSheet({
         <>
           <Pressable
             onPress={handleCopyPress}
-            disabled={!diagnostic}
+            disabled={diagnosticState?.kind !== "success"}
             hitSlop={8}
             style={refreshButtonStyle}
             accessibilityRole="button"
@@ -420,26 +436,35 @@ function DiagnosticSubSheet({
         </>
       ),
     }),
-    [handleCopyPress, handleRefreshPress, loading, diagnostic, refreshButtonStyle, t],
+    [handleCopyPress, handleRefreshPress, loading, diagnosticState, refreshButtonStyle, t],
   );
 
   let body: React.ReactNode;
-  if (loading && !diagnostic) {
+  if (loading && !diagnosticState) {
     body = (
       <View style={sheetStyles.codeBlockLoading}>
         <ThemedActivityIndicator size="small" uniProps={foregroundMutedColorMapping} />
         <Text style={sheetStyles.mutedText}>{t("providerDiagnostics.loadingDiagnostic")}</Text>
       </View>
     );
-  } else if (diagnostic) {
+  } else if (diagnosticState?.kind === "success") {
     body = (
       <ScrollView style={sheetStyles.codeScroll} contentContainerStyle={sheetStyles.codeContent}>
         <ScrollView horizontal showsHorizontalScrollIndicator>
           <Text style={sheetStyles.codeText} selectable>
-            {diagnostic}
+            {diagnosticState.text}
           </Text>
         </ScrollView>
       </ScrollView>
+    );
+  } else if (diagnosticState?.kind === "error") {
+    body = (
+      <View style={sheetStyles.codeBlockLoading}>
+        <Text style={sheetStyles.errorText}>{diagnosticState.text}</Text>
+        <Button variant="default" size="sm" onPress={handleRefreshPress} disabled={loading}>
+          {t("common.retry")}
+        </Button>
+      </View>
     );
   } else {
     body = (
@@ -472,6 +497,7 @@ interface ProviderModalBodyProps {
   filteredDiscovered: AgentModelDefinition[];
   filteredCustom: ProviderProfileModel[];
   deletingModelId: string | null;
+  deletingModelError: string | null;
   onRefresh: () => void;
   onDeleteCustom: (modelId: string) => void;
 }
@@ -488,19 +514,12 @@ function ProviderModalBody(props: ProviderModalBodyProps) {
     filteredDiscovered,
     filteredCustom,
     deletingModelId,
+    deletingModelError,
     onRefresh,
     onDeleteCustom,
   } = props;
 
-  if (discoveredCount === 0 && additionalCount === 0 && providerSnapshotRefreshing) {
-    return (
-      <View style={sheetStyles.emptyState}>
-        <ThemedActivityIndicator size="small" uniProps={foregroundMutedColorMapping} />
-        <Text style={sheetStyles.mutedText}>{t("providerDiagnostics.loadingModels")}</Text>
-      </View>
-    );
-  }
-  if (discoveredCount === 0 && additionalCount === 0 && providerErrorMessage) {
+  if (providerErrorMessage && discoveredCount === 0 && additionalCount === 0) {
     return (
       <View style={sheetStyles.emptyState}>
         <ThemedAlertTriangle uniProps={mutedMdIconMapping} />
@@ -508,6 +527,14 @@ function ProviderModalBody(props: ProviderModalBodyProps) {
         <Button variant="default" size="sm" onPress={onRefresh} disabled={modelsRefreshing}>
           {modelsRefreshing ? t("modelSelector.retrying") : t("common.retry")}
         </Button>
+      </View>
+    );
+  }
+  if (discoveredCount === 0 && additionalCount === 0 && providerSnapshotRefreshing) {
+    return (
+      <View style={sheetStyles.emptyState}>
+        <ThemedActivityIndicator size="small" uniProps={foregroundMutedColorMapping} />
+        <Text style={sheetStyles.mutedText}>{t("providerDiagnostics.loadingModels")}</Text>
       </View>
     );
   }
@@ -527,6 +554,19 @@ function ProviderModalBody(props: ProviderModalBodyProps) {
   }
   return (
     <>
+      {deletingModelError ? (
+        <View style={sheetStyles.backgroundErrorState}>
+          <Text style={sheetStyles.errorText}>{deletingModelError}</Text>
+        </View>
+      ) : null}
+      {providerErrorMessage ? (
+        <View style={sheetStyles.backgroundErrorState}>
+          <Text style={sheetStyles.errorText}>{providerErrorMessage}</Text>
+          <Button variant="secondary" size="sm" onPress={onRefresh} disabled={modelsRefreshing}>
+            {modelsRefreshing ? t("modelSelector.retrying") : t("common.retry")}
+          </Button>
+        </View>
+      ) : null}
       {filteredDiscovered.length > 0 ? (
         <View style={sheetStyles.section}>
           <SectionHeader title={t("providers.discovered")} count={filteredDiscovered.length} />
@@ -564,26 +604,31 @@ function useProviderTooling(
   const { t } = useTranslation();
   const [toolingAction, setToolingAction] = useState<"install" | "update" | null>(null);
   const [toolingOutput, setToolingOutput] = useState<string | null>(null);
+  const [toolingError, setToolingError] = useState<string | null>(null);
 
   const runAction = useCallback(
     (action: "install" | "update") => {
       if (!client || toolingAction) return;
       setToolingAction(action);
       setToolingOutput(null);
+      setToolingError(null);
       void client
         .runProviderToolingAction(provider, action)
         .then((result) => {
           const output = [result.stdout, result.stderr].filter(Boolean).join("\n").trim();
-          setToolingOutput(
-            output ||
-              (result.success
-                ? t("providerDiagnostics.toolingSucceeded")
-                : t("providerDiagnostics.toolingFailed")),
-          );
+          if (!result.success) {
+            const message = output || t("providerDiagnostics.toolingFailed");
+            setToolingError(message);
+            setToolingOutput(message);
+            return;
+          }
+          setToolingOutput(output || t("providerDiagnostics.toolingSucceeded"));
           return refresh([provider]);
         })
         .catch((error) => {
-          setToolingOutput(error instanceof Error ? error.message : String(error));
+          const message = error instanceof Error ? error.message : String(error);
+          setToolingError(message);
+          setToolingOutput(message);
         })
         .finally(() => {
           setToolingAction(null);
@@ -595,19 +640,22 @@ function useProviderTooling(
   const handleRunInstall = useCallback(() => runAction("install"), [runAction]);
   const handleRunUpdate = useCallback(() => runAction("update"), [runAction]);
 
-  return { toolingAction, toolingOutput, handleRunInstall, handleRunUpdate };
+  return { toolingAction, toolingOutput, toolingError, handleRunInstall, handleRunUpdate };
 }
 
-function useDiscoveredModels(providerEntry: { models?: AgentModelDefinition[] } | undefined) {
-  const stableDiscoveredRef = useRef<AgentModelDefinition[]>([]);
+function useDiscoveredModels(
+  provider: string,
+  providerEntry: { models?: AgentModelDefinition[] } | undefined,
+) {
+  const stableDiscoveredRef = useRef<{ provider: string; models: AgentModelDefinition[] } | null>(
+    null,
+  );
   if (providerEntry?.models && providerEntry.models.length > 0) {
-    stableDiscoveredRef.current = providerEntry.models;
+    stableDiscoveredRef.current = { provider, models: providerEntry.models };
   }
-  const discoveredModels =
-    providerEntry?.models && providerEntry.models.length > 0
-      ? providerEntry.models
-      : stableDiscoveredRef.current;
-  return discoveredModels;
+  return stableDiscoveredRef.current?.provider === provider
+    ? stableDiscoveredRef.current.models
+    : (providerEntry?.models ?? []);
 }
 
 function useFetchedAtLabel(fetchedAt: string | undefined, visible: boolean) {
@@ -632,12 +680,19 @@ export function ProviderDiagnosticSheet({
 }: ProviderDiagnosticSheetProps) {
   const { t } = useTranslation();
   const client = useHostRuntimeClient(serverId);
-  const { entries: snapshotEntries, refresh, isRefreshing } = useProvidersSnapshot(serverId);
+  const {
+    entries: snapshotEntries,
+    refresh,
+    isRefreshing,
+    error: snapshotError,
+    refreshError,
+  } = useProvidersSnapshot(serverId);
   const { config, patchConfig } = useDaemonConfig(serverId);
   const [query, setQuery] = useState("");
   const [addSheetOpen, setAddSheetOpen] = useState(false);
   const [diagSheetOpen, setDiagSheetOpen] = useState(false);
   const [deletingModelId, setDeletingModelId] = useState<string | null>(null);
+  const [deletingModelError, setDeletingModelError] = useState<string | null>(null);
 
   const providerLabel = resolveProviderLabel(provider, snapshotEntries);
   const providerEntry = useMemo(
@@ -649,19 +704,19 @@ export function ProviderDiagnosticSheet({
     [config?.providers, provider],
   );
   const providerSnapshotRefreshing = providerEntry?.status === "loading";
-  const providerErrorMessage =
-    providerEntry?.status === "error"
-      ? (providerEntry.error ?? t("modelSelector.unknownError"))
-      : null;
+  let providerStatusError: string | null = null;
+  if (providerEntry?.status === "error") {
+    providerStatusError = providerEntry.error ?? t("modelSelector.unknownError");
+  } else if (providerEntry?.status === "unavailable") {
+    providerStatusError = t("providerDiagnostics.providerUnavailable");
+  }
+  const providerErrorMessage = snapshotError ?? refreshError ?? providerStatusError;
   const modelsRefreshing = isRefreshing || providerSnapshotRefreshing;
 
-  const discoveredModels = useDiscoveredModels(providerEntry);
+  const discoveredModels = useDiscoveredModels(provider, providerEntry);
   const fetchedAtLabel = useFetchedAtLabel(providerEntry?.fetchedAt, visible);
-  const { toolingAction, toolingOutput, handleRunInstall, handleRunUpdate } = useProviderTooling(
-    client,
-    provider,
-    refresh,
-  );
+  const { toolingAction, toolingOutput, toolingError, handleRunInstall, handleRunUpdate } =
+    useProviderTooling(client, provider, refresh);
 
   useEffect(() => {
     if (!visible) {
@@ -682,7 +737,7 @@ export function ProviderDiagnosticSheet({
   );
 
   const handleRefreshModels = useCallback(() => {
-    void refresh([provider]);
+    void refresh([provider]).catch(() => undefined);
   }, [provider, refresh]);
 
   const handleOpenAddSheet = useCallback(() => setAddSheetOpen(true), []);
@@ -693,6 +748,7 @@ export function ProviderDiagnosticSheet({
   const handleDeleteCustom = useCallback(
     (modelId: string) => {
       setDeletingModelId(modelId);
+      setDeletingModelError(null);
       void patchConfig(
         buildDeleteCustomModelFromProviderPatch({
           currentProviders: config?.providers,
@@ -701,11 +757,16 @@ export function ProviderDiagnosticSheet({
         }),
       )
         .then(() => refresh([provider]))
+        .catch((error) => {
+          setDeletingModelError(
+            error instanceof Error ? error.message : t("customModels.deleteFailed"),
+          );
+        })
         .finally(() => {
           setDeletingModelId((current) => (current === modelId ? null : current));
         });
     },
-    [config?.providers, patchConfig, provider, refresh],
+    [config?.providers, patchConfig, provider, refresh, t],
   );
 
   const sheetHeader = useMemo<SheetHeader>(
@@ -764,6 +825,7 @@ export function ProviderDiagnosticSheet({
           toolingOutput={toolingOutput}
           onInstall={handleRunInstall}
           onUpdate={handleRunUpdate}
+          error={toolingError}
         />
         <ProviderModalBody
           discoveredCount={discoveredModels.length}
@@ -775,6 +837,7 @@ export function ProviderDiagnosticSheet({
           filteredDiscovered={filteredDiscovered}
           filteredCustom={filteredCustom}
           deletingModelId={deletingModelId}
+          deletingModelError={deletingModelError}
           onRefresh={handleRefreshModels}
           onDeleteCustom={handleDeleteCustom}
         />
@@ -905,6 +968,12 @@ const sheetStyles = StyleSheet.create((theme) => ({
     fontSize: 12.5,
     lineHeight: 16,
     padding: theme.spacing[3],
+  },
+  backgroundErrorState: {
+    paddingVertical: theme.spacing[3],
+    paddingHorizontal: theme.spacing[2],
+    alignItems: "flex-start",
+    gap: theme.spacing[2],
   },
   emptyState: {
     paddingVertical: theme.spacing[8],

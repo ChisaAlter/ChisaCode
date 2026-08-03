@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { DaemonClientConfig } from "@chisacode/client/internal/daemon-client";
 import type { DaemonConnectionDependencies, DaemonProbeClient } from "./test-daemon-connection";
+import { connectToDaemon } from "./test-daemon-connection";
 
 class FakeDaemonClient implements DaemonProbeClient {
   readonly lastError: string | null;
@@ -72,7 +73,6 @@ describe("test-daemon-connection connectToDaemon", () => {
   });
 
   it("reuses the app clientId for direct connections", async () => {
-    const { connectToDaemon } = await import("./test-daemon-connection");
     const first = await connectToDaemon(
       {
         id: "direct:lan:6767",
@@ -102,7 +102,6 @@ describe("test-daemon-connection connectToDaemon", () => {
   });
 
   it("encodes the local socket target into the client config", async () => {
-    const { connectToDaemon } = await import("./test-daemon-connection");
     const result = await connectToDaemon(
       {
         id: "socket:/tmp/chisacode.sock",
@@ -120,7 +119,6 @@ describe("test-daemon-connection connectToDaemon", () => {
   });
 
   it("passes direct TCP connection passwords into the client config", async () => {
-    const { connectToDaemon } = await import("./test-daemon-connection");
     const result = await connectToDaemon(
       {
         id: "direct:lan:6767",
@@ -137,7 +135,6 @@ describe("test-daemon-connection connectToDaemon", () => {
   });
 
   it("uses relay TLS from the stored connection", async () => {
-    const { connectToDaemon } = await import("./test-daemon-connection");
     const tlsResult = await connectToDaemon(
       {
         id: "relay:wss:[::1]:443",
@@ -169,7 +166,6 @@ describe("test-daemon-connection connectToDaemon", () => {
   });
 
   it("surfaces auth rejection as an incorrect password", async () => {
-    const { connectToDaemon } = await import("./test-daemon-connection");
     probe.failNextConnection(
       new Error("Transport closed (code 4001)"),
       "Transport closed (code 4001)",
@@ -192,7 +188,6 @@ describe("test-daemon-connection connectToDaemon", () => {
   });
 
   it("keeps generic transport failures generic when a password was supplied", async () => {
-    const { connectToDaemon } = await import("./test-daemon-connection");
     probe.failNextConnection(new Error("Transport error"), "Transport error");
 
     await expect(

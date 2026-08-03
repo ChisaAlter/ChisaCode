@@ -12,7 +12,7 @@ import { Session, type SessionOptions } from "./session.js";
 import type { SessionOutboundMessage } from "@chisacode/protocol/messages";
 import { createNoopWorkspaceGitService } from "./test-utils/workspace-git-service-stub.js";
 import { asInternals, createStub } from "./test-utils/class-mocks.js";
-import { createProviderSnapshotManagerStub } from "./test-utils/session-stubs.js";
+import { createProviderSnapshotManagerStub, asAgentManager } from "./test-utils/session-stubs.js";
 import {
   createPersistedProjectRecord,
   createPersistedWorkspaceRecord,
@@ -93,7 +93,7 @@ function createHarness(input: {
     downloadTokenStore: createStub<SessionOptions["downloadTokenStore"]>({}),
     pushTokenStore: createStub<SessionOptions["pushTokenStore"]>({}),
     chisacodeHome: mkdtempSync(path.join(tmpdir(), "chisacode-invariant-test-")),
-    agentManager: createStub<SessionOptions["agentManager"]>({
+    agentManager: asAgentManager({
       subscribe: () => () => {},
       listAgents: () => [],
       getAgent: () => null,
@@ -159,6 +159,7 @@ function createHarness(input: {
     daemonConfigStore: createStub<SessionOptions["daemonConfigStore"]>({
       get: () => ({ mcp: { injectIntoAgents: false }, providers: {} }),
       onChange: () => () => {},
+      onFieldChange: () => () => {},
     }),
     mcpBaseUrl: null,
     stt: null,

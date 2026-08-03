@@ -69,6 +69,16 @@ export const AgentModelDefinitionSchema: z.ZodType<AgentModelDefinition> = z
 export const ProviderSnapshotEntrySchema = z.object({
   provider: AgentProviderSchema,
   status: ProviderStatusSchema,
+  statusReason: z
+    .enum([
+      "disabled",
+      "command_unavailable",
+      "runtime_unavailable",
+      "model_discovery_failed",
+      "refresh_failed",
+      "configuration_changed",
+    ])
+    .optional(),
   enabled: z.boolean().optional().default(true),
   error: z.string().optional(),
   models: z.array(AgentModelDefinitionSchema).optional(),
@@ -296,6 +306,7 @@ export const ListAvailableProvidersResponseSchema = z.object({
 export const GetProvidersSnapshotResponseMessageSchema = z.object({
   type: z.literal("get_providers_snapshot_response"),
   payload: z.object({
+    cwd: z.string().optional(),
     entries: z.array(ProviderSnapshotEntrySchema),
     generatedAt: z.string(),
     requestId: z.string(),

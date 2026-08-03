@@ -8,7 +8,19 @@ const rawPadding = {
 };
 
 describe("resolveWindowControlsPadding", () => {
-  it("integrates desktop content into the titlebar instead of reserving a top spacer", () => {
+  it("applies raw window-control padding only to the titlebar", () => {
+    expect(
+      resolveWindowControlsPadding({
+        role: "titlebar",
+        rawPadding,
+        sidebarClosed: false,
+        explorerOpen: false,
+        focusModeEnabled: false,
+      }),
+    ).toEqual(rawPadding);
+  });
+
+  it("keeps the settings sidebar in the content row", () => {
     expect(
       resolveWindowControlsPadding({
         role: "sidebar",
@@ -18,13 +30,13 @@ describe("resolveWindowControlsPadding", () => {
         focusModeEnabled: false,
       }),
     ).toEqual({
-      left: 80,
+      left: 0,
       right: 0,
       top: 0,
     });
   });
 
-  it("pads the main header for window controls when the app sidebar is closed", () => {
+  it("keeps the main header in the content row when the sidebar is closed", () => {
     expect(
       resolveWindowControlsPadding({
         role: "header",
@@ -34,13 +46,13 @@ describe("resolveWindowControlsPadding", () => {
         focusModeEnabled: false,
       }),
     ).toEqual({
-      left: 80,
-      right: 48,
+      left: 0,
+      right: 0,
       top: 0,
     });
   });
 
-  it("does not add left padding to detail headers with their own sidebar", () => {
+  it("keeps detail headers in the content row when the sidebar is closed", () => {
     expect(
       resolveWindowControlsPadding({
         role: "detailHeader",
@@ -51,7 +63,7 @@ describe("resolveWindowControlsPadding", () => {
       }),
     ).toEqual({
       left: 0,
-      right: 48,
+      right: 0,
       top: 0,
     });
   });
@@ -72,7 +84,7 @@ describe("resolveWindowControlsPadding", () => {
     });
   });
 
-  it("only reserves horizontal window controls space for tab rows in focus mode", () => {
+  it("keeps tab rows in the content row in focus mode", () => {
     expect(
       resolveWindowControlsPadding({
         role: "tabRow",
@@ -82,13 +94,13 @@ describe("resolveWindowControlsPadding", () => {
         focusModeEnabled: true,
       }),
     ).toEqual({
-      left: 80,
-      right: 48,
+      left: 0,
+      right: 0,
       top: 0,
     });
   });
 
-  it("offsets the explorer sidebar from Windows caption buttons", () => {
+  it("keeps the explorer sidebar in the content row", () => {
     expect(
       resolveWindowControlsPadding({
         role: "explorerSidebar",
@@ -99,8 +111,8 @@ describe("resolveWindowControlsPadding", () => {
       }),
     ).toEqual({
       left: 0,
-      right: 48,
-      top: 28,
+      right: 0,
+      top: 0,
     });
   });
 });

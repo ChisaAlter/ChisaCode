@@ -18,7 +18,10 @@ try {
     process.env.CHISACODE_HOME = "/tmp/chisacode-explicit-home";
 
     assert.strictEqual(resolveChisaCodeHomePath(), "/tmp/chisacode-explicit-home");
-    assert.strictEqual(resolveChisaCodeWorktreesDir(), "/tmp/chisacode-explicit-home/worktrees");
+    assert.strictEqual(
+      resolveChisaCodeWorktreesDir(),
+      join("/tmp/chisacode-explicit-home", "worktrees"),
+    );
     console.log("\u2713 explicit CHISACODE_HOME is respected\n");
   }
 

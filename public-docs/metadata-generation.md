@@ -53,7 +53,7 @@ To control which models ChisaCode uses — for example to keep all metadata gene
 
 Each entry accepts:
 
-- `provider` (required) — the provider id. Built-in ids are `claude`, `codex`, `opencode`, `mimocode`, `pi`, and `kimi`; custom providers use the id you gave them.
+- `provider` (required) — the provider id. Built-in ids are `claude`, `codex`, `opencode`, `mimocode`, `pi`, `kimi`, and `grokbuild`; custom providers use the id you gave them.
 - `model` (optional) — a specific model id. Omit it to use that provider's default model.
 - `thinkingOptionId` (optional) — a reasoning/thinking level for models that support one. Falls back to the model's default if the value isn't valid for that model.
 

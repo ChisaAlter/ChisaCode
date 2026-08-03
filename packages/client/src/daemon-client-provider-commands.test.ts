@@ -33,6 +33,103 @@ describe("ProviderCommandClient", () => {
     ]);
   });
 
+  test("maps provider snapshot commands with scope, filters, and bounded timeouts", async () => {
+    const requests: Array<Parameters<DaemonCommandTransport["request"]>[0]> = [];
+    const client = new ProviderCommandClient({
+      request: async (params) => {
+        requests.push(params);
+        return {} as never;
+      },
+    });
+
+    await client.listProviderModels("pi", { cwd: "~/project", requestId: "models-1" });
+    await client.listProviderModes("pi", { cwd: "~/project", requestId: "modes-1" });
+    await client.listProviderFeatures(
+      {
+        provider: "pi",
+        cwd: "/workspace/project",
+        model: "openai/gpt-5",
+      },
+      { requestId: "features-1" },
+    );
+    await client.listAvailableProviders({ requestId: "available-1" });
+    await client.getProvidersSnapshot({ cwd: "~/project", requestId: "snapshot-1" });
+    await client.refreshProvidersSnapshot({
+      cwd: "~/project",
+      providers: ["pi"],
+      requestId: "refresh-1",
+    });
+
+    expect(requests).toEqual([
+      {
+        requestId: "models-1",
+        message: { type: "list_provider_models_request", provider: "pi", cwd: "~/project" },
+        responseType: "list_provider_models_response",
+        timeout: 45000,
+      },
+      {
+        requestId: "modes-1",
+        message: { type: "list_provider_modes_request", provider: "pi", cwd: "~/project" },
+        responseType: "list_provider_modes_response",
+        timeout: 45000,
+      },
+      {
+        requestId: "features-1",
+        message: {
+          type: "list_provider_features_request",
+          draftConfig: { provider: "pi", cwd: "/workspace/project", model: "openai/gpt-5" },
+        },
+        responseType: "list_provider_features_response",
+        timeout: 45000,
+      },
+      {
+        requestId: "available-1",
+        message: { type: "list_available_providers_request" },
+        responseType: "list_available_providers_response",
+        timeout: 30000,
+      },
+      {
+        requestId: "snapshot-1",
+        message: { type: "get_providers_snapshot_request", cwd: "~/project" },
+        responseType: "get_providers_snapshot_response",
+        timeout: 10000,
+      },
+      {
+        requestId: "refresh-1",
+        message: {
+          type: "refresh_providers_snapshot_request",
+          cwd: "~/project",
+          providers: ["pi"],
+        },
+        responseType: "refresh_providers_snapshot_response",
+        timeout: 60000,
+      },
+    ]);
+  });
+
+  test("maps provider diagnostic correlation and propagates transport rejection", async () => {
+    const expectedError = new Error("daemon disconnected");
+    const requests: Array<Parameters<DaemonCommandTransport["request"]>[0]> = [];
+    const client = new ProviderCommandClient({
+      request: async (params) => {
+        requests.push(params);
+        throw expectedError;
+      },
+    });
+
+    await expect(client.getProviderDiagnostic("pi", { requestId: "diagnostic-1" })).rejects.toBe(
+      expectedError,
+    );
+    expect(requests).toEqual([
+      {
+        requestId: "diagnostic-1",
+        message: { type: "provider_diagnostic_request", provider: "pi" },
+        responseType: "provider_diagnostic_response",
+        timeout: 30000,
+      },
+    ]);
+  });
+
   test("keeps provider tooling transport alive beyond the complete server budget", async () => {
     const requests: Array<Parameters<DaemonCommandTransport["request"]>[0]> = [];
     const client = new ProviderCommandClient({

@@ -154,7 +154,8 @@ export interface CompactionItem {
   kind: "compaction";
   id: string;
   timestamp: Date;
-  status: "loading" | "completed";
+  status: "loading" | "completed" | "failed";
+  error?: string;
   trigger?: "auto" | "manual";
   preTokens?: number;
 }
@@ -759,6 +760,7 @@ function reduceTimelineCompaction(
       const updated: CompactionItem = {
         ...existing,
         status: "completed",
+        error: undefined,
         trigger: item.trigger,
         preTokens: item.preTokens,
       };
@@ -773,6 +775,7 @@ function reduceTimelineCompaction(
     id: createTimelineId("compaction", item.status, timestamp),
     timestamp,
     status: item.status,
+    ...(item.error ? { error: item.error } : {}),
     trigger: item.trigger,
     preTokens: item.preTokens,
   };

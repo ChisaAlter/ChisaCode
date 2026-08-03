@@ -18,6 +18,9 @@ const createElement = (
 
 vi.mock("react-native", () => ({
   Platform: { select: (o: Record<string, unknown>) => o.default ?? o.web },
+  StyleSheet: {
+    compose: (first: unknown, second: unknown) => [first, second],
+  },
   View: (p: Record<string, unknown>) => createElement("div", { ...p, "data-rn": "View" }),
   Text: (p: Record<string, unknown>) => createElement("span", { ...p, "data-rn": "Text" }),
   TextInput: (p: Record<string, unknown>) =>
@@ -26,6 +29,43 @@ vi.mock("react-native", () => ({
     createElement("button", { ...p, "data-rn": "TouchableOpacity", type: "button" }),
   ScrollView: (p: Record<string, unknown>) =>
     createElement("div", { ...p, "data-rn": "ScrollView" }),
+}));
+
+const { testTheme } = vi.hoisted(() => ({
+  testTheme: {
+    colors: {
+      surface0: "#ffffff",
+      border: "#e4e6ec",
+      foreground: "#14171f",
+      foregroundMuted: "#6f7686",
+      foregroundSubtleText: "#3d4452",
+      foregroundFaint: "#9aa1b0",
+      destructive: "#ef4444",
+      surface3: "#e2e5ec",
+      accent: "#2a6cf0",
+      accentForeground: "#ffffff",
+      secondary: "#eef0f4",
+    },
+    fontWeight: {
+      semibold: "600",
+      medium: "500",
+    },
+    shadow: {
+      sm: {},
+    },
+    borderRadius: {
+      base: 8,
+    },
+  },
+}));
+
+vi.mock("react-native-unistyles", () => ({
+  StyleSheet: {
+    create: (factory: unknown) => (typeof factory === "function" ? factory(testTheme) : factory),
+    compose: (first: unknown, second: unknown) => [first, second],
+  },
+  useUnistyles: () => ({ theme: testTheme }),
+  withUnistyles: (Component: unknown) => Component,
 }));
 
 // ─── hook dependencies mock ────────────────────────────────────────────────

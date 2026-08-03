@@ -1,6 +1,7 @@
 import { expect, test, vi } from "vitest";
 import { spawn } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
+import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
@@ -1048,7 +1049,9 @@ test("cancelAgentRun completes when provider interrupt hangs", async () => {
     await expect(manager.cancelAgentRun(snapshot.id)).resolves.toBe(true);
     expect(client.session.interruptCalled).toBe(true);
   } finally {
-    rmSync(workdir, { recursive: true, force: true });
+    await manager.flush();
+    await storage.flush();
+    await rm(workdir, { recursive: true, force: true, maxRetries: 30, retryDelay: 50 });
   }
 });
 

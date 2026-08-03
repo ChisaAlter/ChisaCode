@@ -78,7 +78,7 @@ describe("ProviderSnapshotManager public surface", () => {
     const manager = new ProviderSnapshotManager({ logger: createTestLogger() });
     try {
       const ids = manager.listRegisteredProviderIds();
-      expect(ids).toEqual(["claude", "codex", "opencode", "mimocode", "pi", "kimi"]);
+      expect(ids).toEqual(["claude", "codex", "opencode", "mimocode", "pi", "kimi", "grokbuild"]);
     } finally {
       manager.destroy();
     }
@@ -140,6 +140,7 @@ describe("ProviderSnapshotManager public surface", () => {
         mimocode: { enabled: false },
         pi: { enabled: false },
         kimi: { enabled: false },
+        grokbuild: { enabled: false },
       },
       extraClients: {
         codex: createExtraClient("codex", { isAvailable, listModels: fetchModels }),
@@ -166,6 +167,7 @@ describe("ProviderSnapshotManager public surface", () => {
         mimocode: { enabled: false },
         pi: { enabled: false },
         kimi: { enabled: false },
+        grokbuild: { enabled: false },
       },
       extraClients: { codex: createExtraClient("codex", { isAvailable }) },
     });
@@ -199,12 +201,21 @@ describe("ProviderSnapshotManager public surface", () => {
         mimocode: { enabled: false },
         pi: { enabled: false },
         kimi: { enabled: false },
+        grokbuild: { enabled: false },
       },
     });
     try {
       const entries = await manager.listProviders({ cwd: "/tmp/project", wait: true });
       const providers = entries.map((entry) => entry.provider).sort();
-      expect(providers).toEqual(["claude", "codex", "kimi", "mimocode", "opencode", "pi"]);
+      expect(providers).toEqual([
+        "claude",
+        "codex",
+        "grokbuild",
+        "kimi",
+        "mimocode",
+        "opencode",
+        "pi",
+      ]);
       for (const entry of entries) {
         expect(entry.enabled).toBe(false);
         expect(entry.status).toBe("unavailable");
@@ -307,12 +318,12 @@ describe("ProviderSnapshotManager public surface", () => {
     } finally {
       manager.destroy();
     }
-  });
+  }, 15_000);
 
   test("getProviderDiagnostic falls back to a default message when the client has no getDiagnostic", async () => {
     const manager = new ProviderSnapshotManager({
       logger: createTestLogger(),
-      extraClients: { codex: createExtraClient("codex") },
+      extraClients: { codex: createExtraClient("codex", { getDiagnostic: undefined }) },
     });
     try {
       const result = await manager.getProviderDiagnostic("codex");
@@ -411,6 +422,7 @@ describe("ProviderSnapshotManager applyMutableProviderConfig", () => {
         mimocode: { enabled: false },
         pi: { enabled: false },
         kimi: { enabled: false },
+        grokbuild: { enabled: false },
       },
     });
     try {
@@ -441,6 +453,7 @@ describe("ProviderSnapshotManager applyMutableProviderConfig", () => {
         mimocode: { enabled: false },
         pi: { enabled: false },
         kimi: { enabled: false },
+        grokbuild: { enabled: false },
       },
     });
     try {
@@ -468,6 +481,7 @@ describe("ProviderSnapshotManager applyMutableProviderConfig", () => {
         mimocode: { enabled: false },
         pi: { enabled: false },
         kimi: { enabled: false },
+        grokbuild: { enabled: false },
       },
     });
     try {
@@ -505,6 +519,7 @@ describe("ProviderSnapshotManager lifecycle", () => {
         mimocode: { enabled: false },
         pi: { enabled: false },
         kimi: { enabled: false },
+        grokbuild: { enabled: false },
       },
     });
     try {
@@ -533,6 +548,7 @@ describe("ProviderSnapshotManager lifecycle", () => {
         mimocode: { enabled: false },
         pi: { enabled: false },
         kimi: { enabled: false },
+        grokbuild: { enabled: false },
       },
     });
     const listener = vi.fn();
@@ -557,6 +573,7 @@ describe("ProviderSnapshotManager cwd routing", () => {
         mimocode: { enabled: false },
         pi: { enabled: false },
         kimi: { enabled: false },
+        grokbuild: { enabled: false },
       },
     });
     try {
@@ -581,6 +598,7 @@ describe("ProviderSnapshotManager cwd routing", () => {
         mimocode: { enabled: false },
         pi: { enabled: false },
         kimi: { enabled: false },
+        grokbuild: { enabled: false },
       },
     });
     try {

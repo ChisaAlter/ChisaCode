@@ -87,6 +87,8 @@ vi.mock("react-native-unistyles", () => ({
     create: (factory: unknown) => (typeof factory === "function" ? factory(theme) : factory),
   },
   useUnistyles: () => ({ theme }),
+  UnistylesRuntime: { pixelRatio: 1 },
+  withUnistyles: (Component: unknown) => Component,
 }));
 
 vi.mock("lucide-react-native", () => {

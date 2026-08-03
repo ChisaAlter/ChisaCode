@@ -3,12 +3,12 @@ import { createMarkdownStyles, createWorkbenchMarkdownStyles } from "./markdown-
 import { darkTheme } from "./theme";
 
 describe("createMarkdownStyles", () => {
-  it("matches Paseo prose typography (base size, scaled line-height)", () => {
+  it("matches the current Soft chat prose typography", () => {
     const styles = createMarkdownStyles(darkTheme);
 
     expect(styles.body).toMatchObject({
-      fontSize: darkTheme.fontSize.base,
-      lineHeight: Math.round(darkTheme.fontSize.base * 1.4),
+      fontSize: 14.5,
+      lineHeight: 24,
       color: darkTheme.colors.foreground,
     });
     expect(styles.paragraph).toMatchObject({

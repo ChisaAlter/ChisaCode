@@ -639,6 +639,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
             return (
               <CompactionMarker
                 status={item.status}
+                error={item.error}
                 trigger={item.trigger}
                 preTokens={item.preTokens}
               />

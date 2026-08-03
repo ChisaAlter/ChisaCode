@@ -19,6 +19,8 @@
 
 import assert from "node:assert";
 import { $ } from "zx";
+import { installZxWindowsPathCompat } from "./helpers/zx-path-compat.ts";
+installZxWindowsPathCompat();
 import { mkdtemp, rm, writeFile } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";

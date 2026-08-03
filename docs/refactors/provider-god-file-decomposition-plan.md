@@ -251,6 +251,8 @@
 
 各 provider 子目录现有独立的 `tool-call-mapper.ts` / `rewind.ts`；ACP 已先建立 provider-specific mapper。等待至少第二个 provider 出现经测试证明的同构契约后，再评估提取共享版本到 `providers/shared/`，差异点继续保留为 provider-specific strategy。
 
+**状态**：延期，不阻断当前 provider discovery/settings reliability hardening；只有第二个 provider 的真实同构行为和测试契约稳定后才启动。
+
 **验收**：至少一个 provider 改用共享版本；其他保持不变不算阻塞。
 
 ## 风险与缓解

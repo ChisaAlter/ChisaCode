@@ -9,7 +9,7 @@ interface AnimatedStyleBoundary {
 const boundaries: AnimatedStyleBoundary[] = [
   {
     file: "../components/ui/agent-status-indicator.tsx",
-    variables: ["dotStyle"],
+    variables: ["outerStyle"],
   },
   {
     file: "../components/ui/switch.tsx",
@@ -17,7 +17,7 @@ const boundaries: AnimatedStyleBoundary[] = [
   },
   {
     file: "../components/volume-meter.tsx",
-    variables: ["line1CombinedStyle", "line2CombinedStyle", "line3CombinedStyle"],
+    variables: ["line1OuterStyle", "line2OuterStyle", "line3OuterStyle"],
   },
   {
     file: "../components/file-drop-zone.tsx",

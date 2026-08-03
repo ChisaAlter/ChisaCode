@@ -14,6 +14,7 @@ const {
   patchConfigMock,
   openProviderSettingsMock,
   compactState,
+  connectionState,
 } = vi.hoisted(() => ({
   theme: {
     spacing: { 1: 4, "1.5": 6, 2: 8, 3: 12, 4: 16, 6: 24 },
@@ -41,7 +42,12 @@ const {
   snapshotState: {
     entries: undefined as ProviderSnapshotEntry[] | undefined,
     isLoading: false,
+    isFetching: false,
     isRefreshing: false,
+    error: null as string | null,
+    refreshError: null as string | null,
+    supportsSnapshot: true,
+    refresh: vi.fn(async () => {}),
   },
   configState: {
     config: null as MutableDaemonConfig | null,
@@ -50,6 +56,9 @@ const {
   openProviderSettingsMock: vi.fn(),
   compactState: {
     value: false,
+  },
+  connectionState: {
+    value: true,
   },
 }));
 
@@ -160,6 +169,7 @@ vi.mock("react-native-unistyles", () => ({
     pixelRatio: 2,
   },
   useUnistyles: () => ({ theme }),
+  withUnistyles: (Component: React.ComponentType) => Component,
 }));
 
 vi.mock("lucide-react-native", () => {
@@ -217,11 +227,12 @@ vi.mock("@/hooks/use-providers-snapshot", () => ({
   useProvidersSnapshot: () => ({
     entries: snapshotState.entries,
     isLoading: snapshotState.isLoading,
-    isFetching: false,
+    isFetching: snapshotState.isFetching,
     isRefreshing: snapshotState.isRefreshing,
-    error: null,
-    supportsSnapshot: true,
-    refresh: vi.fn(async () => {}),
+    error: snapshotState.error,
+    refreshError: snapshotState.refreshError,
+    supportsSnapshot: snapshotState.supportsSnapshot,
+    refresh: snapshotState.refresh,
     refetchIfStale: vi.fn(),
   }),
 }));
@@ -235,7 +246,7 @@ vi.mock("@/hooks/use-daemon-config", () => ({
 }));
 
 vi.mock("@/runtime/host-runtime", () => ({
-  useHostRuntimeIsConnected: () => true,
+  useHostRuntimeIsConnected: () => connectionState.value,
   useHostRuntimeClient: () => ({
     runProviderToolingAction: openProviderSettingsMock,
   }),
@@ -330,12 +341,17 @@ describe("ProvidersSection", () => {
 
     snapshotState.entries = undefined;
     snapshotState.isLoading = false;
+    snapshotState.isFetching = false;
     snapshotState.isRefreshing = false;
-    configState.config = null;
+    snapshotState.error = null;
+    snapshotState.refreshError = null;
+    snapshotState.supportsSnapshot = true;
+    snapshotState.refresh.mockReset();
     patchConfigMock.mockReset();
     patchConfigMock.mockResolvedValue(undefined);
     openProviderSettingsMock.mockReset();
     compactState.value = false;
+    connectionState.value = true;
   });
 
   afterEach(() => {
@@ -364,6 +380,115 @@ describe("ProvidersSection", () => {
     return row;
   }
 
+  it("shows a disconnected state when the host runtime is unavailable", () => {
+    connectionState.value = false;
+    snapshotState.isLoading = false;
+
+    render();
+
+    expect(container?.textContent).toContain("providers.connectToView");
+  });
+
+  it("shows an unsupported state instead of provider rows", () => {
+    snapshotState.supportsSnapshot = false;
+    snapshotState.entries = [claudeEntry];
+
+    render();
+
+    expect(container?.textContent).toContain("providers.unsupported");
+    expect(container?.querySelector('[aria-label="Claude provider details"]')).toBeNull();
+  });
+
+  it("shows initial loading without rendering provider rows", () => {
+    snapshotState.isLoading = true;
+
+    render();
+
+    expect(container?.textContent).toContain("common.loading");
+    expect(container?.querySelector('[aria-label="Claude provider details"]')).toBeNull();
+  });
+
+  it("shows a query error with a retry action", async () => {
+    snapshotState.error = "snapshot failed";
+    snapshotState.refresh.mockResolvedValue(undefined);
+
+    render();
+
+    const retry = container?.querySelector<HTMLElement>('[aria-label="common.retry"]');
+    expect(container?.textContent).toContain("snapshot failed");
+    expect(retry).not.toBeNull();
+    await act(async () => {
+      retry?.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+    });
+    expect(snapshotState.refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows a refresh error with a retry action while retaining rows", async () => {
+    snapshotState.entries = [claudeEntry];
+    snapshotState.refreshError = "refresh failed";
+    snapshotState.refresh.mockResolvedValue(undefined);
+    configState.config = makeConfig();
+
+    render();
+
+    const retry = container?.querySelector<HTMLElement>('[aria-label="common.retry"]');
+    expect(container?.textContent).toContain("refresh failed");
+    expect(retry).not.toBeNull();
+    expect(container?.querySelector('[aria-label="Claude provider details"]')).toBeNull();
+    await act(async () => {
+      retry?.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+    });
+    expect(snapshotState.refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ["disabled", "Disabled"],
+    ["command_unavailable", "providers.commandUnavailable"],
+    ["runtime_unavailable", "providers.runtimeUnavailable"],
+    ["model_discovery_failed", "providers.modelDiscoveryFailed"],
+    ["refresh_failed", "providers.refreshFailed"],
+    ["configuration_changed", "providers.configurationChanged"],
+  ] as const)("renders the %s status reason", (statusReason, expectedLabel) => {
+    snapshotState.entries = [
+      {
+        ...claudeEntry,
+        status: statusReason === "configuration_changed" ? "loading" : "error",
+        statusReason,
+      },
+    ];
+    configState.config = makeConfig();
+
+    render();
+
+    expect(container?.textContent).toContain(expectedLabel);
+  });
+
+  it("renders a ready provider with no models without a model count", () => {
+    snapshotState.entries = [{ ...claudeEntry, models: [] }];
+    configState.config = makeConfig();
+
+    render();
+
+    const row = findRow("Claude provider details");
+    expect(row.textContent).toContain("Available");
+    expect(row.textContent).not.toContain("0 models");
+  });
+
+  it("refreshes after a successful toggle", async () => {
+    snapshotState.entries = [claudeEntry];
+    configState.config = makeConfig();
+    snapshotState.refresh.mockResolvedValue(undefined);
+
+    render();
+
+    const switchEl =
+      findRow("Claude provider details").querySelector<HTMLElement>('[role="switch"]');
+    await act(async () => {
+      switchEl?.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(snapshotState.refresh).toHaveBeenCalledWith(["claude"]);
+  });
   it("renders the disabled provider with its server-provided label in snapshot order", () => {
     snapshotState.entries = [claudeEntry, disabledCodexEntry];
     configState.config = makeConfig({ codex: { enabled: false } });

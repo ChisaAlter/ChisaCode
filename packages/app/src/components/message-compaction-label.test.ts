@@ -15,5 +15,8 @@ describe("getCompactionMarkerLabel", () => {
       "Context compacted (12K tokens)",
     );
     expect(getCompactionMarkerLabel({ status: "completed" })).toBe("Context compacted");
+    expect(getCompactionMarkerLabel({ status: "failed", error: "provider timeout" })).toBe(
+      "Context compaction failed: provider timeout",
+    );
   });
 });

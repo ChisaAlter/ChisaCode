@@ -25,6 +25,7 @@ describe("daemon protocol", () => {
       mcp: { injectIntoAgents: true },
       providers: {},
       modelGateways: {},
+      visionFallbackModel: null,
       metadataGeneration: { providers: [] },
       autoArchiveAfterMerge: false,
       appendSystemPrompt: "",

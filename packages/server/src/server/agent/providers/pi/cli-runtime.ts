@@ -6,6 +6,7 @@ import type { Logger } from "pino";
 
 import { spawnProcess } from "../../../../utils/spawn.js";
 import { terminateProcessTreeWithFallback } from "../../../../utils/tree-kill.js";
+import { withTimeout } from "../../../../utils/promise-timeout.js";
 import type { ProviderRuntimeSettings } from "../../provider-launch-config.js";
 import {
   buildPiLaunch,
@@ -30,9 +31,6 @@ type Which = (command: string) => string;
 const piRequire = createRequire(import.meta.url);
 const which = piRequire("which") as Which & { sync: Which };
 
-const DEFAULT_PI_COMMAND: [string, ...string[]] = [
-  process.env.PI_COMMAND ?? process.env.PI_ACP_PI_COMMAND ?? "pi",
-];
 const DEFAULT_TIMEOUT_MS = 30_000;
 const STDERR_BUFFER_LIMIT = 8192;
 // Cap stdoutBuffer too: a misbehaving pi process that emits non-newline-
@@ -40,6 +38,7 @@ const STDERR_BUFFER_LIMIT = 8192;
 const STDOUT_BUFFER_LIMIT = 1024 * 1024;
 const GRACEFUL_SHUTDOWN_TIMEOUT_MS = 2_000;
 const FORCE_SHUTDOWN_TIMEOUT_MS = 1_000;
+const CLOSE_TIMEOUT_MS = GRACEFUL_SHUTDOWN_TIMEOUT_MS + FORCE_SHUTDOWN_TIMEOUT_MS + 1_000;
 
 /**
  * Resolves a bare Pi command (e.g. `pi`) to a direct `node cli.js` invocation
@@ -82,6 +81,10 @@ function resolvePiCommand(command: [string, ...string[]]): [string, ...string[]]
   return [process.execPath, cliJsPath, ...args];
 }
 
+function resolveDefaultPiCommand(): [string, ...string[]] {
+  return [process.env.PI_COMMAND ?? process.env.PI_ACP_PI_COMMAND ?? "pi"];
+}
+
 /**
  * Extracts the `dist/cli.js` path an npm `.cmd` shim forwards to.
  * npm shims invoke `<dp0>\node_modules\<pkg>\dist\cli.js` after a `%_prog%`
@@ -122,13 +125,14 @@ export interface PiCliRuntimeOptions {
 }
 
 export class PiCliRuntime implements PiRuntime {
-  private readonly command: [string, ...string[]];
+  private readonly explicitCommand?: [string, ...string[]];
   private readonly spawnProcess: (launch: PiRuntimeLaunch) => ChildProcessWithoutNullStreams;
 
   constructor(private readonly options: PiCliRuntimeOptions) {
-    // Only resolve the default bare `pi` command; an explicit command (tests,
-    // custom installs, PI_COMMAND env) is trusted as-is.
-    this.command = options.command ? options.command : resolvePiCommand(DEFAULT_PI_COMMAND);
+    // Resolve the default command at session-start time. The daemon may update
+    // PI_COMMAND/PI_ACP_PI_COMMAND after this runtime is constructed, so never
+    // capture the module environment here.
+    this.explicitCommand = options.command;
     this.spawnProcess =
       options.spawnProcess ??
       ((launch) => {
@@ -144,8 +148,9 @@ export class PiCliRuntime implements PiRuntime {
   }
 
   async startSession(input: PiStartSessionInput): Promise<PiRuntimeSession> {
+    const command = this.explicitCommand ?? resolvePiCommand(resolveDefaultPiCommand());
     const launch = buildPiLaunch({
-      command: this.command,
+      command,
       runtimeSettings: this.options.runtimeSettings,
       session: input,
     });
@@ -159,6 +164,9 @@ class PiCliRuntimeSession implements PiRuntimeSession {
   private stderrBuffer = "";
   private nextRequestId = 1;
   private disposed = false;
+  private closing = false;
+  private closePromise: Promise<void> | null = null;
+  private processExitEmitted = false;
   private stdoutBuffer = "";
 
   constructor(
@@ -176,18 +184,31 @@ class PiCliRuntimeSession implements PiRuntimeSession {
       }
     });
     child.on("error", (error) => {
-      this.failAll(error instanceof Error ? error : new Error(String(error)));
+      this.handleTransportError(error instanceof Error ? error : new Error(String(error)));
+    });
+    child.stdin.on("error", (error) => {
+      this.handleTransportError(error instanceof Error ? error : new Error(String(error)));
     });
     child.on("exit", (code, signal) => {
       const error = new Error(
         `Pi RPC process exited with code ${code ?? "null"} and signal ${signal ?? "null"}\n${this.stderrBuffer}`.trim(),
       );
-      this.emit({ type: "process_exit", error: error.message });
-      this.failAll(error);
+      this.rejectPending(error);
+      if (!this.closing && !this.processExitEmitted) {
+        this.processExitEmitted = true;
+        this.disposed = true;
+        this.emit({ type: "process_exit", error: error.message });
+      } else {
+        this.disposed = true;
+      }
+      this.subscribers.clear();
     });
   }
 
   onEvent(callback: (event: PiRuntimeEvent) => void): () => void {
+    if (this.disposed) {
+      return () => undefined;
+    }
     this.subscribers.add(callback);
     return () => {
       this.subscribers.delete(callback);
@@ -246,6 +267,8 @@ class PiCliRuntimeSession implements PiRuntimeSession {
     id: string,
     response: { value?: string; confirmed?: boolean; cancelled?: boolean },
   ): void {
+    // Fire-and-forget responses must not throw into event handling if stdin has
+    // already failed or the process is closing.
     this.writeJsonLine({ type: "extension_ui_response", id, ...response });
   }
 
@@ -254,28 +277,42 @@ class PiCliRuntimeSession implements PiRuntimeSession {
   }
 
   async close(): Promise<void> {
-    if (this.disposed) return;
+    if (this.closePromise) {
+      return this.closePromise;
+    }
+
+    this.closing = true;
     this.disposed = true;
+    this.rejectPending(new Error("Pi RPC session is closed"));
+    this.closePromise = this.terminate().finally(() => {
+      this.subscribers.clear();
+    });
+    return this.closePromise;
+  }
+
+  private async terminate(): Promise<void> {
     try {
       this.child.stdin.end();
     } catch {
       // ignore
     }
-    const result = await terminateProcessTreeWithFallback(this.child, {
-      gracefulTimeoutMs: GRACEFUL_SHUTDOWN_TIMEOUT_MS,
-      forceTimeoutMs: FORCE_SHUTDOWN_TIMEOUT_MS,
-      onForceSignal: () => {
-        this.logger.warn(
-          { timeoutMs: GRACEFUL_SHUTDOWN_TIMEOUT_MS },
-          "Pi RPC process did not exit after SIGTERM; sending SIGKILL",
-        );
-      },
-    });
-    if (result === "kill-timeout") {
-      this.logger.warn(
-        { timeoutMs: FORCE_SHUTDOWN_TIMEOUT_MS },
-        "Pi RPC process did not report exit after SIGKILL",
+    try {
+      await withTimeout(
+        terminateProcessTreeWithFallback(this.child, {
+          gracefulTimeoutMs: GRACEFUL_SHUTDOWN_TIMEOUT_MS,
+          forceTimeoutMs: FORCE_SHUTDOWN_TIMEOUT_MS,
+          onForceSignal: () => {
+            this.logger.warn(
+              { timeoutMs: GRACEFUL_SHUTDOWN_TIMEOUT_MS },
+              "Pi RPC process did not exit after SIGTERM; sending SIGKILL",
+            );
+          },
+        }),
+        CLOSE_TIMEOUT_MS,
+        `Timed out closing Pi RPC process after ${CLOSE_TIMEOUT_MS}ms`,
       );
+    } catch (error) {
+      this.logger.warn({ err: error }, "Pi RPC process close did not complete cleanly");
     }
   }
 
@@ -293,15 +330,35 @@ class PiCliRuntimeSession implements PiRuntimeSession {
         );
       }, timeoutMs);
       this.pending.set(id, { resolve, reject, timer });
-      this.writeJsonLine({ ...command, id });
+      try {
+        if (!this.writeJsonLine({ ...command, id })) {
+          clearTimeout(timer);
+          this.pending.delete(id);
+          reject(new Error("Pi RPC session stdin is unavailable"));
+        }
+      } catch (error) {
+        clearTimeout(timer);
+        this.pending.delete(id);
+        reject(error instanceof Error ? error : new Error(String(error)));
+      }
     });
   }
 
-  private writeJsonLine(value: unknown): void {
+  private writeJsonLine(value: unknown): boolean {
     if (this.disposed || this.child.stdin.destroyed || !this.child.stdin.writable) {
-      return;
+      return false;
     }
-    this.child.stdin.write(`${JSON.stringify(value)}\n`);
+    try {
+      this.child.stdin.write(`${JSON.stringify(value)}\n`, (error?: Error | null) => {
+        if (error) {
+          this.handleTransportError(error);
+        }
+      });
+      return true;
+    } catch (error) {
+      this.handleTransportError(error instanceof Error ? error : new Error(String(error)));
+      return false;
+    }
   }
 
   private handleStdoutChunk(chunk: string): void {
@@ -363,15 +420,26 @@ class PiCliRuntimeSession implements PiRuntimeSession {
 
   private emit(event: PiRuntimeEvent): void {
     for (const subscriber of this.subscribers) {
-      subscriber(event);
+      try {
+        subscriber(event);
+      } catch (error) {
+        this.logger.warn({ err: error }, "Pi runtime event subscriber failed");
+      }
     }
   }
 
-  private failAll(error: Error): void {
-    if (this.disposed) {
+  private handleTransportError(error: Error): void {
+    this.rejectPending(error);
+    if (this.closing || this.processExitEmitted) {
+      this.disposed = true;
       return;
     }
     this.disposed = true;
+    this.processExitEmitted = true;
+    this.emit({ type: "process_exit", error: error.message });
+  }
+
+  private rejectPending(error: Error): void {
     for (const pending of this.pending.values()) {
       clearTimeout(pending.timer);
       pending.reject(error);

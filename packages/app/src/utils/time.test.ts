@@ -42,15 +42,24 @@ describe("formatMessageTimestamp", () => {
     const now = new Date(2026, 4, 14, 17, 30);
     const date = new Date(2026, 4, 11, 22, 12);
     const formatted = formatMessageTimestamp(date, now);
-    expect(formatted).toMatch(/Monday/);
-    expect(formatted).toMatch(/10:12 PM|22:12/);
+    const expectedWeekday = date.toLocaleDateString(undefined, { weekday: "long" });
+    expect(formatted).toContain(expectedWeekday);
+    const expectedTime = date.toLocaleTimeString(undefined, {
+      hour: "numeric",
+      minute: "2-digit",
+    });
+    expect(formatted).toContain(expectedTime);
   });
 
   it("includes full date for older timestamps", () => {
     const now = new Date(2026, 4, 14, 17, 30);
     const date = new Date(2026, 3, 1, 9, 5);
     const formatted = formatMessageTimestamp(date, now);
-    expect(formatted).toMatch(/Apr|April/);
-    expect(formatted).toMatch(/2026/);
+    const expectedDate = date.toLocaleDateString(undefined, {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+    expect(formatted).toContain(expectedDate);
   });
 });

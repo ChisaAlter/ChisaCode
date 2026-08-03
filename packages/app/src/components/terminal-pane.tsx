@@ -772,10 +772,7 @@ export function TerminalPane({
     ],
   );
 
-  const containerStyle = useMemo(
-    () => [styles.terminalContainer, keyboardPaddingStyle],
-    [keyboardPaddingStyle],
-  );
+  const containerStyle = keyboardPaddingStyle;
 
   const handleSwipeRight = useCallback(() => {
     if (!swipeGesturesEnabled) return;
@@ -819,46 +816,48 @@ export function TerminalPane({
   return (
     <ErrorBoundary fallback={renderErrorFallback}>
       <Animated.View style={containerStyle} accessibilityLabel={terminalT("terminal.title")}>
-        <View style={styles.outputContainer} accessibilityLabel={terminalT("terminal.output")}>
-          {isWorkspaceFocused ? (
-            <View style={styles.terminalGestureContainer}>
-              <TerminalEmulator
-                ref={emulatorRef}
-                dom={TERMINAL_EMULATOR_DOM_PROPS}
-                streamKey={terminalStreamKey}
-                testId="terminal-surface"
-                xtermTheme={xtermTheme}
-                scrollbackLines={settings.terminalScrollbackLines}
-                swipeGesturesEnabled={swipeGesturesEnabled}
-                initialSnapshot={initialSnapshot}
-                onRendererReadyChange={handleRendererReadyChange}
-                onSwipeRight={handleSwipeRight}
-                onSwipeLeft={handleSwipeLeft}
-                onInput={handleTerminalData}
-                onResize={handleTerminalResize}
-                onTerminalKey={handleTerminalKey}
-                onInputModeChange={handleInputModeChange}
-                onResolveLocalFileLink={handleResolveLocalFileLink}
-                onOpenLocalFileLink={handleOpenLocalFileLink}
-                onPendingModifiersConsumed={handlePendingModifiersConsumed}
-                pendingModifiers={modifiers}
-                focusRequestToken={focusRequestToken}
-                resizeRequestToken={resizeRequestToken}
-              />
-            </View>
-          ) : (
-            <View style={styles.terminalGestureContainer} />
-          )}
+        <View style={styles.terminalContainer}>
+          <View style={styles.outputContainer} accessibilityLabel={terminalT("terminal.output")}>
+            {isWorkspaceFocused ? (
+              <View style={styles.terminalGestureContainer}>
+                <TerminalEmulator
+                  ref={emulatorRef}
+                  dom={TERMINAL_EMULATOR_DOM_PROPS}
+                  streamKey={terminalStreamKey}
+                  testId="terminal-surface"
+                  xtermTheme={xtermTheme}
+                  scrollbackLines={settings.terminalScrollbackLines}
+                  swipeGesturesEnabled={swipeGesturesEnabled}
+                  initialSnapshot={initialSnapshot}
+                  onRendererReadyChange={handleRendererReadyChange}
+                  onSwipeRight={handleSwipeRight}
+                  onSwipeLeft={handleSwipeLeft}
+                  onInput={handleTerminalData}
+                  onResize={handleTerminalResize}
+                  onTerminalKey={handleTerminalKey}
+                  onInputModeChange={handleInputModeChange}
+                  onResolveLocalFileLink={handleResolveLocalFileLink}
+                  onOpenLocalFileLink={handleOpenLocalFileLink}
+                  onPendingModifiersConsumed={handlePendingModifiersConsumed}
+                  pendingModifiers={modifiers}
+                  focusRequestToken={focusRequestToken}
+                  resizeRequestToken={resizeRequestToken}
+                />
+              </View>
+            ) : (
+              <View style={styles.terminalGestureContainer} />
+            )}
 
-          {showLoadingOverlay ? (
-            <View
-              style={styles.attachOverlay}
-              pointerEvents="none"
-              testID="terminal-attach-loading"
-            >
-              <ThemedActivityIndicator size="small" uniProps={foregroundMutedColorMapping} />
-            </View>
-          ) : null}
+            {showLoadingOverlay ? (
+              <View
+                style={styles.attachOverlay}
+                pointerEvents="none"
+                testID="terminal-attach-loading"
+              >
+                <ThemedActivityIndicator size="small" uniProps={foregroundMutedColorMapping} />
+              </View>
+            ) : null}
+          </View>
         </View>
 
         {streamError ? (

@@ -26,6 +26,11 @@ const mockState = vi.hoisted(() => {
         label?: string;
         models?: unknown[];
       }>,
+      grokbuild: [] as Array<{
+        runtimeSettings?: unknown;
+        providerId?: string;
+        label?: string;
+      }>,
       genericAcp: [] as Array<{
         command: string[];
         env?: Record<string, string>;
@@ -42,6 +47,7 @@ const mockState = vi.hoisted(() => {
       this.constructorArgs.mimocode = [];
       this.constructorArgs.pi = [];
       this.constructorArgs.kimi = [];
+      this.constructorArgs.grokbuild = [];
       this.constructorArgs.genericAcp = [];
       this.isCommandAvailable.mockReset();
       this.isCommandAvailable.mockImplementation(async (_command: string) => false);
@@ -321,6 +327,48 @@ vi.mock("./providers/kimi-code-agent.js", () => ({
   },
 }));
 
+vi.mock("./providers/grok-build-agent.js", () => ({
+  GrokBuildAgentClient: class GrokBuildAgentClient {
+    readonly capabilities = {
+      supportsStreaming: true,
+      supportsSessionPersistence: true,
+      supportsDynamicModes: true,
+      supportsMcpServers: true,
+      supportsReasoningStream: true,
+      supportsToolInvocations: true,
+    };
+    readonly provider = "grokbuild";
+
+    constructor(options: { runtimeSettings?: unknown; providerId?: string; label?: string }) {
+      mockState.constructorArgs.grokbuild.push({
+        runtimeSettings: options.runtimeSettings,
+        providerId: options.providerId,
+        label: options.label,
+      });
+    }
+
+    async createSession(): Promise<never> {
+      throw new Error("not implemented");
+    }
+
+    async resumeSession(): Promise<never> {
+      throw new Error("not implemented");
+    }
+
+    async listModels(): Promise<AgentModelDefinition[]> {
+      return mockState.runtimeModels.get(this.provider) ?? [];
+    }
+
+    async listModes(): Promise<[]> {
+      return [];
+    }
+
+    async isAvailable(): Promise<boolean> {
+      return true;
+    }
+  },
+}));
+
 vi.mock("./providers/generic-acp-agent.js", () => ({
   GenericACPAgentClient: class GenericACPAgentClient {
     readonly capabilities = {
@@ -450,6 +498,28 @@ test("mimocode client is exposed under the mimocode provider id", () => {
   const client = registry.mimocode.createClient(logger);
 
   expect(client.provider).toBe("mimocode");
+});
+
+test("grokbuild client uses the Grok Build ACP launcher", () => {
+  const registry = buildProviderRegistry(logger, {
+    providerOverrides: {
+      grokbuild: {
+        command: ["custom-grok", "agent", "stdio"],
+        env: { XAI_API_KEY: "secret" },
+      },
+    },
+  });
+
+  expect(registry.grokbuild.createClient(logger).provider).toBe("grokbuild");
+  expect(mockState.constructorArgs.grokbuild.at(-1)).toMatchObject({
+    runtimeSettings: {
+      command: {
+        mode: "replace",
+        argv: ["custom-grok", "agent", "stdio"],
+      },
+      env: { XAI_API_KEY: "secret" },
+    },
+  });
 });
 
 test("includes mock provider only for development builds", () => {

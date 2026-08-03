@@ -299,6 +299,17 @@ export class ClaudeAgentSession implements AgentSession {
     return this.toolCallHandler.buildToolOutput(block, entry);
   }
 
+  routeSdkMessageFromPump(message: SDKMessage): void {
+    this.messageRouter.routeMessage(message);
+  }
+
+  mapPartialEvent(
+    event: Parameters<ClaudeSessionHistory["mapPartialEvent"]>[0],
+    options?: Parameters<ClaudeSessionHistory["mapPartialEvent"]>[1],
+  ): AgentTimelineItem[] {
+    return this.historyController.mapPartialEvent(event, options);
+  }
+
   // Compatibility surface for focused query lifecycle regression tests.
   private get query(): Query | null {
     return this.queryLifecycle.getCurrentQuery();

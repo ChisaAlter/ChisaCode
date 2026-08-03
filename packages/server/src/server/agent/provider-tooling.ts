@@ -65,6 +65,11 @@ const PROVIDER_TOOLING: Record<string, ProviderToolingDefinition> = {
     packageName: "@moonshot-ai/kimi-code",
     installArgs: ["install", "-g", "@moonshot-ai/kimi-code@latest"],
   },
+  grokbuild: {
+    binary: "grok",
+    packageName: "@xai-official/grok",
+    installArgs: ["install", "-g", "@xai-official/grok@latest"],
+  },
 };
 
 export function isProviderToolingSupported(provider: AgentProvider): boolean {

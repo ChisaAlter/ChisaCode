@@ -123,6 +123,12 @@ vi.mock("react-native-unistyles", () => {
       create: (factory: unknown) => (typeof factory === "function" ? factory(theme) : factory),
     },
     useUnistyles: () => ({ theme }),
+    withUnistyles: (Component: React.ComponentType<Record<string, unknown>>) => {
+      return function ThemedComponent(props: Record<string, unknown>) {
+        const mapped = typeof props.uniProps === "function" ? props.uniProps(theme) : undefined;
+        return <Component {...props} {...mapped} />;
+      };
+    },
   };
 });
 

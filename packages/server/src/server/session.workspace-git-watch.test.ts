@@ -5,7 +5,7 @@ import { createBranchChangeRouteHandler } from "./script-route-branch-handler.js
 import { ScriptRouteStore } from "./script-proxy.js";
 import { Session, type SessionOptions } from "./session.js";
 import { asInternals, createStub } from "./test-utils/class-mocks.js";
-import { createProviderSnapshotManagerStub } from "./test-utils/session-stubs.js";
+import { createProviderSnapshotManagerStub, asAgentManager } from "./test-utils/session-stubs.js";
 import { WorkspaceScriptRuntimeStore } from "./workspace-script-runtime-store.js";
 import type {
   WorkspaceGitListener,
@@ -173,7 +173,7 @@ function createSessionForWorkspaceGitWatchTests(options?: {
     downloadTokenStore: createStub<SessionOptions["downloadTokenStore"]>({}),
     pushTokenStore: createStub<SessionOptions["pushTokenStore"]>({}),
     chisacodeHome: "/tmp/chisacode-test",
-    agentManager: createStub<SessionOptions["agentManager"]>({
+    agentManager: asAgentManager({
       subscribe: () => () => {},
       listAgents: () => [],
       getAgent: () => null,
@@ -231,6 +231,11 @@ function createSessionForWorkspaceGitWatchTests(options?: {
       dispose: () => {},
     }),
     workspaceGitService,
+    daemonConfigStore: {
+      get: vi.fn(() => ({ mcp: { injectIntoAgents: false }, providers: {} })),
+      onChange: vi.fn(() => () => {}),
+      onFieldChange: vi.fn(() => () => {}),
+    },
     mcpBaseUrl: null,
     stt: null,
     tts: null,

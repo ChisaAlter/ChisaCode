@@ -69,6 +69,7 @@ vi.mock("react-native-unistyles", () => ({
   StyleSheet: {
     absoluteFillObject: {},
     create: (styles) => styles,
+    compose: (first, second) => [first, second],
   },
   useUnistyles: () => ({
     theme: {

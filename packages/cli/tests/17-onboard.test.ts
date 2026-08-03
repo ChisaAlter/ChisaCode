@@ -5,6 +5,8 @@ import { readFile, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { $ } from "zx";
+import { installZxWindowsPathCompat } from "./helpers/zx-path-compat.ts";
+installZxWindowsPathCompat();
 import { getAvailablePort } from "./helpers/network.ts";
 
 $.verbose = false;

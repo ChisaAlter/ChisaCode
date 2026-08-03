@@ -11,6 +11,8 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { $ } from "zx";
+import { installZxWindowsPathCompat } from "./helpers/zx-path-compat.ts";
+installZxWindowsPathCompat();
 import { tryConnectToDaemon } from "../src/utils/client.ts";
 import { getAvailablePort } from "./helpers/network.ts";
 
@@ -120,6 +122,13 @@ async function waitFor(
 }
 
 console.log("=== Daemon Restart (supervisor regression) ===\n");
+
+if (process.platform === "win32") {
+  console.log(
+    "Skipping restart supervisor regression on Windows (worker PID discovery requires ps)",
+  );
+  process.exit(0);
+}
 
 const port = await getAvailablePort();
 const chisacodeHome = await mkdtemp(join(tmpdir(), "chisacode-restart-supervisor-"));

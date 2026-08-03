@@ -4,7 +4,7 @@ For AI coding agents working in `packages/server`. Supplements [CLAUDE.md](../..
 
 ## Project Overview
 
-ChisaCode is a local-first app for monitoring and controlling local AI coding agents. The built-in providers are Claude, Codex, OpenCode, MiMoCode, Pi, and Kimi Code. The daemon runs on your machine, manages agent processes, and streams their output over WebSocket to clients.
+ChisaCode is a local-first app for monitoring and controlling local AI coding agents. The built-in providers are Claude, Codex, OpenCode, MiMoCode, Pi, Kimi Code, and Grok Build. The daemon runs on your machine, manages agent processes, and streams their output over WebSocket to clients.
 
 ---
 

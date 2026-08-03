@@ -27,8 +27,8 @@ describe("createAppI18n", () => {
   it("uses the five product theme names in Chinese", () => {
     const i18n = createAppI18n("zh-CN");
 
-    expect(i18n.t("settings.general.theme.options.light")).toBe("Blockchain Light");
-    expect(i18n.t("settings.general.theme.options.dark")).toBe("Cyber Dark");
+    expect(i18n.t("settings.general.theme.options.light")).toBe("Soft Light");
+    expect(i18n.t("settings.general.theme.options.dark")).toBe("Soft Dark");
     expect(i18n.t("settings.general.theme.options.liquid-neon")).toBe("Liquid Glass");
     expect(i18n.t("settings.general.theme.options.chisaki")).toBe("Chisaki");
     expect(i18n.t("settings.general.theme.options.aemeath")).toBe("Aemeath");
@@ -38,8 +38,8 @@ describe("createAppI18n", () => {
   it("uses the five product theme names in English", () => {
     const i18n = createAppI18n("en");
 
-    expect(i18n.t("settings.general.theme.options.light")).toBe("Blockchain Light");
-    expect(i18n.t("settings.general.theme.options.dark")).toBe("Cyber Dark");
+    expect(i18n.t("settings.general.theme.options.light")).toBe("Soft Light");
+    expect(i18n.t("settings.general.theme.options.dark")).toBe("Soft Dark");
     expect(i18n.t("settings.general.theme.options.liquid-neon")).toBe("Liquid Glass");
     expect(i18n.t("settings.general.theme.options.chisaki")).toBe("Chisaki");
     expect(i18n.t("settings.general.theme.options.aemeath")).toBe("Aemeath");

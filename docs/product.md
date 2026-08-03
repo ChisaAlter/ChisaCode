@@ -70,7 +70,7 @@ Anyone who builds software:
 ## Current code state
 
 - Desktop (Electron), mobile (iOS/Android), web, CLI
-- Built-in providers: Claude, Codex, OpenCode, MiMoCode, Pi, and Kimi Code
+- Built-in providers: Claude, Codex, OpenCode, MiMoCode, Pi, Kimi Code, and Grok Build
 - Custom providers can extend a built-in provider or use `extends: "acp"` for Agent Client Protocol commands
 - Voice mode: dictate prompts or talk through problems hands-free
 - MCP server exposes the daemon to other agents (create_agent, send_agent_prompt, schedules, terminals, worktrees)

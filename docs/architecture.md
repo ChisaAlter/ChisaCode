@@ -245,7 +245,7 @@ read the capped final assistant text. The companion token is not persisted.
 
 Each provider implements the `AgentClient` interface in `agent/agent-sdk-types.ts`. Provider implementations live in `agent/providers/`.
 
-The built-in, user-facing providers are Claude, Codex, OpenCode, MiMoCode, Pi, and Kimi Code. Additional adapters exist in the same directory for generic ACP-compatible agents and internal use:
+The built-in, user-facing providers are Claude, Codex, OpenCode, MiMoCode, Pi, Kimi Code, and Grok Build. Additional adapters exist in the same directory for generic ACP-compatible agents and internal use:
 
 | Provider           | Wraps                                | Session format                                     |
 | ------------------ | ------------------------------------ | -------------------------------------------------- |
@@ -255,6 +255,7 @@ The built-in, user-facing providers are Claude, Codex, OpenCode, MiMoCode, Pi, a
 | MiMoCode           | MiMoCode server / CLI                | Provider-managed                                   |
 | Pi                 | Local Pi RPC process                 | Provider-managed                                   |
 | Kimi Code          | Kimi ACP command                     | Provider-managed                                   |
+| Grok Build         | Grok Build ACP command               | Provider-managed                                   |
 | Generic ACP        | Configured ACP command               | Provider-managed                                   |
 | Mock load test     | In-process fake                      | In-memory                                          |
 

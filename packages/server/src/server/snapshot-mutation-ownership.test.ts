@@ -7,7 +7,7 @@ import { Session } from "./session.js";
 import type { SessionOptions } from "./session.js";
 import { createTestChisaCodeDaemon } from "./test-utils/chisacode-daemon.js";
 import { asInternals, createStub } from "./test-utils/class-mocks.js";
-import { createProviderSnapshotManagerStub } from "./test-utils/session-stubs.js";
+import { createProviderSnapshotManagerStub, asAgentManager } from "./test-utils/session-stubs.js";
 
 interface SessionInternals {
   archiveAgentForClose(agentId: string): Promise<{ archivedAt: string }>;
@@ -93,7 +93,7 @@ describe("snapshot mutation ownership boundary", () => {
         downloadTokenStore: createStub<SessionOptions["downloadTokenStore"]>({}),
         pushTokenStore: createStub<SessionOptions["pushTokenStore"]>({}),
         chisacodeHome: "/tmp/chisacode-test",
-        agentManager: createStub<SessionOptions["agentManager"]>({
+        agentManager: asAgentManager({
           subscribe: () => () => {},
           listAgents: () => [],
           getAgent: () => null,
@@ -124,6 +124,11 @@ describe("snapshot mutation ownership boundary", () => {
           archive: async () => {},
           remove: async () => {},
         }),
+        daemonConfigStore: {
+          get: vi.fn(() => ({ mcp: { injectIntoAgents: false }, providers: {} })),
+          onChange: vi.fn(() => () => {}),
+          onFieldChange: vi.fn(() => () => {}),
+        },
         createAgentMcpTransport: async () => {
           throw new Error("not used");
         },

@@ -4,11 +4,8 @@
  * Handles provider list/snapshot/diagnostic/tooling RPC requests.
  */
 
-import { homedir } from "node:os";
-
 import { CLIENT_CAPS } from "@chisacode/protocol/client-capabilities";
 
-import { expandTilde } from "../../utils/path.js";
 import { getErrorMessage } from "@chisacode/protocol/error-utils";
 import { runSyntheticModelTest } from "../model-gateway/model-gateway.js";
 import { createDaemonDiagnosticReport } from "../diagnostics-report.js";
@@ -18,6 +15,7 @@ import type {
   AgentSessionConfig,
   ProviderSnapshotEntry,
 } from "../agent/agent-sdk-types.js";
+import { resolveSnapshotCwd as resolveManagerSnapshotCwd } from "../agent/provider-snapshot-manager.js";
 import type { ProviderHandlerContext, DisposableHandler } from "./session-context.js";
 
 const LEGACY_MODE_ICONS = new Set<string>([
@@ -28,19 +26,56 @@ const LEGACY_MODE_ICONS = new Set<string>([
 ]);
 
 function resolveSnapshotCwd(cwd: string | undefined): string {
-  return cwd ?? homedir();
+  return resolveManagerSnapshotCwd(cwd);
 }
 
 /** Handles provider list/snapshot/diagnostic, mode/feature/command discovery, presets, and model gateway test RPC operations. */
 export class ProviderHandler implements DisposableHandler {
   private readonly context: ProviderHandlerContext;
+  private unsubscribeProviderSnapshotEvents: (() => void) | null = null;
 
   constructor(context: ProviderHandlerContext) {
     this.context = context;
   }
 
+  start(): void {
+    if (this.unsubscribeProviderSnapshotEvents) {
+      return;
+    }
+
+    const handleProviderSnapshotChange = (entries: ProviderSnapshotEntry[], cwd: string) => {
+      try {
+        // COMPAT(providersSnapshot): keep provider visibility gating for older clients.
+        const visibleEntries = entries.filter((entry) =>
+          this.isProviderVisibleToClient(entry.provider),
+        );
+        const snapshotCwd = cwd === resolveSnapshotCwd(undefined) ? undefined : cwd;
+        this.context.emit({
+          type: "providers_snapshot_update",
+          payload: {
+            ...(snapshotCwd ? { cwd: snapshotCwd } : {}),
+            entries: this.downgradeEntryModesForClient(visibleEntries),
+            generatedAt: new Date().toISOString(),
+          },
+        });
+      } catch (error) {
+        this.context.sessionLogger.warn(
+          { err: error, cwd },
+          "Failed to publish provider snapshot update",
+        );
+      }
+    };
+
+    this.context.providerSnapshotManager.on("change", handleProviderSnapshotChange);
+    this.unsubscribeProviderSnapshotEvents = () => {
+      this.context.providerSnapshotManager.off("change", handleProviderSnapshotChange);
+    };
+  }
+
   dispose(): void {
-    // No subscriptions or timers to clean up.
+    const unsubscribe = this.unsubscribeProviderSnapshotEvents;
+    this.unsubscribeProviderSnapshotEvents = null;
+    unsubscribe?.();
   }
 
   // --- Provider visibility & client downgrade helpers ---
@@ -114,7 +149,7 @@ export class ProviderHandler implements DisposableHandler {
   }): AgentSessionConfig {
     return {
       provider: draftConfig.provider,
-      cwd: expandTilde(draftConfig.cwd),
+      cwd: resolveSnapshotCwd(draftConfig.cwd),
       ...(draftConfig.modeId ? { modeId: draftConfig.modeId } : {}),
       ...(draftConfig.model ? { model: draftConfig.model } : {}),
       ...(draftConfig.thinkingOptionId ? { thinkingOptionId: draftConfig.thinkingOptionId } : {}),
@@ -128,7 +163,7 @@ export class ProviderHandler implements DisposableHandler {
   async handleListProviderModelsRequest(
     msg: Extract<SessionInboundMessage, { type: "list_provider_models_request" }>,
   ): Promise<void> {
-    const cwd = resolveSnapshotCwd(msg.cwd ? expandTilde(msg.cwd) : undefined);
+    const cwd = resolveSnapshotCwd(msg.cwd);
     const fetchedAt = new Date().toISOString();
     const entry = await this.getProviderSnapshotEntryForRead(cwd, msg.provider);
     if (!entry) {
@@ -175,7 +210,7 @@ export class ProviderHandler implements DisposableHandler {
     msg: Extract<SessionInboundMessage, { type: "list_provider_modes_request" }>,
   ): Promise<void> {
     const fetchedAt = new Date().toISOString();
-    const cwd = resolveSnapshotCwd(msg.cwd ? expandTilde(msg.cwd) : undefined);
+    const cwd = resolveSnapshotCwd(msg.cwd);
     const entry = await this.getProviderSnapshotEntryForRead(cwd, msg.provider);
     if (!entry) {
       this.context.emit({
@@ -282,12 +317,14 @@ export class ProviderHandler implements DisposableHandler {
   async handleGetProvidersSnapshotRequest(
     msg: Extract<SessionInboundMessage, { type: "get_providers_snapshot_request" }>,
   ): Promise<void> {
+    const requestedCwd = msg.cwd?.trim() ? resolveSnapshotCwd(msg.cwd) : undefined;
     const entries = this.context.providerSnapshotManager
-      .getSnapshot(msg.cwd ? expandTilde(msg.cwd) : undefined)
+      .getSnapshot(requestedCwd)
       .filter((entry) => this.isProviderVisibleToClient(entry.provider));
     this.context.emit({
       type: "get_providers_snapshot_response",
       payload: {
+        cwd: requestedCwd,
         entries: this.downgradeEntryModesForClient(entries),
         generatedAt: new Date().toISOString(),
         requestId: msg.requestId,
@@ -301,7 +338,7 @@ export class ProviderHandler implements DisposableHandler {
   ): Promise<void> {
     if (msg.cwd) {
       await this.context.providerSnapshotManager.refreshSnapshotForCwd({
-        cwd: expandTilde(msg.cwd),
+        cwd: resolveSnapshotCwd(msg.cwd),
         providers: msg.providers,
       });
     } else {

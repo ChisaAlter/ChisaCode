@@ -25,6 +25,7 @@ The built-in provider manifest currently declares:
 - MiMoCode
 - Pi
 - Kimi Code
+- Grok Build
 
 See [Supported providers](/docs/supported-providers) for IDs and install links.
 
@@ -38,7 +39,11 @@ Custom providers live in `agents.providers` inside ChisaCode config.
 
 See [Custom providers](/docs/custom-providers) for examples and field reference.
 
-## Where to go next
+## Provider status and troubleshooting
+
+Provider discovery is cached per home/workspace scope. Settings may briefly show Loading while a cold scope is probed, then converges to Available, Error, or Unavailable. An available command with no discovered models is still a valid ready state. Refresh preserves cached models while it probes; use Retry after a query, network, permissions, version, or authentication failure.
+
+For Pi, install the CLI and configure authentication in Pi's normal `~/.pi/agent/auth.json` location. Pi model providers and gateway profiles remain Pi configuration; ChisaCode only supplies the configured launch environment and isolates gateway model metadata when needed. Open provider details and choose Diagnostic for command, model-discovery, auth, and MCP information. The CLI `provider inspect` path is useful for daemon-side troubleshooting. Do not include secrets in copied diagnostics or logs.
 
 - [Supported providers](/docs/supported-providers), the current built-in provider list.
 - [Custom providers](/docs/custom-providers), profiles, custom binaries, model overrides, and generic ACP commands.

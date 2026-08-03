@@ -9,6 +9,8 @@
  */
 
 import { $ } from "zx";
+import { installZxWindowsPathCompat } from "./helpers/zx-path-compat.ts";
+installZxWindowsPathCompat();
 
 $.verbose = false;
 

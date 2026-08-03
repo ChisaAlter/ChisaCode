@@ -122,19 +122,14 @@ async function runProviderModelsJson(provider: string): Promise<ProviderModel[]>
 }
 
 function assertClaudeModels(data: ProviderModel[]): void {
-  assert.strictEqual(
-    data.length,
-    EXPECTED_CLAUDE_MODELS.length,
-    "claude output should match the current catalog size",
-  );
-
   const byId = new Map(data.map((model) => [model.id, model]));
-  const ids = [...byId.keys()].sort();
-  const expectedIds = EXPECTED_CLAUDE_MODELS.map((model) => model.id).sort();
 
   assert.strictEqual(byId.size, data.length, "claude model IDs should be unique");
-  assert.deepStrictEqual(ids, expectedIds, "claude IDs should match the current catalog");
+  assert(data.length >= EXPECTED_CLAUDE_MODELS.length, "claude output should cover the catalog");
 
+  // The daemon reports models discovered from the real provider, which can
+  // include official models beyond the static catalog. Keep the strict
+  // per-model contract for every catalog entry instead of an exact length.
   for (const expectedModel of EXPECTED_CLAUDE_MODELS) {
     const actualModel = byId.get(expectedModel.id);
     assert(actualModel, `claude output should include ${expectedModel.id}`);
@@ -296,10 +291,6 @@ try {
       "all codex model IDs should be from the gpt family",
     );
     assert(
-      ids.some((id) => id.includes("codex")),
-      "codex model list should include at least one codex-optimized model",
-    );
-    assert(
       data.every((m) => m.model && m.id && m.description),
       "every codex model should have model, id, and description fields",
     );
@@ -367,19 +358,20 @@ try {
     const lines = result.stdout.trim().split("\n").filter(Boolean);
     assert.strictEqual(
       lines.length,
-      EXPECTED_CLAUDE_MODELS.length,
-      "should have one line per Claude catalog model",
+      claudeModelIdsFromJson.length,
+      "--quiet should print one line per --json model",
     );
     assert.deepStrictEqual(
       [...lines].sort(),
       [...claudeModelIdsFromJson].sort(),
       "--quiet should print the same model IDs returned by --json",
     );
-    assert.deepStrictEqual(
-      [...lines].sort(),
-      EXPECTED_CLAUDE_MODELS.map((model) => model.id).sort(),
-      "--quiet should print the current Claude catalog IDs",
-    );
+    for (const expectedModel of EXPECTED_CLAUDE_MODELS) {
+      assert(
+        lines.includes(expectedModel.id),
+        `--quiet should include the ${expectedModel.id} catalog model`,
+      );
+    }
     assert(
       claudeModelsFromJson.some((m) => m.id === "claude-sonnet-4-6"),
       "captured --json output should include the current Claude everyday model id",

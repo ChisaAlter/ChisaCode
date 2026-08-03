@@ -15,6 +15,7 @@ import {
 import type { ModelGatewayConfigs } from "./agent/provider-launch-config.js";
 import type { ProviderOverride } from "./agent/provider-launch-config.js";
 import { ensurePrivateFile, writePrivateFileSync } from "./private-files.js";
+import { BUILTIN_PROVIDER_IDS } from "@chisacode/protocol/provider-manifest";
 
 export const LogLevelSchema = z.enum(["trace", "debug", "info", "warn", "error", "fatal"]);
 export const LogFormatSchema = z.enum(["pretty", "json"]);
@@ -154,7 +155,6 @@ const AgentMetadataGenerationSchema = z
   })
   .strict();
 
-const BUILTIN_PROVIDER_IDS = ["claude", "codex", "opencode", "mimocode", "pi", "kimi"] as const;
 const PersistedProviderOverridesSchema = ProviderOverridesSchema;
 
 function isLegacyProviderEntry(value: unknown): boolean {

@@ -1,7 +1,7 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { rm } from "node:fs/promises";
 
 import { createTestLogger } from "../../../test-utils/test-logger.js";
 import { AgentManager } from "../agent-manager.js";
@@ -179,9 +179,10 @@ describe("MockLoadTestAgentClient", () => {
   test("agent manager coalesces adjacent assistant tokens into fewer messages", async () => {
     vi.useFakeTimers();
     const workdir = mkdtempSync(join(tmpdir(), "chisacode-mock-load-test-"));
+    let manager: AgentManager | undefined;
     try {
       const client = new MockLoadTestAgentClient();
-      const manager = new AgentManager({
+      manager = new AgentManager({
         clients: { mock: client },
         idFactory: () => "00000000-0000-4000-8000-000000000001",
         logger: createTestLogger(),
@@ -235,7 +236,15 @@ describe("MockLoadTestAgentClient", () => {
         .map((item) => (item.type === "tool_call" ? item.name : ""));
       expect(runningTools).toEqual(expect.arrayContaining(["read", "grep", "edit", "bash"]));
     } finally {
-      rmSync(workdir, { recursive: true, force: true });
+      if (manager) {
+        for (const activeAgent of manager.listAgents()) {
+          if (activeAgent.lifecycle !== "closed") {
+            await manager.closeAgent(activeAgent.id).catch(() => undefined);
+          }
+        }
+        await manager.flush();
+      }
+      await rm(workdir, { recursive: true, force: true, maxRetries: 30, retryDelay: 50 });
     }
   });
 });

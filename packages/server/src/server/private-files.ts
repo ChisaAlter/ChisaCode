@@ -59,7 +59,17 @@ export function writePrivateFileAtomicSync(
     // expose an empty file at the target path.
     const fd = openSync(tmpPath, "r");
     try {
-      fsyncSync(fd);
+      try {
+        fsyncSync(fd);
+      } catch (error) {
+        const code = (error as NodeJS.ErrnoException).code;
+        const unsupportedOnWindows =
+          process.platform === "win32" &&
+          (code === "EPERM" || code === "EINVAL" || code === "ENOTSUP");
+        if (!unsupportedOnWindows) {
+          throw error;
+        }
+      }
     } finally {
       closeSync(fd);
     }

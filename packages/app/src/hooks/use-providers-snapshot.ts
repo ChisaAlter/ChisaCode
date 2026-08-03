@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import type { AgentProvider, ProviderSnapshotEntry } from "@chisacode/protocol/agent-types";
 import type { DaemonClient } from "@chisacode/client/internal/daemon-client";
@@ -32,6 +32,35 @@ export interface ProvidersSnapshotUpdateMessage {
   };
 }
 
+interface ProvidersSnapshotCacheData {
+  cwd?: string;
+  entries: ProviderSnapshotEntry[];
+  generatedAt: string;
+  requestId: string;
+}
+
+function canonicalSnapshotCwd(cwd: string | undefined): string | null {
+  return normalizeProvidersSnapshotCwd(cwd);
+}
+
+function cacheProvidersSnapshotResponse(input: {
+  queryClient: QueryClient;
+  serverId: string;
+  requestedCwd: string | null;
+  snapshot: GetProvidersSnapshotResult;
+}): void {
+  const responseCwd = canonicalSnapshotCwd(input.snapshot.cwd);
+  const requestedCwd = normalizeProvidersSnapshotCwd(input.requestedCwd);
+  const responseKey = responseCwd ? providersSnapshotQueryKey(input.serverId, responseCwd) : null;
+  const requestedKey = providersSnapshotQueryKey(input.serverId, requestedCwd);
+
+  // A workspace response without cwd is from an older daemon. Keep it under
+  // the requested alias, but never guess that it belongs to the home scope.
+  if (responseKey) {
+    input.queryClient.setQueryData(responseKey, input.snapshot);
+  }
+  input.queryClient.setQueryData(requestedKey, input.snapshot);
+}
 export async function fetchProvidersSnapshot(input: {
   client: ProvidersSnapshotClient;
   cwd: string | null;
@@ -50,7 +79,12 @@ export async function refreshAndApplyProvidersSnapshot(input: {
     providersSnapshotRequestOptions({ cwd: input.cwd, providers: input.providers }),
   );
   const snapshot = await fetchProvidersSnapshot({ client: input.client, cwd: input.cwd });
-  input.queryClient.setQueryData(providersSnapshotQueryKey(input.serverId, input.cwd), snapshot);
+  cacheProvidersSnapshotResponse({
+    queryClient: input.queryClient,
+    serverId: input.serverId,
+    requestedCwd: input.cwd,
+    snapshot,
+  });
   if (isProvidersSnapshotHomeScope(input.cwd)) {
     void input.queryClient.invalidateQueries({
       queryKey: providersSnapshotQueryRoot(input.serverId),
@@ -64,16 +98,26 @@ export function applyProvidersSnapshotUpdate(input: {
   serverId: string;
   queryClient: QueryClient;
   message: ProvidersSnapshotUpdateMessage;
+  aliasCwd?: string | null;
 }): void {
   if (input.message.type !== "providers_snapshot_update") {
     return;
   }
-  const queryKey = providersSnapshotQueryKey(input.serverId, input.message.payload.cwd);
-  input.queryClient.setQueryData(queryKey, {
+  const canonicalCwd = canonicalSnapshotCwd(input.message.payload.cwd);
+  const data: ProvidersSnapshotCacheData = {
+    ...(input.message.payload.cwd ? { cwd: input.message.payload.cwd } : {}),
     entries: input.message.payload.entries,
     generatedAt: input.message.payload.generatedAt,
     requestId: "providers_snapshot_update",
-  });
+  };
+  const canonicalKey = providersSnapshotQueryKey(input.serverId, canonicalCwd);
+  input.queryClient.setQueryData(canonicalKey, data);
+  if (canonicalCwd !== null && input.aliasCwd !== undefined) {
+    const aliasCwd = normalizeProvidersSnapshotCwd(input.aliasCwd);
+    if (aliasCwd !== canonicalCwd) {
+      input.queryClient.setQueryData(providersSnapshotQueryKey(input.serverId, aliasCwd), data);
+    }
+  }
 }
 
 export type SelectorOpenRefetchDecision = "refetch-stale" | "refresh-now";
@@ -98,6 +142,7 @@ interface UseProvidersSnapshotResult {
   isFetching: boolean;
   isRefreshing: boolean;
   error: string | null;
+  refreshError: string | null;
   supportsSnapshot: boolean;
   refresh: (providers?: AgentProvider[]) => Promise<void>;
   refetchIfStale: (selectedProvider?: AgentProvider | null) => void;
@@ -131,7 +176,14 @@ export function useProvidersSnapshot(
       if (!client) {
         throw new Error("Host is not connected");
       }
-      return fetchProvidersSnapshot({ client, cwd });
+      const snapshot = await fetchProvidersSnapshot({ client, cwd });
+      cacheProvidersSnapshotResponse({
+        queryClient,
+        serverId: serverId!,
+        requestedCwd: cwd,
+        snapshot,
+      });
+      return snapshot;
     },
   });
 
@@ -149,7 +201,26 @@ export function useProvidersSnapshot(
       });
     },
   });
-  const { mutateAsync: refreshSnapshot, isPending: isRefreshing } = refreshMutation;
+  const {
+    mutateAsync: refreshSnapshot,
+    isPending: isRefreshing,
+    error: refreshMutationError,
+  } = refreshMutation;
+
+  const reconnectGeneration = useRef(0);
+
+  useEffect(() => {
+    if (!isConnected || !serverId || !supportsSnapshot) {
+      return;
+    }
+    reconnectGeneration.current += 1;
+    if (reconnectGeneration.current === 1) {
+      return;
+    }
+    void snapshotQuery.refetch();
+    // Query refetch is stable for the lifetime of this query key.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isConnected, serverId, supportsSnapshot, queryKey]);
 
   useEffect(() => {
     if (!enabled || !supportsSnapshot || !client || !isConnected || !serverId) {
@@ -160,9 +231,9 @@ export function useProvidersSnapshot(
       if (message.type !== "providers_snapshot_update") {
         return;
       }
-      applyProvidersSnapshotUpdate({ serverId, queryClient, message });
+      applyProvidersSnapshotUpdate({ serverId, queryClient, message, aliasCwd: cwd });
     });
-  }, [client, enabled, isConnected, queryClient, serverId, supportsSnapshot]);
+  }, [client, cwd, enabled, isConnected, queryClient, serverId, supportsSnapshot]);
 
   const refresh = useCallback(
     async (providers?: AgentProvider[]) => {
@@ -192,6 +263,7 @@ export function useProvidersSnapshot(
     isFetching: snapshotQuery.isFetching,
     isRefreshing,
     error: snapshotQuery.error instanceof Error ? snapshotQuery.error.message : null,
+    refreshError: refreshMutationError instanceof Error ? refreshMutationError.message : null,
     supportsSnapshot,
     refresh,
     refetchIfStale,

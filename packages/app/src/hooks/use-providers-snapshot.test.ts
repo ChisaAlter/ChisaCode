@@ -56,8 +56,12 @@ function createClient(
   };
 }
 
-function providersSnapshot(entries: ProviderSnapshotEntry[]): GetProvidersSnapshotResult {
+function providersSnapshot(
+  entries: ProviderSnapshotEntry[],
+  cwd?: string,
+): GetProvidersSnapshotResult {
   return {
+    ...(cwd ? { cwd } : {}),
     entries,
     generatedAt: "2026-01-01T00:00:00.000Z",
     requestId: "snapshot",
@@ -136,23 +140,40 @@ describe("refreshAndApplyProvidersSnapshot", () => {
     );
   });
 
-  it("refreshes then re-fetches the workspace snapshot with the cwd preserved", async () => {
+  it("stores a pull response under the daemon canonical cwd and requested alias", async () => {
     const client = createClient({
-      snapshots: [providersSnapshot([codexEntry("ready", [readyCodexModel])])],
+      snapshots: [providersSnapshot([codexEntry("ready")], "/server/repo")],
     });
 
     await refreshAndApplyProvidersSnapshot({
       client,
       queryClient,
       serverId,
-      cwd: "/repo-a",
-      providers: ["codex"],
+      cwd: "/client/alias",
     });
 
-    expect(client.refreshCalls).toEqual([{ cwd: "/repo-a", providers: ["codex"] }]);
-    expect(client.getCalls).toEqual([{ cwd: "/repo-a" }]);
-    expect(queryClient.getQueryData(providersSnapshotQueryKey(serverId, "/repo-a"))).toEqual(
-      providersSnapshot([codexEntry("ready", [readyCodexModel])]),
+    expect(queryClient.getQueryData(providersSnapshotQueryKey(serverId, "/server/repo"))).toEqual(
+      providersSnapshot([codexEntry("ready")], "/server/repo"),
+    );
+    expect(queryClient.getQueryData(providersSnapshotQueryKey(serverId, "/client/alias"))).toEqual(
+      providersSnapshot([codexEntry("ready")], "/server/repo"),
+    );
+    expect(queryClient.getQueryData(providersSnapshotQueryKey(serverId))).toBeUndefined();
+  });
+
+  it("does not guess the home scope when a workspace pull omits cwd", async () => {
+    const client = createClient({ snapshots: [providersSnapshot([codexEntry("ready")])] });
+
+    await refreshAndApplyProvidersSnapshot({
+      client,
+      queryClient,
+      serverId,
+      cwd: "/client/alias",
+    });
+
+    expect(queryClient.getQueryData(providersSnapshotQueryKey(serverId))).toBeUndefined();
+    expect(queryClient.getQueryData(providersSnapshotQueryKey(serverId, "/client/alias"))).toEqual(
+      providersSnapshot([codexEntry("ready")]),
     );
   });
 
@@ -232,23 +253,45 @@ describe("applyProvidersSnapshotUpdate", () => {
     });
   });
 
-  it("routes workspace updates to the matching scope without touching siblings", () => {
-    queryClient.setQueryData(providersSnapshotQueryKey(serverId, "/repo-b"), providersSnapshot([]));
-
+  it("routes workspace pushes to the canonical scope and optional alias", () => {
     applyProvidersSnapshotUpdate({
       serverId,
       queryClient,
-      message: updateMessage([codexEntry("ready", [readyCodexModel])], "/repo-a"),
+      aliasCwd: "/client/alias",
+      message: updateMessage([codexEntry("ready")], "/server/repo"),
     });
 
-    expect(queryClient.getQueryData(providersSnapshotQueryKey(serverId, "/repo-a"))).toEqual({
-      entries: [codexEntry("ready", [readyCodexModel])],
+    const expected = {
+      cwd: "/server/repo",
+      entries: [codexEntry("ready")],
+      generatedAt: "2026-01-01T00:00:01.000Z",
+      requestId: "providers_snapshot_update",
+    };
+    expect(queryClient.getQueryData(providersSnapshotQueryKey(serverId, "/server/repo"))).toEqual(
+      expected,
+    );
+    expect(queryClient.getQueryData(providersSnapshotQueryKey(serverId, "/client/alias"))).toEqual(
+      expected,
+    );
+    expect(queryClient.getQueryData(providersSnapshotQueryKey(serverId))).toBeUndefined();
+  });
+
+  it("does not write a workspace alias into home for a cwd-less push", () => {
+    applyProvidersSnapshotUpdate({
+      serverId,
+      queryClient,
+      aliasCwd: "/client/alias",
+      message: updateMessage([codexEntry("ready")]),
+    });
+
+    expect(queryClient.getQueryData(providersSnapshotQueryKey(serverId))).toEqual({
+      entries: [codexEntry("ready")],
       generatedAt: "2026-01-01T00:00:01.000Z",
       requestId: "providers_snapshot_update",
     });
-    expect(queryClient.getQueryData(providersSnapshotQueryKey(serverId, "/repo-b"))).toEqual(
-      providersSnapshot([]),
-    );
+    expect(
+      queryClient.getQueryData(providersSnapshotQueryKey(serverId, "/client/alias")),
+    ).toBeUndefined();
   });
 });
 

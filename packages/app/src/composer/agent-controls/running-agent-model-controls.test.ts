@@ -141,6 +141,11 @@ describe("resolveRunningAgentModelControls", () => {
       rows: [
         expect.objectContaining({
           agentProvider: "grok-4-5-codex",
+          runtimeProvider: "codex",
+          modelId: "gpt-5.4",
+        }),
+        expect.objectContaining({
+          agentProvider: "grok-4-5-codex",
           runtimeProvider: "grok-4-5-codex",
           modelId: "grok-4.5",
         }),

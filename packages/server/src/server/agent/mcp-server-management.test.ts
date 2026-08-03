@@ -45,6 +45,7 @@ describe("listManagedMcpServers", () => {
       { type: "provider", provider: "mimocode", label: "MiMoCode" },
       { type: "provider", provider: "kimi", label: "Kimi Code" },
       { type: "provider", provider: "pi", label: "Pi" },
+      { type: "provider", provider: "grokbuild", label: "Grok Build" },
     ]);
   });
 

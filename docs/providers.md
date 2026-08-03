@@ -8,18 +8,21 @@ ChisaCode also supports user-defined providers through config. For runtime confi
 
 The shared provider manifest currently exposes these user-facing built-ins:
 
-| ID         | Label     | Integration shape                          |
-| ---------- | --------- | ------------------------------------------ |
-| `claude`   | Claude    | direct provider backed by Claude tooling   |
-| `codex`    | Codex     | direct provider backed by Codex app-server |
-| `opencode` | OpenCode  | direct provider backed by OpenCode         |
-| `mimocode` | MiMoCode  | OpenCode-compatible provider               |
-| `pi`       | Pi        | direct provider backed by Pi RPC           |
-| `kimi`     | Kimi Code | ACP-backed provider                        |
+| ID          | Label      | Integration shape                          |
+| ----------- | ---------- | ------------------------------------------ |
+| `claude`    | Claude     | direct provider backed by Claude tooling   |
+| `codex`     | Codex      | direct provider backed by Codex app-server |
+| `opencode`  | OpenCode   | direct provider backed by OpenCode         |
+| `mimocode`  | MiMoCode   | OpenCode-compatible provider               |
+| `pi`        | Pi         | direct provider backed by Pi RPC           |
+| `kimi`      | Kimi Code  | ACP-backed provider                        |
+| `grokbuild` | Grok Build | ACP-backed provider                        |
 
 Development-only providers are `mock` and `mock-slow`.
 
 Custom provider config may derive from any built-in provider ID above, or from the special `acp` value for a generic Agent Client Protocol command.
+
+Grok Build is implemented as a built-in ACP provider. Its default launcher is `grok agent stdio`; models and modes are discovered from the Grok Build runtime.
 
 ## Integration Patterns
 
@@ -45,7 +48,7 @@ The generic ACP client handles process spawning, initialization, session creatio
 
 ### Built-in ACP Provider
 
-Use a built-in ACP provider when the runtime needs first-class defaults or provider-specific behavior. The current built-in ACP-backed provider is Kimi Code.
+Use a built-in ACP provider when the runtime needs first-class defaults or provider-specific behavior. The current built-in ACP-backed providers are Kimi Code and Grok Build.
 
 Create a provider class that wraps the ACP base client or a specialized ACP client, then register it in the provider registry and shared manifest.
 
@@ -139,13 +142,13 @@ Do not run full test suites locally unless explicitly asked.
 
 ## Provider Snapshot Rules
 
-The daemon keeps provider snapshots per resolved working directory. Missing or blank cwd resolves to the user's home directory.
+The daemon keeps provider snapshots per resolved working directory. Missing or blank cwd resolves to the user's home directory. A cold read can return `loading` while discovery runs, but it must be followed by a terminal `ready`, `error`, or `unavailable` update. A command that exists with no discovered models is `ready` with an empty model list; missing commands, runtime failures, and discovery/refresh failures are distinct diagnostic states.
 
-Snapshot reads may probe providers only while the requested cwd scope is cold. Warm entries stay cached until an explicit refresh. Do not add TTL revalidation, focus-triggered refresh, selector-open refresh, or config-reload refresh.
+The Settings page receives both pull responses and `providers_snapshot_update` pushes. Home updates omit `cwd`; workspace updates carry the server-resolved canonical cwd. Refresh retains cached models and modes while probing, and a failed refresh is retryable instead of becoming an endless loading state.
 
-Settings refresh is the user-facing "forget stale provider knowledge everywhere" action. It clears provider snapshot caches and in-flight loads across all cwd scopes, then immediately refreshes only the home-directory snapshot with `force: true`.
+Settings refresh invalidates all established cwd scopes and immediately force-refreshes the home scope. Existing workspace scopes are re-warmed on their next pull or active query. Registry/config replacement updates metadata without starting provider processes; explicit refresh is the only probing path.
 
-Registry/config replacement may update visible metadata such as label, description, default mode, enabled state, and provider membership, but it must not spawn provider processes. Route provider re-probing through explicit refresh paths.
+For Pi, install `@earendil-works/pi-coding-agent` and authenticate it with `~/.pi/agent/auth.json` or the credentials supported by your Pi setup. Model providers and gateway models are configured by Pi's model configuration and the environment passed by ChisaCode. ChisaCode's Pi diagnostics report command availability, model discovery, auth-related failures, and MCP probe state separately. Use Settings → provider details → Refresh/Retry, then the Diagnostic action; the CLI `provider inspect` command is useful when the daemon is unavailable. Never paste auth tokens or full environment values into diagnostics.
 
 ## Custom Provider Behavior
 

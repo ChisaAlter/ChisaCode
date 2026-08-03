@@ -1,5 +1,14 @@
-import { createHash } from "node:crypto";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { createHash, randomUUID } from "node:crypto";
+import {
+  chmodSync,
+  closeSync,
+  fsyncSync,
+  mkdirSync,
+  openSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
@@ -53,8 +62,43 @@ function writeManagedPiModelsJson(agentDir: string, baseUrl: string): void {
       },
     },
   };
-  writeFileSync(modelsPath, `${JSON.stringify(payload, null, 2)}\n`, {
-    encoding: "utf8",
-    mode: 0o600,
-  });
+  const tempPath = join(agentDir, `.${process.pid}.${randomUUID()}.models.json.tmp`);
+  const content = `${JSON.stringify(payload, null, 2)}\n`;
+  let fd: number | undefined;
+  try {
+    writeFileSync(tempPath, content, { encoding: "utf8", mode: 0o600 });
+    fd = openSync(tempPath, "r");
+    try {
+      fsyncSync(fd);
+    } catch (error) {
+      // Windows and some filesystems do not support fsync for this handle.
+      // The temp-file + same-directory rename remains atomic, so only treat
+      // known unsupported durability errors as best-effort.
+      const code = (error as NodeJS.ErrnoException).code;
+      if (process.platform !== "win32" || !["EPERM", "EINVAL", "ENOTSUP"].includes(code ?? "")) {
+        throw error;
+      }
+    } finally {
+      closeSync(fd);
+      fd = undefined;
+    }
+    renameSync(tempPath, modelsPath);
+    if (process.platform !== "win32") {
+      try {
+        chmodSync(modelsPath, 0o600);
+      } catch {
+        // Keep launch resilient on filesystems without POSIX chmod support.
+      }
+    }
+  } catch (error) {
+    if (fd !== undefined) {
+      try {
+        closeSync(fd);
+      } catch {
+        // ignore cleanup errors
+      }
+    }
+    rmSync(tempPath, { force: true });
+    throw error;
+  }
 }

@@ -10,6 +10,7 @@ import {
   MutableDaemonConfigSchema,
   MutableDaemonConfigPatchSchema,
 } from "@chisacode/protocol/messages";
+import { BUILTIN_PROVIDER_IDS } from "@chisacode/protocol/provider-manifest";
 
 export type { MutableDaemonConfig, MutableDaemonConfigPatch } from "@chisacode/protocol/messages";
 
@@ -17,7 +18,7 @@ type MutableDaemonConfig = import("@chisacode/protocol/messages").MutableDaemonC
 type MutableDaemonConfigPatch = import("@chisacode/protocol/messages").MutableDaemonConfigPatch;
 type ProviderOverride = import("./agent/provider-launch-config.js").ProviderOverride;
 
-const MUTABLE_PROVIDER_IDS = new Set(["claude", "codex", "opencode", "mimocode", "pi", "kimi"]);
+const MUTABLE_PROVIDER_IDS = new Set(BUILTIN_PROVIDER_IDS);
 
 interface LoggerLike {
   child(bindings: Record<string, unknown>): LoggerLike;

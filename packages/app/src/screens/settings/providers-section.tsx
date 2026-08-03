@@ -43,6 +43,7 @@ const chevronIdleColorMapping = (theme: Theme) => ({ color: theme.colors.foregro
 
 type ProviderDefinition = ReturnType<typeof buildProviderDefinitions>[number];
 type ProviderEntry = NonNullable<ReturnType<typeof useProvidersSnapshot>["entries"]>[number];
+type ProviderStatusReason = NonNullable<ProviderEntry["statusReason"]>;
 
 type StatusTone = "success" | "warning" | "danger" | "muted" | "loading";
 
@@ -58,20 +59,47 @@ function getProviderStatus(
   enabled: boolean,
   modelCount: number,
   installedVersion: string | null | undefined,
+  statusReason: ProviderStatusReason | undefined,
   t: TFunction,
 ): ProviderStatus {
-  let versionLabel: string | null = null;
-  if (installedVersion) {
-    versionLabel = `v${installedVersion}`;
-  } else if (status === "unavailable") {
-    versionLabel = t("providers.notInstalled");
-  }
+  const versionLabel = installedVersion ? `v${installedVersion}` : null;
+  const reasonLabel = (fallbackKey: string): string => {
+    switch (statusReason) {
+      case "disabled":
+        return t("providers.disabled");
+      case "command_unavailable":
+        return t("providers.commandUnavailable");
+      case "runtime_unavailable":
+        return t("providers.runtimeUnavailable");
+      case "model_discovery_failed":
+        return t("providers.modelDiscoveryFailed");
+      case "refresh_failed":
+        return t("providers.refreshFailed");
+      case "configuration_changed":
+        return t("providers.configurationChanged");
+      default:
+        return t(fallbackKey);
+    }
+  };
   if (!enabled)
     return { tone: "muted", label: t("providers.disabled"), modelCount: null, versionLabel };
   if (status === "loading")
-    return { tone: "loading", label: t("providers.loading"), modelCount: null, versionLabel };
+    return {
+      tone: "loading",
+      label:
+        statusReason === "configuration_changed"
+          ? t("providers.configurationChanged")
+          : t("providers.loading"),
+      modelCount: null,
+      versionLabel,
+    };
   if (status === "error")
-    return { tone: "danger", label: t("providers.error"), modelCount: null, versionLabel };
+    return {
+      tone: "danger",
+      label: reasonLabel("providers.error"),
+      modelCount: null,
+      versionLabel,
+    };
   if (status === "ready") {
     return {
       tone: "success",
@@ -80,7 +108,12 @@ function getProviderStatus(
       versionLabel,
     };
   }
-  return { tone: "warning", label: t("providers.missing"), modelCount: null, versionLabel };
+  return {
+    tone: "warning",
+    label: reasonLabel("providers.missing"),
+    modelCount: null,
+    versionLabel,
+  };
 }
 
 interface ProviderRowProps {
@@ -123,6 +156,7 @@ function ProviderRow({
     enabled,
     modelCount,
     entry.installedVersion,
+    entry.statusReason,
     t,
   );
 
@@ -152,9 +186,10 @@ function ProviderRow({
     },
     [client, def.id, reportError, t, toolingAction],
   );
-  const canInstall = entry.installAvailable === true || entry.status === "unavailable";
-  const canUpdate = entry.updateAvailable === true;
+  const canInstall = enabled && entry.installAvailable === true;
+  const canUpdate = enabled && entry.updateAvailable === true;
   const canReinstall =
+    enabled &&
     Boolean(entry.packageName) &&
     Boolean(entry.installedVersion) &&
     entry.versionStatus !== "not-installed";
@@ -434,11 +469,97 @@ export interface ProvidersSectionProps {
   serverId: string;
 }
 
+function ProviderSnapshotStatusView({
+  hasServer,
+  isConnected,
+  supportsSnapshot,
+  isLoading,
+  isFetching,
+  error,
+  refreshError,
+  onRetry,
+  connectLabel,
+  unsupportedLabel,
+  loadingLabel,
+  retryLabel,
+}: {
+  hasServer: boolean;
+  isConnected: boolean;
+  supportsSnapshot: boolean;
+  isLoading: boolean;
+  isFetching: boolean;
+  error: string | null;
+  refreshError: string | null;
+  onRetry: () => void;
+  connectLabel: string;
+  unsupportedLabel: string;
+  loadingLabel: string;
+  retryLabel: string;
+}) {
+  if (!hasServer || !isConnected) {
+    return (
+      <View style={EMPTY_CARD_STYLE}>
+        <Text style={styles.emptyText}>{connectLabel}</Text>
+      </View>
+    );
+  }
+  if (!supportsSnapshot) {
+    return (
+      <View style={EMPTY_CARD_STYLE}>
+        <Text style={styles.emptyText}>{unsupportedLabel}</Text>
+      </View>
+    );
+  }
+  if (isLoading) {
+    return (
+      <View style={EMPTY_CARD_STYLE}>
+        <Text style={styles.emptyText}>{loadingLabel}</Text>
+      </View>
+    );
+  }
+  if (error) {
+    return (
+      <View style={EMPTY_CARD_STYLE}>
+        <Text style={styles.errorText}>{error}</Text>
+        <Pressable
+          onPress={onRetry}
+          disabled={isFetching}
+          accessibilityRole="button"
+          accessibilityLabel={retryLabel}
+          style={styles.actionButton}
+        >
+          {isFetching ? <ThemedLoadingSpinner size={14} uniProps={accentColorMapping} /> : null}
+          <Text style={styles.actionLabel}>{retryLabel}</Text>
+        </Pressable>
+      </View>
+    );
+  }
+  if (refreshError) {
+    return (
+      <View style={EMPTY_CARD_STYLE}>
+        <Text style={styles.errorText}>{refreshError}</Text>
+        <Pressable
+          onPress={onRetry}
+          disabled={isFetching}
+          accessibilityRole="button"
+          accessibilityLabel={retryLabel}
+          style={styles.actionButton}
+        >
+          {isFetching ? <ThemedLoadingSpinner size={14} uniProps={accentColorMapping} /> : null}
+          <Text style={styles.actionLabel}>{retryLabel}</Text>
+        </Pressable>
+      </View>
+    );
+  }
+  return null;
+}
+
 export function ProvidersSection({ serverId }: ProvidersSectionProps) {
   const { t } = useTranslation();
   const reportError = useUserVisibleErrorReporter();
   const isConnected = useHostRuntimeIsConnected(serverId);
-  const { entries, isLoading } = useProvidersSnapshot(serverId);
+  const { entries, isLoading, isFetching, error, refresh, refreshError, supportsSnapshot } =
+    useProvidersSnapshot(serverId);
   const { patchConfig } = useDaemonConfig(serverId);
   const openProviderSettings = useProviderSettingsStore((state) => state.open);
   const [pendingProviderId, setPendingProviderId] = useState<string | null>(null);
@@ -453,13 +574,14 @@ export function ProvidersSection({ serverId }: ProvidersSectionProps) {
     [openProviderSettings, serverId],
   );
   const handleToggleEnabled = useCallback(
-    async (providerId: string, enabled: boolean) => {
+    async (providerId: string, nextEnabled: boolean) => {
       setPendingProviderId(providerId);
       try {
-        await patchConfig({ providers: { [providerId]: { enabled } } });
-      } catch (error) {
+        await patchConfig({ providers: { [providerId]: { enabled: nextEnabled } } });
+        await refresh([providerId]);
+      } catch (patchError) {
         reportError({
-          error,
+          error: patchError,
           logLabel: `[ProvidersSettings] Failed to update provider ${providerId}`,
           fallbackMessage: t("providers.updateFailed"),
         });
@@ -467,8 +589,11 @@ export function ProvidersSection({ serverId }: ProvidersSectionProps) {
         setPendingProviderId((current) => (current === providerId ? null : current));
       }
     },
-    [patchConfig, reportError, t],
+    [patchConfig, refresh, reportError, t],
   );
+  const handleRetry = useCallback(() => {
+    void refresh().catch(() => undefined);
+  }, [refresh]);
 
   return (
     <SettingsSection
@@ -476,17 +601,27 @@ export function ProvidersSection({ serverId }: ProvidersSectionProps) {
       testID="host-page-providers-card"
       style={styles.sectionSpacing}
     >
-      {!hasServer || !isConnected ? (
-        <View style={EMPTY_CARD_STYLE}>
-          <Text style={styles.emptyText}>{t("providers.connectToView")}</Text>
-        </View>
-      ) : null}
-      {hasServer && isConnected && isLoading ? (
-        <View style={EMPTY_CARD_STYLE}>
-          <Text style={styles.emptyText}>{t("common.loading")}</Text>
-        </View>
-      ) : null}
-      {hasServer && isConnected && !isLoading && providerDefinitions.length > 0 ? (
+      <ProviderSnapshotStatusView
+        hasServer={hasServer}
+        isConnected={isConnected}
+        supportsSnapshot={supportsSnapshot}
+        isLoading={isLoading}
+        isFetching={isFetching}
+        error={error}
+        refreshError={refreshError}
+        onRetry={handleRetry}
+        connectLabel={t("providers.connectToView")}
+        unsupportedLabel={t("providers.unsupported")}
+        loadingLabel={t("common.loading")}
+        retryLabel={t("common.retry")}
+      />
+      {hasServer &&
+      isConnected &&
+      supportsSnapshot &&
+      !isLoading &&
+      !error &&
+      !refreshError &&
+      providerDefinitions.length > 0 ? (
         <View style={settingsStyles.card}>
           {providerDefinitions.map((def, index) => {
             const entry = entries?.find((candidate) => candidate.provider === def.id);

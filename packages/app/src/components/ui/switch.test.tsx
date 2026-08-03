@@ -31,6 +31,7 @@ vi.mock("react-native-reanimated", () => ({
 }));
 
 vi.mock("react-native", () => ({
+  Platform: { OS: "web" },
   StyleSheet: {
     create: (styles: unknown) => styles,
   },
@@ -74,6 +75,7 @@ vi.mock("react-native-unistyles", () => ({
     create: (factory: unknown) => (typeof factory === "function" ? factory(theme) : factory),
   },
   useUnistyles: () => ({ theme }),
+  withUnistyles: (Component: unknown) => Component,
 }));
 
 describe("Switch", () => {

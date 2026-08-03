@@ -2,7 +2,7 @@
 
 ChisaCode is a local-first app for monitoring and controlling local AI coding agents from desktop, mobile, web, and CLI clients. It connects to your actual development environment; your code stays on your machine.
 
-**Built-in providers:** Claude, Codex, OpenCode, MiMoCode, Pi, and Kimi Code. Custom providers can extend those providers or use `extends: "acp"` for Agent Client Protocol commands.
+**Built-in providers:** Claude, Codex, OpenCode, MiMoCode, Pi, Kimi Code, and Grok Build. Custom providers can extend those providers or use `extends: "acp"` for Agent Client Protocol commands.
 
 ## Repository map
 
