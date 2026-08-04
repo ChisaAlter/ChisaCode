@@ -89,19 +89,22 @@ AGENTS.md 第 41/49 行要求系统性问题建独立 roadmap 条目：
 
 这些是审查发现的实质实现问题，涉及行为变更但范围可控。
 
-### 2.1 Slice C：从「乐观 id 扫 store」迁移到「快照契约」
+### 2.1 Slice C：发送时快照契约（双流版 LocalDispatch）
 
-- **问题**：`composer/index.tsx:321-347` 在 `submitMessage` 后扫描 store 找乐观 id，依赖 `dispatchComposerAgentMessage` 在首个 `await` 前同步完成 stream append。若有人插入 `await`，锚定与 busy 快释放静默失效。
-- **T3 做法**：`beginLocalDispatch` 主动写入 `LocalDispatchSnapshot`（拍发送瞬间的 `Thread` 投影快照），ack = 快照字段 vs 当前投影 diff。多信号短路（approval/input/error + turn 时间戳 + session 状态），不依赖 id 相等，不依赖对账中间逻辑。
-- **ChisaCode 现状**：`useComposerSendProjectionAck` 记乐观 id → `hasServerAdoptedOptimisticUserMessage` 扫 tail+head 找同 id 非 optimistic。单信号，无短路兜底。
-- **修复方案**（对齐 T3 但不引入 Thread 投影依赖）：
-  1. `dispatchComposerAgentMessage` 返回乐观 `messageId`（而非事后扫描）——消除隐式同步契约
-  2. `hasServerAdoptedOptimisticUserMessage` 纯函数内补多信号短路：permission_requested / turn_failed / agent lifecycle error → 立即 ack（防卡死）
-  3. 补 turn 进展兜底：若 tail 中出现新的 `turn_started` 或 `turn_completed` 且 ordinal 超过乐观消息位置 → ack（即使 id 不匹配，turn 已推进说明消息被收下）
-  4. 保留同 id 精确匹配作为主信号（mock provider 回显路径）
-- **影响**：`packages/app/src/composer/actions.ts`（返回 messageId）、`packages/app/src/composer/index.tsx`（用返回值替代扫描）、`packages/app/src/timeline/session-stream-reducers.ts`（补短路）、`packages/app/src/composer/use-composer-send-projection-ack.ts`（消费返回值）、对应单测
-- **门禁**：`use-composer-send-projection-ack.test.tsx` 新增多信号短路用例；`turn-anchor.spec.ts` Slice C 断言不回归
-- **优先级**：P1（中等改动，消除最大脆弱点）
+- **问题**：事后扫 store 找乐观 id 依赖隐式同步契约；真实 provider 不回显 messageId 时同 id 判定永不命中。
+- **T3 做法**：`beginLocalDispatch` 写入 `LocalDispatchSnapshot`，ack = 快照 vs 当前投影字段 diff + 多信号短路。
+- **ChisaCode 落地（生产路径，非 stub）**：
+  1. `dispatchComposerAgentMessage` 在 stream append 后同步 `onOptimisticDispatched(messageId)`（不 await 后再扫 store）
+  2. `trackPendingSend` 构建 `ComposerSendSnapshot`：`optimisticMessageId` + `baselineLatestUserMessageId` + `baselineAgentStatus`
+  3. `hasServerAcknowledgedComposerSend` 多信号 ack：
+     - permission / agent error 短路
+     - 非 idle 基线后回到 idle/closed 短路
+     - 同 id canonical 投影（messageId 回显路径）
+     - **latest canonical user id 越过 send baseline**（真实 provider id 漂移路径）
+     - 乐观条目后的 turn progress（assistant/tool/thought/activity）
+- **影响**：`session-stream-reducers.ts`、`use-composer-send-projection-ack.ts`、`actions.ts`、`delivery-controller.ts`、`index.tsx` + 单测
+- **门禁**：snapshot/ack 单测 + hook 单测；turn-anchor Slice C 不回归
+- **优先级**：P1
 
 ### 2.2 Slice B：`maxScroll<=0` 无限 rAF 防护
 
@@ -215,13 +218,13 @@ AGENTS.md 第 41/49 行要求系统性问题建独立 roadmap 条目：
 
 ### 5.2 阶段二：P1（已完成，2026-08-04）
 
-| 项                           | 改动                                                                                 | 状态                |
-| ---------------------------- | ------------------------------------------------------------------------------------ | ------------------- |
-| 2.1 Slice C 返回 id + 多信号 | `dispatch` 同步 `onOptimisticDispatched`；permission/error 短路 + turn-progress 兜底 | ✅ unit 125/125     |
-| 2.2 maxScroll<=0 防护        | `TURN_ANCHOR_NO_OVERFLOW_ATTEMPT_MAX=60` + 测试                                      | ✅ controller 22/22 |
-| 2.3 折叠按钮文案             | 展开 `Show fewer` / 折叠 `+N`；e2e locator 同步                                      | ✅                  |
-| 2.4 messageId schema         | `z.string().max(256)` on send schemas                                                | ✅                  |
-| 2.5 mock-slow 测试           | opt-in on/off 断言                                                                   | ✅ registry 40/40   |
+| 项                       | 改动                                                                                                         | 状态                  |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------ | --------------------- |
+| 2.1 Slice C 发送快照契约 | `ComposerSendSnapshot` + `hasServerAcknowledgedComposerSend`（permission/error/idle/id-drift/turn-progress） | ✅ reducers+hook 单测 |
+| 2.2 maxScroll<=0 防护    | `TURN_ANCHOR_NO_OVERFLOW_ATTEMPT_MAX=60` + 测试                                                              | ✅ controller 22/22   |
+| 2.3 折叠按钮文案         | 展开 `Show fewer` / 折叠 `+N`；e2e locator 同步                                                              | ✅                    |
+| 2.4 messageId schema     | `z.string().max(256)` on send schemas                                                                        | ✅                    |
+| 2.5 mock-slow 测试       | opt-in on/off 断言                                                                                           | ✅ registry 40/40     |
 
 ### 5.2.1 改动后门禁复跑证据（2026-08-04）
 
@@ -238,7 +241,7 @@ AGENTS.md 第 41/49 行要求系统性问题建独立 roadmap 条目：
 ## 6. 风险与回滚
 
 - **P0 零风险**：门禁基建 + 文档，不改实现行为
-- **P1.1（Slice C 快照契约）中等风险**：涉及 composer + reducers 多文件，需充分单测。回滚 = 恢复乐观 id 扫描（git revert）
+- **P1.1（Slice C 发送快照契约）中等风险**：涉及 composer + reducers 多文件，需充分单测。回滚 = 恢复仅同 id adoption（git revert）
 - **P1.2（maxScroll 防护）低风险**：仅加上限，不改变正常路径。回滚 = 删除 `noOverflowAttemptCount`
 - **P1.3（折叠文案）低风险**：纯 UI。回滚 = 恢复恒 `+N`
 - **P1.4（schema）低风险**：加宽约束。回滚 = 删除 `.max(256)`

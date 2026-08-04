@@ -8,6 +8,8 @@ import {
 } from "@/types/stream";
 import {
   createAgentStreamReducerQueue,
+  createComposerSendSnapshot,
+  hasServerAcknowledgedComposerSend,
   hasServerAdoptedOptimisticUserMessage,
   processTimelineResponse,
   processAgentStreamEvent,
@@ -1919,5 +1921,169 @@ describe("hasServerAdoptedOptimisticUserMessage", () => {
         head: [],
       }),
     ).toBe(false);
+  });
+});
+
+describe("hasServerAcknowledgedComposerSend", () => {
+  it("returns false without a snapshot", () => {
+    expect(
+      hasServerAcknowledgedComposerSend({
+        snapshot: null,
+        tail: [],
+        head: [],
+        agentStatus: "running",
+        hasPendingPermission: false,
+      }),
+    ).toBe(false);
+  });
+
+  it("short-circuits on pending permission", () => {
+    const snapshot = createComposerSendSnapshot({
+      optimisticMessageId: "opt-1",
+      tail: [],
+      head: [makeOptimisticUserMessage("hi", "opt-1")],
+      agentStatus: "running",
+    });
+    expect(
+      hasServerAcknowledgedComposerSend({
+        snapshot,
+        tail: [],
+        head: [makeOptimisticUserMessage("hi", "opt-1")],
+        agentStatus: "running",
+        hasPendingPermission: true,
+      }),
+    ).toBe(true);
+  });
+
+  it("short-circuits on agent error", () => {
+    const snapshot = createComposerSendSnapshot({
+      optimisticMessageId: "opt-1",
+      tail: [],
+      head: [makeOptimisticUserMessage("hi", "opt-1")],
+      agentStatus: "running",
+    });
+    expect(
+      hasServerAcknowledgedComposerSend({
+        snapshot,
+        tail: [],
+        head: [makeOptimisticUserMessage("hi", "opt-1")],
+        agentStatus: "error",
+        hasPendingPermission: false,
+      }),
+    ).toBe(true);
+  });
+
+  it("short-circuits when agent returns to idle after a non-idle send baseline", () => {
+    const snapshot = createComposerSendSnapshot({
+      optimisticMessageId: "opt-1",
+      tail: [],
+      head: [makeOptimisticUserMessage("hi", "opt-1")],
+      agentStatus: "running",
+    });
+    expect(snapshot.baselineAgentStatus).toBe("running");
+    expect(
+      hasServerAcknowledgedComposerSend({
+        snapshot,
+        tail: [],
+        head: [makeOptimisticUserMessage("hi", "opt-1")],
+        agentStatus: "idle",
+        hasPendingPermission: false,
+      }),
+    ).toBe(true);
+  });
+
+  it("does not idle-short-circuit when send baseline was already idle", () => {
+    const snapshot = createComposerSendSnapshot({
+      optimisticMessageId: "opt-1",
+      tail: [],
+      head: [makeOptimisticUserMessage("hi", "opt-1")],
+      agentStatus: "idle",
+    });
+    expect(
+      hasServerAcknowledgedComposerSend({
+        snapshot,
+        tail: [],
+        head: [makeOptimisticUserMessage("hi", "opt-1")],
+        agentStatus: "idle",
+        hasPendingPermission: false,
+      }),
+    ).toBe(false);
+  });
+
+  it("acknowledges same-id canonical projection", () => {
+    const optimistic = makeOptimisticUserMessage("hi", "opt-1");
+    const snapshot = createComposerSendSnapshot({
+      optimisticMessageId: "opt-1",
+      tail: [],
+      head: [optimistic],
+      agentStatus: "running",
+    });
+    const canonical: Extract<StreamItem, { kind: "user_message" }> = {
+      kind: "user_message",
+      id: "opt-1",
+      text: "hi",
+      timestamp: new Date(2000),
+    };
+    expect(
+      hasServerAcknowledgedComposerSend({
+        snapshot,
+        tail: [canonical],
+        head: [],
+        agentStatus: "running",
+        hasPendingPermission: false,
+      }),
+    ).toBe(true);
+  });
+
+  it("acknowledges when latest canonical user id moves past the send baseline", () => {
+    const baseline: Extract<StreamItem, { kind: "user_message" }> = {
+      kind: "user_message",
+      id: "user-prev",
+      text: "previous",
+      timestamp: new Date(1000),
+    };
+    const optimistic = makeOptimisticUserMessage("next", "opt-new");
+    const snapshot = createComposerSendSnapshot({
+      optimisticMessageId: "opt-new",
+      tail: [baseline],
+      head: [optimistic],
+      agentStatus: "running",
+    });
+    expect(snapshot.baselineLatestUserMessageId).toBe("user-prev");
+    // Real provider projected a different user message id (id drift).
+    const drifted: Extract<StreamItem, { kind: "user_message" }> = {
+      kind: "user_message",
+      id: "server-minted-id",
+      text: "next",
+      timestamp: new Date(2000),
+    };
+    expect(
+      hasServerAcknowledgedComposerSend({
+        snapshot,
+        tail: [baseline, drifted],
+        head: [],
+        agentStatus: "running",
+        hasPendingPermission: false,
+      }),
+    ).toBe(true);
+  });
+
+  it("acknowledges turn progress after the optimistic entry", () => {
+    const optimistic = makeOptimisticUserMessage("hi", "opt-1");
+    const snapshot = createComposerSendSnapshot({
+      optimisticMessageId: "opt-1",
+      tail: [],
+      head: [optimistic],
+      agentStatus: "running",
+    });
+    expect(
+      hasServerAcknowledgedComposerSend({
+        snapshot,
+        tail: [],
+        head: [optimistic, makeAssistantItem("reply")],
+        agentStatus: "running",
+        hasPendingPermission: false,
+      }),
+    ).toBe(true);
   });
 });

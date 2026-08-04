@@ -10,7 +10,7 @@
 | ----------------------------------- | -------------------------------------------------------------------------------------------- | ---------- |
 | Slice A 锚定几何纯函数              | `agent-stream/turn-anchor-metrics.ts` + 17 测试                                              | ✅         |
 | Slice B 新回合锚定滚动（web）       | `turn-anchor-controller.ts`（21 测试）+ strategy-web/native/view/agent-panel 接线 + e2e spec | ✅         |
-| Slice C projection ack busy         | `hasServerAdoptedOptimisticUserMessage`（6 测试）                                            | ✅         |
+| Slice C projection ack busy         | `ComposerSendSnapshot` + `hasServerAcknowledgedComposerSend`（多信号）                       | ✅         |
 | Slice D 回合/work-log 折叠          | `turn-fold.ts`（7 测试）+ view.tsx 折叠渲染                                                  | ✅         |
 | Slice E web markdown + 高亮缓存策略 | `highlight-cache` `cacheable` 选项（3 新测试）；react-markdown 降级                          | ✅（降级） |
 | 全链门禁                            | typecheck / lint / vitest / Playwright 定向 spec                                             | ✅（见下） |

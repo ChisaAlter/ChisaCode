@@ -32,7 +32,13 @@ function makeCanonicalUserMessage(
   };
 }
 
-function setAgentStream(serverId: string, agentId: string, tail: StreamItem[], head: StreamItem[]) {
+function setAgentStream(
+  serverId: string,
+  agentId: string,
+  tail: StreamItem[],
+  head: StreamItem[],
+  agentStatus: "initializing" | "idle" | "running" | "error" | "closed" | null = "idle",
+) {
   ensureSession(serverId);
   useSessionStore.setState((state) => {
     const session = state.sessions[serverId];
@@ -43,9 +49,38 @@ function setAgentStream(serverId: string, agentId: string, tail: StreamItem[], h
       ...session,
       agentStreamTail: new Map(session.agentStreamTail),
       agentStreamHead: new Map(session.agentStreamHead),
+      agents: new Map(session.agents),
+      pendingPermissions: new Map(session.pendingPermissions),
     };
     nextSession.agentStreamTail.set(agentId, tail);
     nextSession.agentStreamHead.set(agentId, head);
+    if (agentStatus === null) {
+      nextSession.agents.delete(agentId);
+    } else {
+      nextSession.agents.set(agentId, {
+        serverId,
+        id: agentId,
+        provider: "mock",
+        status: agentStatus,
+        createdAt: new Date(0),
+        updatedAt: new Date(0),
+        lastUserMessageAt: null,
+        lastActivityAt: new Date(0),
+        capabilities: {
+          supportsImages: false,
+          supportsTools: false,
+          supportsModes: false,
+          supportsThinking: false,
+        } as never,
+        currentModeId: null,
+        availableModes: [],
+        pendingPermissions: [],
+        persistence: null,
+        title: null,
+        cwd: "/tmp",
+        model: null,
+      } as never);
+    }
     return {
       ...state,
       sessions: { ...state.sessions, [serverId]: nextSession },
@@ -187,5 +222,49 @@ describe("useComposerSendProjectionAck", () => {
     );
     expect(result.current.pendingSendMessageId).toBeNull();
     expect(result.current.isServerAdopted).toBe(false);
+  });
+
+  it("short-circuits when agent errors after a pending send", () => {
+    setAgentStream(SERVER_ID, AGENT_ID, [], [], "running");
+    const { result } = renderHook(() =>
+      useComposerSendProjectionAck({ serverId: SERVER_ID, agentId: AGENT_ID }),
+    );
+    act(() => {
+      result.current.trackPendingSend("optimistic-1");
+    });
+    expect(result.current.isServerAdopted).toBe(false);
+    act(() => {
+      setAgentStream(SERVER_ID, AGENT_ID, [], [makeOptimisticUserMessage("optimistic-1")], "error");
+    });
+    expect(result.current.isServerAdopted).toBe(true);
+  });
+
+  it("builds a send snapshot that acknowledges id-drifted canonical users", () => {
+    setAgentStream(SERVER_ID, AGENT_ID, [], [], "running");
+    const { result } = renderHook(() =>
+      useComposerSendProjectionAck({ serverId: SERVER_ID, agentId: AGENT_ID }),
+    );
+    act(() => {
+      setAgentStream(
+        SERVER_ID,
+        AGENT_ID,
+        [],
+        [makeOptimisticUserMessage("optimistic-1")],
+        "running",
+      );
+      result.current.trackPendingSend("optimistic-1");
+    });
+    expect(result.current.isServerAdopted).toBe(false);
+    act(() => {
+      // Real provider projected a different id (ordinal merge path).
+      setAgentStream(
+        SERVER_ID,
+        AGENT_ID,
+        [makeCanonicalUserMessage("server-minted")],
+        [],
+        "running",
+      );
+    });
+    expect(result.current.isServerAdopted).toBe(true);
   });
 });

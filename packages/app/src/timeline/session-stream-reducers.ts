@@ -296,6 +296,39 @@ function collectOptimisticUserMessages(items: StreamItem[]): Array<{
   return optimistic;
 }
 
+/**
+ * Snapshot of stream/agent state captured at send time (ChisaCode dual-stream
+ * analogue of T3's LocalDispatchSnapshot).
+ *
+ * Ack is computed by comparing this snapshot to the current projection — not
+ * by re-scanning the store for an optimistic id after an async gap.
+ */
+export interface ComposerSendSnapshot {
+  /** Optimistic user message id written at send time */
+  optimisticMessageId: string;
+  /**
+   * Latest already-canonical user message id at send time (excludes the
+   * optimistic entry just appended). Null when this is the first user message.
+   */
+  baselineLatestUserMessageId: string | null;
+  /** Agent lifecycle status at send time */
+  baselineAgentStatus: string | null;
+}
+
+function streamItems(tail: readonly StreamItem[], head: readonly StreamItem[]): StreamItem[] {
+  return [...tail, ...head];
+}
+
+function findLatestCanonicalUserMessageId(items: readonly StreamItem[]): string | null {
+  let latest: string | null = null;
+  for (const item of items) {
+    if (item.kind === "user_message" && !item.optimistic) {
+      latest = item.id;
+    }
+  }
+  return latest;
+}
+
 function streamHasCanonicalUserMessage(
   items: readonly StreamItem[],
   optimisticMessageId: string,
@@ -339,18 +372,99 @@ function streamHasTurnProgressAfterOptimistic(
 }
 
 /**
- * True when the daemon has adopted (canonicalized) an optimistic user message.
+ * Builds a send-time snapshot from the stream after the optimistic entry has
+ * been appended (the production dispatch path calls this from the sync
+ * onOptimisticDispatched callback).
+ * @param optimisticMessageId The optimistic message id just written
+ * @param tail Canonical history tail
+ * @param head Live stream head (includes the optimistic entry)
+ * @param agentStatus Agent lifecycle status at send time
+ */
+export function createComposerSendSnapshot(input: {
+  optimisticMessageId: string;
+  tail: readonly StreamItem[];
+  head: readonly StreamItem[];
+  agentStatus: string | null;
+}): ComposerSendSnapshot {
+  const items = streamItems(input.tail, input.head);
+  let baselineLatestUserMessageId: string | null = null;
+  for (const item of items) {
+    if (item.kind === "user_message" && !item.optimistic && item.id !== input.optimisticMessageId) {
+      baselineLatestUserMessageId = item.id;
+    }
+  }
+  return {
+    optimisticMessageId: input.optimisticMessageId,
+    baselineLatestUserMessageId,
+    baselineAgentStatus: input.agentStatus,
+  };
+}
+
+/**
+ * True when the server has acknowledged a pending send described by `snapshot`.
  *
- * The client renders an optimistic user message immediately after the user
- * hits send; the daemon later projects the same message id into the timeline
- * (`timeline` events / fetch responses) without the `optimistic` marker.
- * Composer "sending" busy state should end once this projection is visible,
- * so the user can steer or send again without waiting for the turn to settle.
- * @param optimisticMessageId The optimistic message id to check, null disables
+ * Multi-signal ack (aligned with T3 LocalDispatch, adapted to dual-stream):
+ * 1. Permission / agent error short circuits
+ * 2. Agent returned to idle after a non-idle send baseline
+ * 3. Same-id canonical projection (messageId echo path)
+ * 4. Latest canonical user message id moved past the send baseline (id-drift path)
+ * 5. Turn progress after the optimistic entry (assistant/tool/thought)
+ *
+ * @param snapshot Send-time snapshot, or null when no send is pending
  * @param tail Canonical history tail
  * @param head Live stream head
- * @param shortCircuit Optional multi-signal short circuits (permission / error / idle)
- * @returns True when the id appears non-optimistically in tail or head, or a short circuit fires
+ * @param agentStatus Current agent lifecycle status
+ * @param hasPendingPermission Whether this agent has a pending permission request
+ */
+export function hasServerAcknowledgedComposerSend(input: {
+  snapshot: ComposerSendSnapshot | null;
+  tail: readonly StreamItem[];
+  head: readonly StreamItem[];
+  agentStatus: string | null;
+  hasPendingPermission: boolean;
+}): boolean {
+  const snapshot = input.snapshot;
+  if (!snapshot) {
+    return false;
+  }
+  if (input.hasPendingPermission) {
+    return true;
+  }
+  if (input.agentStatus === "error") {
+    return true;
+  }
+  // Idle short-circuit only when the send baseline was non-idle (otherwise a
+  // pre-send idle agent would look "acknowledged" immediately).
+  if (
+    snapshot.baselineAgentStatus !== null &&
+    snapshot.baselineAgentStatus !== "idle" &&
+    snapshot.baselineAgentStatus !== "closed" &&
+    (input.agentStatus === "idle" || input.agentStatus === "closed")
+  ) {
+    return true;
+  }
+
+  const items = streamItems(input.tail, input.head);
+  if (streamHasCanonicalUserMessage(items, snapshot.optimisticMessageId)) {
+    return true;
+  }
+
+  // Id-drift path: a new canonical user message appeared that was not the
+  // baseline at send time (real providers that mint their own message ids).
+  const latestCanonicalUserId = findLatestCanonicalUserMessageId(items);
+  if (
+    latestCanonicalUserId !== null &&
+    latestCanonicalUserId !== snapshot.baselineLatestUserMessageId
+  ) {
+    return true;
+  }
+
+  return streamHasTurnProgressAfterOptimistic(items, snapshot.optimisticMessageId);
+}
+
+/**
+ * @deprecated Prefer {@link hasServerAcknowledgedComposerSend} with a send snapshot.
+ * Kept as a thin adapter for call sites that only have an optimistic id.
  */
 export function hasServerAdoptedOptimisticUserMessage(input: {
   optimisticMessageId: string | null;
@@ -365,25 +479,28 @@ export function hasServerAdoptedOptimisticUserMessage(input: {
   if (!input.optimisticMessageId) {
     return false;
   }
-  if (
-    input.shortCircuit?.hasPendingPermission ||
-    input.shortCircuit?.agentErrored ||
-    input.shortCircuit?.agentIdleAfterSend
-  ) {
-    return true;
+  let baselineAgentStatus: string | null = null;
+  let currentAgentStatus: string | null = null;
+  if (input.shortCircuit?.agentErrored) {
+    baselineAgentStatus = "running";
+    currentAgentStatus = "error";
+  } else if (input.shortCircuit?.agentIdleAfterSend) {
+    baselineAgentStatus = "running";
+    currentAgentStatus = "idle";
   }
-  if (streamHasCanonicalUserMessage(input.tail, input.optimisticMessageId)) {
-    return true;
-  }
-  if (streamHasCanonicalUserMessage(input.head, input.optimisticMessageId)) {
-    return true;
-  }
-  // Turn-progress fallback: non-optimistic stream activity after the optimistic
-  // user message means the daemon accepted the turn even if the message id drifted.
-  return streamHasTurnProgressAfterOptimistic(
-    [...input.tail, ...input.head],
-    input.optimisticMessageId,
-  );
+  const snapshot = createComposerSendSnapshot({
+    optimisticMessageId: input.optimisticMessageId,
+    tail: input.tail,
+    head: input.head,
+    agentStatus: baselineAgentStatus,
+  });
+  return hasServerAcknowledgedComposerSend({
+    snapshot,
+    tail: input.tail,
+    head: input.head,
+    agentStatus: currentAgentStatus,
+    hasPendingPermission: Boolean(input.shortCircuit?.hasPendingPermission),
+  });
 }
 
 function mergeCanonicalUserWithOptimistic(
