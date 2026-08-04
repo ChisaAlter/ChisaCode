@@ -379,6 +379,16 @@ async function main(): Promise<void> {
     await sendQueuedMessageNow(page);
     console.log("[desktop-slices] Slice C: busy released, second message queued and flushed");
 
+    // SidebarV2 smoke: the seeded thread row renders in the real Electron
+    // sidebar, and clicking it navigates to the workspace route (same
+    // semantics as the web switchAgentViaSidebar helper). Runs last so the
+    // navigation cannot disturb the B/C/D/E slice assertions above.
+    const threadRow = page.getByTestId(`sidebar-v2-thread-${agent.id}`);
+    await expect(threadRow).toBeVisible({ timeout: 30_000 });
+    await threadRow.click();
+    await expect(page).toHaveURL(/\/workspace\//, { timeout: 60_000 });
+    console.log("[desktop-slices] SidebarV2: thread row click navigated to workspace route");
+
     console.log("[desktop-slices] ALL DESKTOP SLICES PASSED");
   } finally {
     await page?.close().catch(() => undefined);
