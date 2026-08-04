@@ -9,6 +9,30 @@
 
 ## 进行中
 
+### T3 Sidebar V2 左侧栏全量移植（2026-08-03 完成）
+
+- **问题**：ChisaCode 左侧栏与 T3 Code SidebarV2 体感差距大——新会话沉底、worktree slug（如 naive-seahorse）闪现成假项目目录、无搜索/scope 过滤/状态分层
+- **影响范围**：`packages/app/src/sidebar-v2/`（新目录：logic/snooze/shelves/projects/agent-adapter/store + SidebarV2/SidebarV2Row/SidebarV2Menu/SidebarV2Search/SidebarV2ScopeMenu 组件）、`packages/app/src/components/left-sidebar.tsx`（正文换成 SidebarV2，保留外壳/host 切换/置顶区）、`packages/app/src/i18n/index.ts`（sidebarV2 键）、`packages/app/src/utils/sidebar-session-groups.ts`（createdAt 排序、worktree hash 归组、新项前置）
+- **方案**：按 T3 `SidebarV2.tsx` + `Sidebar.logic.ts` + `sidebarProjectGrouping.ts` 移植——active 卡片（状态槽/时长/应退让淡化）→ snoozed shelf（默认收起+唤醒倒计时+Woke）→ settled shelf（默认展开+分页 Show more）、搜索、scope 过滤菜单、上下文菜单全套（settle/snooze 预设/重命名/mark-unread/复制路径分支/删除）、行内改名、项目设置对话框、标签持久化（`chisacode.sidebarSettledAt`/`sidebarSnoozedUntil`/`sidebarSettledOverride`）、自动 settle（3 天）。明确不做（对齐 T3）：拖拽重排、分组头
+- **验证**：92 个 sidebar-v2 单测通过、App typecheck 干净、改动文件 lint 0 错误；桌面端实机启动正常
+- **状态**：完成（待桌面实测反馈）
+
+### T3 消息发送 / AI 回复渲染丝滑移植（2026-08-03 启动，计划评审中）
+
+- **问题**：ChisaCode 的发送与回复渲染在"对话体感"上落后 T3 Code：发送后用户消息直接贴底（T3 是新回合锚定滚动，用户消息停在视口上沿、回复向下生长）；composer busy 绑定 submit Promise 而非服务器投影（T3 用 LocalDispatch 投影 ack，steer/permission/error 都能及时释放）；长会话工具行全展开（T3 折叠已完成回合与 work-log）；web 端 markdown 表现力弱（T3 有路径 chip/表格/details/外链 favicon + Shiki 流式不缓存）。详见 `docs/research/t3code-message-render-ux.md`（代码级全景研究）
+- **影响范围**：`packages/app/src/agent-stream`（turn-anchor 控制器、strategy-web/native、view/model/layout）、`packages/app/src/panels/agent-panel.tsx`、`packages/app/src/composer`（busy 装配）、`packages/app/src/timeline/session-stream-reducers.ts`（projection ack 派生）、`packages/app/src/components/message.tsx` + 新 `assistant-markdown.*` 平台组件；可选 `packages/server` delta 微批
+- **方案**：6 个切片——A 锚定几何纯函数（`turn-anchor-metrics.ts`，0 UI 风险）、B web 新回合锚定滚动（独立 `turn-anchor-controller.ts` 与 bottom-anchor 并行，web 先行 native 不动）、C send projection ack busy（`hasServerAdoptedOptimisticUserMessage` 派生 + 装配层叠加）、D 完成回合/work-log 折叠（`turn-fold.ts` 纯函数）、E web markdown 表现力 + 流式高亮缓存策略（分平台组件，RN 不动）、F 服务端 delta 微批（可选，先采样证明 jank 再做）。详见 `docs/refactors/t3code-message-render-ux-plan.md`
+- **强制门禁**：只跑改动 Vitest 文件（`--bail=1`，无固定 sleep）、App typecheck、改动文件 lint/format；平台验证按切片要求——B/C/D 用真实 web（Playwright 定向 spec），E 必须真实 web + 真实 Electron，不得以 web preview 代替 desktop；native 代码零改动的切片明确声明"未验证 native"；现有 `bottom-anchor-controller.test.ts` / `web-virtualization.test.ts` / reducers 测试全量回归
+- **状态**：Slice A–F 已按计划执行并完成 e2e 验证（分支 `research/t3code-message-render-ux`，2026-08-03/04）——turn-anchor 控制器/度量/折叠纯函数 + web 装配（composer 回调触发锚定、惰性锚行解析、服务器投影 id 变更后回退到末条 user message）、Slice C busy 装配（hook + composer 接线 + queue 路径共用 + 服务端 messageId 回显闭环）、流式高亮不写缓存、work-log 折叠（`turn-fold.ts` + mock 尾置工具模式）。门禁：`turn-anchor.spec.ts`（2 测试）、`work-log-fold.spec.ts`（1 测试，连续 3 轮全绿）、合并回归 5 测试一次通过、`agent-stream-ui.spec.ts` 测试 1、2 全绿；测试 3 为 Soft Home/SidebarV2 迁移造成的分支级预存故障（`openHomeWithProject` 依赖经典 sidebar testid，见审计文档 §2.4）；**桌面验证已完成（2026-08-04）**——真实 Electron 双门禁：dev 模式 `e2e/desktop-slices.script.ts`（3 轮全绿）+ electron-builder 重建 x64 打包产物 `e2e/desktop-packaged-slices.script.ts`（2 轮全绿），B/C/D/E 全绿；新增 server `CHISACODE_ENABLE_DEV_PROVIDERS`（打包/e2e daemon 显式启用 dev-only mock 提供者，生产默认关闭，审计 §3.6）；mock 尾置回合文本加流式代码围栏（Slice E 桌面可观察载体）
+
+### T3 切片 C 投影 ack 的 id 失配（2026-08-03 发现，2026-08-04 修复完成）
+
+- **问题**：`send_agent_message_request` 携带客户端 `messageId`，但 `sendPromptToAgent` 未把它传入 `startAgentRun`——daemon 投影的 canonical user_message 使用服务端生成的 id；客户端 `mergeCanonicalUserWithOptimistic` 按 ordinal 合并后条目 id 变为 canonical id，乐观 id 从流中消失。导致：(a) turn-anchor 的按 id 锚行解析在投影后失效（已用"回退到末条 user message"修复）；(b) Slice C 的 `hasServerAdoptedOptimisticUserMessage`（同 id 检查）在真实链路永不命中，composer busy 状态在整轮 turn 内无法提前释放——单测用同 id 假流通过，真实链路未覆盖
+- **修复**：服务端把客户端 messageId 回显为投影 user_message 的 messageId——`sendPromptToAgent` 将其并入 `runOptions.messageId`（`AgentRunOptions` 字段已存在），mock provider 的 `startTurn` 用 `options.messageId ?? randomUUID()` 投影。客户端按 `messageId` 派生 StreamItem id（`stream.ts` 既有逻辑），同 id 投影后 `hasServerAdoptedOptimisticUserMessage` 命中、锚定精确 id 解析也命中（末条回退保留为真实 provider 的安全网）
+- **影响范围**：`packages/server/src/server/agent/agent-prompt.ts`、`packages/server/src/server/agent/providers/mock-load-test-agent.ts`
+- **门禁（全绿）**：server 单测（mock `session.run(prompt, {messageId})` 投影 item.messageId == 客户端 id）、server e2e（真实 daemon `sendMessage(agentId, text, {messageId})` → `agent_stream` 中 user_message item.messageId == 客户端 id，`vi.waitFor` 轮询）、app ack 单测（同 id 投影 adopted，68 测试全绿）、web e2e（turn-anchor spec 新增"投影后第二轮消息可入队"断言，2 轮全绿；agent-stream-ui 1、2 无回归）
+- **范围边界**：Claude 等真实 provider 不回显——SDK 自行管理消息 uuid（rewind 锚点/去重依赖它），覆盖客户端 id 有破坏 rewind 语义的风险；这些路径继续依赖客户端"末条 user message"锚定回退。状态：完成
+
 ### Provider family model selector regression (2026-08-01 completed)
 
 - **问题**：运行中会话的模型选择器在 derived/gateway provider 命中 exact provider 或基础 provider snapshot 处于 loading/error 时，可能用应用配置模型覆盖原生 Claude/Codex family 模型；snapshot refresh 也会在刷新期间清空已有模型
