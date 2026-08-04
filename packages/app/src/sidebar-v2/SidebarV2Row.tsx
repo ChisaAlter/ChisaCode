@@ -4,6 +4,7 @@ import {
   Text,
   TextInput,
   View,
+  type GestureResponderEvent,
   type PressableStateCallbackType,
   type StyleProp,
   type ViewStyle,
@@ -259,11 +260,27 @@ export function SidebarV2Row({
     [isMultiSelectMode, onModSelect, onPress, onRangeSelect, threadKey, toggleSelected],
   );
 
-  const handlePress = useCallback(() => {
-    // Web multi-select/open is handled solely by onClick to avoid double-firing.
-    if (isWeb) return;
-    activateRow();
-  }, [activateRow]);
+  const handlePress = useCallback(
+    (event?: GestureResponderEvent) => {
+      // RNW 0.21 Pressable swallows a user-supplied onClick (its internal click
+      // handler wins and only invokes onPress), so onPress is the single web
+      // activation path; there is no double-firing to avoid. Modifier keys
+      // arrive on nativeEvent for web mouse events; native taps have none.
+      const native = event?.nativeEvent as
+        | (GestureResponderEvent["nativeEvent"] & {
+            metaKey?: boolean;
+            ctrlKey?: boolean;
+            shiftKey?: boolean;
+          })
+        | undefined;
+      activateRow({
+        metaKey: native?.metaKey,
+        ctrlKey: native?.ctrlKey,
+        shiftKey: native?.shiftKey,
+      });
+    },
+    [activateRow],
+  );
 
   const handlePointerEnter = useCallback(() => setIsHovered(true), []);
   const handlePointerLeave = useCallback(() => setIsHovered(false), []);
@@ -450,29 +467,11 @@ export function SidebarV2Row({
           onPress={handlePress}
           onLongPress={handleLongPress}
           testID={`sidebar-v2-thread-${thread.id}`}
+          aria-selected={isActive}
           accessibilityLabel={
             thread.projectName ? `${thread.projectName}: ${thread.title}` : thread.title
           }
           {...hoverProps}
-          {...(isWeb
-            ? {
-                onClick: (event: {
-                  metaKey?: boolean;
-                  ctrlKey?: boolean;
-                  shiftKey?: boolean;
-                  preventDefault?: () => void;
-                  stopPropagation?: () => void;
-                }) => {
-                  event.preventDefault?.();
-                  event.stopPropagation?.();
-                  activateRow({
-                    metaKey: event.metaKey,
-                    ctrlKey: event.ctrlKey,
-                    shiftKey: event.shiftKey,
-                  });
-                },
-              }
-            : {})}
         >
           {variant === "card" ? renderCard() : renderSlim()}
           {renderVariantAction()}

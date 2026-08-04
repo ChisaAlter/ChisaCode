@@ -63,7 +63,7 @@ export function SidebarV2ScopeMenu({
     <View style={styles.row}>
       <DropdownMenu>
         <DropdownMenuTrigger>
-          <View style={styles.trigger}>
+          <View style={styles.trigger} testID="sidebar-v2-scope-trigger">
             <ThemedIconHost
               Icon={Folder}
               size={ICON_SIZE.sm}

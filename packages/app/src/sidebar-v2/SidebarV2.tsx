@@ -123,6 +123,20 @@ export function SidebarV2({
     return new Date().toISOString();
   }, [snoozeWakeTick]);
 
+  // The app passes the selected agent as `${serverId}:${agentId}` (same key
+  // format the classic sidebar list compared), while the thread model here is
+  // keyed by the bare agent id — normalize so route-driven selection lights
+  // the matching row.
+  const normalizedSelectedAgentId = useMemo(() => {
+    if (!selectedAgentId || !activeServerId) {
+      return selectedAgentId;
+    }
+    const prefix = `${activeServerId}:`;
+    return selectedAgentId.startsWith(prefix)
+      ? selectedAgentId.slice(prefix.length)
+      : selectedAgentId;
+  }, [activeServerId, selectedAgentId]);
+
   useEffect(() => {
     const timer = setInterval(() => setNowMinute(quantizeToMinute(new Date())), 15_000);
     return () => clearInterval(timer);
@@ -219,12 +233,12 @@ export function SidebarV2({
       pageSettledThreads({
         settledThreads: partition.settledThreads,
         settledVisibleCount: uiState?.settledVisibleCount ?? SETTLED_TAIL_INITIAL_COUNT,
-        routeThreadKey: selectedAgentId ?? null,
+        routeThreadKey: normalizedSelectedAgentId ?? null,
         settledShelfExpanded: uiState?.settledShelfExpanded ?? true,
       }),
     [
       partition.settledThreads,
-      selectedAgentId,
+      normalizedSelectedAgentId,
       uiState?.settledVisibleCount,
       uiState?.settledShelfExpanded,
     ],
@@ -238,9 +252,9 @@ export function SidebarV2({
       resolveVisibleSnoozedThreads({
         snoozedThreads: partition.snoozedThreads,
         expanded: uiState?.snoozedShelfExpanded ?? false,
-        selectedAgentId,
+        selectedAgentId: normalizedSelectedAgentId,
       }),
-    [partition.snoozedThreads, selectedAgentId, uiState?.snoozedShelfExpanded],
+    [partition.snoozedThreads, normalizedSelectedAgentId, uiState?.snoozedShelfExpanded],
   );
 
   const orderedVisibleThreads = useMemo(
@@ -280,7 +294,9 @@ export function SidebarV2({
   snoozedThreadKeysRef.current = snoozedThreadKeys;
 
   const routeThreadKey =
-    activeServerId && selectedAgentId ? sidebarV2ThreadKey(activeServerId, selectedAgentId) : null;
+    activeServerId && normalizedSelectedAgentId
+      ? sidebarV2ThreadKey(activeServerId, normalizedSelectedAgentId)
+      : null;
   const routeThreadKeyRef = useRef(routeThreadKey);
   routeThreadKeyRef.current = routeThreadKey;
   const threadByKeyRef = useRef(threadByKey);
@@ -681,7 +697,7 @@ export function SidebarV2({
         thread={thread}
         variant="card"
         variantAction="settle"
-        isActive={selectedAgentId === thread.id}
+        isActive={normalizedSelectedAgentId === thread.id}
         isSelected={selectedThreadKeys.includes(sidebarV2ThreadKey(thread.serverId, thread.id))}
         isMultiSelectMode={isMultiSelectMode}
         isSnoozed={false}
@@ -706,7 +722,7 @@ export function SidebarV2({
       now,
       resolveUnseenCompletion,
       rowHandlers,
-      selectedAgentId,
+      normalizedSelectedAgentId,
       selectedThreadKeys,
       snoozeNow,
     ],
@@ -719,7 +735,7 @@ export function SidebarV2({
         thread={thread}
         variant="slim"
         variantAction="unsnooze"
-        isActive={selectedAgentId === thread.id}
+        isActive={normalizedSelectedAgentId === thread.id}
         isSelected={selectedThreadKeys.includes(sidebarV2ThreadKey(thread.serverId, thread.id))}
         isMultiSelectMode={isMultiSelectMode}
         isSnoozed
@@ -744,7 +760,7 @@ export function SidebarV2({
       now,
       resolveUnseenCompletion,
       rowHandlers,
-      selectedAgentId,
+      normalizedSelectedAgentId,
       selectedThreadKeys,
       snoozeNow,
     ],
@@ -757,7 +773,7 @@ export function SidebarV2({
         thread={thread}
         variant="slim"
         variantAction="unsettle"
-        isActive={selectedAgentId === thread.id}
+        isActive={normalizedSelectedAgentId === thread.id}
         isSelected={selectedThreadKeys.includes(sidebarV2ThreadKey(thread.serverId, thread.id))}
         isMultiSelectMode={isMultiSelectMode}
         isSnoozed={false}
@@ -782,7 +798,7 @@ export function SidebarV2({
       now,
       resolveUnseenCompletion,
       rowHandlers,
-      selectedAgentId,
+      normalizedSelectedAgentId,
       selectedThreadKeys,
       snoozeNow,
     ],

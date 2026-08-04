@@ -59,16 +59,28 @@ export function SidebarV2RowMenu({
   return (
     <ContextMenuContent mobileMode="sheet" minWidth={220}>
       {capabilities.isSettled ? (
-        <ContextMenuItem onSelect={callbacks.onUnsettle} disabled={!capabilities.canUnsettle}>
+        <ContextMenuItem
+          testID="sidebar-v2-menu-unsettle"
+          onSelect={callbacks.onUnsettle}
+          disabled={!capabilities.canUnsettle}
+        >
           {t("sidebarV2.unsettle")}
         </ContextMenuItem>
       ) : (
-        <ContextMenuItem onSelect={callbacks.onSettle} disabled={!capabilities.canSettle}>
+        <ContextMenuItem
+          testID="sidebar-v2-menu-settle"
+          onSelect={callbacks.onSettle}
+          disabled={!capabilities.canSettle}
+        >
           {t("sidebarV2.settle")}
         </ContextMenuItem>
       )}
       {capabilities.isSnoozed ? (
-        <ContextMenuItem onSelect={callbacks.onUnsnooze} disabled={!capabilities.canUnsnooze}>
+        <ContextMenuItem
+          testID="sidebar-v2-menu-wake"
+          onSelect={callbacks.onUnsnooze}
+          disabled={!capabilities.canUnsnooze}
+        >
           {t("sidebarV2.wake")}
         </ContextMenuItem>
       ) : (
@@ -85,24 +97,34 @@ export function SidebarV2RowMenu({
         </>
       )}
       <ContextMenuSeparator />
-      <ContextMenuItem onSelect={callbacks.onRename}>{t("sidebarV2.rename")}</ContextMenuItem>
-      <ContextMenuItem onSelect={callbacks.onRegenerateTitle}>
+      <ContextMenuItem testID="sidebar-v2-menu-rename" onSelect={callbacks.onRename}>
+        {t("sidebarV2.rename")}
+      </ContextMenuItem>
+      <ContextMenuItem
+        testID="sidebar-v2-menu-regenerate-title"
+        onSelect={callbacks.onRegenerateTitle}
+      >
         {t("sidebarV2.regenerateTitle")}
       </ContextMenuItem>
-      <ContextMenuItem onSelect={callbacks.onMarkUnread}>
+      <ContextMenuItem testID="sidebar-v2-menu-mark-unread" onSelect={callbacks.onMarkUnread}>
         {t("sidebarV2.markUnread")}
       </ContextMenuItem>
       <ContextMenuItem
+        testID="sidebar-v2-menu-copy-path"
         onSelect={callbacks.onCopyPath}
         disabled={!thread.worktreePath && !thread.projectKey}
       >
         {t("sidebarV2.copyPath")}
       </ContextMenuItem>
-      <ContextMenuItem onSelect={callbacks.onCopyBranch} disabled={!thread.branch}>
+      <ContextMenuItem
+        testID="sidebar-v2-menu-copy-branch"
+        onSelect={callbacks.onCopyBranch}
+        disabled={!thread.branch}
+      >
         {t("sidebarV2.copyBranch")}
       </ContextMenuItem>
       <ContextMenuSeparator />
-      <ContextMenuItem onSelect={callbacks.onDelete} destructive>
+      <ContextMenuItem testID="sidebar-v2-menu-delete" onSelect={callbacks.onDelete} destructive>
         {t("sidebarV2.delete")}
       </ContextMenuItem>
     </ContextMenuContent>
@@ -120,7 +142,11 @@ function SnoozePresetMenuItem({
 }) {
   const handleSelect = useCallback(() => onSelect(preset), [onSelect, preset]);
   return (
-    <ContextMenuItem onSelect={handleSelect} disabled={disabled}>
+    <ContextMenuItem
+      testID={`sidebar-v2-menu-snooze-${preset.id}`}
+      onSelect={handleSelect}
+      disabled={disabled}
+    >
       {preset.label}
     </ContextMenuItem>
   );
