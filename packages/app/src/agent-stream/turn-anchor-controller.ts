@@ -67,6 +67,12 @@ interface CreateTurnAnchorControllerDriverInput {
 export const TURN_ANCHOR_USER_SCROLL_AWAY_DELTA_PX = 24;
 /** Attempts to position the anchor before giving up (row not measurable yet). */
 export const TURN_ANCHOR_POSITION_ATTEMPT_MAX = 12;
+/**
+ * Bounded retries while content has no scrollable overflow. Without this,
+ * a never-growing reply would re-schedule rAF forever (T3 LegendList path
+ * has no equivalent hazard).
+ */
+export const TURN_ANCHOR_NO_OVERFLOW_ATTEMPT_MAX = 60;
 
 export function createTurnAnchorControllerDriver(
   input: CreateTurnAnchorControllerDriverInput,
@@ -74,6 +80,7 @@ export function createTurnAnchorControllerDriver(
   let mode: TurnAnchorScrollMode = "following-end";
   let pendingRequest: TurnAnchorRequest | null = null;
   let attemptCount = 0;
+  let noOverflowAttemptCount = 0;
   let attemptHandle: unknown = null;
 
   const setModeInternal = (nextMode: TurnAnchorScrollMode) => {
@@ -126,10 +133,16 @@ export function createTurnAnchorControllerDriver(
     const maxScroll = Math.max(0, measurement.scrollLength - measurement.viewportLength);
     if (maxScroll <= 0) {
       // No scrollable overflow yet: the reply has not grown enough for the
-      // row to be positioned. Keep the request pending and retry on the next
-      // frame; handleContentSizeChange re-schedules while the reply grows.
-      attemptCount = 0;
-      attemptHandle = input.scheduleFrame(positionAnchor);
+      // row to be positioned. Retry briefly; give up if content never grows
+      // so we do not schedule rAF forever.
+      if (noOverflowAttemptCount < TURN_ANCHOR_NO_OVERFLOW_ATTEMPT_MAX) {
+        noOverflowAttemptCount += 1;
+        attemptHandle = input.scheduleFrame(positionAnchor);
+      } else {
+        pendingRequest = null;
+        attemptCount = 0;
+        noOverflowAttemptCount = 0;
+      }
       return;
     }
     const delta = Math.min(targetScroll, maxScroll) - measurement.scroll;
@@ -138,6 +151,7 @@ export function createTurnAnchorControllerDriver(
     }
     pendingRequest = null;
     attemptCount = 0;
+    noOverflowAttemptCount = 0;
   };
 
   const scheduleAttempt = () => {
@@ -168,6 +182,7 @@ export function createTurnAnchorControllerDriver(
       cancelPendingAttempt();
       pendingRequest = request;
       attemptCount = 0;
+      noOverflowAttemptCount = 0;
       if (request.reason === "jump-to-end") {
         setModeInternal("following-end");
         pendingRequest = null;
@@ -183,6 +198,7 @@ export function createTurnAnchorControllerDriver(
       cancelPendingAttempt();
       pendingRequest = null;
       attemptCount = 0;
+      noOverflowAttemptCount = 0;
       setModeInternal("free-scrolling");
     },
     handleContentSizeChange(params) {
@@ -190,8 +206,9 @@ export function createTurnAnchorControllerDriver(
         return;
       }
       if (pendingRequest !== null) {
-        // Anchor has not landed yet: content grew while we were waiting for
-        // the row to become measurable, so retry positioning on the next frame.
+        // Content grew while waiting for overflow / measurable row: reset the
+        // no-overflow budget so a short reply that later expands can still pin.
+        noOverflowAttemptCount = 0;
         scheduleAttempt();
         return;
       }
@@ -230,6 +247,7 @@ export function createTurnAnchorControllerDriver(
         cancelPendingAttempt();
         pendingRequest = null;
         attemptCount = 0;
+        noOverflowAttemptCount = 0;
         setModeInternal("following-end");
       }
     },

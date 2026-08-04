@@ -37,8 +37,17 @@ interface UseComposerDeliveryControllerInput {
 
 interface ComposerDeliveryControllerResult {
   runClientSlashCommand: (command: ClientSlashCommand) => boolean;
-  submitMessage: (text: string, attachments: ComposerAttachment[]) => Promise<void>;
+  /**
+   * Submits a message. When the default daemon path is used, resolves to the
+   * optimistic message id; external `onSubmitMessage` paths resolve to null.
+   */
+  submitMessage: (text: string, attachments: ComposerAttachment[]) => Promise<string | null>;
   canSubmitMessage: () => boolean;
+  /**
+   * Registers a synchronous callback for the optimistic message id (fired
+   * immediately after the stream append, before the daemon round-trip).
+   */
+  setOnOptimisticDispatched: (handler: ((messageId: string) => void) | null) => void;
 }
 
 export function useComposerDeliveryController(
@@ -65,8 +74,13 @@ export function useComposerDeliveryController(
   const setAgentStreamTail = useSessionStore((state) => state.setAgentStreamTail);
   const setAgentStreamHead = useSessionStore((state) => state.setAgentStreamHead);
   const agentIdRef = useRef(agentId);
+  const onOptimisticDispatchedRef = useRef<((messageId: string) => void) | null>(null);
   const sendAgentMessageRef = useRef<
-    | ((targetAgentId: string, text: string, attachments: ComposerAttachment[]) => Promise<void>)
+    | ((
+        targetAgentId: string,
+        text: string,
+        attachments: ComposerAttachment[],
+      ) => Promise<string | null>)
     | null
   >(null);
   const onSubmitMessageRef = useRef(onSubmitMessage);
@@ -108,16 +122,16 @@ export function useComposerDeliveryController(
     ],
   );
   const submitMessage = useCallback(
-    async (text: string, submitAttachments: ComposerAttachment[]) => {
+    async (text: string, submitAttachments: ComposerAttachment[]): Promise<string | null> => {
       onMessageSent?.();
       if (onSubmitMessageRef.current) {
         await onSubmitMessageRef.current({ text, attachments: submitAttachments, cwd });
-        return;
+        return null;
       }
       if (!sendAgentMessageRef.current) {
         throw new Error("Host is not connected");
       }
-      await sendAgentMessageRef.current(agentIdRef.current, text, submitAttachments);
+      return await sendAgentMessageRef.current(agentIdRef.current, text, submitAttachments);
     },
     [cwd, onMessageSent],
   );
@@ -134,7 +148,7 @@ export function useComposerDeliveryController(
       targetAgentId: string,
       text: string,
       sendAttachments: ComposerAttachment[],
-    ) => {
+    ): Promise<string | null> => {
       if (!client) {
         throw new Error("Host is not connected");
       }
@@ -144,20 +158,26 @@ export function useComposerDeliveryController(
         setHead: (updater) => setAgentStreamHead(serverId, updater),
         setTail: (updater) => setAgentStreamTail(serverId, updater),
       };
-      await dispatchComposerAgentMessage({
+      const messageId = await dispatchComposerAgentMessage({
         client,
         agentId: targetAgentId,
         text,
         attachments: sendAttachments,
         encodeImages,
         stream,
+        onOptimisticDispatched: (id) => onOptimisticDispatchedRef.current?.(id),
       });
       onAttentionPromptSend?.();
+      return messageId;
     };
   }, [client, onAttentionPromptSend, serverId, setAgentStreamHead, setAgentStreamTail]);
   useEffect(() => {
     onSubmitMessageRef.current = onSubmitMessage;
   }, [onSubmitMessage]);
 
-  return { runClientSlashCommand, submitMessage, canSubmitMessage };
+  const setOnOptimisticDispatched = useCallback((handler: ((messageId: string) => void) | null) => {
+    onOptimisticDispatchedRef.current = handler;
+  }, []);
+
+  return { runClientSlashCommand, submitMessage, canSubmitMessage, setOnOptimisticDispatched };
 }

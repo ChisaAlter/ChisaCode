@@ -221,18 +221,19 @@ async function main(): Promise<void> {
           daemonStatus?.status === "running" &&
           daemonStatus.desktopManaged === true &&
           typeof daemonStatus.listen === "string" &&
-          daemonStatus.listen.length > 0
+          daemonStatus.listen.length > 0 &&
+          typeof daemonStatus.pid === "number"
         );
       },
       120_000,
       "desktop-managed daemon running",
     );
     const daemonStatus = statusHolder.value;
-    if (!daemonStatus) {
-      throw new Error("desktop-managed daemon status missing after poll");
+    if (!daemonStatus || typeof daemonStatus.pid !== "number") {
+      throw new Error("desktop-managed daemon status missing pid after poll");
     }
     console.log("[desktop-packaged] daemon status:", JSON.stringify(daemonStatus).slice(0, 300));
-    daemonPid = daemonStatus.pid ?? null;
+    daemonPid = daemonStatus.pid;
 
     // Seed a mock agent through the desktop-managed daemon and open its route.
     const repo = await createTempGitRepo("packaged-slice-");
@@ -296,7 +297,9 @@ async function main(): Promise<void> {
     // the tool run folds to a "+N" badge once complete, and the streamed
     // fenced code block renders (streaming highlight cache path).
     await submitMessage(page, "End the turn with a tool run.");
-    const moreButton = page.getByRole("button", { name: /Show \d+ more tool calls/ });
+    const moreButton = page.getByRole("button", {
+      name: /Show \d+ more tool calls|Show fewer tool calls/,
+    });
     try {
       await expect(moreButton).toHaveCount(1, { timeout: 60_000 });
     } catch (error) {
@@ -320,6 +323,7 @@ async function main(): Promise<void> {
     await expect(moreButton).toHaveText("+3");
     await moreButton.click();
     await expect(badges).toHaveCount(4, { timeout: 15_000 });
+    await expect(moreButton).toHaveText("Show fewer");
     console.log("[desktop-packaged] Slice D: work-log fold +3 expand -> 4 badges");
 
     await expect(page.getByText("const anchorRef = useRef<FlatList>(null);")).toBeVisible({
@@ -406,10 +410,22 @@ async function main(): Promise<void> {
       ]).catch(() => undefined);
     await boundedClose(() => page?.close().catch(() => undefined) ?? Promise.resolve());
     await boundedClose(() => electronApp?.close().catch(() => undefined) ?? Promise.resolve());
-    await client?.close().catch(() => undefined);
+    await boundedClose(() => client?.close().catch(() => undefined) ?? Promise.resolve());
     if (daemonPid) {
       try {
         spawnSync("taskkill", ["/pid", String(daemonPid), "/T", "/F"], { stdio: "ignore" });
+      } catch {
+        // Best effort.
+      }
+    } else {
+      // Bridge may not have reported a pid; kill packaged node-entrypoint-runner
+      // holders of 6767 so the next run is not blocked.
+      const script =
+        "Get-CimInstance Win32_Process -Filter \"Name='node.exe'\" | " +
+        "Where-Object { $_.CommandLine -like '*node-entrypoint-runner*' } | " +
+        "ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }";
+      try {
+        spawnSync("powershell.exe", ["-NoProfile", "-Command", script], { stdio: "ignore" });
       } catch {
         // Best effort.
       }

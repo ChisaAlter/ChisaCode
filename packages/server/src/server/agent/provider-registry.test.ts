@@ -541,6 +541,11 @@ test("includes mock provider only for development builds or explicit opt-in", ()
     label: "Mock Load Test",
     defaultModeId: "load-test",
   });
+  expect(optInRegistry["mock-slow"]).toMatchObject({
+    id: "mock-slow",
+  });
+  expect(buildProviderRegistry(logger, { enableDevProviders: false })["mock-slow"]).toBeUndefined();
+  expect(buildProviderRegistry(logger)["mock-slow"]).toBeUndefined();
 });
 
 test("built-in override applies command", () => {

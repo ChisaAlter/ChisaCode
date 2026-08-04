@@ -25,6 +25,20 @@
 - **强制门禁**：只跑改动 Vitest 文件（`--bail=1`，无固定 sleep）、App typecheck、改动文件 lint/format；平台验证按切片要求——B/C/D 用真实 web（Playwright 定向 spec），E 必须真实 web + 真实 Electron，不得以 web preview 代替 desktop；native 代码零改动的切片明确声明"未验证 native"；现有 `bottom-anchor-controller.test.ts` / `web-virtualization.test.ts` / reducers 测试全量回归
 - **状态**：Slice A–F 已按计划执行并完成 e2e 验证（分支 `research/t3code-message-render-ux`，2026-08-03/04）——turn-anchor 控制器/度量/折叠纯函数 + web 装配（composer 回调触发锚定、惰性锚行解析、服务器投影 id 变更后回退到末条 user message）、Slice C busy 装配（hook + composer 接线 + queue 路径共用 + 服务端 messageId 回显闭环）、流式高亮不写缓存、work-log 折叠（`turn-fold.ts` + mock 尾置工具模式）。门禁：`turn-anchor.spec.ts`（2 测试）、`work-log-fold.spec.ts`（1 测试，连续 3 轮全绿）、合并回归 5 测试一次通过、`agent-stream-ui.spec.ts` 测试 1、2 全绿；测试 3 为 Soft Home/SidebarV2 迁移造成的分支级预存故障（`openHomeWithProject` 依赖经典 sidebar testid，见审计文档 §2.4）；**桌面验证已完成（2026-08-04）**——真实 Electron 双门禁：dev 模式 `e2e/desktop-slices.script.ts`（3 轮全绿）+ electron-builder 重建 x64 打包产物 `e2e/desktop-packaged-slices.script.ts`（2 轮全绿），B/C/D/E 全绿；新增 server `CHISACODE_ENABLE_DEV_PROVIDERS`（打包/e2e daemon 显式启用 dev-only mock 提供者，生产默认关闭，审计 §3.6）；mock 尾置回合文本加流式代码围栏（Slice E 桌面可观察载体）
 
+### Desktop x64-only packaged rebuild script (`build-x64.js`)（2026-08-04 登记）
+
+- **问题**：T3 桌面打包门禁需要频繁重建 win x64 产物，完整 `packages/desktop/scripts/build.js` 同时打 arm64，耗时长且曾在 arm64 完整性步骤失败。新增 `packages/desktop/scripts/build-x64.js` 镜像 asar-integrity-after-rcedit packager 但仅构建 x64 nsis+zip；该脚本已提交但无 npm script / 文档面包屑，与 `build.js` 的 asar 完整性逻辑必须保持同步，否则打包门禁会静默拿到错误产物
+- **影响范围**：`packages/desktop/scripts/build-x64.js`、`packages/desktop/scripts/build.js`、`packages/app/e2e/desktop-packaged-slices.script.ts`
+- **方案**：在 desktop `package.json` 增加 `build:x64` 入口；在 AGENTS.md 或 desktop README 记录「打包 e2e 用 `node scripts/build-x64.js`」；任何改 `build.js` 的 asar-integrity packager 时必须同步 `build-x64.js`
+- **状态**：已登记（脚本可用，文档/npm 入口待补）
+
+### SidebarV2 / Soft Home e2e testid 迁移（2026-08-04 登记）
+
+- **问题**：Soft Home 重定向 + `left-sidebar` 无条件渲染 SidebarV2 后，经典 `sidebar-project-row-*` / `sidebar-workspace-row-*` 永不出现在 DOM；`openHomeWithProject` / `withWorkspace.navigateTo` 等 helper 依赖这些 testid，阻断 `agent-stream-ui.spec.ts` 测试 3 及至少 7 个 workspace 相关 spec。属 SidebarV2 迁移遗留，非 T3 引入，但阻塞全链 e2e
+- **影响范围**：`packages/app/src/sidebar-v2/`（尤其 `SidebarV2Row`）、`packages/app/e2e/helpers/workspace-setup.ts`、`packages/app/e2e/helpers/with-workspace.ts`、`packages/app/e2e/helpers/sidebar.ts`、依赖 `withWorkspace`/`openHomeWithProject` 的 spec
+- **方案**：为 `SidebarV2Row` 补稳定 `testID`（如 `sidebar-v2-thread-{id}` + 项目名可检索），或把 `withWorkspace.navigateTo` 改为路由直开（`buildHostWorkspaceOpenRoute`，与 `openAgentRoute` 同模式）；更新 helper 后重跑被阻断的 7 个 spec
+- **状态**：进行中（独立于 T3 切片）
+
 ### T3 切片 C 投影 ack 的 id 失配（2026-08-03 发现，2026-08-04 修复完成）
 
 - **问题**：`send_agent_message_request` 携带客户端 `messageId`，但 `sendPromptToAgent` 未把它传入 `startAgentRun`——daemon 投影的 canonical user_message 使用服务端生成的 id；客户端 `mergeCanonicalUserWithOptimistic` 按 ordinal 合并后条目 id 变为 canonical id，乐观 id 从流中消失。导致：(a) turn-anchor 的按 id 锚行解析在投影后失效（已用"回退到末条 user message"修复）；(b) Slice C 的 `hasServerAdoptedOptimisticUserMessage`（同 id 检查）在真实链路永不命中，composer busy 状态在整轮 turn 内无法提前释放——单测用同 id 假流通过，真实链路未覆盖

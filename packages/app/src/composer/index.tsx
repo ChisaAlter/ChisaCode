@@ -298,53 +298,34 @@ export function Composer({
     agentId,
   });
 
-  const { runClientSlashCommand, submitMessage, canSubmitMessage } = useComposerDeliveryController({
-    serverId,
-    agentId,
-    cwd,
-    client,
-    messageInputRef,
-    blurOnSubmit,
-    onSubmitMessage,
-    onClientSlashCommand,
-    onMessageSent,
-    onAttentionPromptSend,
-    clearDraft,
-    setUserInput,
-    setSelectedAttachments,
-    resetSuppression,
-    setSendError,
-    setIsProcessing,
-  });
-  // Track the optimistic message id right after dispatch so busy state
-  // releases on server projection rather than on the whole turn.
-  const submitMessageWithProjectionAck = useCallback(
-    async (text: string, submitAttachments: ComposerAttachment[]) => {
-      const submitPromise = submitMessage(text, submitAttachments);
-      // The optimistic entry is appended synchronously inside submitMessage's
-      // dispatch path; pick it up from the store before awaiting.
-      const session = useSessionStore.getState().sessions[serverId];
-      const tail = session?.agentStreamTail?.get(agentId) ?? [];
-      const head = session?.agentStreamHead?.get(agentId) ?? [];
-      let latestOptimisticId: string | null = null;
-      for (const item of head) {
-        if (item.kind === "user_message" && item.optimistic) {
-          latestOptimisticId = item.id;
-        }
-      }
-      for (const item of tail) {
-        if (item.kind === "user_message" && item.optimistic) {
-          latestOptimisticId = item.id;
-        }
-      }
-      if (latestOptimisticId !== null) {
-        trackPendingSend(latestOptimisticId);
-        onOptimisticMessageDispatched?.(latestOptimisticId);
-      }
-      await submitPromise;
-    },
-    [agentId, onOptimisticMessageDispatched, serverId, submitMessage, trackPendingSend],
-  );
+  // Track the optimistic message id via the dispatch callback (sync after
+  // stream append) so busy-ack / turn-anchor do not re-scan the store.
+  const { runClientSlashCommand, submitMessage, canSubmitMessage, setOnOptimisticDispatched } =
+    useComposerDeliveryController({
+      serverId,
+      agentId,
+      cwd,
+      client,
+      messageInputRef,
+      blurOnSubmit,
+      onSubmitMessage,
+      onClientSlashCommand,
+      onMessageSent,
+      onAttentionPromptSend,
+      clearDraft,
+      setUserInput,
+      setSelectedAttachments,
+      resetSuppression,
+      setSendError,
+      setIsProcessing,
+    });
+  useEffect(() => {
+    setOnOptimisticDispatched((messageId) => {
+      trackPendingSend(messageId);
+      onOptimisticMessageDispatched?.(messageId);
+    });
+    return () => setOnOptimisticDispatched(null);
+  }, [onOptimisticMessageDispatched, setOnOptimisticDispatched, trackPendingSend]);
   const autocomplete = useAgentAutocomplete({
     userInput,
     cursorIndex,
@@ -432,7 +413,7 @@ export function Composer({
     clearSentAttachments,
     runClientSlashCommand,
     canSubmitQueuedMessage: canSubmitMessage,
-    submitMessage: submitMessageWithProjectionAck,
+    submitMessage,
     setSendError,
   });
   const { handleSubmit } = useComposerSubmissionController({
@@ -447,7 +428,7 @@ export function Composer({
     isAgentRunning,
     canSubmitMessage,
     queueMessage,
-    submitMessage: submitMessageWithProjectionAck,
+    submitMessage,
     clearDraft,
     setUserInput,
     setSelectedAttachments,

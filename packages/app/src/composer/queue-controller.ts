@@ -25,7 +25,7 @@ interface UseComposerQueueControllerInput {
   clearSentAttachments: (attachments: readonly ComposerAttachment[]) => void;
   runClientSlashCommand: (command: ClientSlashCommand) => boolean;
   canSubmitQueuedMessage: () => boolean;
-  submitMessage: (text: string, attachments: ComposerAttachment[]) => Promise<void>;
+  submitMessage: (text: string, attachments: ComposerAttachment[]) => Promise<string | null | void>;
   setSendError: Dispatch<SetStateAction<string | null>>;
 }
 
@@ -110,8 +110,9 @@ export function useComposerQueueController(
         agentId,
         messageId: id,
         queue: queueWriter,
-        submitMessage: ({ text, attachments: queuedAttachments }) =>
-          submitMessage(text, queuedAttachments),
+        submitMessage: async ({ text, attachments: queuedAttachments }) => {
+          await submitMessage(text, queuedAttachments);
+        },
       });
       if (result.status === "failed") {
         setSendError(result.errorMessage);

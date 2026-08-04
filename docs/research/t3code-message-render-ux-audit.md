@@ -9,7 +9,7 @@
 | 目标（计划）                        | 交付物                                                                                       | 状态       |
 | ----------------------------------- | -------------------------------------------------------------------------------------------- | ---------- |
 | Slice A 锚定几何纯函数              | `agent-stream/turn-anchor-metrics.ts` + 17 测试                                              | ✅         |
-| Slice B 新回合锚定滚动（web）       | `turn-anchor-controller.ts`（20 测试）+ strategy-web/native/view/agent-panel 接线 + e2e spec | ✅         |
+| Slice B 新回合锚定滚动（web）       | `turn-anchor-controller.ts`（21 测试）+ strategy-web/native/view/agent-panel 接线 + e2e spec | ✅         |
 | Slice C projection ack busy         | `hasServerAdoptedOptimisticUserMessage`（6 测试）                                            | ✅         |
 | Slice D 回合/work-log 折叠          | `turn-fold.ts`（7 测试）+ view.tsx 折叠渲染                                                  | ✅         |
 | Slice E web markdown + 高亮缓存策略 | `highlight-cache` `cacheable` 选项（3 新测试）；react-markdown 降级                          | ✅（降级） |
@@ -22,7 +22,7 @@
 | 文件                                                                                                                                                              | 测试数                | 结果                   |
 | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- | ---------------------- |
 | `turn-anchor-metrics.test.ts`                                                                                                                                     | 17                    | ✅ 17/17               |
-| `turn-anchor-controller.test.ts`                                                                                                                                  | 20                    | ✅ 20/20               |
+| `turn-anchor-controller.test.ts`                                                                                                                                  | 21                    | ✅ 21/21               |
 | `turn-fold.test.ts`                                                                                                                                               | 7                     | ✅ 7/7                 |
 | `session-stream-reducers.test.ts`                                                                                                                                 | 60（含 6 新 ack）     | ✅ 60/60               |
 | `highlight-cache.test.ts`                                                                                                                                         | 12（含 3 新缓存策略） | ✅ 12/12               |
@@ -47,7 +47,7 @@
 - **打包构建门禁** `packages/app/e2e/desktop-packaged-slices.script.ts`：electron-builder 重建 x64 产物（fresh server dist + fresh `expo export` web bundle），解压 `ChisaCode-Setup-1.0.2-x64.zip` 启动真实 `ChisaCode.exe`（`chisacode://app/` 协议 + 桌面自管 daemon `desktopManaged:true`）；`CHISACODE_ENABLE_DEV_PROVIDERS=1` 显式启用 dev 提供者（打包 daemon 强制 `CHISACODE_NODE_ENV=production`，mock 为 dev-only 注册，见 §3.6）；同四切片断言全绿。**连续 2 轮全绿**。
 - 支撑改动：server mock 尾置工具模式新增流式代码围栏（Slice E 可观察载体）；server 新增 `CHISACODE_ENABLE_DEV_PROVIDERS`（打包/e2e 门禁专用，registry 单测覆盖）。
 
-**声明**：native 代码改动仅限 strategy-native 的 `requestTurnAnchor` no-op 分支（行为不变），未声称 native 验证。B/C/D/E 已完成真实 web + 真实 Electron（dev 与打包）双平台门禁。
+**声明**：native 的 `requestTurnAnchor` 委托给既有 bottom-anchor `requestLocalAnchor`（sticky-bottom 语义保留，非 no-op），未声称 native turn-anchor 语义验证。B/C/D/E 已完成真实 web + 真实 Electron（dev 与打包）双平台门禁。
 
 ### 2.3 预存失败（非本次引入，stash 验证）
 
@@ -90,6 +90,7 @@
 - **证据**：`react-markdown` / `remark-gfm` / `rehype-*` / `shiki` 在 `packages/app/package.json` 均不存在
 - **理由**：ChisaCode 已有自研跨端高亮（`@chisacode/highlight` + `HighlightedCodeBlock`）与文件链接解析（`assistant-file-links`）；引入 react-markdown 会新建一条 web-only 渲染路径，破坏 RN 跨端一致性，并带来 lockfile/包体积/安全面变更
 - **落地**：改为对齐 T3 的「流式期间不写高亮缓存」策略（`tokenizeToLines` 增 `cacheable: false` 选项），零新依赖、跨端一致
+- **与 T3 的差异**：T3 在 `isStreaming` 时 **read+write 均跳过**；ChisaCode 流式期间 **只跳过 write，read 仍尝试**（有意微优化——缓存键是完整内容，命中只能是已完成代码块；有单测背书）
 - **后续跟踪**：web-only 表现力（表格/详情/外链 favicon）留作独立路线图项，需产品决策
 
 ### 3.2 Slice D 范围收敛
@@ -99,8 +100,8 @@
 
 ### 3.3 Slice B 架构
 
-- 独立 `turn-anchor-controller`（20 单测），不动 `bottom-anchor-controller`（回归全绿）
-- web 先行；native `requestTurnAnchor` 映射回 sticky-bottom（行为不变）
+- 独立 `turn-anchor-controller`（21 单测），不动 `bottom-anchor-controller`（回归全绿）
+- web 先行；native `requestTurnAnchor` 委托 bottom-anchor `requestLocalAnchor`（sticky-bottom 语义保留）
 - `isTurnAnchorEnabled` 默认 false，可整体关闭
 
 ### 3.4 Slice C 架构
@@ -169,6 +170,6 @@
 - ⚠️ 预存失败 3 文件（Unistyles setup）+ .expo 噪音：均为 stash 验证的预存状态
 - ✅ **桌面（真实 Electron）验证已完成（2026-08-04）**：
   - dev 模式：`e2e/desktop-slices.script.ts`（`_electron.launch` + Metro + 独立 daemon）——Slice B 锚定 / C busy 释放入队 / D 「+3」折叠展开 / E 流式围栏渲染，连续 3 轮全绿
-  - 打包产物：electron-builder 重建 `ChisaCode-Setup-1.0.2-x64`（fresh server dist + fresh `expo export` web bundle——原 08-01 产物不含切片代码，重建后 asar 校验包含尾置工具模式/折叠 UI/`ENABLE_DEV_PROVIDERS`）；`e2e/desktop-packaged-slices.script.ts` 解压并启动真实 `ChisaCode.exe`（`chisacode://app/` + `desktopManaged:true` daemon，`CHISACODE_ENABLE_DEV_PROVIDERS=1`）——同四切片断言全绿，连续 2 轮全绿
+  - 打包产物：electron-builder 重建 `ChisaCode-Setup-1.0.2-x64`（fresh server dist + fresh `expo export` web bundle——原 08-01 产物不含切片代码；**asar 内容需重跑 `node packages/desktop/scripts/build-x64.js` + 解压 asar 复现**，产物本身 gitignored）；`e2e/desktop-packaged-slices.script.ts` 解压并启动真实 `ChisaCode.exe`（`chisacode://app/` + `desktopManaged:true` daemon，`CHISACODE_ENABLE_DEV_PROVIDERS=1`）——同四切片断言全绿，连续 2 轮全绿
   - 新支持件：server `CHISACODE_ENABLE_DEV_PROVIDERS`（§3.6）、mock 尾置回合文本加流式代码围栏（Slice E 桌面可观察载体，server mock 测试 7/7 无回归）
-  - native 代码改动仅 strategy-native 的 `requestTurnAnchor` no-op 分支（行为不变），未声称 native 验证
+  - native 的 `requestTurnAnchor` 委托 bottom-anchor `requestLocalAnchor`（sticky-bottom 语义保留，非 no-op），未声称 native turn-anchor 语义验证

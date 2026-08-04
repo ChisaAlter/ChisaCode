@@ -296,6 +296,48 @@ function collectOptimisticUserMessages(items: StreamItem[]): Array<{
   return optimistic;
 }
 
+function streamHasCanonicalUserMessage(
+  items: readonly StreamItem[],
+  optimisticMessageId: string,
+): boolean {
+  for (const item of items) {
+    if (item.kind === "user_message" && item.id === optimisticMessageId && !item.optimistic) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function isTurnProgressItem(item: StreamItem): boolean {
+  return (
+    item.kind === "assistant_message" ||
+    item.kind === "thought" ||
+    item.kind === "tool_call" ||
+    item.kind === "activity_log"
+  );
+}
+
+function streamHasTurnProgressAfterOptimistic(
+  items: readonly StreamItem[],
+  optimisticMessageId: string,
+): boolean {
+  let sawOptimistic = false;
+  for (const item of items) {
+    if (item.kind === "user_message" && item.id === optimisticMessageId) {
+      sawOptimistic = true;
+      continue;
+    }
+    if (
+      sawOptimistic &&
+      !(item.kind === "user_message" && item.optimistic) &&
+      isTurnProgressItem(item)
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /**
  * True when the daemon has adopted (canonicalized) an optimistic user message.
  *
@@ -307,27 +349,41 @@ function collectOptimisticUserMessages(items: StreamItem[]): Array<{
  * @param optimisticMessageId The optimistic message id to check, null disables
  * @param tail Canonical history tail
  * @param head Live stream head
- * @returns True when the id appears non-optimistically in tail or head
+ * @param shortCircuit Optional multi-signal short circuits (permission / error / idle)
+ * @returns True when the id appears non-optimistically in tail or head, or a short circuit fires
  */
 export function hasServerAdoptedOptimisticUserMessage(input: {
   optimisticMessageId: string | null;
   tail: readonly StreamItem[];
   head: readonly StreamItem[];
+  shortCircuit?: {
+    hasPendingPermission?: boolean;
+    agentErrored?: boolean;
+    agentIdleAfterSend?: boolean;
+  };
 }): boolean {
   if (!input.optimisticMessageId) {
     return false;
   }
-  for (const item of input.tail) {
-    if (item.kind === "user_message" && item.id === input.optimisticMessageId && !item.optimistic) {
-      return true;
-    }
+  if (
+    input.shortCircuit?.hasPendingPermission ||
+    input.shortCircuit?.agentErrored ||
+    input.shortCircuit?.agentIdleAfterSend
+  ) {
+    return true;
   }
-  for (const item of input.head) {
-    if (item.kind === "user_message" && item.id === input.optimisticMessageId && !item.optimistic) {
-      return true;
-    }
+  if (streamHasCanonicalUserMessage(input.tail, input.optimisticMessageId)) {
+    return true;
   }
-  return false;
+  if (streamHasCanonicalUserMessage(input.head, input.optimisticMessageId)) {
+    return true;
+  }
+  // Turn-progress fallback: non-optimistic stream activity after the optimistic
+  // user message means the daemon accepted the turn even if the message id drifted.
+  return streamHasTurnProgressAfterOptimistic(
+    [...input.tail, ...input.head],
+    input.optimisticMessageId,
+  );
 }
 
 function mergeCanonicalUserWithOptimistic(

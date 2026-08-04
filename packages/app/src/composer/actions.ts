@@ -130,11 +130,19 @@ export interface DispatchComposerAgentMessageInput {
     images: AttachmentMetadata[],
   ) => Promise<Array<{ data: string; mimeType: string }> | undefined>;
   stream: AgentStreamWriter;
+  /** Called synchronously after the optimistic stream entry is appended. */
+  onOptimisticDispatched?: (messageId: string) => void;
 }
 
+/**
+ * Dispatches a user message: appends the optimistic stream entry synchronously,
+ * then awaits encoding + the daemon send.
+ * @returns The optimistic message id written to the stream (for projection-ack
+ * and turn-anchor — callers must not re-scan the store for it)
+ */
 export async function dispatchComposerAgentMessage(
   input: DispatchComposerAgentMessageInput,
-): Promise<void> {
+): Promise<string> {
   const wirePayload = splitComposerAttachmentsForSubmit(input.attachments);
   const messageId = generateMessageId();
   const userMessage = buildOptimisticUserMessage({
@@ -145,12 +153,16 @@ export async function dispatchComposerAgentMessage(
     attachments: wirePayload.attachments,
   });
   appendUserMessageToStream(input.agentId, userMessage, input.stream);
+  // Notify immediately after the sync append so busy-ack / turn-anchor do not
+  // wait on image encoding or the daemon round-trip.
+  input.onOptimisticDispatched?.(messageId);
   const imagesData = await input.encodeImages(wirePayload.images);
   await input.client.sendAgentMessage(input.agentId, input.text, {
     messageId,
     images: imagesData ?? [],
     attachments: wirePayload.attachments,
   });
+  return messageId;
 }
 
 function appendUserMessageToStream(
@@ -243,7 +255,10 @@ export interface SendQueuedComposerMessageNowInput {
   agentId: string;
   messageId: string;
   queue: QueueWriter;
-  submitMessage: (input: { text: string; attachments: ComposerAttachment[] }) => Promise<void>;
+  submitMessage: (input: {
+    text: string;
+    attachments: ComposerAttachment[];
+  }) => Promise<string | null | void>;
 }
 
 export type SendQueuedComposerMessageNowResult =

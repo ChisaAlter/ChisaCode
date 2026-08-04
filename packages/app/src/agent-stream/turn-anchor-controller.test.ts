@@ -227,6 +227,23 @@ describe("createTurnAnchorControllerDriver", () => {
     expect(harness.scrollDeltas).toEqual([184]);
   });
 
+  it("gives up when content never grows past the viewport (no-overflow budget)", () => {
+    const harness = createHarness({
+      measurement: { anchorIndex: 3, scrollLength: 500, viewportLength: 800 },
+    });
+    sendAnchor(harness);
+    // Budget is TURN_ANCHOR_NO_OVERFLOW_ATTEMPT_MAX (60) successful retries,
+    // then the next frame clears the pending request.
+    for (let i = 0; i < 60; i += 1) {
+      harness.scheduler.flushFrame();
+    }
+    expect(harness.scrollDeltas).toEqual([]);
+    expect(harness.driver.getSnapshot().pendingAnchorMessageId).toBe("optimistic-1");
+    harness.scheduler.flushFrame();
+    expect(harness.driver.getSnapshot().pendingAnchorMessageId).toBeNull();
+    expect(harness.scrollDeltas).toEqual([]);
+  });
+
   it("waits for scrollable overflow before pinning, then clamps to the max scroll", () => {
     const harness = createHarness({
       measurement: { anchorIndex: 3, scrollLength: 500, viewportLength: 800 },

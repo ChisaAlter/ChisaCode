@@ -1806,6 +1806,47 @@ describe("createAgentStreamReducerQueue", () => {
 });
 
 describe("hasServerAdoptedOptimisticUserMessage", () => {
+  it("short-circuits on pending permission", () => {
+    expect(
+      hasServerAdoptedOptimisticUserMessage({
+        optimisticMessageId: "opt-1",
+        tail: [],
+        head: [],
+        shortCircuit: { hasPendingPermission: true },
+      }),
+    ).toBe(true);
+  });
+
+  it("short-circuits on agent error", () => {
+    expect(
+      hasServerAdoptedOptimisticUserMessage({
+        optimisticMessageId: "opt-1",
+        tail: [],
+        head: [],
+        shortCircuit: { agentErrored: true },
+      }),
+    ).toBe(true);
+  });
+
+  it("adopts when turn activity follows the optimistic user message", () => {
+    expect(
+      hasServerAdoptedOptimisticUserMessage({
+        optimisticMessageId: "opt-1",
+        tail: [],
+        head: [
+          {
+            kind: "user_message",
+            id: "opt-1",
+            text: "hi",
+            timestamp: new Date(),
+            optimistic: true,
+          },
+          { kind: "assistant_message", id: "a1", text: "hello", timestamp: new Date() },
+        ],
+      }),
+    ).toBe(true);
+  });
+
   it("returns false for a null optimistic message id", () => {
     expect(
       hasServerAdoptedOptimisticUserMessage({

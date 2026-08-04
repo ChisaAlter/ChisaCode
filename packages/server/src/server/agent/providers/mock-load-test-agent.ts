@@ -107,6 +107,8 @@ interface ActiveTurn {
   turnStarted: boolean;
   /** Finish when the queue drains instead of repeating the cycle. */
   finishWhenQueueDrained?: boolean;
+  /** Final text used when `finishWhenQueueDrained` completes the turn. */
+  finishTextWhenQueueDrained?: string;
 }
 
 type CycleEvent =
@@ -500,6 +502,29 @@ function shouldEmitTrailingToolRun(prompt: AgentPromptInput): boolean {
   return /end\s+(?:the\s+)?turn\s+(?:with|on)\s+(?:a\s+)?tool run/i.test(promptToText(prompt));
 }
 
+/** Prompt mode for Slice E: a short turn that ends on a fenced code block. */
+function shouldEmitCodeFence(prompt: AgentPromptInput): boolean {
+  return /stream\s+(?:a\s+)?(?:code\s+)?fence|highlight\s+(?:this\s+)?fence/i.test(
+    promptToText(prompt),
+  );
+}
+
+function buildCodeFenceQueue(): CycleEvent[] {
+  const queue: CycleEvent[] = [];
+  for (const tok of tokenize(
+    "Here is the scroll-anchor threshold adjustment as a fenced block:\n\n",
+  )) {
+    queue.push({ kind: "assistant_token", text: tok });
+  }
+  for (const tok of tokenize(
+    "```ts\nconst anchorRef = useRef<FlatList>(null);\nconst NEAR_BOTTOM_PX = 160;\n```",
+  )) {
+    queue.push({ kind: "assistant_token", text: tok });
+  }
+  queue.push({ kind: "usage" });
+  return queue;
+}
+
 function createToolCall(input: {
   callId: string;
   name: string;
@@ -671,6 +696,8 @@ export class MockLoadTestAgentSession implements AgentSession {
       this.scheduleStressTurn(turn, stress);
     } else if (shouldEmitTrailingToolRun(prompt)) {
       this.scheduleTrailingToolRunTurn(turn);
+    } else if (shouldEmitCodeFence(prompt)) {
+      this.scheduleCodeFenceTurn(turn);
     } else {
       this.schedule(turn, 0);
     }
@@ -809,7 +836,19 @@ export class MockLoadTestAgentSession implements AgentSession {
    */
   private scheduleTrailingToolRunTurn(turn: ActiveTurn): void {
     turn.finishWhenQueueDrained = true;
+    turn.finishTextWhenQueueDrained = "Synthetic trailing tool run complete";
     turn.queue = buildTrailingToolRunQueue(turn.turnId);
+    this.schedule(turn, 0);
+  }
+
+  /**
+   * Single-shot turn for Slice E: stream a fenced code block then finish so the
+   * HighlightedCodeBlock path (cacheable:false while streaming) is observable.
+   */
+  private scheduleCodeFenceTurn(turn: ActiveTurn): void {
+    turn.finishWhenQueueDrained = true;
+    turn.finishTextWhenQueueDrained = "Synthetic code fence stream complete";
+    turn.queue = buildCodeFenceQueue();
     this.schedule(turn, 0);
   }
 
@@ -1061,8 +1100,12 @@ export class MockLoadTestAgentSession implements AgentSession {
 
     if (turn.queue.length === 0) {
       if (turn.finishWhenQueueDrained) {
-        // No end-marker text: the trailing tool run must stay the last items.
-        this.finishTurnWithText(turn, "Synthetic trailing tool run complete");
+        // No end-marker text: keep the last streamed items (tool run / fence)
+        // as the terminal content for the app to observe.
+        this.finishTurnWithText(
+          turn,
+          turn.finishTextWhenQueueDrained ?? "Synthetic trailing tool run complete",
+        );
         return;
       }
       turn.cycle += 1;

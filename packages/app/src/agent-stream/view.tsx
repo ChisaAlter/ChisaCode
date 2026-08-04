@@ -638,6 +638,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
                   <WorkLogMoreButton
                     groupId={groupId}
                     hiddenCount={hiddenCount}
+                    expanded={expandedWorkLogGroupIds.has(groupId)}
                     onToggleWorkLogGroup={setExpandedWorkLogGroupIds}
                     slotStyle={stylesheet.workbenchToolBadgeSlot}
                     moreBadgeStyle={stylesheet.workbenchToolMoreBadge}
@@ -1001,6 +1002,7 @@ function PermissionActionButton({
 interface WorkLogMoreButtonProps {
   groupId: string;
   hiddenCount: number;
+  expanded: boolean;
   onToggleWorkLogGroup: React.Dispatch<React.SetStateAction<Set<string>>>;
   slotStyle: StyleProp<ViewStyle>;
   moreBadgeStyle: StyleProp<ViewStyle>;
@@ -1010,6 +1012,7 @@ interface WorkLogMoreButtonProps {
 function WorkLogMoreButton({
   groupId,
   hiddenCount,
+  expanded,
   onToggleWorkLogGroup,
   slotStyle,
   moreBadgeStyle,
@@ -1026,15 +1029,21 @@ function WorkLogMoreButton({
       return next;
     });
   }, [groupId, onToggleWorkLogGroup]);
+  // Expanded keeps the affordance (T3 work-toggle) and switches the label to
+  // "Show fewer"; collapsed keeps the compact "+N" badge.
+  const accessibilityLabel = expanded
+    ? "Show fewer tool calls"
+    : `Show ${hiddenCount} more tool calls`;
+  const label = expanded ? "Show fewer" : `+${hiddenCount}`;
   return (
     <Pressable
       onPress={handlePress}
       accessibilityRole="button"
-      accessibilityLabel={`Show ${hiddenCount} more tool calls`}
+      accessibilityLabel={accessibilityLabel}
       style={slotStyle}
     >
       <View style={moreBadgeStyle}>
-        <Text style={moreBadgeTextStyle}>+{hiddenCount}</Text>
+        <Text style={moreBadgeTextStyle}>{label}</Text>
       </View>
     </Pressable>
   );

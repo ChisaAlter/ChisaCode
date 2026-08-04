@@ -75,6 +75,43 @@ async function waitForHttp(url: string, timeoutMs: number): Promise<void> {
   throw new Error(`Timed out waiting for ${url}`);
 }
 
+/** Fails the gate if 6767 is already held by a developer/stale daemon worker. */
+async function ensurePortFree(port: number): Promise<void> {
+  const occupied = await new Promise<boolean>((resolve) => {
+    const socket = net.connect({ host: "127.0.0.1", port });
+    socket.once("connect", () => {
+      socket.destroy();
+      resolve(true);
+    });
+    socket.once("error", () => resolve(false));
+  });
+  if (!occupied) {
+    return;
+  }
+  console.log(`[desktop-slices] port ${port} occupied; killing stale dev daemon workers`);
+  // Only dev-mode supervisor workers (daemon-worker.ts) can be stale here; the
+  // packaged daemon runs node-entrypoint-runner.js and is never targeted.
+  const script =
+    "Get-CimInstance Win32_Process -Filter \"Name='node.exe'\" | " +
+    "Where-Object { $_.CommandLine -like '*daemon-worker*' } | " +
+    "ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }";
+  spawnSync("powershell.exe", ["-NoProfile", "-Command", script], { stdio: "ignore" });
+  await new Promise((resolve) => setTimeout(resolve, 1500));
+  const stillOccupied = await new Promise<boolean>((resolve) => {
+    const socket = net.connect({ host: "127.0.0.1", port });
+    socket.once("connect", () => {
+      socket.destroy();
+      resolve(true);
+    });
+    socket.once("error", () => resolve(false));
+  });
+  if (stillOccupied) {
+    throw new Error(
+      `port ${port} still occupied after stale-worker cleanup — refuse to seed the developer daemon`,
+    );
+  }
+}
+
 async function stopChild(child: ChildProcess | null): Promise<void> {
   if (!child || child.exitCode !== null) {
     return;
@@ -141,6 +178,7 @@ async function main(): Promise<void> {
 
   try {
     console.log("[desktop-slices] starting daemon on", daemonPort, "metro on", metroPort);
+    await ensurePortFree(daemonPort);
     daemon = spawnResolved(tsxBin, ["scripts/supervisor-entrypoint.ts", "--dev"], {
       cwd: serverDir,
       env: {
@@ -320,13 +358,16 @@ async function main(): Promise<void> {
     await fillComposerDraft(page, "End the turn with a tool run.");
     await sendDraftToQueue(page);
     await sendQueuedMessageNow(page);
-    const moreButton = page.getByRole("button", { name: /Show \d+ more tool calls/ });
+    const moreButton = page.getByRole("button", {
+      name: /Show \d+ more tool calls|Show fewer tool calls/,
+    });
     await expect(moreButton).toHaveCount(1, { timeout: 60_000 });
     const badges = page.getByTestId("tool-call-badge");
     await expect(badges).toHaveCount(1, { timeout: 15_000 });
     await expect(moreButton).toHaveText("+3");
     await moreButton.click();
     await expect(badges).toHaveCount(4, { timeout: 15_000 });
+    await expect(moreButton).toHaveText("Show fewer");
     console.log("[desktop-slices] Slice D: work-log fold +3 expand -> 4 badges");
 
     // Slice E: the streamed fenced code block rendered through

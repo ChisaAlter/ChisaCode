@@ -19,7 +19,7 @@ interface UseComposerSubmissionControllerInput {
   isAgentRunning: boolean;
   canSubmitMessage: () => boolean;
   queueMessage: (text: string, attachments: ComposerAttachment[]) => void;
-  submitMessage: (text: string, attachments: ComposerAttachment[]) => Promise<void>;
+  submitMessage: (text: string, attachments: ComposerAttachment[]) => Promise<string | null | void>;
   clearDraft: (lifecycle: "sent" | "abandoned") => void;
   setUserInput: (text: string) => void;
   setSelectedAttachments: Dispatch<SetStateAction<UserComposerAttachment[]>>;

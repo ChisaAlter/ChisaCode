@@ -203,6 +203,40 @@ describe("MockLoadTestAgentClient", () => {
     });
   });
 
+  test("code-fence mode streams a fenced block and finishes without cycling", async () => {
+    vi.useFakeTimers();
+    const client = new MockLoadTestAgentClient();
+    const session = await client.createSession({
+      provider: "mock",
+      cwd: process.cwd(),
+      model: "one-minute-stream",
+    });
+    const events: AgentStreamEvent[] = [];
+    const unsubscribe = session.subscribe((event) => events.push(event));
+
+    const resultPromise = session.run("Stream a code fence for highlight cache.");
+    await vi.advanceTimersByTimeAsync(60_000);
+    const result = await resultPromise;
+    unsubscribe();
+
+    const assistantText = events
+      .flatMap((event): string[] => {
+        if (event.type !== "timeline" || event.item.type !== "assistant_message") {
+          return [];
+        }
+        return [event.item.text];
+      })
+      .join("");
+    expect(assistantText).toContain("const anchorRef = useRef<FlatList>(null);");
+    expect(assistantText).toContain("const NEAR_BOTTOM_PX = 160;");
+    expect(assistantText).toContain("```ts");
+    expect(events.some((event) => event.type === "turn_completed")).toBe(true);
+    expect(result).toMatchObject({
+      finalText: "Synthetic code fence stream complete",
+      canceled: false,
+    });
+  });
+
   test("trailing-tool-run mode emits all text first then the tool run and finishes", async () => {
     vi.useFakeTimers();
     const client = new MockLoadTestAgentClient();

@@ -24,16 +24,19 @@ test.describe("Work log fold", () => {
       // The app can lag the daemon stream, so wait on the fold's own
       // observable: the "+N" affordance appears once the app renders the
       // idle state (MAX_VISIBLE_WORK_LOG_ENTRIES = 1 → "+3").
-      const moreButton = page.getByRole("button", { name: /Show \d+ more tool calls/ });
+      const moreButton = page.getByRole("button", {
+        name: /Show \d+ more tool calls|Show fewer tool calls/,
+      });
       await expect(moreButton).toHaveCount(1, { timeout: 60_000 });
       const badges = page.getByTestId("tool-call-badge");
       await expect(badges).toHaveCount(1, { timeout: 15_000 });
       await expect(moreButton).toHaveText("+3");
 
-      // Expanding restores the hidden badges; the affordance stays and
-      // collapses the run again on a second click.
+      // Expanding restores the hidden badges; the affordance switches to
+      // "Show fewer" and collapses the run again on a second click.
       await moreButton.click();
       await expect(badges).toHaveCount(4, { timeout: 15_000 });
+      await expect(moreButton).toHaveText("Show fewer");
       await moreButton.click();
       await expect(badges).toHaveCount(1, { timeout: 15_000 });
       await expect(moreButton).toHaveText("+3");

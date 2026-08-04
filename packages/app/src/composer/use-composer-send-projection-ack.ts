@@ -17,10 +17,9 @@ const EMPTY_STREAM_ITEMS: readonly StreamItem[] = [];
  * message is genuinely in flight — but it must not stay busy until the whole
  * turn settles (a long run would lock the composer for minutes).
  *
- * `trackPendingSend` captures the latest optimistic user message id present in
- * the stream at send time; `isServerAdopted` flips once that id appears
- * without the optimistic marker. Callers combine it with their own submit
- * promise state (e.g. `isProcessing && !isServerAdopted`).
+ * Multi-signal short circuits (permission / agent error / idle after send)
+ * release busy even when the optimistic id drifts (real providers that do not
+ * echo the client messageId).
  */
 export function useComposerSendProjectionAck(input: { serverId: string; agentId: string | null }): {
   /** The optimistic message id currently awaiting server adoption, or null */
@@ -28,23 +27,42 @@ export function useComposerSendProjectionAck(input: { serverId: string; agentId:
   /** True while the server has adopted the pending optimistic message */
   isServerAdopted: boolean;
   /**
-   * Records the latest optimistic user message id as the one to await.
-   * Call it right after dispatching the send; pass null to clear
+   * Records the optimistic message id as the one to await.
+   * Call it from the dispatch-time optimistic callback; pass null to clear
    * (e.g. on send error).
    */
   trackPendingSend: (messageId: string | null) => void;
 } {
   const [pendingSendMessageId, setPendingSendMessageId] = useState<string | null>(null);
 
-  const streamItems = useSessionStore(
+  const projectionInputs = useSessionStore(
     useShallow((state) => {
       if (!input.agentId) {
-        return { tail: EMPTY_STREAM_ITEMS, head: EMPTY_STREAM_ITEMS };
+        return {
+          tail: EMPTY_STREAM_ITEMS,
+          head: EMPTY_STREAM_ITEMS,
+          hasPendingPermission: false,
+          agentErrored: false,
+        };
       }
       const session = state.sessions[input.serverId];
+      const agent = session?.agents?.get(input.agentId);
+      const pendingPermissions = session?.pendingPermissions;
+      let hasPendingPermission = false;
+      if (pendingPermissions) {
+        for (const permission of pendingPermissions.values()) {
+          if (permission.agentId === input.agentId) {
+            hasPendingPermission = true;
+            break;
+          }
+        }
+      }
+      const agentStatus = agent?.status ?? null;
       return {
         tail: session?.agentStreamTail?.get(input.agentId) ?? EMPTY_STREAM_ITEMS,
         head: session?.agentStreamHead?.get(input.agentId) ?? EMPTY_STREAM_ITEMS,
+        hasPendingPermission,
+        agentErrored: agentStatus === "error",
       };
     }),
   );
@@ -53,10 +71,14 @@ export function useComposerSendProjectionAck(input: { serverId: string; agentId:
     () =>
       hasServerAdoptedOptimisticUserMessage({
         optimisticMessageId: pendingSendMessageId,
-        tail: streamItems.tail,
-        head: streamItems.head,
+        tail: projectionInputs.tail,
+        head: projectionInputs.head,
+        shortCircuit: {
+          hasPendingPermission: projectionInputs.hasPendingPermission,
+          agentErrored: projectionInputs.agentErrored,
+        },
       }),
-    [pendingSendMessageId, streamItems.head, streamItems.tail],
+    [pendingSendMessageId, projectionInputs],
   );
 
   const trackPendingSend = useCallback((messageId: string | null) => {
