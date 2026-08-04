@@ -324,8 +324,36 @@ async function main(): Promise<void> {
     await expectComposerEditable(page);
     console.log("[desktop-slices] agent route open, composer editable");
 
-    // Slice B: sending anchors the sent row near the top of the viewport.
+    // Slice D + E first (same order as the packaged gate): a short
+    // trailing-tool-run turn drains in a few seconds, folds to "+N", and
+    // streams the fenced code block. Doing this before the 60s stream avoids
+    // flaky mid-turn replace races on a slow Electron renderer.
+    await submitMessage(page, "End the turn with a tool run.");
+    const moreButton = page.getByRole("button", {
+      name: /Show \d+ more tool calls|Show fewer tool calls/,
+    });
+    await expect(moreButton).toHaveCount(1, { timeout: 60_000 });
+    const badges = page.getByTestId("tool-call-badge");
+    await expect(badges).toHaveCount(1, { timeout: 15_000 });
+    await expect(moreButton).toHaveText("+3");
+    await moreButton.click();
+    await expect(badges).toHaveCount(4, { timeout: 15_000 });
+    await expect(moreButton).toHaveText("Show fewer");
+    console.log("[desktop-slices] Slice D: work-log fold +3 expand -> 4 badges");
+
+    await expect(page.getByText("const anchorRef = useRef<FlatList>(null);")).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(page.getByText("const NEAR_BOTTOM_PX = 160;")).toBeVisible({ timeout: 15_000 });
+    console.log("[desktop-slices] Slice E: streaming highlight fence rendered");
+
+    // Slice B: a fresh 60s turn anchors the sent row near the top of the
+    // viewport. Guard on the running state first so the later queue cannot
+    // race a completed turn.
     await submitMessage(page, "Anchor this desktop turn.");
+    await expect(page.getByRole("button", { name: /stop|cancel|停止|取消/i }).first()).toBeVisible({
+      timeout: 30_000,
+    });
     const userRowTop = () =>
       page!
         .getByTestId("user-message")
@@ -344,39 +372,12 @@ async function main(): Promise<void> {
 
     // Slice C: the projection ack released composer busy — a second message
     // can be queued while the turn still streams. Flush it: the daemon
-    // replaces the running turn with a new one (replaceRunning), which also
-    // exercises the queue-flush path on the desktop surface.
+    // replaces the running turn with a new one (replaceRunning).
     await fillComposerDraft(page, "Second desktop message.");
     await sendDraftToQueue(page);
     await expectQueuedMessageButton(page);
     await sendQueuedMessageNow(page);
     console.log("[desktop-slices] Slice C: busy released, second message queued and flushed");
-
-    // Slice D: queue the trailing-tool-run prompt and flush it while the
-    // replacement turn streams; the trailing turn drains in ~2s and the tool
-    // run survives the completed-turn collapse as a "+N" fold badge.
-    await fillComposerDraft(page, "End the turn with a tool run.");
-    await sendDraftToQueue(page);
-    await sendQueuedMessageNow(page);
-    const moreButton = page.getByRole("button", {
-      name: /Show \d+ more tool calls|Show fewer tool calls/,
-    });
-    await expect(moreButton).toHaveCount(1, { timeout: 60_000 });
-    const badges = page.getByTestId("tool-call-badge");
-    await expect(badges).toHaveCount(1, { timeout: 15_000 });
-    await expect(moreButton).toHaveText("+3");
-    await moreButton.click();
-    await expect(badges).toHaveCount(4, { timeout: 15_000 });
-    await expect(moreButton).toHaveText("Show fewer");
-    console.log("[desktop-slices] Slice D: work-log fold +3 expand -> 4 badges");
-
-    // Slice E: the streamed fenced code block rendered through
-    // HighlightedCodeBlock (cacheable:false while streaming — unit-covered).
-    await expect(page.getByText("const anchorRef = useRef<FlatList>(null);")).toBeVisible({
-      timeout: 15_000,
-    });
-    await expect(page.getByText("const NEAR_BOTTOM_PX = 160;")).toBeVisible({ timeout: 15_000 });
-    console.log("[desktop-slices] Slice E: streaming highlight fence rendered");
 
     console.log("[desktop-slices] ALL DESKTOP SLICES PASSED");
   } finally {
