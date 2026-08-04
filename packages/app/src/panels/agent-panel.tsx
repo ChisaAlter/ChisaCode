@@ -925,7 +925,10 @@ function ChatAgentContent({
     if (!agentId) {
       return;
     }
-    streamViewRef.current?.scrollToBottom("message-sent");
+    // The optimistic user message is written to the stream store after this
+    // callback fires (the delivery controller emits it before dispatching),
+    // so anchoring is driven declaratively by the optimistic-message effect
+    // in AgentStreamSection instead of here.
   }, [agentId]);
 
   useEffect(() => {
@@ -1179,6 +1182,22 @@ function ChatAgentReadyContent({
     }),
   });
 
+  // Anchor the just-sent row near the top so the reply grows below it. The
+  // composer dispatches the optimistic user message id (stable across server
+  // adoption), which avoids racing the daemon: the optimistic entry can be
+  // adopted before it ever renders, so watching the stream for optimistic
+  // entries is unreliable.
+  const handleOptimisticMessageDispatched = useCallback(
+    (messageId: string) => {
+      streamViewRef.current?.requestTurnAnchor({
+        reason: "message-sent",
+        anchorMessageId: messageId,
+        requestKey: `${agentId}:${messageId}`,
+      });
+    },
+    [agentId, streamViewRef],
+  );
+
   return (
     <RewindComposerRestoreProvider text={agentInputDraft.text} setText={agentInputDraft.setText}>
       <View style={styles.root}>
@@ -1227,6 +1246,7 @@ function ChatAgentReadyContent({
               onAddImages={handleAddImagesCallback}
               onComposerHeightChange={handleComposerHeightChange}
               onMessageSent={handleMessageSent}
+              onOptimisticMessageDispatched={handleOptimisticMessageDispatched}
             />
 
             <ToastViewport
@@ -1342,6 +1362,7 @@ function AgentStreamSection({
       isAuthoritativeHistoryReady={hasAppliedAuthoritativeHistory}
       toast={toast}
       onOpenWorkspaceFile={onOpenWorkspaceFile}
+      isTurnAnchorEnabled={isWeb}
     />
   );
 }
@@ -1360,6 +1381,7 @@ function AgentComposerSection({
   onAddImages,
   onComposerHeightChange,
   onMessageSent,
+  onOptimisticMessageDispatched,
 }: {
   agentId?: string;
   serverId: string;
@@ -1374,6 +1396,7 @@ function AgentComposerSection({
   onAddImages: (addImages: (images: ImageAttachment[]) => void) => void;
   onComposerHeightChange: (height: number) => void;
   onMessageSent: () => void;
+  onOptimisticMessageDispatched: (messageId: string) => void;
 }) {
   if (!agentId) {
     return null;
@@ -1398,6 +1421,7 @@ function AgentComposerSection({
       onAddImages={onAddImages}
       onComposerHeightChange={onComposerHeightChange}
       onMessageSent={onMessageSent}
+      onOptimisticMessageDispatched={onOptimisticMessageDispatched}
     />
   );
 }
@@ -1414,6 +1438,7 @@ function ActiveAgentComposer({
   onAddImages,
   onComposerHeightChange,
   onMessageSent,
+  onOptimisticMessageDispatched,
 }: {
   agentId: string;
   serverId: string;
@@ -1426,6 +1451,7 @@ function ActiveAgentComposer({
   onAddImages: (addImages: (images: ImageAttachment[]) => void) => void;
   onComposerHeightChange: (height: number) => void;
   onMessageSent: () => void;
+  onOptimisticMessageDispatched: (messageId: string) => void;
 }) {
   const insets = useSafeAreaInsets();
   const isCompact = useIsCompactFormFactor();
@@ -1559,6 +1585,7 @@ function ActiveAgentComposer({
           onAddImages={onAddImages}
           onComposerHeightChange={onComposerHeightChange}
           onMessageSent={onMessageSent}
+          onOptimisticMessageDispatched={onOptimisticMessageDispatched}
           onClientSlashCommand={handleClientSlashCommand}
           footer={composerFooter}
           inputWrapperStyle={styles.composerInputWrapper}

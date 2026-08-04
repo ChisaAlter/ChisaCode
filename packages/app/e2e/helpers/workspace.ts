@@ -23,6 +23,34 @@ export async function resolveTempRoot(): Promise<string> {
   return process.platform === "win32" ? tmpdir() : await realpath("/tmp");
 }
 
+const REMOVE_RETRY_ATTEMPTS = 20;
+const REMOVE_RETRY_BASE_DELAY_MS = 100;
+
+/**
+ * Recursively removes a directory, retrying transient lock errors.
+ *
+ * On Windows, the daemon's git watcher can hold a directory handle for a
+ * moment after the last operation on a repo, making `rm` throw EBUSY/EPERM.
+ * There is no event hook for the handle release, so we back off and retry;
+ * a handle left after the deadline is reported as the original error.
+ */
+export async function removeDirectoryWithRetry(dirPath: string): Promise<void> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await rm(dirPath, { recursive: true, force: true });
+      return;
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      const isTransient =
+        code === "EBUSY" || code === "EPERM" || code === "ENOTEMPTY" || code === "EACCES";
+      if (!isTransient || attempt >= REMOVE_RETRY_ATTEMPTS) {
+        throw error;
+      }
+      await new Promise((resolve) => setTimeout(resolve, REMOVE_RETRY_BASE_DELAY_MS * attempt));
+    }
+  }
+}
+
 async function configureRemote(input: {
   repoPath: string;
   withRemote: boolean;
@@ -126,7 +154,7 @@ export const createTempGitRepo = async (
     path: repoPath,
     branchHeads,
     cleanup: async () => {
-      await rm(repoPath, { recursive: true, force: true });
+      await removeDirectoryWithRetry(repoPath);
     },
   };
 };
@@ -141,7 +169,7 @@ export async function createTempDirectory(prefix = "chisacode-e2e-dir-"): Promis
   return {
     path: dirPath,
     cleanup: async () => {
-      await rm(dirPath, { recursive: true, force: true });
+      await removeDirectoryWithRetry(dirPath);
     },
   };
 }

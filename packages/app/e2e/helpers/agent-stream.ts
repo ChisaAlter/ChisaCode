@@ -14,7 +14,9 @@ export async function awaitToolCall(page: Page, toolName: string | RegExp): Prom
 }
 
 export async function expectAgentIdle(page: Page, timeout = 30_000): Promise<void> {
-  await expect(page.getByRole("button", { name: /stop|cancel/i })).toHaveCount(0, { timeout });
+  await expect(page.getByRole("button", { name: /stop|cancel|停止|取消/i })).toHaveCount(0, {
+    timeout,
+  });
 }
 
 // The working indicator is an animated spinner View — no semantic ARIA role, testId is correct.

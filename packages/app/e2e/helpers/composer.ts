@@ -51,14 +51,22 @@ export async function sendDraftToQueue(page: Page): Promise<void> {
   await composerInput(page).press("Control+Enter");
 }
 
+const SEND_QUEUED_NOW_NAME = /Send queued message now|立即发送排队消息/;
+
 export async function expectQueuedMessageButton(page: Page): Promise<void> {
-  await expect(page.getByRole("button", { name: "Send queued message now" })).toBeVisible({
+  await expect(page.getByRole("button", { name: SEND_QUEUED_NOW_NAME })).toBeVisible({
     timeout: 10_000,
   });
 }
 
+/** Flushes the queued message track, dispatching the message for real. */
+export async function sendQueuedMessageNow(page: Page): Promise<void> {
+  await expectQueuedMessageButton(page);
+  await page.getByRole("button", { name: SEND_QUEUED_NOW_NAME }).click();
+}
+
 export async function cancelAgent(page: Page): Promise<void> {
-  const stopButton = page.getByRole("button", { name: /stop|cancel/i }).first();
+  const stopButton = page.getByRole("button", { name: /stop|cancel|停止|取消/i }).first();
   await expect(stopButton).toBeVisible({ timeout: 10_000 });
   await stopButton.click();
 }
@@ -169,7 +177,7 @@ export async function startRunningMockAgent(
   });
   const agentUrl = `${buildHostWorkspaceRoute(serverId, repo.path)}?open=${encodeURIComponent(`agent:${agent.id}`)}`;
   await page.goto(agentUrl);
-  await expect(page.getByRole("button", { name: /stop|cancel/i }).first()).toBeVisible({
+  await expect(page.getByRole("button", { name: /stop|cancel|停止|取消/i }).first()).toBeVisible({
     timeout: 30_000,
   });
   await expectComposerVisible(page);

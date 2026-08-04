@@ -1,12 +1,13 @@
 import { spawn, type ChildProcess, execFileSync, execSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import net from "node:net";
 import { Buffer } from "node:buffer";
 import dotenv from "dotenv";
 import { forkChisaCodeHomeMetadata, resolveChisaCodeHomePath } from "./helpers/chisacode-home-fork";
+import { removeDirectoryWithRetry } from "./helpers/workspace";
 
 interface WaitForServerOptions {
   host?: string;
@@ -116,14 +117,7 @@ function parseRelayStartupFailure(line: string): string | null {
   return null;
 }
 
-async function stopProcess(child: ChildProcess | null): Promise<void> {
-  if (!child) {
-    return;
-  }
-  if (child.exitCode !== null || child.signalCode !== null) {
-    return;
-  }
-  child.kill("SIGTERM");
+async function waitForChildExit(child: ChildProcess, timeoutMs: number): Promise<void> {
   await new Promise<void>((resolve) => {
     let pendingResolve: (() => void) | null = resolve;
     const settle = () => {
@@ -138,9 +132,35 @@ async function stopProcess(child: ChildProcess | null): Promise<void> {
         child.kill("SIGKILL");
       }
       settle();
-    }, 5000);
+    }, timeoutMs);
     child.once("exit", settle);
   });
+}
+
+async function stopProcess(child: ChildProcess | null): Promise<void> {
+  if (!child) {
+    return;
+  }
+  if (child.exitCode !== null || child.signalCode !== null) {
+    return;
+  }
+  if (process.platform === "win32") {
+    // SIGTERM only kills the direct child on Windows; children (metro workers,
+    // the daemon worker) survive and hold ports/file locks (e.g. the agent
+    // index sqlite), which breaks teardown and accumulates stale processes.
+    // Kill the whole tree instead.
+    try {
+      execFileSync("taskkill", ["/pid", String(child.pid), "/T", "/F"], {
+        stdio: "ignore",
+      });
+    } catch {
+      child.kill("SIGKILL");
+    }
+    await waitForChildExit(child, 5000);
+    return;
+  }
+  child.kill("SIGTERM");
+  await waitForChildExit(child, 5000);
 }
 
 function summarizeOpenAiErrorBody(body: string): string {
@@ -759,13 +779,13 @@ async function performCleanup(shouldRemoveChisaCodeHome: boolean): Promise<void>
   metroProcess = null;
   relayProcess = null;
   if (chisacodeHome && shouldRemoveChisaCodeHome) {
-    await rm(chisacodeHome, { recursive: true, force: true });
+    await removeDirectoryWithRetry(chisacodeHome);
     chisacodeHome = null;
   } else if (chisacodeHome) {
     console.log(`[e2e] Preserving CHISACODE_HOME: ${chisacodeHome}`);
   }
   if (fakeToolBinDir) {
-    await rm(fakeToolBinDir, { recursive: true, force: true });
+    await removeDirectoryWithRetry(fakeToolBinDir);
     fakeToolBinDir = null;
   }
 }

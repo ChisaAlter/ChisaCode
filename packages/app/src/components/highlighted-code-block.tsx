@@ -17,6 +17,12 @@ interface HighlightedCodeBlockProps {
   language: string | null | undefined;
   inheritedStyles: TextStyle;
   textStyle: TextStyle;
+  /**
+   * True while the code block is still streaming in. Streamed (half-rendered)
+   * fence content is tokenized without polluting the shared highlight LRU, so
+   * completed blocks are never evicted by intermediate frames.
+   */
+  isStreaming?: boolean;
 }
 
 // Fence info strings ("```ts", "```typescript", "```ts {1,3}") map to the
@@ -52,6 +58,7 @@ export const HighlightedCodeBlock = React.memo(function HighlightedCodeBlock({
   language,
   inheritedStyles,
   textStyle,
+  isStreaming = false,
 }: HighlightedCodeBlockProps) {
   // Box styles (bg / padding / border / radius / margin) go on the wrapper View
   // so the absolute copy button positions relative to the visible code area,
@@ -66,9 +73,11 @@ export const HighlightedCodeBlock = React.memo(function HighlightedCodeBlock({
   const keyedLines = useMemo<KeyedLine[] | null>(
     () =>
       blockKind === "code"
-        ? highlightToKeyedLines(renderedCode, fenceLanguageToExtension(language))
+        ? highlightToKeyedLines(renderedCode, fenceLanguageToExtension(language), {
+            cacheable: !isStreaming,
+          })
         : null,
-    [renderedCode, language, blockKind],
+    [renderedCode, language, blockKind, isStreaming],
   );
 
   const diffLines = useMemo<DiffLine[] | null>(

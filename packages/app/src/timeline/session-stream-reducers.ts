@@ -296,6 +296,40 @@ function collectOptimisticUserMessages(items: StreamItem[]): Array<{
   return optimistic;
 }
 
+/**
+ * True when the daemon has adopted (canonicalized) an optimistic user message.
+ *
+ * The client renders an optimistic user message immediately after the user
+ * hits send; the daemon later projects the same message id into the timeline
+ * (`timeline` events / fetch responses) without the `optimistic` marker.
+ * Composer "sending" busy state should end once this projection is visible,
+ * so the user can steer or send again without waiting for the turn to settle.
+ * @param optimisticMessageId The optimistic message id to check, null disables
+ * @param tail Canonical history tail
+ * @param head Live stream head
+ * @returns True when the id appears non-optimistically in tail or head
+ */
+export function hasServerAdoptedOptimisticUserMessage(input: {
+  optimisticMessageId: string | null;
+  tail: readonly StreamItem[];
+  head: readonly StreamItem[];
+}): boolean {
+  if (!input.optimisticMessageId) {
+    return false;
+  }
+  for (const item of input.tail) {
+    if (item.kind === "user_message" && item.id === input.optimisticMessageId && !item.optimistic) {
+      return true;
+    }
+  }
+  for (const item of input.head) {
+    if (item.kind === "user_message" && item.id === input.optimisticMessageId && !item.optimistic) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function mergeCanonicalUserWithOptimistic(
   canonical: UserMessageItem,
   optimistic: UserMessageItem,

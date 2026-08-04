@@ -176,6 +176,75 @@ describe("MockLoadTestAgentClient", () => {
     );
   });
 
+  test("echoes the client message id in the projected user message", async () => {
+    vi.useFakeTimers();
+    const client = new MockLoadTestAgentClient();
+    const session = await client.createSession({
+      provider: "mock",
+      cwd: process.cwd(),
+      model: "ten-second-stream",
+    });
+    const events: AgentStreamEvent[] = [];
+    const unsubscribe = session.subscribe((event) => events.push(event));
+
+    const resultPromise = session.run("Echo my message id.", { messageId: "client-msg-123" });
+    await vi.advanceTimersByTimeAsync(0);
+    unsubscribe();
+    await vi.advanceTimersByTimeAsync(10_000);
+    await resultPromise;
+
+    const userMessage = events.find(
+      (event): event is Extract<AgentStreamEvent, { type: "timeline" }> =>
+        event.type === "timeline" && event.item.type === "user_message",
+    );
+    expect(userMessage?.item).toMatchObject({
+      type: "user_message",
+      messageId: "client-msg-123",
+    });
+  });
+
+  test("trailing-tool-run mode emits all text first then the tool run and finishes", async () => {
+    vi.useFakeTimers();
+    const client = new MockLoadTestAgentClient();
+    const session = await client.createSession({
+      provider: "mock",
+      cwd: process.cwd(),
+      model: "one-minute-stream",
+    });
+    const events: AgentStreamEvent[] = [];
+    const unsubscribe = session.subscribe((event) => events.push(event));
+
+    const resultPromise = session.run("End the turn with a tool run.");
+    await vi.advanceTimersByTimeAsync(60_000);
+    const result = await resultPromise;
+    unsubscribe();
+
+    const timelineItems = events.flatMap((event): AgentTimelineItem[] =>
+      event.type === "timeline" ? [event.item] : [],
+    );
+    const toolCalls = timelineItems.filter(
+      (item) => item.type === "tool_call" && item.status === "completed",
+    );
+    expect(toolCalls.map((item) => (item.type === "tool_call" ? item.name : ""))).toEqual([
+      "read",
+      "grep",
+      "edit",
+      "bash",
+    ]);
+
+    // The tool run is the last content: no assistant text after it and no
+    // repeated cycles (the app folds the run as badges once idle).
+    const lastToolIndex = timelineItems.findLastIndex((item) => item.type === "tool_call");
+    const afterToolItems = timelineItems.slice(lastToolIndex + 1);
+    expect(afterToolItems.every((item) => item.type !== "assistant_message")).toBe(true);
+    expect(afterToolItems.length).toBe(0);
+    expect(events.some((event) => event.type === "turn_completed")).toBe(true);
+    expect(result).toMatchObject({
+      finalText: "Synthetic trailing tool run complete",
+      canceled: false,
+    });
+  });
+
   test("agent manager coalesces adjacent assistant tokens into fewer messages", async () => {
     vi.useFakeTimers();
     const workdir = mkdtempSync(join(tmpdir(), "chisacode-mock-load-test-"));

@@ -25,6 +25,7 @@ import type {
   AgentSessionConfig,
   AgentStreamEvent,
 } from "./agent/agent-sdk-types.js";
+import { MockLoadTestAgentClient } from "./agent/providers/mock-load-test-agent.js";
 
 const openaiApiKey = process.env.OPENAI_API_KEY ?? null;
 const TEST_PASSWORD_HASH = "$2b$12$GMhF7pN4QnMlHOQXOqjd1OitKWPSmAO3FwB0PHzKtcZR/sAMryz76";
@@ -733,6 +734,64 @@ test("send_agent_message auto-unarchives archived agents", async () => {
     removeTempDirSync(cwd);
   }
 }, 180000);
+
+test("send_agent_message echoes the client message id in the projected user message", async () => {
+  const cwd = tmpCwd();
+  execSync("git init -b main", { cwd, stdio: "ignore" });
+  execSync('git config user.email "e2e@chisacode.test"', { cwd, stdio: "ignore" });
+  execSync('git config user.name "ChisaCode E2E"', { cwd, stdio: "ignore" });
+  writeFileSync(path.join(cwd, "README.md"), "# Temp\n");
+  execSync("git add README.md && git commit -m init", { cwd, stdio: "ignore" });
+  const localCtx = await createDaemonTestContext({
+    agentClients: {
+      mock: new MockLoadTestAgentClient(),
+    },
+  });
+  try {
+    const created = await localCtx.client.createAgent({
+      config: {
+        provider: "mock",
+        cwd,
+        model: "ten-second-stream",
+      },
+      initialPrompt: "Warm up the agent turn.",
+    });
+
+    let projectedMessageId: string | null = null;
+    let turnCompleted = false;
+    let turnError: unknown = null;
+    const unsubscribe = localCtx.client.subscribe((event) => {
+      if (event.type !== "agent_stream" || event.agentId !== created.id) {
+        return;
+      }
+      if (event.event.type === "timeline" && event.event.item.type === "user_message") {
+        projectedMessageId = event.event.item.messageId ?? null;
+      }
+      if (event.event.type === "turn_completed") {
+        turnCompleted = true;
+      }
+      if (event.event.type === "turn_failed") {
+        turnError = event.event;
+      }
+    });
+    await localCtx.client.sendMessage(created.id, "Echo my message id.", {
+      messageId: "client-msg-e2e-1",
+    });
+    await vi.waitFor(() => expect(turnCompleted).toBe(true), { timeout: 30_000 });
+    unsubscribe();
+    expect(turnError).toBeNull();
+    expect(turnCompleted).toBe(true);
+    // The app renders the user message optimistically with this id and
+    // matches the projection to it (composer busy ack / turn anchoring).
+    expect(projectedMessageId).toBe("client-msg-e2e-1");
+    // The app renders the user message optimistically with this id and
+    // matches the projection to it (composer busy ack / turn anchoring).
+    expect(projectedMessageId).toBe("client-msg-e2e-1");
+  } finally {
+    await localCtx.cleanup();
+    removeTempDirSync(cwd);
+  }
+}, 120000);
 
 test("refresh_agent auto-unarchives archived agents", async () => {
   const cwd = tmpCwd();

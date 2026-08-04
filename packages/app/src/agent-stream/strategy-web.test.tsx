@@ -139,6 +139,8 @@ describe("createWebStreamStrategy", () => {
             listStyle: null,
             baseListContentContainerStyle: null,
             forwardListContentContainerStyle: null,
+            turnAnchorRequest: null,
+            isTurnAnchorEnabled: false,
           })}
         </>,
       );
@@ -184,6 +186,8 @@ describe("createWebStreamStrategy", () => {
             listStyle: null,
             baseListContentContainerStyle: null,
             forwardListContentContainerStyle: null,
+            turnAnchorRequest: null,
+            isTurnAnchorEnabled: false,
           })}
         </>,
       );

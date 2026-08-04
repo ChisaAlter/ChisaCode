@@ -522,13 +522,21 @@ test("grokbuild client uses the Grok Build ACP launcher", () => {
   });
 });
 
-test("includes mock provider only for development builds", () => {
+test("includes mock provider only for development builds or explicit opt-in", () => {
   expect(buildProviderRegistry(logger).mock).toBeUndefined();
   expect(buildProviderRegistry(logger, { isDev: false }).mock).toBeUndefined();
+  expect(buildProviderRegistry(logger, { enableDevProviders: false }).mock).toBeUndefined();
 
   const registry = buildProviderRegistry(logger, { isDev: true });
 
   expect(registry.mock).toMatchObject({
+    id: "mock",
+    label: "Mock Load Test",
+    defaultModeId: "load-test",
+  });
+
+  const optInRegistry = buildProviderRegistry(logger, { enableDevProviders: true });
+  expect(optInRegistry.mock).toMatchObject({
     id: "mock",
     label: "Mock Load Test",
     defaultModeId: "load-test",

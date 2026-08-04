@@ -55,6 +55,8 @@ export interface ProviderSnapshotManagerOptions {
   modelGatewayToken?: string;
   workspaceGitService?: Pick<WorkspaceGitService, "resolveRepoRoot">;
   isDev?: boolean;
+  /** Register dev-only providers (mock) in non-dev daemons for e2e/packaged gates. */
+  enableDevProviders?: boolean;
   extraClients?: Partial<Record<AgentProvider, AgentClient>>;
   refreshTimeoutMs?: number;
 }
@@ -156,6 +158,7 @@ export class ProviderSnapshotManager {
   private readonly logger: Logger;
   private readonly workspaceGitService?: Pick<WorkspaceGitService, "resolveRepoRoot">;
   private readonly isDev: boolean;
+  private readonly enableDevProviders: boolean;
   private readonly extraClients: Partial<Record<AgentProvider, AgentClient>>;
   private runtimeSettings: AgentProviderRuntimeSettingsMap | undefined;
   private providerOverrides: Record<string, ProviderOverride> | undefined;
@@ -174,6 +177,7 @@ export class ProviderSnapshotManager {
     this.logger = options.logger;
     this.workspaceGitService = options.workspaceGitService;
     this.isDev = options.isDev === true;
+    this.enableDevProviders = options.enableDevProviders === true;
     this.extraClients = options.extraClients ?? {};
     this.runtimeSettings = options.runtimeSettings;
     this.providerOverrides = options.providerOverrides;
@@ -508,6 +512,7 @@ export class ProviderSnapshotManager {
       modelGatewayToken: this.modelGatewayToken,
       workspaceGitService: this.workspaceGitService,
       isDev: this.isDev,
+      enableDevProviders: this.enableDevProviders,
     });
   }
 

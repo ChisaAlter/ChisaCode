@@ -19,6 +19,7 @@ import {
   ActivityIndicator,
   type PressableStateCallbackType,
   type StyleProp,
+  type TextStyle,
   type ViewStyle,
 } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
@@ -64,7 +65,11 @@ import { QuestionFormCard } from "@/components/question-form-card";
 import { ToolCallSheetProvider } from "@/components/tool-call-sheet";
 import { type AgentStreamRenderModel, buildAgentStreamRenderModel } from "./model";
 import { resolveStreamRenderStrategy } from "./strategy-resolver";
-import { type StreamSegmentRenderers, type StreamViewportHandle } from "./strategy";
+import {
+  type StreamSegmentRenderers,
+  type StreamViewportHandle,
+  type TurnAnchorRequest,
+} from "./strategy";
 import { CompletedTurnFooterRow, TurnFooter, type TurnContentStrategy } from "./turn-footer";
 import { layoutStream, type StreamLayoutItem } from "./layout";
 import {
@@ -72,6 +77,7 @@ import {
   type BottomAnchorRouteRequest,
 } from "./bottom-anchor-controller";
 import { submitPermissionResponse } from "./permission-response";
+import { deriveWorkLogCollapse } from "./turn-fold";
 import {
   AssistantFileLinkResolverProvider,
   normalizeInlinePathTarget,
@@ -221,6 +227,7 @@ function renderLiveHeadStreamItem(input: {
 export interface AgentStreamViewHandle {
   scrollToBottom(reason?: BottomAnchorLocalRequest["reason"]): void;
   prepareForViewportChange(): void;
+  requestTurnAnchor(request: TurnAnchorRequest): void;
 }
 
 export interface AgentStreamViewProps {
@@ -233,6 +240,8 @@ export interface AgentStreamViewProps {
   isAuthoritativeHistoryReady?: boolean;
   toast?: ToastApi | null;
   onOpenWorkspaceFile?: (request: WorkspaceFileOpenRequest) => void;
+  turnAnchorRequest?: TurnAnchorRequest | null;
+  isTurnAnchorEnabled?: boolean;
 }
 
 const EMPTY_STREAM_HEAD: StreamItem[] = [];
@@ -249,6 +258,8 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       isAuthoritativeHistoryReady = true,
       toast,
       onOpenWorkspaceFile,
+      turnAnchorRequest = null,
+      isTurnAnchorEnabled = false,
     },
     ref,
   ) {
@@ -268,6 +279,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
     const [expandedInlineToolCallIds, setExpandedInlineToolCallIds] = useState<Set<string>>(
       new Set(),
     );
+    const [expandedWorkLogGroupIds, setExpandedWorkLogGroupIds] = useState<Set<string>>(new Set());
     const openFileExplorerForCheckout = usePanelStore((state) => state.openFileExplorerForCheckout);
     const setExplorerTabForCheckout = usePanelStore((state) => state.setExplorerTabForCheckout);
 
@@ -405,6 +417,9 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
         prepareForViewportChange() {
           viewportRef.current?.prepareForViewportChange();
         },
+        requestTurnAnchor(request) {
+          viewportRef.current?.requestTurnAnchor(request);
+        },
       }),
       [],
     );
@@ -474,12 +489,21 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
                 agentId={agentId}
                 client={client}
                 spacing={layoutItem.assistantSpacing}
+                isStreaming={agent.status === "running"}
               />
             </AssistantFileLinkResolverProvider>
           </View>
         );
       },
-      [client, handleInlinePathPress, resolvedServerId, toast, workspaceRoot, agentId],
+      [
+        agent.status,
+        client,
+        handleInlinePathPress,
+        resolvedServerId,
+        toast,
+        workspaceRoot,
+        agentId,
+      ],
     );
 
     const renderThoughtItem = useCallback(
@@ -574,11 +598,33 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
         );
         const supportingItems = group.filter((candidate) => candidate.item.kind !== "tool_call");
 
+        // While the agent is running, keep every badge visible so live tool
+        // activity reads as work-in-progress; once idle, collapse the run to
+        // its last badge with a "+N" affordance (reference implementation
+        // MAX_VISIBLE_WORK_LOG_ENTRIES behavior).
+        const groupId = layoutItem.item.id;
+        const workLogCollapse =
+          agent.status === "running"
+            ? null
+            : deriveWorkLogCollapse({
+                toolEntries: toolCalls.map((candidate) => candidate.item),
+                expanded: expandedWorkLogGroupIds.has(groupId),
+              });
+        const visibleIds =
+          workLogCollapse === null
+            ? null
+            : new Set(workLogCollapse.visibleEntries.map((entry) => entry.id));
+        const visibleToolCalls =
+          visibleIds === null
+            ? toolCalls
+            : toolCalls.filter((candidate) => visibleIds.has(candidate.item.id));
+        const hiddenCount = workLogCollapse?.hiddenCount ?? 0;
+
         return (
           <View style={stylesheet.workbenchToolSequenceGroup}>
-            {toolCalls.length > 0 ? (
+            {visibleToolCalls.length > 0 ? (
               <View style={stylesheet.workbenchToolBadgeRow}>
-                {toolCalls.map((candidate) => (
+                {visibleToolCalls.map((candidate) => (
                   <View key={candidate.item.id} style={stylesheet.workbenchToolBadgeSlot}>
                     {renderToolCallItem(
                       candidate,
@@ -588,6 +634,16 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
                     )}
                   </View>
                 ))}
+                {hiddenCount > 0 ? (
+                  <WorkLogMoreButton
+                    groupId={groupId}
+                    hiddenCount={hiddenCount}
+                    onToggleWorkLogGroup={setExpandedWorkLogGroupIds}
+                    slotStyle={stylesheet.workbenchToolBadgeSlot}
+                    moreBadgeStyle={stylesheet.workbenchToolMoreBadge}
+                    moreBadgeTextStyle={stylesheet.workbenchToolMoreBadgeText}
+                  />
+                ) : null}
               </View>
             ) : null}
             {supportingItems.map((candidate) => {
@@ -603,7 +659,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
           </View>
         );
       },
-      [renderThoughtItem, renderToolCallItem],
+      [agent.status, expandedWorkLogGroupIds, renderThoughtItem, renderToolCallItem],
     );
 
     const renderStreamItemContent = useCallback(
@@ -834,6 +890,8 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
               listStyle: stylesheet.list,
               baseListContentContainerStyle: stylesheet.listContentContainer,
               forwardListContentContainerStyle: stylesheet.forwardListContentContainer,
+              turnAnchorRequest,
+              isTurnAnchorEnabled,
             })}
           </MessageOuterSpacingProvider>
           {!isNearBottom && (
@@ -936,6 +994,48 @@ function PermissionActionButton({
           <Text style={optionTextStyle}>{action.label}</Text>
         </View>
       )}
+    </Pressable>
+  );
+}
+
+interface WorkLogMoreButtonProps {
+  groupId: string;
+  hiddenCount: number;
+  onToggleWorkLogGroup: React.Dispatch<React.SetStateAction<Set<string>>>;
+  slotStyle: StyleProp<ViewStyle>;
+  moreBadgeStyle: StyleProp<ViewStyle>;
+  moreBadgeTextStyle: StyleProp<TextStyle>;
+}
+
+function WorkLogMoreButton({
+  groupId,
+  hiddenCount,
+  onToggleWorkLogGroup,
+  slotStyle,
+  moreBadgeStyle,
+  moreBadgeTextStyle,
+}: WorkLogMoreButtonProps) {
+  const handlePress = useCallback(() => {
+    onToggleWorkLogGroup((previous) => {
+      const next = new Set(previous);
+      if (next.has(groupId)) {
+        next.delete(groupId);
+      } else {
+        next.add(groupId);
+      }
+      return next;
+    });
+  }, [groupId, onToggleWorkLogGroup]);
+  return (
+    <Pressable
+      onPress={handlePress}
+      accessibilityRole="button"
+      accessibilityLabel={`Show ${hiddenCount} more tool calls`}
+      style={slotStyle}
+    >
+      <View style={moreBadgeStyle}>
+        <Text style={moreBadgeTextStyle}>+{hiddenCount}</Text>
+      </View>
     </Pressable>
   );
 }
@@ -1215,6 +1315,24 @@ const stylesheet = StyleSheet.create((theme) => ({
     width: "auto",
     maxWidth: 220,
     alignSelf: "flex-start",
+  },
+  workbenchToolMoreBadge: {
+    height: 28,
+    minWidth: 36,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface0,
+  },
+  workbenchToolMoreBadgeText: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: "500",
+    color: theme.colors.mutedForeground,
+    fontVariant: ["tabular-nums"],
   },
   streamItemWrapper: {
     width: "100%",

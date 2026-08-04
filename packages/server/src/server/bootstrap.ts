@@ -445,6 +445,8 @@ export interface ChisaCodeDaemonConfig {
   staticDir: string;
   mcpDebug: boolean;
   isDev?: boolean;
+  /** Register dev-only providers (mock) in non-dev daemons for e2e/packaged gates. */
+  enableDevProviders?: boolean;
   agentClients: Partial<Record<AgentProvider, AgentClient>>;
   agentStoragePath: string;
   relayEnabled?: boolean;
@@ -957,6 +959,7 @@ export async function createChisaCodeDaemon(
     modelGatewayToken,
     workspaceGitService,
     isDev: config.isDev === true,
+    enableDevProviders: config.enableDevProviders === true,
     extraClients: config.agentClients,
   });
   const initialAgentManagerState = providerSnapshotManager.getAgentManagerProviderState();

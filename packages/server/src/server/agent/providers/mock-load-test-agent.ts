@@ -105,6 +105,8 @@ interface ActiveTurn {
   queue: CycleEvent[];
   emittedTokens: number;
   turnStarted: boolean;
+  /** Finish when the queue drains instead of repeating the cycle. */
+  finishWhenQueueDrained?: boolean;
 }
 
 type CycleEvent =
@@ -376,6 +378,23 @@ function buildCycleQueue(turnId: string, cycle: number): CycleEvent[] {
     queue.push({ kind: "assistant_token", text: tok });
   }
 
+  queue.push(...buildCycleToolEvents(turnId, cycle));
+
+  for (const tok of tokenize(buildClosingParagraph())) {
+    queue.push({ kind: "assistant_token", text: tok });
+  }
+
+  queue.push({ kind: "usage" });
+
+  return queue;
+}
+
+/**
+ * The edit/bash tool pair shared by the standard cycle and the
+ * trailing-tool-run turn (which places all tools after the final text so the
+ * app's completed-turn collapse keeps them as a badge run).
+ */
+function buildCycleToolEvents(turnId: string, cycle: number): CycleEvent[] {
   const editFile = "packages/app/src/hooks/use-scroll-anchor.ts";
   const editDetail: ToolCallDetail = {
     type: "edit",
@@ -385,9 +404,6 @@ function buildCycleQueue(turnId: string, cycle: number): CycleEvent[] {
     unifiedDiff: buildEditDiff(editFile),
   };
   const editId = `${turnId}:edit:${cycle}`;
-  queue.push({ kind: "tool_running", callId: editId, name: "edit", detail: editDetail });
-  queue.push({ kind: "tool_completed", callId: editId, name: "edit", detail: editDetail });
-
   const shellDetail: ToolCallDetail = {
     type: "shell",
     command: "node scripts/simulate-stream-burst.mjs",
@@ -397,16 +413,91 @@ function buildCycleQueue(turnId: string, cycle: number): CycleEvent[] {
     exitCode: 0,
   };
   const shellId = `${turnId}:bash:${cycle}`;
-  queue.push({ kind: "tool_running", callId: shellId, name: "bash", detail: shellDetail });
-  queue.push({ kind: "tool_completed", callId: shellId, name: "bash", detail: shellDetail });
+  return [
+    { kind: "tool_running", callId: editId, name: "edit", detail: editDetail },
+    { kind: "tool_completed", callId: editId, name: "edit", detail: editDetail },
+    { kind: "tool_running", callId: shellId, name: "bash", detail: shellDetail },
+    { kind: "tool_completed", callId: shellId, name: "bash", detail: shellDetail },
+  ];
+}
 
+/**
+ * Turn queue for the "end the turn with a tool run" mode: all text tokens
+ * first, then the read/grep/edit/bash tool run as the last items (no closing
+ * text after it), so the tool run survives the app's completed-turn collapse
+ * and renders as a foldable badge run.
+ */
+function buildTrailingToolRunQueue(turnId: string): CycleEvent[] {
+  const queue: CycleEvent[] = [];
+  for (const tok of tokenize(buildIntroParagraph(1))) {
+    queue.push({ kind: "assistant_token", text: tok });
+  }
+  for (const tok of tokenize(buildReasoningText())) {
+    queue.push({ kind: "reasoning_token", text: tok });
+  }
+  for (const tok of tokenize(buildMidParagraph())) {
+    queue.push({ kind: "assistant_token", text: tok });
+  }
   for (const tok of tokenize(buildClosingParagraph())) {
     queue.push({ kind: "assistant_token", text: tok });
   }
 
-  queue.push({ kind: "usage" });
+  // A fenced code block exercises the streaming highlight path
+  // (HighlightedCodeBlock with cacheable:false while streaming, cache write
+  // after completion — the Slice E strategy) on every surface.
+  for (const tok of tokenize(
+    "```ts\nconst anchorRef = useRef<FlatList>(null);\nconst NEAR_BOTTOM_PX = 160;\n```",
+  )) {
+    queue.push({ kind: "assistant_token", text: tok });
+  }
 
+  const readDetail: ToolCallDetail = {
+    type: "read",
+    filePath: "packages/app/src/components/conversation-list.tsx",
+  };
+  const readId = `${turnId}:read:1`;
+  queue.push({ kind: "tool_running", callId: readId, name: "read", detail: readDetail });
+  queue.push({
+    kind: "tool_completed",
+    callId: readId,
+    name: "read",
+    detail: {
+      ...readDetail,
+      content:
+        "export function ConversationList() {\n  const ref = useRef<FlatList>(null);\n  // ...\n}",
+    },
+  });
+
+  const grepDetail: ToolCallDetail = {
+    type: "search",
+    query: "scrollToEnd",
+    toolName: "grep",
+    mode: "files_with_matches",
+  };
+  const grepId = `${turnId}:grep:1`;
+  queue.push({ kind: "tool_running", callId: grepId, name: "grep", detail: grepDetail });
+  queue.push({
+    kind: "tool_completed",
+    callId: grepId,
+    name: "grep",
+    detail: {
+      ...grepDetail,
+      filePaths: [
+        "packages/app/src/components/conversation-list.tsx",
+        "packages/app/src/hooks/use-scroll-anchor.ts",
+      ],
+      numFiles: 2,
+      numMatches: 5,
+    },
+  });
+
+  queue.push(...buildCycleToolEvents(turnId, 1));
+  queue.push({ kind: "usage" });
   return queue;
+}
+
+function shouldEmitTrailingToolRun(prompt: AgentPromptInput): boolean {
+  return /end\s+(?:the\s+)?turn\s+(?:with|on)\s+(?:a\s+)?tool run/i.test(promptToText(prompt));
 }
 
 function createToolCall(input: {
@@ -548,7 +639,10 @@ export class MockLoadTestAgentSession implements AgentSession {
       turnStarted: false,
     };
     this.activeTurn = turn;
-    const userMessageId = randomUUID();
+    // Echo the client's message id when provided (the app renders the user
+    // message optimistically with that id and matches the projection to it);
+    // otherwise fall back to a server-generated id.
+    const userMessageId = options?.messageId ?? randomUUID();
     setTimeout(() => {
       if (this.activeTurn?.turnId !== turnId) {
         return;
@@ -575,6 +669,8 @@ export class MockLoadTestAgentSession implements AgentSession {
       this.scheduleLargePayloadTurn(turn, largePayload);
     } else if (stress) {
       this.scheduleStressTurn(turn, stress);
+    } else if (shouldEmitTrailingToolRun(prompt)) {
+      this.scheduleTrailingToolRunTurn(turn);
     } else {
       this.schedule(turn, 0);
     }
@@ -704,6 +800,17 @@ export class MockLoadTestAgentSession implements AgentSession {
       this.tick(turn);
     }, delayMs);
     turn.timer.unref?.();
+  }
+
+  /**
+   * Single-shot turn for the "end the turn with a tool run" mode: text first,
+   * then the tool run as the last items, then finish (no cycle repetition and
+   * no trailing end-marker text, so the app keeps the tool run as badges).
+   */
+  private scheduleTrailingToolRunTurn(turn: ActiveTurn): void {
+    turn.finishWhenQueueDrained = true;
+    turn.queue = buildTrailingToolRunQueue(turn.turnId);
+    this.schedule(turn, 0);
   }
 
   private failConfiguredRewind(): void {
@@ -953,6 +1060,11 @@ export class MockLoadTestAgentSession implements AgentSession {
     }
 
     if (turn.queue.length === 0) {
+      if (turn.finishWhenQueueDrained) {
+        // No end-marker text: the trailing tool run must stay the last items.
+        this.finishTurnWithText(turn, "Synthetic trailing tool run complete");
+        return;
+      }
       turn.cycle += 1;
       turn.queue = buildCycleQueue(turn.turnId, turn.cycle);
     }

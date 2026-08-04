@@ -701,6 +701,11 @@ interface AssistantMessageProps {
   agentId?: string;
   client?: DaemonClient | null;
   spacing?: "default" | "compactTop" | "compactBottom" | "compactBoth";
+  /**
+   * True while the agent turn is still running. Streaming code fences are
+   * tokenized without polluting the shared highlight cache.
+   */
+  isStreaming?: boolean;
 }
 
 export const assistantMessageStylesheet = StyleSheet.create((theme) => ({
@@ -1254,6 +1259,7 @@ export const AssistantMessage = memo(function AssistantMessage({
   agentId,
   client,
   spacing = "default",
+  isStreaming = false,
 }: AssistantMessageProps) {
   const markdownParser = useMemo(() => {
     const parser = MarkdownIt({ typographer: true, linkify: true });
@@ -1319,6 +1325,7 @@ export const AssistantMessage = memo(function AssistantMessage({
             language={node.sourceInfo}
             inheritedStyles={inheritedStyles}
             textStyle={styles.fence}
+            isStreaming={isStreaming}
           />
         );
       },
@@ -1424,7 +1431,7 @@ export const AssistantMessage = memo(function AssistantMessage({
         );
       },
     };
-  }, [client, fileLinkActions, markdownParser, serverId, workspaceRoot, agentId]);
+  }, [agentId, client, fileLinkActions, isStreaming, markdownParser, serverId, workspaceRoot]);
 
   // During streaming the agent emits tokens rapidly and `message` changes on
   // every chunk. Re-parsing + re-rendering the whole markdown tree on each

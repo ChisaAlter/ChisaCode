@@ -42,6 +42,13 @@ export interface StreamEdgeSlotProps {
 export interface StreamViewportHandle {
   scrollToBottom: (reason?: BottomAnchorLocalRequest["reason"]) => void;
   prepareForViewportChange: () => void;
+  requestTurnAnchor: (request: TurnAnchorRequest) => void;
+}
+
+export interface TurnAnchorRequest {
+  reason: "message-sent" | "jump-to-end";
+  anchorMessageId: string | null;
+  requestKey: string;
 }
 
 export interface StreamSegmentRenderers {
@@ -68,6 +75,8 @@ export interface StreamRenderInput {
   listStyle: StyleProp<ViewStyle>;
   baseListContentContainerStyle: StyleProp<ViewStyle>;
   forwardListContentContainerStyle: StyleProp<ViewStyle>;
+  turnAnchorRequest: TurnAnchorRequest | null;
+  isTurnAnchorEnabled: boolean;
 }
 
 export interface ResolveStreamRenderStrategyInput {

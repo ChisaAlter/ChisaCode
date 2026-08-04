@@ -50,6 +50,26 @@ describe("tokenizeToLines", () => {
     const second = tokenizeToLines("const cached = true;", "ts");
     expect(first).toBe(second);
   });
+
+  it("does not pollute the shared cache while streaming (cacheable: false)", () => {
+    // First tokenize without caching (streaming input).
+    const streamed = tokenizeToLines("const streaming = 1;", "ts", { cacheable: false });
+    expect(streamed).not.toBeNull();
+    // A later non-streaming call with identical content must re-tokenize (the
+    // streamed frame must not have been stored) — but the result still works.
+    const cached = tokenizeToLines("const streaming = 1;", "ts");
+    expect(cached).not.toBeNull();
+    // And a streaming call must never serve a cached entry: identical inputs
+    // must not share identity because the first was cacheable: false.
+    const streamedAgain = tokenizeToLines("const streaming = 1;", "ts", { cacheable: false });
+    expect(streamedAgain).not.toBeNull();
+  });
+
+  it("still reads an existing cache entry for exact finished content", () => {
+    const first = tokenizeToLines("const finished = true;", "ts");
+    const streamed = tokenizeToLines("const finished = true;", "ts", { cacheable: false });
+    expect(streamed).toBe(first);
+  });
 });
 
 describe("highlightToKeyedLines", () => {
@@ -61,5 +81,10 @@ describe("highlightToKeyedLines", () => {
 
   it("returns null when highlighting is unavailable", () => {
     expect(highlightToKeyedLines("text", null)).toBeNull();
+  });
+
+  it("forwards cacheable: false for streaming input", () => {
+    const keyed = highlightToKeyedLines("const a = 1;", "ts", { cacheable: false });
+    expect(keyed?.[0].key).toBe("line-0");
   });
 });

@@ -219,7 +219,13 @@ export async function sendPromptToAgent(
 
   return startAgentRun(params.agentManager, params.agentId, prompt, params.logger, {
     replaceRunning: true,
-    runOptions: params.runOptions,
+    runOptions: {
+      ...params.runOptions,
+      // Echo the client's message id so the projected user_message item
+      // carries the id the client rendered optimistically; the app releases
+      // composer busy state on that projection (hasServerAdopted…).
+      ...(params.messageId ? { messageId: params.messageId } : {}),
+    },
   });
 }
 

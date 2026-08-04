@@ -82,6 +82,13 @@ export interface BuildProviderRegistryOptions {
   modelGatewayToken?: string;
   workspaceGitService?: Pick<WorkspaceGitService, "resolveRepoRoot">;
   isDev?: boolean;
+  /**
+   * Register development-only providers (e.g. mock load-test) in non-dev
+   * daemons. Used by packaged/e2e environments that need the synthetic
+   * streaming provider for deterministic UI gates; production daemons do not
+   * set this.
+   */
+  enableDevProviders?: boolean;
 }
 
 interface ProviderClientFactoryOptions extends Pick<
@@ -518,12 +525,14 @@ function buildResolvedBuiltinProviders(
   runtimeSettings: AgentProviderRuntimeSettingsMap | undefined,
   options: Pick<BuildProviderRegistryOptions, "workspaceGitService">,
   isDev: boolean,
+  enableDevProviders: boolean,
 ): Map<string, ResolvedProvider> {
   const resolvedProviders = new Map<string, ResolvedProvider>();
 
-  const definitions = isDev
-    ? [...AGENT_PROVIDER_DEFINITIONS, ...DEV_AGENT_PROVIDER_DEFINITIONS]
-    : AGENT_PROVIDER_DEFINITIONS;
+  const definitions =
+    isDev || enableDevProviders
+      ? [...AGENT_PROVIDER_DEFINITIONS, ...DEV_AGENT_PROVIDER_DEFINITIONS]
+      : AGENT_PROVIDER_DEFINITIONS;
 
   for (const definition of definitions) {
     const override = providerOverrides[definition.id];
@@ -1188,6 +1197,7 @@ export function buildProviderRegistry(
       workspaceGitService: options?.workspaceGitService,
     },
     options?.isDev === true,
+    options?.enableDevProviders === true,
   );
   addResolvedCustomProviders(resolvedProviders, providerOverrides, runtimeSettings, {
     workspaceGitService: options?.workspaceGitService,

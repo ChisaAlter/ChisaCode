@@ -8,6 +8,7 @@ import {
 } from "@/types/stream";
 import {
   createAgentStreamReducerQueue,
+  hasServerAdoptedOptimisticUserMessage,
   processTimelineResponse,
   processAgentStreamEvent,
   processAgentStreamEvents,
@@ -1801,5 +1802,81 @@ describe("createAgentStreamReducerQueue", () => {
 
     expect(commits).toEqual(["agent-1:queued"]);
     expect(scheduler.size).toBe(0);
+  });
+});
+
+describe("hasServerAdoptedOptimisticUserMessage", () => {
+  it("returns false for a null optimistic message id", () => {
+    expect(
+      hasServerAdoptedOptimisticUserMessage({
+        optimisticMessageId: null,
+        tail: [],
+        head: [],
+      }),
+    ).toBe(false);
+  });
+
+  it("returns false when the id is absent from tail and head", () => {
+    expect(
+      hasServerAdoptedOptimisticUserMessage({
+        optimisticMessageId: "missing",
+        tail: [makeAssistantItem("hello")],
+        head: [],
+      }),
+    ).toBe(false);
+  });
+
+  it("returns false while the optimistic entry is still optimistic", () => {
+    const optimistic = makeOptimisticUserMessage("still sending", "optimistic-msg");
+    expect(
+      hasServerAdoptedOptimisticUserMessage({
+        optimisticMessageId: "optimistic-msg",
+        tail: [optimistic],
+        head: [],
+      }),
+    ).toBe(false);
+  });
+
+  it("returns true when the canonical entry lands in the tail", () => {
+    const canonical: Extract<StreamItem, { kind: "user_message" }> = {
+      kind: "user_message",
+      id: "optimistic-msg",
+      text: "adopted",
+      timestamp: new Date(2000),
+    };
+    expect(
+      hasServerAdoptedOptimisticUserMessage({
+        optimisticMessageId: "optimistic-msg",
+        tail: [canonical],
+        head: [],
+      }),
+    ).toBe(true);
+  });
+
+  it("returns true when the canonical entry lands in the head", () => {
+    const canonical: Extract<StreamItem, { kind: "user_message" }> = {
+      kind: "user_message",
+      id: "optimistic-msg",
+      text: "adopted",
+      timestamp: new Date(2000),
+    };
+    expect(
+      hasServerAdoptedOptimisticUserMessage({
+        optimisticMessageId: "optimistic-msg",
+        tail: [],
+        head: [canonical],
+      }),
+    ).toBe(true);
+  });
+
+  it("ignores optimistic duplicates of other messages", () => {
+    const otherOptimistic = makeOptimisticUserMessage("other", "optimistic-other");
+    expect(
+      hasServerAdoptedOptimisticUserMessage({
+        optimisticMessageId: "optimistic-msg",
+        tail: [otherOptimistic],
+        head: [],
+      }),
+    ).toBe(false);
   });
 });

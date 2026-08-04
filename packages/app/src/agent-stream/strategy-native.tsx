@@ -209,6 +209,18 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
         bottomAnchorController.prepareForStickyViewportChange();
         markNativeViewportSettling();
       },
+      // Native uses an inverted list with maintainVisibleContentPosition, so
+      // the anchored sent row stays in place naturally while the reply grows
+      // above it. Turn anchoring is a web-only behavior; keep the existing
+      // sticky-bottom semantics here.
+      requestTurnAnchor: (request) => {
+        if (request.reason === "message-sent") {
+          bottomAnchorController.requestLocalAnchor({
+            agentId,
+            reason: "message-sent",
+          });
+        }
+      },
     };
     viewportRef.current = handle;
     return () => {

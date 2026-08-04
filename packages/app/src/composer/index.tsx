@@ -66,6 +66,7 @@ import type { ClientSlashCommand } from "@/client-slash-commands";
 import { renderAttachmentTray, renderQueueTrack } from "@/composer/attachment-queue-renderers";
 import { useComposerAttachmentMenu } from "./attachment-menu";
 import { useComposerDeliveryController } from "./delivery-controller";
+import { useComposerSendProjectionAck } from "./use-composer-send-projection-ack";
 import { useComposerGithubPicker } from "./github/picker";
 import { useComposerKeyboardController } from "./keyboard-controller";
 import { useComposerQueueController } from "./queue-controller";
@@ -162,6 +163,12 @@ interface ComposerProps {
   commandDraftConfig?: DraftCommandConfig;
   /** Called when a message is about to be sent (any path: keyboard, dictation, queued). */
   onMessageSent?: () => void;
+  /**
+   * Called right after a send dispatch with the optimistic user message id
+   * (any send path). The id is stable across server adoption, so consumers
+   * can anchor UI on it without racing the daemon's projection.
+   */
+  onOptimisticMessageDispatched?: (messageId: string) => void;
   onComposerHeightChange?: (height: number) => void;
   onAttentionInputFocus?: () => void;
   onAttentionPromptSend?: () => void;
@@ -210,6 +217,7 @@ export function Composer({
   onFocusInput,
   commandDraftConfig,
   onMessageSent,
+  onOptimisticMessageDispatched,
   onComposerHeightChange,
   onAttentionInputFocus,
   onAttentionPromptSend,
@@ -283,6 +291,13 @@ export function Composer({
     anchorRef: attachButtonRef,
   });
 
+  // Send-busy is projection-driven: stay busy until the daemon adopts the
+  // optimistic user message, not until the whole turn settles.
+  const { isServerAdopted, trackPendingSend } = useComposerSendProjectionAck({
+    serverId,
+    agentId,
+  });
+
   const { runClientSlashCommand, submitMessage, canSubmitMessage } = useComposerDeliveryController({
     serverId,
     agentId,
@@ -301,6 +316,35 @@ export function Composer({
     setSendError,
     setIsProcessing,
   });
+  // Track the optimistic message id right after dispatch so busy state
+  // releases on server projection rather than on the whole turn.
+  const submitMessageWithProjectionAck = useCallback(
+    async (text: string, submitAttachments: ComposerAttachment[]) => {
+      const submitPromise = submitMessage(text, submitAttachments);
+      // The optimistic entry is appended synchronously inside submitMessage's
+      // dispatch path; pick it up from the store before awaiting.
+      const session = useSessionStore.getState().sessions[serverId];
+      const tail = session?.agentStreamTail?.get(agentId) ?? [];
+      const head = session?.agentStreamHead?.get(agentId) ?? [];
+      let latestOptimisticId: string | null = null;
+      for (const item of head) {
+        if (item.kind === "user_message" && item.optimistic) {
+          latestOptimisticId = item.id;
+        }
+      }
+      for (const item of tail) {
+        if (item.kind === "user_message" && item.optimistic) {
+          latestOptimisticId = item.id;
+        }
+      }
+      if (latestOptimisticId !== null) {
+        trackPendingSend(latestOptimisticId);
+        onOptimisticMessageDispatched?.(latestOptimisticId);
+      }
+      await submitPromise;
+    },
+    [agentId, onOptimisticMessageDispatched, serverId, submitMessage, trackPendingSend],
+  );
   const autocomplete = useAgentAutocomplete({
     userInput,
     cursorIndex,
@@ -323,6 +367,14 @@ export function Composer({
       setSendError(null);
     }
   }, [userInput, sendError]);
+
+  // A send failure ends the in-flight window: release the projection busy so
+  // the composer is not stuck waiting for a message the daemon never adopted.
+  useEffect(() => {
+    if (sendError) {
+      trackPendingSend(null);
+    }
+  }, [sendError, trackPendingSend]);
 
   useEffect(() => {
     setCursorIndex((current) => Math.min(current, userInput.length));
@@ -380,7 +432,7 @@ export function Composer({
     clearSentAttachments,
     runClientSlashCommand,
     canSubmitQueuedMessage: canSubmitMessage,
-    submitMessage,
+    submitMessage: submitMessageWithProjectionAck,
     setSendError,
   });
   const { handleSubmit } = useComposerSubmissionController({
@@ -395,7 +447,7 @@ export function Composer({
     isAgentRunning,
     canSubmitMessage,
     queueMessage,
-    submitMessage,
+    submitMessage: submitMessageWithProjectionAck,
     clearDraft,
     setUserInput,
     setSelectedAttachments,
@@ -601,7 +653,7 @@ export function Composer({
 
   const messageInputContainerRef = useRef<View>(null);
 
-  const isSubmitBusy = isProcessing || isSubmitLoading;
+  const isSubmitBusy = (isProcessing && !isServerAdopted) || isSubmitLoading;
   const messageInputAutoFocus = autoFocus && isDesktopWebBreakpoint;
   const submitLoadingPressHandler = isAgentRunning ? handleCancelAgent : undefined;
   const sendErrorNode = useMemo(

@@ -13,6 +13,13 @@ import { measureElement as measureVirtualElement, useVirtualizer } from "@tansta
 import { estimateStreamItemHeight } from "./web-virtualization";
 import type { StreamRenderInput, StreamStrategy, StreamViewportHandle } from "./strategy";
 import { createStreamStrategy } from "./strategy";
+import {
+  createTurnAnchorControllerDriver,
+  type TurnAnchorControllerDriver,
+  type TurnAnchorMeasurement,
+} from "./turn-anchor-controller";
+import type { TurnAnchorRequest } from "./turn-anchor-controller";
+import type { StreamItem } from "@/types/stream";
 
 interface CreateWebStreamStrategyInput {
   isMobileBreakpoint: boolean;
@@ -107,6 +114,8 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
     hasOlderHistory,
     scrollEnabled,
     isMobileBreakpoint,
+    turnAnchorRequest = null,
+    isTurnAnchorEnabled = false,
   } = props;
   const scrollContainerRef = useRef<HTMLElement | null>(null);
   const contentRef = useRef<HTMLElement | null>(null);
@@ -461,12 +470,25 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
         setFollowOutput(true);
         cancelPendingStickToBottom();
         forceStickToBottom();
+        // Forget any pending anchor: jumping to the end cancels anchoring.
+        turnAnchorRequestRef.current = null;
+        turnAnchorControllerRef.current?.applySendAnchor({
+          reason: "jump-to-end",
+          anchorMessageId: null,
+          requestKey: `${props.agentId}:jump-to-end`,
+        });
       },
       prepareForViewportChange: () => {
         if (!followOutputRef.current) {
           return;
         }
         scheduleStickToBottom();
+      },
+      requestTurnAnchor: (request) => {
+        // Record the request so the lazy measurement can resolve the anchor
+        // row, then hand it to the controller.
+        turnAnchorRequestRef.current = request;
+        turnAnchorControllerRef.current?.applySendAnchor(request);
       },
     };
     viewportRef.current = handle;
@@ -476,7 +498,250 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
       }
       cancelPendingStickToBottom();
     };
-  }, [cancelPendingStickToBottom, forceStickToBottom, scheduleStickToBottom, viewportRef]);
+  }, [
+    cancelPendingStickToBottom,
+    forceStickToBottom,
+    props.agentId,
+    scheduleStickToBottom,
+    viewportRef,
+  ]);
+
+  // ---------------------------------------------------------------------------
+  // Turn-anchor scroll (web only): after the user sends a message, pin the
+  // sent row near the top of the usable viewport and let the reply grow below
+  // it. Reuses the estimated row positions so no extra DOM measurement pass is
+  // needed, and falls back to plain sticky-bottom when disabled.
+  // ---------------------------------------------------------------------------
+
+  const turnAnchorControllerRef = useRef<TurnAnchorControllerDriver | null>(null);
+  const turnAnchorRequestRef = useRef<TurnAnchorRequest | null>(null);
+  const anchorScrollDeltaRef = useRef(0);
+  const previousContentHeightRef = useRef(0);
+
+  const turnAnchorMeasurementRef = useRef<TurnAnchorMeasurement>({
+    data: [],
+    scroll: 0,
+    scrollLength: 0,
+    viewportLength: 0,
+    positionAtIndex: () => undefined,
+    sizeAtIndex: () => undefined,
+    anchorIndex: null,
+    composerOverlayHeight: 0,
+  });
+
+  const getTurnAnchorMeasurement = useCallback((): TurnAnchorMeasurement => {
+    const current = turnAnchorMeasurementRef.current;
+    const anchorId = turnAnchorRequestRef.current?.anchorMessageId ?? null;
+    if (anchorId === null) {
+      return current;
+    }
+    // Resolve the anchor row lazily at positioning time: the request can land
+    // before or after the optimistic entry appears in the rendered items.
+    let anchorIndex: number | null = null;
+    for (let index = 0; index < current.data.length; index += 1) {
+      const item = current.data[index] as { id?: string } | undefined;
+      if (item?.id === anchorId) {
+        anchorIndex = index;
+        break;
+      }
+    }
+    if (anchorIndex === null) {
+      // The daemon may have adopted the message under a different id (the
+      // canonical merge keeps the server id), so fall back to the last user
+      // message — the row the user just sent.
+      for (let index = current.data.length - 1; index >= 0; index -= 1) {
+        const item = current.data[index] as { kind?: string } | undefined;
+        if (item?.kind === "user_message") {
+          anchorIndex = index;
+          break;
+        }
+      }
+    }
+    return anchorIndex === current.anchorIndex ? current : { ...current, anchorIndex };
+  }, []);
+
+  const scrollByDelta = useCallback((delta: number) => {
+    const scrollContainer = scrollContainerRef.current;
+    if (!scrollContainer) {
+      return;
+    }
+    anchorScrollDeltaRef.current += delta;
+    const nextTop = scrollContainer.scrollTop + delta;
+    // Clamp to the valid range; the scroll handler keeps follow state in sync.
+    scrollContainer.scrollTop = Math.max(
+      0,
+      Math.min(nextTop, scrollContainer.scrollHeight - scrollContainer.clientHeight),
+    );
+  }, []);
+
+  const scheduleFrame = useCallback((callback: () => void): number => {
+    return window.requestAnimationFrame(callback);
+  }, []);
+  const cancelFrame = useCallback((handle: unknown) => {
+    if (typeof handle === "number") {
+      window.cancelAnimationFrame(handle);
+    }
+  }, []);
+
+  useEffect(() => {
+    turnAnchorControllerRef.current?.destroy();
+    turnAnchorControllerRef.current = createTurnAnchorControllerDriver({
+      getMeasurement: getTurnAnchorMeasurement,
+      scrollByDelta,
+      onModeChange: (nextMode) => {
+        if (nextMode === "following-end") {
+          setFollowOutput(true);
+          scheduleStickToBottom();
+        } else if (nextMode === "anchoring-new-turn") {
+          setFollowOutput(false);
+          cancelPendingStickToBottom();
+        }
+      },
+      scheduleFrame,
+      cancelFrame,
+    });
+    return () => {
+      turnAnchorControllerRef.current?.destroy();
+      turnAnchorControllerRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.agentId]);
+
+  // Build the flat rendered item order (virtualized + mounted + live head) so
+  // the anchor row index and estimated positions are consistent with the DOM.
+  const orderedRenderItems = useMemo<StreamItem[]>(() => {
+    if (shouldUseVirtualizer) {
+      return [...segments.historyVirtualized, ...segments.historyMounted, ...segments.liveHead];
+    }
+    return [...segments.historyMounted, ...segments.liveHead];
+  }, [
+    segments.historyMounted,
+    segments.historyVirtualized,
+    segments.liveHead,
+    shouldUseVirtualizer,
+  ]);
+
+  useEffect(() => {
+    const items = orderedRenderItems;
+
+    const scrollContainer = scrollContainerRef.current;
+    const scroll = scrollContainer?.scrollTop ?? 0;
+    const scrollLength = scrollContainer?.scrollHeight ?? 0;
+    const viewportLength = scrollContainer?.clientHeight ?? 0;
+
+    // anchorIndex is resolved lazily in getTurnAnchorMeasurement, because the
+    // anchor request can arrive in a different commit than the row it targets.
+    turnAnchorMeasurementRef.current = {
+      data: items,
+      scroll,
+      scrollLength,
+      viewportLength,
+      positionAtIndex: (index) => {
+        if (index < 0) {
+          return 0;
+        }
+        let top = 0;
+        for (let i = 0; i < index; i += 1) {
+          const item = items[i];
+          top += item ? estimateStreamItemHeight(item) : 0;
+        }
+        return top;
+      },
+      sizeAtIndex: (index) => {
+        const item = items[index];
+        return item ? estimateStreamItemHeight(item) : undefined;
+      },
+      anchorIndex: null,
+      composerOverlayHeight: 0,
+    };
+  }, [orderedRenderItems, props.agentId, shouldUseVirtualizer]);
+
+  // Feed send anchors from the parent into the controller, keyed per agent.
+  useEffect(() => {
+    if (!isTurnAnchorEnabled) {
+      return;
+    }
+    if (!turnAnchorRequest) {
+      return;
+    }
+    turnAnchorRequestRef.current = turnAnchorRequest;
+    turnAnchorControllerRef.current?.applySendAnchor(turnAnchorRequest);
+    previousContentHeightRef.current = turnAnchorMeasurementRef.current.scrollLength;
+  }, [isTurnAnchorEnabled, turnAnchorRequest]);
+
+  // Notify the controller of content growth so the reply end stays visible
+  // once the anchored turn overflows the usable viewport.
+  useEffect(() => {
+    if (!isTurnAnchorEnabled) {
+      return;
+    }
+    const scrollContainer = scrollContainerRef.current;
+    if (!scrollContainer || typeof ResizeObserver === "undefined") {
+      return;
+    }
+    const observer = new ResizeObserver(() => {
+      const contentHeight = scrollContainer.scrollHeight;
+      turnAnchorControllerRef.current?.handleContentSizeChange({
+        previousContentHeight: previousContentHeightRef.current,
+        contentHeight,
+      });
+      previousContentHeightRef.current = contentHeight;
+    });
+    observer.observe(scrollContainer);
+    if (contentRef.current) {
+      observer.observe(contentRef.current);
+    }
+    return () => {
+      observer.disconnect();
+    };
+  }, [contentRef, isTurnAnchorEnabled, scrollContainerRef]);
+
+  // User scroll-away while anchored detaches to free-scrolling; returning to
+  // the bottom resumes following-end.
+  useEffect(() => {
+    if (!isTurnAnchorEnabled) {
+      return;
+    }
+    const scrollContainer = scrollContainerRef.current;
+    if (!scrollContainer) {
+      return;
+    }
+    let lastScrollTop = scrollContainer.scrollTop;
+    const handleScroll = () => {
+      const currentScrollTop = scrollContainer.scrollTop;
+      const delta = currentScrollTop - lastScrollTop;
+      lastScrollTop = currentScrollTop;
+      const nearBottom = isScrollContainerNearBottom(scrollContainer);
+      turnAnchorControllerRef.current?.handleScrollNearBottomChange({
+        nextIsNearBottom: nearBottom,
+        scrollDelta: delta,
+      });
+    };
+    scrollContainer.addEventListener("scroll", handleScroll, { passive: true });
+    return () => {
+      scrollContainer.removeEventListener("scroll", handleScroll);
+    };
+  }, [isTurnAnchorEnabled, scrollContainerRef]);
+
+  // Detach when the user wheels/touches upward while anchored.
+  useEffect(() => {
+    if (!isTurnAnchorEnabled) {
+      return;
+    }
+    const scrollContainer = scrollContainerRef.current;
+    if (!scrollContainer) {
+      return;
+    }
+    const handleWheel = (event: WheelEvent) => {
+      if (event.deltaY < 0) {
+        turnAnchorControllerRef.current?.detachByUser();
+      }
+    };
+    scrollContainer.addEventListener("wheel", handleWheel, { passive: true });
+    return () => {
+      scrollContainer.removeEventListener("wheel", handleWheel);
+    };
+  }, [isTurnAnchorEnabled, scrollContainerRef]);
 
   const contentContainerStyle = useMemo((): CSSProperties => {
     // Soft .stream: padding 14px 28px 10px.

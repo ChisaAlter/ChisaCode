@@ -313,6 +313,11 @@ export function loadConfig(
     appBaseUrl,
   } = resolveStaticLoadConfigSettings(env, options?.cli, persisted);
 
+  // Packaged/e2e daemons run with CHISACODE_NODE_ENV=production (the desktop
+  // launcher forces it), so the dev-only mock provider is normally unavailable
+  // there. Allow deterministic UI gates to opt dev providers in explicitly.
+  const enableDevProviders = chisacodeEnv(env, "ENABLE_DEV_PROVIDERS") === "1";
+
   const relay = resolveRelayConfig({
     env,
     persisted,
@@ -344,6 +349,7 @@ export function loadConfig(
     mcpServers,
     mcpDebug: env.MCP_DEBUG === "1",
     isDev: resolveChisaCodeNodeEnv(env) === "development",
+    enableDevProviders,
     agentStoragePath: path.join(chisacodeHome, "agents"),
     staticDir: "public",
     agentClients: {},
