@@ -223,6 +223,12 @@ AGENTS.md 第 41/49 行要求系统性问题建独立 roadmap 条目：
 | 2.4 messageId schema         | `z.string().max(256)` on send schemas                                                | ✅                  |
 | 2.5 mock-slow 测试           | opt-in on/off 断言                                                                   | ✅ registry 40/40   |
 
+### 5.2.1 改动后门禁复跑证据（2026-08-04）
+
+- `npx playwright test --project='Desktop Chrome' e2e/highlight-streaming.spec.ts e2e/turn-anchor.spec.ts e2e/work-log-fold.spec.ts` → **4 passed**
+- `npx tsx e2e/desktop-slices.script.ts` → **3/3 ALL DESKTOP SLICES PASSED**（顺序改为 D/E → B/C 后稳定）
+- 重建 `npm run build:web` + `node packages/desktop/scripts/build-x64.js` 后 `npx tsx e2e/desktop-packaged-slices.script.ts` → **2/2 ALL PACKAGED SLICES PASSED**
+
 ### 5.3 阶段三：P2（可改进，按需）
 
 按需实施，每个独立可回滚。
