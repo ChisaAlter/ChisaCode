@@ -36,6 +36,8 @@ describe("agentToSidebarThread", () => {
     expect(thread.title).toBe("Fix sidebar");
     expect(thread.createdAt).toBe("2026-04-01T00:00:00.000Z");
     expect(thread.status).toBe("idle");
+    expect(thread.requiresFinishedAttention).toBe(false);
+    expect(thread.cwd).toBe("C:\\repo");
   });
 
   it("derives project key and name from placement", () => {

@@ -24,7 +24,12 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { ContextMenu, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { isWeb } from "@/constants/platform";
 import { useIsCompactFormFactor } from "@/constants/layout";
-import { useSidebarV2Store } from "./store";
+import { sidebarV2ThreadKey, useSidebarV2Store } from "./store";
+import {
+  SidebarV2BulkMenu,
+  type SidebarV2BulkMenuCallbacks,
+  type SidebarV2BulkMenuCapabilities,
+} from "./SidebarV2BulkMenu";
 import {
   resolveSidebarV2TopStatus,
   shouldSidebarRowRecede,
@@ -81,13 +86,18 @@ interface SidebarV2RowProps {
   onRename: (title: string) => void;
   onSettle: () => void;
   onUnsettle: () => void;
-  onSnooze: (untilIso: string) => void;
+  onSnooze: (untilIso: string, whenLabel?: string) => void;
   onUnsnooze: () => void;
   onDelete: () => void;
   onCopyPath: () => void;
   onCopyBranch: () => void;
   onMarkUnread: () => void;
   onRegenerateTitle: () => void;
+  selectedCount?: number;
+  bulkMenuCapabilities?: SidebarV2BulkMenuCapabilities;
+  bulkMenuCallbacks?: SidebarV2BulkMenuCallbacks;
+  onModSelect?: () => void;
+  onRangeSelect?: () => void;
 }
 
 function StatusSlotIcon({ status }: { status: "working" | "woke" | "done" | null }) {
@@ -145,6 +155,11 @@ export function SidebarV2Row({
   onCopyBranch,
   onMarkUnread,
   onRegenerateTitle,
+  selectedCount = 0,
+  bulkMenuCapabilities,
+  bulkMenuCallbacks,
+  onModSelect,
+  onRangeSelect,
 }: SidebarV2RowProps) {
   const isCompact = useIsCompactFormFactor();
   void isCompact;
@@ -221,13 +236,34 @@ export function SidebarV2Row({
     return null;
   }, [isSnoozed, thread.snoozedUntil, snoozeNow]);
 
+  const threadKey = sidebarV2ThreadKey(thread.serverId, thread.id);
+
+  const activateRow = useCallback(
+    (modifiers?: { metaKey?: boolean; ctrlKey?: boolean; shiftKey?: boolean }) => {
+      const isMod = Boolean(modifiers?.metaKey || modifiers?.ctrlKey);
+      const isShift = Boolean(modifiers?.shiftKey);
+      if (isShift && onRangeSelect) {
+        onRangeSelect();
+        return;
+      }
+      if (isMod && onModSelect) {
+        onModSelect();
+        return;
+      }
+      if (isMultiSelectMode) {
+        toggleSelected(threadKey);
+        return;
+      }
+      onPress();
+    },
+    [isMultiSelectMode, onModSelect, onPress, onRangeSelect, threadKey, toggleSelected],
+  );
+
   const handlePress = useCallback(() => {
-    if (isMultiSelectMode) {
-      toggleSelected(thread.id);
-      return;
-    }
-    onPress();
-  }, [isMultiSelectMode, onPress, thread.id, toggleSelected]);
+    // Web multi-select/open is handled solely by onClick to avoid double-firing.
+    if (isWeb) return;
+    activateRow();
+  }, [activateRow]);
 
   const handlePointerEnter = useCallback(() => setIsHovered(true), []);
   const handlePointerLeave = useCallback(() => setIsHovered(false), []);
@@ -235,8 +271,8 @@ export function SidebarV2Row({
     ? { onPointerEnter: handlePointerEnter, onPointerLeave: handlePointerLeave }
     : {};
   const handleLongPress = useCallback(() => {
-    toggleSelected(thread.id);
-  }, [thread.id, toggleSelected]);
+    toggleSelected(threadKey);
+  }, [threadKey, toggleSelected]);
   const handleRenameKeyPress = useCallback((event: { nativeEvent: { key: string } }) => {
     if (event.nativeEvent.key === "Escape") {
       setIsRenaming(false);
@@ -413,13 +449,48 @@ export function SidebarV2Row({
           style={rowStyle}
           onPress={handlePress}
           onLongPress={handleLongPress}
+          testID={`sidebar-v2-thread-${thread.id}`}
+          accessibilityLabel={
+            thread.projectName ? `${thread.projectName}: ${thread.title}` : thread.title
+          }
           {...hoverProps}
+          {...(isWeb
+            ? {
+                onClick: (event: {
+                  metaKey?: boolean;
+                  ctrlKey?: boolean;
+                  shiftKey?: boolean;
+                  preventDefault?: () => void;
+                  stopPropagation?: () => void;
+                }) => {
+                  event.preventDefault?.();
+                  event.stopPropagation?.();
+                  activateRow({
+                    metaKey: event.metaKey,
+                    ctrlKey: event.ctrlKey,
+                    shiftKey: event.shiftKey,
+                  });
+                },
+              }
+            : {})}
         >
           {variant === "card" ? renderCard() : renderSlim()}
           {renderVariantAction()}
         </Pressable>
       </ContextMenuTrigger>
-      <SidebarV2RowMenu thread={thread} capabilities={menuCapabilities} callbacks={menuCallbacks} />
+      {selectedCount > 1 && isSelected && bulkMenuCapabilities && bulkMenuCallbacks ? (
+        <SidebarV2BulkMenu
+          count={selectedCount}
+          capabilities={bulkMenuCapabilities}
+          callbacks={bulkMenuCallbacks}
+        />
+      ) : (
+        <SidebarV2RowMenu
+          thread={thread}
+          capabilities={menuCapabilities}
+          callbacks={menuCallbacks}
+        />
+      )}
     </ContextMenu>
   );
 }
@@ -434,7 +505,7 @@ function useRowMenu(input: {
   canSettleThread: boolean;
   onSettle: () => void;
   onUnsettle: () => void;
-  onSnooze: (untilIso: string) => void;
+  onSnooze: (untilIso: string, whenLabel?: string) => void;
   onUnsnooze: () => void;
   onStartRename: () => void;
   onRegenerateTitle: () => void;
@@ -446,15 +517,15 @@ function useRowMenu(input: {
   const capabilities: SidebarV2MenuCapabilities = {
     canSnooze: input.canSnoozeThread,
     canSettle: input.canSettleThread,
-    canUnsettle: input.variantAction === "unsettle",
-    canUnsnooze: input.variantAction === "unsnooze",
+    canUnsettle: input.isSettled,
+    canUnsnooze: input.isSnoozed,
     isSnoozed: input.isSnoozed,
     isSettled: input.isSettled,
   };
   const callbacks: SidebarV2MenuCallbacks = {
     onSettle: input.onSettle,
     onUnsettle: input.onUnsettle,
-    onSnooze: (preset) => input.onSnooze(preset.snoozedUntil),
+    onSnooze: (preset) => input.onSnooze(preset.snoozedUntil, preset.whenLabel),
     onUnsnooze: input.onUnsnooze,
     onRename: input.onStartRename,
     onRegenerateTitle: input.onRegenerateTitle,

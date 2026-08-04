@@ -53,15 +53,21 @@ export class AgentMetadataController {
     this.options.emitState(agent, { persist: false });
   }
 
-  async setGeneratedTitle(agent: ManagedAgent, title: string): Promise<void> {
+  async setGeneratedTitle(
+    agent: ManagedAgent,
+    title: string,
+    options?: { force?: boolean },
+  ): Promise<void> {
     const normalizedTitle = title.trim();
     if (!normalizedTitle) {
       return;
     }
 
     const registry = this.requireRegistry();
-    const persisted = await registry.setGeneratedTitle(agent.id, normalizedTitle);
-
+    const persisted = await registry.setGeneratedTitle(agent.id, normalizedTitle, options);
+    if (options?.force) {
+      agent.config = { ...agent.config, title: normalizedTitle };
+    }
     agent.updatedAt = new Date(persisted.updatedAt);
     this.options.emitState(agent, { persist: false });
   }

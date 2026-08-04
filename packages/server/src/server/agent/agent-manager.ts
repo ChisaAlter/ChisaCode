@@ -880,9 +880,57 @@ export class AgentManager {
     await this.metadata.setTitle(agent, title);
   }
 
-  async setGeneratedTitle(agentId: string, title: string): Promise<void> {
+  async setGeneratedTitle(
+    agentId: string,
+    title: string,
+    options?: { force?: boolean },
+  ): Promise<void> {
     const agent = this.requireAgent(agentId);
-    await this.metadata.setGeneratedTitle(agent, title);
+    await this.metadata.setGeneratedTitle(agent, title, options);
+  }
+
+  /**
+   * Force-regenerate title from first user message. Requires provider snapshot deps.
+   */
+  async regenerateAgentTitle(
+    agentId: string,
+    deps: {
+      providerSnapshotManager: { listProviders: (...args: never[]) => unknown };
+      workspaceGitService?: { resolveRepoRoot: (...args: never[]) => unknown };
+      daemonConfig?: unknown;
+    },
+  ): Promise<void> {
+    const agent = this.requireAgent(agentId);
+    if (agent.internal) {
+      throw new Error("Cannot regenerate title for internal agents");
+    }
+    const timeline = this.getTimeline(agentId);
+    const firstUserMessage = timeline.find(
+      (item) => item.type === "user_message" && typeof item.text === "string" && item.text.trim(),
+    );
+    if (!firstUserMessage || firstUserMessage.type !== "user_message") {
+      throw new Error("No user message available to regenerate the title");
+    }
+    const { generateAndApplyAgentMetadata } = await import("./agent-metadata-generator.js");
+    await generateAndApplyAgentMetadata({
+      agentManager: this,
+      agentId,
+      cwd: agent.config.cwd,
+      workspaceGitService: deps.workspaceGitService as never,
+      providerSnapshotManager: deps.providerSnapshotManager as never,
+      daemonConfig: deps.daemonConfig as never,
+      currentSelection: {
+        provider: agent.provider,
+        model: agent.runtimeInfo?.model ?? agent.config.model,
+        thinkingOptionId:
+          agent.runtimeInfo?.thinkingOptionId ?? agent.config.thinkingOptionId ?? null,
+      },
+      initialPrompt: firstUserMessage.text,
+      explicitTitle: null,
+      provisionalTitle: null,
+      forceRegenerateTitle: true,
+      logger: this.logger,
+    });
   }
 
   async setLabels(agentId: string, labels: Record<string, string>): Promise<void> {

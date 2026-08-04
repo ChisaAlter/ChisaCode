@@ -37,6 +37,8 @@ interface SidebarV2StoreState {
   searchQuery: string;
   /** Multi-selected thread keys (not persisted). */
   selectedThreadKeys: string[];
+  /** Local mark-unread completedAt by `${serverId}:${threadId}`. */
+  localUnreadCompletedAtByKey: Record<string, string>;
   getServerUiState: (serverId: string) => SidebarV2ServerUiState;
   setScopeProjectKey: (serverId: string, projectKey: string | null) => void;
   setSettledShelfExpanded: (serverId: string, expanded: boolean) => void;
@@ -47,7 +49,10 @@ interface SidebarV2StoreState {
   clearSearch: () => void;
   toggleThreadSelected: (threadKey: string) => void;
   setThreadsSelected: (threadKeys: string[]) => void;
+  rangeSelectThreads: (threadKey: string, orderedThreadKeys: readonly string[]) => void;
   clearSelection: () => void;
+  markThreadUnread: (threadKey: string, completedAt: string | null) => void;
+  clearThreadUnread: (threadKey: string) => void;
   /** Builds the next labels map for a settle/snooze mutation. */
   buildSettledLabels: (nowIso: string, pinned: boolean) => Record<string, string>;
   buildSnoozedLabels: (untilIso: string, atIso: string) => Record<string, string>;
@@ -81,6 +86,7 @@ export const useSidebarV2Store = create<SidebarV2StoreState>()(
       serverUiStateByServerId: {},
       searchQuery: "",
       selectedThreadKeys: [],
+      localUnreadCompletedAtByKey: {},
       getServerUiState: (serverId) => {
         const key = serverId.trim();
         return key
@@ -182,7 +188,47 @@ export const useSidebarV2Store = create<SidebarV2StoreState>()(
       },
       setThreadsSelected: (threadKeys) =>
         set({ selectedThreadKeys: normalizeThreadKeys(threadKeys) }),
+      rangeSelectThreads: (threadKey, orderedThreadKeys) => {
+        const target = threadKey.trim();
+        if (!target) return;
+        set((state) => {
+          const ordered = orderedThreadKeys.map((k) => k.trim()).filter(Boolean);
+          const targetIndex = ordered.indexOf(target);
+          if (targetIndex < 0) {
+            return {
+              selectedThreadKeys: normalizeThreadKeys([...state.selectedThreadKeys, target]),
+            };
+          }
+          const anchor =
+            [...state.selectedThreadKeys].toReversed().find((k) => ordered.includes(k)) ?? target;
+          const anchorIndex = ordered.indexOf(anchor);
+          const start = Math.min(anchorIndex, targetIndex);
+          const end = Math.max(anchorIndex, targetIndex);
+          return { selectedThreadKeys: normalizeThreadKeys(ordered.slice(start, end + 1)) };
+        });
+      },
       clearSelection: () => set({ selectedThreadKeys: [] }),
+      markThreadUnread: (threadKey, completedAt) => {
+        const key = threadKey.trim();
+        if (!key) return;
+        const stamp = completedAt?.trim() || new Date().toISOString();
+        set((state) => ({
+          localUnreadCompletedAtByKey: {
+            ...state.localUnreadCompletedAtByKey,
+            [key]: stamp,
+          },
+        }));
+      },
+      clearThreadUnread: (threadKey) => {
+        const key = threadKey.trim();
+        if (!key) return;
+        set((state) => {
+          if (!(key in state.localUnreadCompletedAtByKey)) return state;
+          const next = { ...state.localUnreadCompletedAtByKey };
+          delete next[key];
+          return { localUnreadCompletedAtByKey: next };
+        });
+      },
       buildSettledLabels: (nowIso, pinned) =>
         pinned
           ? {
@@ -209,6 +255,7 @@ export const useSidebarV2Store = create<SidebarV2StoreState>()(
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (state) => ({
         serverUiStateByServerId: state.serverUiStateByServerId,
+        localUnreadCompletedAtByKey: state.localUnreadCompletedAtByKey,
       }),
     },
   ),
@@ -220,4 +267,9 @@ export function selectSidebarV2ServerUiState(
   serverId: string,
 ): SidebarV2ServerUiState {
   return state.getServerUiState(serverId);
+}
+
+/** Composite key for multi-select / unread. */
+export function sidebarV2ThreadKey(serverId: string, threadId: string): string {
+  return `${serverId.trim()}:${threadId.trim()}`;
 }

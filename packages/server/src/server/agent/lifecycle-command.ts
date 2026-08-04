@@ -34,6 +34,8 @@ export interface AgentLifecycleCommandDependencies {
   agentManager: LifecycleAgentManager;
   agentStorage: LifecycleAgentStorage;
   logger: Logger;
+  /** Session-provided title regeneration with provider snapshot access. */
+  regenerateAgentTitle?: (agentId: string) => Promise<void>;
 }
 
 export interface CancelAgentRunResult {
@@ -132,27 +134,38 @@ export interface UpdateAgentResult {
 }
 
 export async function updateAgentCommand(
-  dependencies: Pick<AgentLifecycleCommandDependencies, "agentManager">,
+  dependencies: Pick<AgentLifecycleCommandDependencies, "agentManager" | "regenerateAgentTitle">,
   input: {
     agentId: string;
     name?: string;
     labels?: Record<string, string>;
+    regenerateTitle?: boolean;
   },
 ): Promise<UpdateAgentResult> {
   const title = input.name?.trim();
   const labels = input.labels && Object.keys(input.labels).length > 0 ? input.labels : undefined;
+  const regenerateTitle = input.regenerateTitle === true;
 
-  if (!title && !labels) {
+  if (!title && !labels && !regenerateTitle) {
     return {
       accepted: false,
-      error: "Nothing to update (provide name and/or labels)",
+      error: "Nothing to update (provide name, labels, and/or regenerateTitle)",
     };
   }
 
-  await dependencies.agentManager.updateAgentMetadata(input.agentId, {
-    ...(title ? { title } : {}),
-    ...(labels ? { labels } : {}),
-  });
+  if (regenerateTitle) {
+    if (!dependencies.regenerateAgentTitle) {
+      return { accepted: false, error: "Title regeneration is not available" };
+    }
+    await dependencies.regenerateAgentTitle(input.agentId);
+  }
+
+  if (title || labels) {
+    await dependencies.agentManager.updateAgentMetadata(input.agentId, {
+      ...(title ? { title } : {}),
+      ...(labels ? { labels } : {}),
+    });
+  }
 
   return {
     accepted: true,

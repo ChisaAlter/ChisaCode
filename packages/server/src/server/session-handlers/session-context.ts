@@ -382,6 +382,7 @@ export type AgentLifecycleHandlerContext = SessionIdentityContext &
     | "getAgentPayloadById"
     | "buildAgentSessionConfig"
     | "resolveCreateAgentWorkspace"
+    | "readStructuredGenerationDaemonConfig"
   > &
   Pick<
     WorkspaceProjectContext,

@@ -8,16 +8,16 @@
 
 审查暴露的问题大多源自一个根本架构差异：
 
-| 维度             | T3                                                                                    | ChisaCode                                                           | 差异后果                                                         |
-| ---------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| **事件流**       | 单事件流（`thread.messages` 原子更新 + `afterSequence` 续传游标）                     | tail/head 双流（canonical 历史 + live optimistic head）             | ChisaCode 有「乐观 id 被投影吞掉」「触发竞态」等 T3 不存在的问题 |
-| **id 命名权**    | 客户端生成 id → 服务端 decider 原样回显 → 纯 id 去重合并                              | 服务端自生 id（已修复为透传，但真实 provider 不回显）→ ordinal 合并 | ChisaCode 需「末条 user_message 回退」安全网                     |
-| **busy 绑定**    | `LocalDispatch` 快照契约（发送时拍 Thread 投影快照，ack = 快照 vs 当前投影字段 diff） | 乐观 id 扫 store（记下 id，扫 tail+head 找同 id 非 optimistic）     | ChisaCode 单信号、依赖隐式同步契约、无多信号短路                 |
-| **滚动定位**     | `LegendList.scrollToIndex({viewPosition:0, viewOffset:16})` 动画 API                  | 手算 `targetScroll` + `Math.min(targetScroll, maxScroll)`           | ChisaCode 引入 `maxScroll<=0` 无限 rAF 风险（T3 不存在）         |
-| **流式高亮缓存** | `isStreaming` 时 read+write 均跳过                                                    | `cacheable:false` 时只跳过 write，read 仍尝试                       | ChisaCode 是有意微优化（键=完整内容，命中必已完成块）            |
-| **native**       | 无 native（web-only 单路径）                                                          | web/native 双 strategy，native 用 inverted FlatList                 | ChisaCode native 委托 sticky-bottom 非 no-op                     |
+| 维度             | T3                                                                                    | ChisaCode                                                                                                    | 差异后果                                                                                     |
+| ---------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------- |
+| **事件流**       | 单事件流（`thread.messages` 原子更新 + `afterSequence` 续传游标）                     | tail/head 双流（canonical 历史 + live optimistic head）                                                      | ChisaCode 有「乐观 id 被投影吞掉」「触发竞态」等 T3 不存在的问题                             |
+| **id 命名权**    | 客户端生成 id → 服务端 decider 原样回显 → 纯 id 去重合并                              | 服务端自生 id（已修复为透传，但真实 provider 不回显）→ ordinal 合并                                          | ChisaCode 需「末条 user_message 回退」安全网                                                 |
+| **busy 绑定**    | `LocalDispatch` 快照契约（发送时拍 Thread 投影快照，ack = 快照 vs 当前投影字段 diff） | 已实现发送时快照契约 `ComposerSendSnapshot`（P1.1）：permission/error/idle/id-drift/turn-progress 多信号 ack | 快照字段集与 T3 不同（乐观 id + baseline 字段，非全投影 diff），ack 启发式偏宽（见 §6 遗留） |
+| **滚动定位**     | `LegendList.scrollToIndex({viewPosition:0, viewOffset:16})` 动画 API                  | 手算 `targetScroll` + `Math.min(targetScroll, maxScroll)`                                                    | ChisaCode 引入 `maxScroll<=0` 无限 rAF 风险（T3 不存在）                                     |
+| **流式高亮缓存** | `isStreaming` 时 read+write 均跳过                                                    | `cacheable:false` 时只跳过 write，read 仍尝试                                                                | ChisaCode 是有意微优化（键=完整内容，命中必已完成块）                                        |
+| **native**       | 无 native（web-only 单路径）                                                          | web/native 双 strategy，native 用 inverted FlatList                                                          | ChisaCode native 委托 sticky-bottom 非 no-op                                                 |
 
-**结论**：ChisaCode 的双流模型 + 乐观 id 扫 store + 手算滚动是三条结构性脆弱链，T3 的单流 + 快照契约 + LegendList 内建锚定免疫这些问题。优化计划按「先补门禁缺口（不改架构）→ 再对齐 T3 健壮性（局部改架构）→ 最后体验对齐」三层推进。
+**结论**：ChisaCode 的双流模型 + 手算滚动是两条结构性脆弱链（乐观 id 扫 store 已在 P1.1 被发送时快照契约替代，见 §2.1），T3 的单流 + 快照契约 + LegendList 内建锚定免疫这些问题。优化计划按「先补门禁缺口（不改架构）→ 再对齐 T3 健壮性（局部改架构）→ 最后体验对齐」三层推进。
 
 ---
 

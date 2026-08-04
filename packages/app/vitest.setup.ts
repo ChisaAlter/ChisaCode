@@ -1,5 +1,14 @@
 // @ts-nocheck
-import { vi } from "vitest";
+import { afterEach, vi } from "vitest";
+import { cleanup } from "@testing-library/react";
+
+// Vitest runs with `globals: false`, so testing-library cannot auto-register
+// its afterEach cleanup. Without explicit unmounting, components mounted in
+// one test stay subscribed to stores and re-render during later tests,
+// producing "not wrapped in act(...)" noise and masking real async bugs.
+afterEach(() => {
+  cleanup();
+});
 
 const globalWithTestShims = globalThis as typeof globalThis & Record<string, unknown>;
 

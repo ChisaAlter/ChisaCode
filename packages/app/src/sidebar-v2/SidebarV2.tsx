@@ -1,12 +1,16 @@
-import { useCallback, useEffect, useMemo, useState, type ReactElement } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
+import * as Clipboard from "expo-clipboard";
 import { ChevronDown, ChevronRight, Plus } from "lucide-react-native";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { ThemedIconHost } from "@/components/themed-icon-host";
 import { useTranslation } from "react-i18next";
+import { useToast } from "@/contexts/toast-context";
 import { useSessionStore } from "@/stores/session-store";
+import { useWorkspaceLayoutStore } from "@/stores/workspace-layout-store";
 import { navigateToAgent } from "@/utils/navigate-to-agent";
+import { confirmDialog } from "@/utils/confirm-dialog";
 import { SidebarV2Row } from "./SidebarV2Row";
 import { SidebarV2Search, SidebarV2NewThreadButton } from "./SidebarV2Search";
 import { SidebarV2ScopeMenu, SidebarV2ProjectSettingsDialog } from "./SidebarV2ScopeMenu";
@@ -27,8 +31,17 @@ import {
   buildWorkspaceDirectoryIndex,
   type SidebarV2Thread,
 } from "./agent-adapter";
-import { useSidebarV2Store } from "./store";
-import { SIDEBAR_LABEL_SETTLED_OVERRIDE } from "./snooze";
+import { sidebarV2ThreadKey, useSidebarV2Store } from "./store";
+import {
+  canSettle,
+  canSnooze,
+  SIDEBAR_LABEL_SETTLED_AT,
+  SIDEBAR_LABEL_SETTLED_OVERRIDE,
+  threadWokeAt,
+} from "./snooze";
+import { hasUnseenCompletion } from "./logic";
+import { buildOrderedThreadKeys, planForwardNavigationTarget } from "./actions";
+import { useSidebarV2BulkActions } from "./use-sidebar-v2-bulk-actions";
 import type { AggregatedAgent } from "@/hooks/use-aggregated-agents";
 import type { WorkspaceDescriptor } from "@/stores/session-store";
 
@@ -45,9 +58,29 @@ interface SidebarV2Props {
 
 /** Auto-settle window in days; matches T3's default. */
 const AUTO_SETTLE_AFTER_DAYS = 3;
-/** Shared no-op used for row actions the slim shelves do not surface. */
-const NOOP = () => undefined;
 
+function quantizeToMinute(date: Date): string {
+  const copy = new Date(date);
+  copy.setSeconds(0, 0);
+  return copy.toISOString();
+}
+
+function resolveVisibleSnoozedThreads(input: {
+  snoozedThreads: readonly SidebarV2Thread[];
+  expanded: boolean;
+  selectedAgentId?: string;
+}): SidebarV2Thread[] {
+  if (input.expanded) return [...input.snoozedThreads];
+  if (!input.selectedAgentId) return [];
+  const route = input.snoozedThreads.find((thread) => thread.id === input.selectedAgentId);
+  return route ? [route] : [];
+}
+
+function buildThreadKeySet(threads: readonly SidebarV2Thread[]): Set<string> {
+  return new Set(threads.map((thread) => sidebarV2ThreadKey(thread.serverId, thread.id)));
+}
+
+// eslint-disable-next-line complexity -- T3 parity surface: shelves + single/bulk actions
 export function SidebarV2({
   agents,
   serverId,
@@ -56,8 +89,12 @@ export function SidebarV2({
   onNewConversation,
   onAddProject,
 }: SidebarV2Props) {
+  const { t } = useTranslation();
+  const toast = useToast();
   const [projectSettingsProject, setProjectSettingsProject] =
     useState<SidebarV2ProjectSnapshot | null>(null);
+  const [nowMinute, setNowMinute] = useState(() => quantizeToMinute(new Date()));
+  const [snoozeWakeTick, bumpSnoozeWakeTick] = useState(0);
 
   const uiState = useSidebarV2Store((state) =>
     serverId ? state.getServerUiState(serverId) : null,
@@ -68,9 +105,28 @@ export function SidebarV2({
   const resetSettledVisibleCount = useSidebarV2Store((state) => state.resetSettledVisibleCount);
   const searchQuery = useSidebarV2Store((state) => state.searchQuery);
   const selectedThreadKeys = useSidebarV2Store((state) => state.selectedThreadKeys);
+  const localUnreadCompletedAtByKey = useSidebarV2Store(
+    (state) => state.localUnreadCompletedAtByKey,
+  );
+  const markThreadUnread = useSidebarV2Store((state) => state.markThreadUnread);
+  const clearThreadUnread = useSidebarV2Store((state) => state.clearThreadUnread);
+  const clearSelection = useSidebarV2Store((state) => state.clearSelection);
+  const rangeSelectThreads = useSidebarV2Store((state) => state.rangeSelectThreads);
+  const buildSettledLabels = useSidebarV2Store((state) => state.buildSettledLabels);
+  const buildSnoozedLabels = useSidebarV2Store((state) => state.buildSnoozedLabels);
+  const clearSnoozedLabels = useSidebarV2Store((state) => state.clearSnoozedLabels);
 
-  const now = useMemo(() => new Date().toISOString(), []);
   const activeServerId = serverId;
+  const now = nowMinute;
+  const snoozeNow = useMemo(() => {
+    void snoozeWakeTick;
+    return new Date().toISOString();
+  }, [snoozeWakeTick]);
+
+  useEffect(() => {
+    const timer = setInterval(() => setNowMinute(quantizeToMinute(new Date())), 15_000);
+    return () => clearInterval(timer);
+  }, []);
 
   const workspaceIndex = useMemo(
     () => (workspaces ? buildWorkspaceDirectoryIndex(workspaces.values()) : new Map()),
@@ -78,15 +134,10 @@ export function SidebarV2({
   );
 
   const threads = useMemo<SidebarV2Thread[]>(() => {
-    if (!activeServerId) {
-      return [];
-    }
+    if (!activeServerId) return [];
     return agents
       .filter((agent) => agent.serverId === activeServerId)
-      .map((agent) => {
-        const workspace = findWorkspaceForAgent(agent, workspaceIndex);
-        return agentToSidebarThread(agent, workspace);
-      });
+      .map((agent) => agentToSidebarThread(agent, findWorkspaceForAgent(agent, workspaceIndex)));
   }, [activeServerId, agents, workspaceIndex]);
 
   const projectMembers = useMemo(
@@ -132,17 +183,13 @@ export function SidebarV2({
   );
 
   const scopedThreads = useMemo(() => {
-    if (!uiState?.scopeProjectKey) {
-      return threads;
-    }
+    if (!uiState?.scopeProjectKey) return threads;
     return threads.filter((thread) => thread.projectKey === uiState.scopeProjectKey);
   }, [threads, uiState?.scopeProjectKey]);
 
   const changeRequestStateByKey = useMemo(() => {
     const map = new Map<string, "open" | "closed" | "merged" | null>();
-    for (const thread of threads) {
-      map.set(thread.id, thread.changeRequestState);
-    }
+    for (const thread of threads) map.set(thread.id, thread.changeRequestState);
     return map;
   }, [threads]);
 
@@ -151,12 +198,21 @@ export function SidebarV2({
       partitionThreadsForSidebarV2({
         threads: scopedThreads,
         now,
-        snoozeNow: now,
+        snoozeNow,
         autoSettleAfterDays: AUTO_SETTLE_AFTER_DAYS,
         changeRequestStateByKey,
       }),
-    [scopedThreads, now, changeRequestStateByKey],
+    [scopedThreads, now, snoozeNow, changeRequestStateByKey],
   );
+
+  useEffect(() => {
+    if (!partition.nextSnoozeWakeAt) return;
+    const wakeMs = Date.parse(partition.nextSnoozeWakeAt);
+    if (Number.isNaN(wakeMs)) return;
+    const delay = Math.max(0, wakeMs - Date.now()) + 25;
+    const timer = setTimeout(() => bumpSnoozeWakeTick((tick) => tick + 1), delay);
+    return () => clearTimeout(timer);
+  }, [partition.nextSnoozeWakeAt]);
 
   const settledPaging = useMemo(
     () =>
@@ -175,63 +231,328 @@ export function SidebarV2({
   );
 
   const isSearching = searchQuery.length > 0;
+  const isMultiSelectMode = selectedThreadKeys.length > 0;
 
-  const handleOpenThread = useCallback(
-    (thread: SidebarV2Thread) => {
-      if (!activeServerId) {
-        return;
-      }
-      navigateToAgent({ serverId: activeServerId, agentId: thread.id });
+  const visibleSnoozedThreads = useMemo(
+    () =>
+      resolveVisibleSnoozedThreads({
+        snoozedThreads: partition.snoozedThreads,
+        expanded: uiState?.snoozedShelfExpanded ?? false,
+        selectedAgentId,
+      }),
+    [partition.snoozedThreads, selectedAgentId, uiState?.snoozedShelfExpanded],
+  );
+
+  const orderedVisibleThreads = useMemo(
+    () => [
+      ...partition.activeThreads,
+      ...visibleSnoozedThreads,
+      ...settledPaging.visibleSettledThreads,
+    ],
+    [partition.activeThreads, visibleSnoozedThreads, settledPaging.visibleSettledThreads],
+  );
+  const orderedThreadKeys = useMemo(
+    () => buildOrderedThreadKeys(orderedVisibleThreads),
+    [orderedVisibleThreads],
+  );
+  const orderedThreadKeysRef = useRef(orderedThreadKeys);
+  orderedThreadKeysRef.current = orderedThreadKeys;
+
+  const threadByKey = useMemo(() => {
+    const map = new Map<string, SidebarV2Thread>();
+    for (const thread of orderedVisibleThreads) {
+      map.set(sidebarV2ThreadKey(thread.serverId, thread.id), thread);
+    }
+    return map;
+  }, [orderedVisibleThreads]);
+
+  const settledThreadKeys = useMemo(
+    () => buildThreadKeySet(partition.settledThreads),
+    [partition.settledThreads],
+  );
+  const snoozedThreadKeys = useMemo(
+    () => buildThreadKeySet(partition.snoozedThreads),
+    [partition.snoozedThreads],
+  );
+  const settledThreadKeysRef = useRef(settledThreadKeys);
+  settledThreadKeysRef.current = settledThreadKeys;
+  const snoozedThreadKeysRef = useRef(snoozedThreadKeys);
+  snoozedThreadKeysRef.current = snoozedThreadKeys;
+
+  const routeThreadKey =
+    activeServerId && selectedAgentId ? sidebarV2ThreadKey(activeServerId, selectedAgentId) : null;
+  const routeThreadKeyRef = useRef(routeThreadKey);
+  routeThreadKeyRef.current = routeThreadKey;
+  const threadByKeyRef = useRef(threadByKey);
+  threadByKeyRef.current = threadByKey;
+
+  const settlingThreadKeysRef = useRef(new Set<string>());
+  const snoozingThreadKeysRef = useRef(new Set<string>());
+
+  const getClient = useCallback(() => {
+    if (!activeServerId) return null;
+    return useSessionStore.getState().sessions[activeServerId]?.client ?? null;
+  }, [activeServerId]);
+
+  const patchAgentLabelsLocally = useCallback(
+    (thread: SidebarV2Thread, labels: Record<string, string>) => {
+      if (!activeServerId) return;
+      useSessionStore.getState().setAgents(activeServerId, (prev) => {
+        const existing = prev.get(thread.id);
+        if (!existing) return prev;
+        const next = new Map(prev);
+        next.set(thread.id, { ...existing, labels: { ...existing.labels, ...labels } });
+        return next;
+      });
     },
     [activeServerId],
   );
 
   const handleUpdateLabels = useCallback(
-    (thread: SidebarV2Thread, labels: Record<string, string>) => {
-      const client = activeServerId
-        ? useSessionStore.getState().sessions[activeServerId]?.client
-        : null;
+    async (thread: SidebarV2Thread, labels: Record<string, string>) => {
+      const client = getClient();
       if (!client) {
-        return;
+        toast.error(t("workspace.screen.hostDisconnected"));
+        return false;
       }
-      void client.updateAgent(thread.id, { labels }).catch(() => undefined);
+      const previousLabels: Record<string, string> = {};
+      for (const key of Object.keys(labels)) previousLabels[key] = "";
+      if (activeServerId) {
+        const live = useSessionStore.getState().sessions[activeServerId]?.agents.get(thread.id);
+        if (live?.labels) {
+          for (const key of Object.keys(labels)) previousLabels[key] = live.labels[key] ?? "";
+        }
+      }
+      patchAgentLabelsLocally(thread, labels);
+      try {
+        await client.updateAgent(thread.id, { labels });
+        return true;
+      } catch (error) {
+        patchAgentLabelsLocally(thread, previousLabels);
+        toast.error(error instanceof Error ? error.message : t("sidebarV2.actionFailed"));
+        return false;
+      }
+    },
+    [activeServerId, getClient, patchAgentLabelsLocally, t, toast],
+  );
+
+  const navigateToThreadId = useCallback(
+    (threadId: string) => {
+      if (!activeServerId) return;
+      navigateToAgent({ serverId: activeServerId, agentId: threadId });
     },
     [activeServerId],
   );
 
-  const handleSettle = useCallback(
+  const planForward = useCallback(
+    (parkedThreadKey: string, coParkingKeys?: ReadonlySet<string>) => {
+      const nextKey = planForwardNavigationTarget({
+        routeThreadKey: routeThreadKeyRef.current,
+        parkedThreadKey,
+        orderedThreadKeys: orderedThreadKeysRef.current,
+        settledThreadKeys: settledThreadKeysRef.current,
+        snoozedThreadKeys: snoozedThreadKeysRef.current,
+        coParkingKeys,
+      });
+      if (!nextKey) return () => onNewConversation();
+      const nextThread = threadByKeyRef.current.get(nextKey);
+      if (!nextThread) return () => onNewConversation();
+      return () => navigateToThreadId(nextThread.id);
+    },
+    [navigateToThreadId, onNewConversation],
+  );
+
+  const handleOpenThread = useCallback(
     (thread: SidebarV2Thread) => {
-      handleUpdateLabels(thread, {
-        [SIDEBAR_LABEL_SETTLED_OVERRIDE]: "settled",
+      if (!activeServerId) return;
+      if (selectedThreadKeys.length > 0) clearSelection();
+      clearThreadUnread(sidebarV2ThreadKey(thread.serverId, thread.id));
+      navigateToAgent({ serverId: activeServerId, agentId: thread.id });
+    },
+    [activeServerId, clearSelection, clearThreadUnread, selectedThreadKeys.length],
+  );
+
+  const handleUnsettle = useCallback(
+    (thread: SidebarV2Thread) => {
+      void handleUpdateLabels(thread, {
+        [SIDEBAR_LABEL_SETTLED_AT]: "",
+        [SIDEBAR_LABEL_SETTLED_OVERRIDE]: "active",
       });
     },
     [handleUpdateLabels],
   );
 
-  const handleUnsettle = useCallback(
+  const handleUnsnooze = useCallback(
     (thread: SidebarV2Thread) => {
-      handleUpdateLabels(thread, { [SIDEBAR_LABEL_SETTLED_OVERRIDE]: "" });
+      void handleUpdateLabels(thread, clearSnoozedLabels());
     },
-    [handleUpdateLabels],
+    [clearSnoozedLabels, handleUpdateLabels],
+  );
+
+  const handleSettle = useCallback(
+    (thread: SidebarV2Thread, opts?: { coParkingKeys?: ReadonlySet<string> }) => {
+      if (!canSettle(thread, { now: snoozeNow })) return;
+      const threadKey = sidebarV2ThreadKey(thread.serverId, thread.id);
+      if (settlingThreadKeysRef.current.has(threadKey)) return;
+      settlingThreadKeysRef.current.add(threadKey);
+      const navigateAfter = planForward(threadKey, opts?.coParkingKeys);
+      void handleUpdateLabels(thread, buildSettledLabels(snoozeNow, true))
+        .then((ok) => {
+          if (ok && routeThreadKeyRef.current === threadKey) navigateAfter();
+          return undefined;
+        })
+        .finally(() => {
+          settlingThreadKeysRef.current.delete(threadKey);
+        });
+    },
+    [buildSettledLabels, handleUpdateLabels, planForward, snoozeNow],
+  );
+
+  const handleSnooze = useCallback(
+    (
+      thread: SidebarV2Thread,
+      untilIso: string,
+      opts?: {
+        coParkingKeys?: ReadonlySet<string>;
+        skipUndoToast?: boolean;
+        whenLabel?: string;
+      },
+    ) => {
+      if (!canSnooze(thread, { now: snoozeNow })) return;
+      const threadKey = sidebarV2ThreadKey(thread.serverId, thread.id);
+      if (snoozingThreadKeysRef.current.has(threadKey)) return;
+      snoozingThreadKeysRef.current.add(threadKey);
+      const navigateAfter = planForward(threadKey, opts?.coParkingKeys);
+      void handleUpdateLabels(thread, buildSnoozedLabels(untilIso, snoozeNow))
+        .then((ok) => {
+          if (!ok) return undefined;
+          if (!opts?.skipUndoToast) {
+            toast.show(t("sidebarV2.snoozedUntil", { when: opts?.whenLabel ?? untilIso }), {
+              variant: "success",
+              durationMs: 5_000,
+              action: {
+                label: t("sidebarV2.undo"),
+                onPress: () => handleUnsnooze(thread),
+              },
+            });
+          }
+          if (routeThreadKeyRef.current === threadKey) navigateAfter();
+          return undefined;
+        })
+        .finally(() => {
+          snoozingThreadKeysRef.current.delete(threadKey);
+        });
+    },
+    [buildSnoozedLabels, handleUnsnooze, handleUpdateLabels, planForward, snoozeNow, t, toast],
   );
 
   const handleRename = useCallback(
     (thread: SidebarV2Thread, title: string) => {
-      const client = activeServerId
-        ? useSessionStore.getState().sessions[activeServerId]?.client
-        : null;
+      const client = getClient();
       if (!client) {
+        toast.error(t("workspace.screen.hostDisconnected"));
         return;
       }
-      void client.updateAgent(thread.id, { name: title }).catch(() => undefined);
+      const trimmed = title.trim();
+      if (!trimmed || trimmed === thread.title) return;
+      void client.updateAgent(thread.id, { name: trimmed }).catch((error) => {
+        toast.error(error instanceof Error ? error.message : t("sidebarV2.renameFailed"));
+      });
     },
-    [activeServerId],
+    [getClient, t, toast],
+  );
+
+  const handleCopyPath = useCallback(
+    (thread: SidebarV2Thread) => {
+      const path = thread.worktreePath ?? thread.cwd;
+      if (!path) return;
+      void Clipboard.setStringAsync(path)
+        .then(() => toast.copied(t("common.copiedToClipboard")))
+        .catch(() => toast.error(t("workspace.screen.copyFailed")));
+    },
+    [t, toast],
+  );
+
+  const handleCopyBranch = useCallback(
+    (thread: SidebarV2Thread) => {
+      if (!thread.branch) return;
+      void Clipboard.setStringAsync(thread.branch)
+        .then(() => toast.copied(t("common.copiedToClipboard")))
+        .catch(() => toast.error(t("workspace.screen.copyFailed")));
+    },
+    [t, toast],
+  );
+
+  const handleMarkUnread = useCallback(
+    (thread: SidebarV2Thread) => {
+      markThreadUnread(
+        sidebarV2ThreadKey(thread.serverId, thread.id),
+        thread.lastActivityAt ?? new Date().toISOString(),
+      );
+    },
+    [markThreadUnread],
+  );
+
+  const handleRegenerateTitle = useCallback(
+    (thread: SidebarV2Thread) => {
+      const client = getClient();
+      if (!client) {
+        toast.error(t("workspace.screen.hostDisconnected"));
+        return;
+      }
+      void client.updateAgent(thread.id, { regenerateTitle: true }).catch((error) => {
+        toast.error(error instanceof Error ? error.message : t("sidebarV2.regenerateTitleFailed"));
+      });
+    },
+    [getClient, t, toast],
+  );
+
+  const handleDelete = useCallback(
+    (thread: SidebarV2Thread, opts?: { skipConfirm?: boolean }) => {
+      const client = getClient();
+      if (!client || !activeServerId) {
+        toast.error(t("workspace.screen.hostDisconnected"));
+        return;
+      }
+      void (async () => {
+        if (!opts?.skipConfirm) {
+          const confirmed = await confirmDialog({
+            title: t("sidebar.deleteSessionTitle"),
+            message: t("sidebar.deleteSessionMessage", {
+              name: thread.title || t("session.newSession"),
+            }),
+            confirmLabel: t("sidebar.deleteSession"),
+            cancelLabel: t("common.cancel"),
+            destructive: true,
+          });
+          if (!confirmed) return;
+        }
+        try {
+          await client.deleteAgent(thread.id);
+          useWorkspaceLayoutStore.getState().unpinAgentEverywhere(thread.id);
+          useSessionStore.getState().setAgents(activeServerId, (prev) => {
+            if (!prev.has(thread.id)) return prev;
+            const next = new Map(prev);
+            next.delete(thread.id);
+            return next;
+          });
+          useSessionStore.getState().setAgentDetails(activeServerId, (prev) => {
+            if (!prev.has(thread.id)) return prev;
+            const next = new Map(prev);
+            next.delete(thread.id);
+            return next;
+          });
+          clearThreadUnread(sidebarV2ThreadKey(thread.serverId, thread.id));
+        } catch (error) {
+          toast.error(error instanceof Error ? error.message : t("sidebar.deleteSessionFailed"));
+        }
+      })();
+    },
+    [activeServerId, clearThreadUnread, getClient, t, toast],
   );
 
   const handleShowMoreSettled = useCallback(() => {
-    if (!activeServerId) {
-      return;
-    }
+    if (!activeServerId) return;
     const current = uiState?.settledVisibleCount ?? SETTLED_TAIL_INITIAL_COUNT;
     setSettledVisibleCount(activeServerId, current + SETTLED_TAIL_PAGE_COUNT);
   }, [activeServerId, setSettledVisibleCount, uiState?.settledVisibleCount]);
@@ -251,26 +572,69 @@ export function SidebarV2({
   const handleCloseProjectSettings = useCallback(() => setProjectSettingsProject(null), []);
 
   useEffect(() => {
-    if (!activeServerId) {
-      return;
-    }
+    if (!activeServerId) return;
     resetSettledVisibleCount(activeServerId);
-  }, [activeServerId, uiState?.scopeProjectKey, resetSettledVisibleCount]);
+    clearSelection();
+  }, [activeServerId, uiState?.scopeProjectKey, resetSettledVisibleCount, clearSelection]);
+
+  const resolveUnseenCompletion = useCallback(
+    (thread: SidebarV2Thread): boolean => {
+      if (thread.requiresFinishedAttention) return true;
+      const key = sidebarV2ThreadKey(thread.serverId, thread.id);
+      const localCompletedAt = localUnreadCompletedAtByKey[key] ?? null;
+      if (!localCompletedAt) return false;
+      return hasUnseenCompletion({
+        completedAt: localCompletedAt,
+        lastVisitedAt: "1970-01-01T00:00:00.000Z",
+      });
+    },
+    [localUnreadCompletedAtByKey],
+  );
+
+  const { bulkMenuCapabilities, bulkMenuCallbacks } = useSidebarV2BulkActions({
+    selectedThreadKeys,
+    threadByKey,
+    snoozeNow,
+    clearSelection,
+    handleSettle,
+    handleSnooze,
+    handleMarkUnread,
+    handleRegenerateTitle,
+    handleDelete,
+  });
+
+  const handleRowModSelect = useCallback((thread: SidebarV2Thread) => {
+    useSidebarV2Store
+      .getState()
+      .toggleThreadSelected(sidebarV2ThreadKey(thread.serverId, thread.id));
+  }, []);
+
+  const handleRowRangeSelect = useCallback(
+    (thread: SidebarV2Thread) => {
+      rangeSelectThreads(
+        sidebarV2ThreadKey(thread.serverId, thread.id),
+        orderedThreadKeysRef.current,
+      );
+    },
+    [rangeSelectThreads],
+  );
 
   const rowHandlers = useMemo(() => {
     const byId = new Map<string, RowHandlers>();
     const fallback: RowHandlers = {
-      onPress: NOOP,
-      onRename: NOOP,
-      onSettle: NOOP,
-      onUnsettle: NOOP,
-      onSnooze: NOOP,
-      onUnsnooze: NOOP,
-      onDelete: NOOP,
-      onCopyPath: NOOP,
-      onCopyBranch: NOOP,
-      onMarkUnread: NOOP,
-      onRegenerateTitle: NOOP,
+      onPress: () => undefined,
+      onRename: () => undefined,
+      onSettle: () => undefined,
+      onUnsettle: () => undefined,
+      onSnooze: () => undefined,
+      onUnsnooze: () => undefined,
+      onDelete: () => undefined,
+      onCopyPath: () => undefined,
+      onCopyBranch: () => undefined,
+      onMarkUnread: () => undefined,
+      onRegenerateTitle: () => undefined,
+      onModSelect: () => undefined,
+      onRangeSelect: () => undefined,
     };
     for (const thread of threads) {
       byId.set(thread.id, {
@@ -278,17 +642,34 @@ export function SidebarV2({
         onRename: (title) => handleRename(thread, title),
         onSettle: () => handleSettle(thread),
         onUnsettle: () => handleUnsettle(thread),
-        onSnooze: NOOP,
-        onUnsnooze: NOOP,
-        onDelete: NOOP,
-        onCopyPath: NOOP,
-        onCopyBranch: NOOP,
-        onMarkUnread: NOOP,
-        onRegenerateTitle: NOOP,
+        onSnooze: (untilIso, whenLabel) => handleSnooze(thread, untilIso, { whenLabel }),
+        onUnsnooze: () => handleUnsnooze(thread),
+        onDelete: () => handleDelete(thread),
+        onCopyPath: () => handleCopyPath(thread),
+        onCopyBranch: () => handleCopyBranch(thread),
+        onMarkUnread: () => handleMarkUnread(thread),
+        onRegenerateTitle: () => handleRegenerateTitle(thread),
+        onModSelect: () => handleRowModSelect(thread),
+        onRangeSelect: () => handleRowRangeSelect(thread),
       });
     }
     return { byId, fallback };
-  }, [handleOpenThread, handleRename, handleSettle, handleUnsettle, threads]);
+  }, [
+    handleCopyBranch,
+    handleCopyPath,
+    handleDelete,
+    handleMarkUnread,
+    handleOpenThread,
+    handleRegenerateTitle,
+    handleRename,
+    handleRowModSelect,
+    handleRowRangeSelect,
+    handleSettle,
+    handleSnooze,
+    handleUnsettle,
+    handleUnsnooze,
+    threads,
+  ]);
 
   const noProjects = projectSnapshots.length === 0;
   const noThreads = threads.length === 0;
@@ -301,21 +682,34 @@ export function SidebarV2({
         variant="card"
         variantAction="settle"
         isActive={selectedAgentId === thread.id}
-        isSelected={selectedThreadKeys.includes(thread.id)}
-        isMultiSelectMode={false}
+        isSelected={selectedThreadKeys.includes(sidebarV2ThreadKey(thread.serverId, thread.id))}
+        isMultiSelectMode={isMultiSelectMode}
         isSnoozed={false}
         isSettled={false}
-        isWoke={false}
-        unseenCompletion={false}
+        isWoke={Boolean(threadWokeAt(thread, { now: snoozeNow }))}
+        unseenCompletion={resolveUnseenCompletion(thread)}
         now={now}
-        snoozeNow={now}
-        canSnoozeThread={false}
-        canSettleThread={true}
+        snoozeNow={snoozeNow}
+        canSnoozeThread={canSnooze(thread, { now: snoozeNow })}
+        canSettleThread={canSettle(thread, { now: snoozeNow })}
         projectLabel={thread.projectName}
+        selectedCount={selectedThreadKeys.length}
+        bulkMenuCapabilities={bulkMenuCapabilities}
+        bulkMenuCallbacks={bulkMenuCallbacks}
         {...(rowHandlers.byId.get(thread.id) ?? rowHandlers.fallback)}
       />
     ),
-    [now, rowHandlers, selectedAgentId, selectedThreadKeys],
+    [
+      bulkMenuCallbacks,
+      bulkMenuCapabilities,
+      isMultiSelectMode,
+      now,
+      resolveUnseenCompletion,
+      rowHandlers,
+      selectedAgentId,
+      selectedThreadKeys,
+      snoozeNow,
+    ],
   );
 
   const renderSnoozedRow = useCallback(
@@ -326,21 +720,34 @@ export function SidebarV2({
         variant="slim"
         variantAction="unsnooze"
         isActive={selectedAgentId === thread.id}
-        isSelected={selectedThreadKeys.includes(thread.id)}
-        isMultiSelectMode={false}
+        isSelected={selectedThreadKeys.includes(sidebarV2ThreadKey(thread.serverId, thread.id))}
+        isMultiSelectMode={isMultiSelectMode}
         isSnoozed
         isSettled={false}
-        isWoke={threadWoke(thread, now)}
-        unseenCompletion={false}
+        isWoke={Boolean(threadWokeAt(thread, { now: snoozeNow }))}
+        unseenCompletion={resolveUnseenCompletion(thread)}
         now={now}
-        snoozeNow={now}
+        snoozeNow={snoozeNow}
         canSnoozeThread={false}
         canSettleThread={false}
         projectLabel={thread.projectName}
+        selectedCount={selectedThreadKeys.length}
+        bulkMenuCapabilities={bulkMenuCapabilities}
+        bulkMenuCallbacks={bulkMenuCallbacks}
         {...(rowHandlers.byId.get(thread.id) ?? rowHandlers.fallback)}
       />
     ),
-    [now, rowHandlers, selectedAgentId, selectedThreadKeys],
+    [
+      bulkMenuCallbacks,
+      bulkMenuCapabilities,
+      isMultiSelectMode,
+      now,
+      resolveUnseenCompletion,
+      rowHandlers,
+      selectedAgentId,
+      selectedThreadKeys,
+      snoozeNow,
+    ],
   );
 
   const renderSettledRow = useCallback(
@@ -351,21 +758,34 @@ export function SidebarV2({
         variant="slim"
         variantAction="unsettle"
         isActive={selectedAgentId === thread.id}
-        isSelected={selectedThreadKeys.includes(thread.id)}
-        isMultiSelectMode={false}
+        isSelected={selectedThreadKeys.includes(sidebarV2ThreadKey(thread.serverId, thread.id))}
+        isMultiSelectMode={isMultiSelectMode}
         isSnoozed={false}
         isSettled
-        isWoke={false}
-        unseenCompletion={false}
+        isWoke={Boolean(threadWokeAt(thread, { now: snoozeNow }))}
+        unseenCompletion={resolveUnseenCompletion(thread)}
         now={now}
-        snoozeNow={now}
-        canSnoozeThread={false}
+        snoozeNow={snoozeNow}
+        canSnoozeThread={canSnooze(thread, { now: snoozeNow })}
         canSettleThread={false}
         projectLabel={thread.projectName}
+        selectedCount={selectedThreadKeys.length}
+        bulkMenuCapabilities={bulkMenuCapabilities}
+        bulkMenuCallbacks={bulkMenuCallbacks}
         {...(rowHandlers.byId.get(thread.id) ?? rowHandlers.fallback)}
       />
     ),
-    [now, rowHandlers, selectedAgentId, selectedThreadKeys],
+    [
+      bulkMenuCallbacks,
+      bulkMenuCapabilities,
+      isMultiSelectMode,
+      now,
+      resolveUnseenCompletion,
+      rowHandlers,
+      selectedAgentId,
+      selectedThreadKeys,
+      snoozeNow,
+    ],
   );
 
   return (
@@ -402,6 +822,7 @@ export function SidebarV2({
           settledShelfExpanded={uiState?.settledShelfExpanded ?? true}
           activeThreads={partition.activeThreads}
           snoozedThreads={partition.snoozedThreads}
+          visibleSnoozedThreads={visibleSnoozedThreads}
           visibleSettledThreads={settledPaging.visibleSettledThreads}
           hiddenSettledCount={settledPaging.hiddenSettledCount}
           selectedAgentId={selectedAgentId ?? null}
@@ -433,13 +854,15 @@ interface RowHandlers {
   onRename: (title: string) => void;
   onSettle: () => void;
   onUnsettle: () => void;
-  onSnooze: (untilIso: string) => void;
+  onSnooze: (untilIso: string, whenLabel?: string) => void;
   onUnsnooze: () => void;
   onDelete: () => void;
   onCopyPath: () => void;
   onCopyBranch: () => void;
   onMarkUnread: () => void;
   onRegenerateTitle: () => void;
+  onModSelect: () => void;
+  onRangeSelect: () => void;
 }
 
 /** Renders the scroll body: search mode, empty states, or the shelf list. */
@@ -452,6 +875,7 @@ function SidebarV2Body({
   settledShelfExpanded,
   activeThreads,
   snoozedThreads,
+  visibleSnoozedThreads,
   visibleSettledThreads,
   hiddenSettledCount,
   renderActiveRow,
@@ -470,6 +894,7 @@ function SidebarV2Body({
   settledShelfExpanded: boolean;
   activeThreads: readonly SidebarV2Thread[];
   snoozedThreads: readonly SidebarV2Thread[];
+  visibleSnoozedThreads: readonly SidebarV2Thread[];
   visibleSettledThreads: readonly SidebarV2Thread[];
   hiddenSettledCount: number;
   selectedAgentId: string | null;
@@ -519,7 +944,7 @@ function SidebarV2Body({
             onToggle={onToggleSnoozedShelf}
             tone="snoozed"
           />
-          {snoozedShelfExpanded ? snoozedThreads.map(renderSnoozedRow) : null}
+          {visibleSnoozedThreads.map(renderSnoozedRow)}
         </>
       ) : null}
 
@@ -587,13 +1012,6 @@ function ShelfHeader({
       />
     </Pressable>
   );
-}
-
-function threadWoke(thread: SidebarV2Thread, now: string): boolean {
-  if (!thread.snoozedUntil) {
-    return false;
-  }
-  return Date.parse(thread.snoozedUntil) <= Date.parse(now);
 }
 
 function resolvePrState(workspace: WorkspaceDescriptor): "open" | "closed" | "merged" | null {

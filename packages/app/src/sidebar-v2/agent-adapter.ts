@@ -27,9 +27,11 @@ export interface SidebarV2Thread extends PartitionableThread {
   projectKey: string | null;
   projectName: string | null;
   branch: string | null;
+  cwd: string | null;
   worktreePath: string | null;
   changeRequestState: "open" | "closed" | "merged" | null;
   lastVisitedAt: string | null;
+  requiresFinishedAttention: boolean;
   model: string | null;
   lastError: string | null;
 }
@@ -130,6 +132,27 @@ function resolveWorktreePath(agent: AggregatedAgent): string | null {
   return null;
 }
 
+function resolveSettledOverride(
+  labels: Record<string, string> | undefined,
+): SidebarV2Thread["settledOverride"] {
+  const settledOverrideLabel = labelOrNull(labels, SIDEBAR_LABEL_SETTLED_OVERRIDE);
+  if (settledOverrideLabel === "active" || settledOverrideLabel === "settled") {
+    return settledOverrideLabel;
+  }
+  return null;
+}
+
+function resolveLatestUserMessageAt(
+  agent: AggregatedAgent,
+  lastActivityAt: string | null,
+): string | null {
+  const attentionAt = isoOrNull(agent.attentionTimestamp);
+  if (agent.status === "running" || agent.status === "initializing") {
+    return attentionAt ?? lastActivityAt;
+  }
+  return attentionAt;
+}
+
 /**
  * Adapts an aggregated agent into the sidebar v2 thread model.
  * @param agent The aggregated agent from live/history sources
@@ -147,12 +170,12 @@ export function agentToSidebarThread(
   const hasPendingUserInput =
     agent.requiresAttention === true &&
     USER_INPUT_ATTENTION_REASONS.has(agent.attentionReason ?? "");
-
-  const settledOverrideLabel = labelOrNull(labels, SIDEBAR_LABEL_SETTLED_OVERRIDE);
-  const settledOverride: SidebarV2Thread["settledOverride"] =
-    settledOverrideLabel === "active" || settledOverrideLabel === "settled"
-      ? settledOverrideLabel
-      : null;
+  const requiresFinishedAttention =
+    agent.requiresAttention === true && agent.attentionReason === "finished";
+  const lastActivityAt = isoOrNull(agent.lastActivityAt);
+  const latestUserMessageAt = resolveLatestUserMessageAt(agent, lastActivityAt);
+  const settledOverride = resolveSettledOverride(labels);
+  const cwd = agent.cwd?.trim() || null;
 
   return {
     id: agent.id,
@@ -161,11 +184,10 @@ export function agentToSidebarThread(
     provider: agent.provider,
     status: agent.status,
     lastError: extras?.lastError ?? null,
-    lastActivityAt: isoOrNull(agent.lastActivityAt),
-    latestUserMessageAt: null,
+    lastActivityAt,
+    latestUserMessageAt,
     createdAt: isoOrNull(agent.createdAt) ?? "1970-01-01T00:00:00.000Z",
-    updatedAt:
-      isoOrNull(agent.lastActivityAt) ?? isoOrNull(agent.createdAt) ?? "1970-01-01T00:00:00.000Z",
+    updatedAt: lastActivityAt ?? isoOrNull(agent.createdAt) ?? "1970-01-01T00:00:00.000Z",
     archivedAt: isoOrNull(agent.archivedAt),
     hasPendingApprovals,
     hasPendingUserInput,
@@ -176,9 +198,11 @@ export function agentToSidebarThread(
     projectKey: resolveProjectKey(agent),
     projectName: resolveProjectName(agent),
     branch: resolveBranch(agent, workspace),
-    worktreePath: resolveWorktreePath(agent),
+    cwd,
+    worktreePath: resolveWorktreePath(agent) ?? cwd,
     changeRequestState: resolveChangeRequestState(workspace),
     lastVisitedAt: null,
+    requiresFinishedAttention,
     model: extras?.model ?? null,
   };
 }

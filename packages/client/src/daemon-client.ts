@@ -917,7 +917,11 @@ export class DaemonClient {
 
   async updateAgent(
     agentId: string,
-    updates: { name?: string; labels?: Record<string, string> },
+    updates: {
+      name?: string;
+      labels?: Record<string, string>;
+      regenerateTitle?: boolean;
+    },
   ): Promise<void> {
     return this.agentLifecycle.updateAgent(agentId, updates);
   }

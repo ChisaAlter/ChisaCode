@@ -35,6 +35,7 @@ export interface AgentMetadataGenerationOptions {
   initialPrompt?: string | null;
   explicitTitle?: string | null;
   provisionalTitle?: string | null;
+  forceRegenerateTitle?: boolean;
   chisacodeHome?: string;
   logger: Logger;
   deps?: AgentMetadataGeneratorDeps;
@@ -60,7 +61,13 @@ function normalizeAutoTitle(title: string): string | null {
 export async function determineAgentMetadataNeeds(
   options: Pick<
     AgentMetadataGenerationOptions,
-    "initialPrompt" | "explicitTitle" | "provisionalTitle" | "cwd" | "chisacodeHome" | "deps"
+    | "initialPrompt"
+    | "explicitTitle"
+    | "provisionalTitle"
+    | "forceRegenerateTitle"
+    | "cwd"
+    | "chisacodeHome"
+    | "deps"
   >,
 ): Promise<AgentMetadataNeeds> {
   const prompt = options.initialPrompt?.trim();
@@ -69,7 +76,8 @@ export async function determineAgentMetadataNeeds(
   }
 
   const needsTitle =
-    !hasExplicitTitle(options.explicitTitle) && !hasExplicitTitle(options.provisionalTitle);
+    options.forceRegenerateTitle === true ||
+    (!hasExplicitTitle(options.explicitTitle) && !hasExplicitTitle(options.provisionalTitle));
 
   return {
     prompt,
@@ -113,6 +121,27 @@ async function buildPrompt(
   });
 }
 
+async function resolveMetadataGenerationProviders(options: AgentMetadataGenerationOptions) {
+  if (!options.providerSnapshotManager) {
+    const message = "Title regeneration requires provider snapshot access";
+    options.logger.error({ agentId: options.agentId }, message);
+    if (options.forceRegenerateTitle === true) {
+      throw new Error(message);
+    }
+    return [] as Awaited<ReturnType<typeof resolveStructuredGenerationProviders>>;
+  }
+  const providers = await resolveStructuredGenerationProviders({
+    cwd: options.cwd,
+    providerSnapshotManager: options.providerSnapshotManager,
+    daemonConfig: options.daemonConfig,
+    currentSelection: options.currentSelection,
+  });
+  if (providers.length === 0 && options.forceRegenerateTitle === true) {
+    throw new Error("No providers available to regenerate the title");
+  }
+  return providers;
+}
+
 export async function generateAndApplyAgentMetadata(
   options: AgentMetadataGenerationOptions,
 ): Promise<void> {
@@ -139,14 +168,10 @@ export async function generateAndApplyAgentMetadata(
   let result: { title?: string };
 
   try {
-    const providers = options.providerSnapshotManager
-      ? await resolveStructuredGenerationProviders({
-          cwd: options.cwd,
-          providerSnapshotManager: options.providerSnapshotManager,
-          daemonConfig: options.daemonConfig,
-          currentSelection: options.currentSelection,
-        })
-      : [];
+    const providers = await resolveMetadataGenerationProviders(options);
+    if (providers.length === 0) {
+      return;
+    }
     result = await generator({
       manager: options.agentManager,
       cwd: options.cwd,
@@ -173,14 +198,23 @@ export async function generateAndApplyAgentMetadata(
         ? "Structured metadata generation failed"
         : "Agent metadata generation failed",
     );
+    if (options.forceRegenerateTitle === true) {
+      throw error instanceof Error ? error : new Error("Agent metadata generation failed");
+    }
     return;
   }
 
   if (needs.needsTitle && typeof result.title === "string") {
     const normalizedTitle = normalizeAutoTitle(result.title);
     if (normalizedTitle) {
-      await options.agentManager.setGeneratedTitle(options.agentId, normalizedTitle);
+      await options.agentManager.setGeneratedTitle(options.agentId, normalizedTitle, {
+        force: options.forceRegenerateTitle === true,
+      });
+      return;
     }
+  }
+  if (options.forceRegenerateTitle === true) {
+    throw new Error("Title regeneration produced no title");
   }
 }
 

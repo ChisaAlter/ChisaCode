@@ -68,6 +68,8 @@ export const UpdateAgentRequestMessageSchema = z.object({
   agentId: z.string(),
   name: z.string().optional(),
   labels: z.record(z.string()).optional(),
+  /** Force-regenerate title from the first user message. Optional for wire compat. */
+  regenerateTitle: z.boolean().optional(),
   requestId: z.string(),
 });
 

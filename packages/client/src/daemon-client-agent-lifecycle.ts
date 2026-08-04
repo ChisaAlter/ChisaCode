@@ -174,7 +174,11 @@ export class AgentLifecycleClient {
 
   async updateAgent(
     agentId: string,
-    updates: { name?: string; labels?: Record<string, string> },
+    updates: {
+      name?: string;
+      labels?: Record<string, string>;
+      regenerateTitle?: boolean;
+    },
   ): Promise<void> {
     const payload = await this.transport.request({
       message: {
@@ -184,9 +188,10 @@ export class AgentLifecycleClient {
         ...(updates.labels && Object.keys(updates.labels).length > 0
           ? { labels: updates.labels }
           : {}),
+        ...(updates.regenerateTitle === true ? { regenerateTitle: true } : {}),
       },
       responseType: "update_agent_response",
-      timeout: 10_000,
+      timeout: 30_000,
     });
     if (!payload.accepted) {
       throw new Error(payload.error ?? "updateAgent rejected");

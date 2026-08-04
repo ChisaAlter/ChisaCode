@@ -88,7 +88,13 @@ export class AgentLifecycleHandler implements DisposableHandler {
       case "clear_agent_attention":
         return this.handleClearAgentAttention(msg.agentId, msg.requestId);
       case "update_agent_request":
-        return this.handleUpdateAgentRequest(msg.agentId, msg.name, msg.labels, msg.requestId);
+        return this.handleUpdateAgentRequest(
+          msg.agentId,
+          msg.name,
+          msg.labels,
+          msg.regenerateTitle,
+          msg.requestId,
+        );
       case "send_agent_message_request":
         return this.handleSendAgentMessageRequest(msg);
       default:
@@ -378,6 +384,7 @@ export class AgentLifecycleHandler implements DisposableHandler {
     agentId: string,
     name: string | undefined,
     labels: Record<string, string> | undefined,
+    regenerateTitle: boolean | undefined,
     requestId: string,
   ): Promise<void> {
     this.context.sessionLogger.info(
@@ -386,14 +393,24 @@ export class AgentLifecycleHandler implements DisposableHandler {
         requestId,
         hasName: typeof name === "string",
         labelCount: labels ? Object.keys(labels).length : 0,
+        regenerateTitle: regenerateTitle === true,
       },
       "session: update_agent_request",
     );
 
     try {
       const result = await updateAgentCommand(
-        { agentManager: this.context.agentManager },
-        { agentId, name, labels },
+        {
+          agentManager: this.context.agentManager,
+          regenerateAgentTitle: async (id) => {
+            await this.context.agentManager.regenerateAgentTitle(id, {
+              providerSnapshotManager: this.context.providerSnapshotManager,
+              workspaceGitService: this.context.workspaceGitService,
+              daemonConfig: this.context.readStructuredGenerationDaemonConfig(),
+            });
+          },
+        },
+        { agentId, name, labels, regenerateTitle },
       );
 
       if (!result.accepted) {

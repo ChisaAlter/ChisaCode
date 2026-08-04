@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
-import { Animated, Easing, Platform, Text, ToastAndroid, View } from "react-native";
+import { Animated, Easing, Platform, Pressable, Text, ToastAndroid, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useIsCompactFormFactor } from "@/constants/layout";
@@ -18,12 +18,18 @@ import { createToastQueue, type ToastQueue } from "./toast-queue";
 
 export type ToastVariant = "default" | "success" | "error";
 
+export interface ToastAction {
+  label: string;
+  onPress: () => void;
+}
+
 export interface ToastShowOptions {
   icon?: ReactNode;
   variant?: ToastVariant;
   durationMs?: number | null;
   nativeAndroid?: boolean;
   testID?: string;
+  action?: ToastAction;
 }
 
 export interface ToastState {
@@ -34,6 +40,7 @@ export interface ToastState {
   variant: ToastVariant;
   durationMs: number | null;
   testID?: string;
+  action?: ToastAction;
 }
 
 export interface ToastApi {
@@ -104,6 +111,7 @@ export function useToastHost(): {
       variant,
       durationMs,
       testID: options?.testID,
+      action: options?.action,
     });
   }, []);
 
@@ -129,6 +137,23 @@ export function useToastHost(): {
   }, []);
 
   return { api, toasts, dismiss };
+}
+
+function ToastActionButton({ action, onDismiss }: { action: ToastAction; onDismiss: () => void }) {
+  const handlePress = useCallback(() => {
+    action.onPress();
+    onDismiss();
+  }, [action, onDismiss]);
+  return (
+    <Pressable
+      testID="app-toast-action"
+      onPress={handlePress}
+      hitSlop={8}
+      style={styles.actionButton}
+    >
+      <Text style={styles.actionLabel}>{action.label}</Text>
+    </Pressable>
+  );
 }
 
 function ToastItem({ toast, onDismiss }: { toast: ToastState; onDismiss: () => void }) {
@@ -275,6 +300,7 @@ function ToastItem({ toast, onDismiss }: { toast: ToastState; onDismiss: () => v
           {toast.content}
         </View>
       )}
+      {toast.action ? <ToastActionButton action={toast.action} onDismiss={onDismiss} /> : null}
     </Animated.View>
   );
 }
@@ -357,6 +383,17 @@ const styles = StyleSheet.create((theme) => ({
   contentSlot: {
     flexShrink: 1,
     minWidth: 0,
+  },
+  actionButton: {
+    marginLeft: theme.spacing[2],
+    paddingHorizontal: theme.spacing[1],
+    paddingVertical: 2,
+  },
+  actionLabel: {
+    fontSize: 12.5,
+    fontWeight: theme.fontWeight.semibold,
+    color: theme.colors.primary,
+    textDecorationLine: "underline",
   },
   message: {
     flexShrink: 1,

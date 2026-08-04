@@ -1,14 +1,11 @@
 import { execSync } from "node:child_process";
 import path from "node:path";
 import type { Page } from "@playwright/test";
+import { buildHostWorkspaceRoute } from "../../src/utils/host-routes";
 import { waitForTabBar } from "./launcher";
-import { selectWorkspaceInSidebar } from "./sidebar";
+import { getServerId } from "./server-id";
 import { createTempGitRepo, resolveTempRoot } from "./workspace";
-import {
-  connectWorkspaceSetupClient,
-  openHomeWithProject,
-  type WorkspaceSetupDaemonClient,
-} from "./workspace-setup";
+import { connectWorkspaceSetupClient, type WorkspaceSetupDaemonClient } from "./workspace-setup";
 
 export interface CreatedWorkspace {
   workspaceId: string;
@@ -73,8 +70,12 @@ export function createWithWorkspace(page: Page): WithWorkspaceHandle {
       workspaceId,
       repoPath: workspacePath,
       navigateTo: async () => {
-        await openHomeWithProject(page, repo.path);
-        await selectWorkspaceInSidebar(page, workspaceId);
+        await page.goto(buildHostWorkspaceRoute(getServerId(), workspaceId), {
+          waitUntil: "domcontentloaded",
+        });
+        await page.waitForURL((url) => url.pathname.includes("/workspace/"), {
+          timeout: 60_000,
+        });
         await waitForTabBar(page);
       },
     };

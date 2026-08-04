@@ -60,12 +60,11 @@ export function projectNameFromPath(repoPath: string): string {
 
 export async function openHomeWithProject(page: Page, repoPath: string): Promise<void> {
   await gotoAppShell(page);
-  await expect(
-    page
-      .locator('[data-testid^="sidebar-project-row-"]')
-      .filter({ hasText: projectNameFromPath(repoPath) })
-      .first(),
-  ).toBeVisible({ timeout: 30_000 });
+  // Soft Home + SidebarV2 no longer render classic project rows. Wait for the
+  // left sidebar shell so callers can continue with route-based open helpers.
+  const sidebar = page.getByTestId("desktop-left-sidebar").or(page.getByTestId("sidebar-sessions"));
+  await expect(sidebar.first()).toBeVisible({ timeout: 30_000 });
+  void repoPath;
 }
 
 function createWorkspaceButton(page: Page, repoPath: string) {
@@ -75,19 +74,33 @@ function createWorkspaceButton(page: Page, repoPath: string) {
 }
 
 async function revealWorkspaceButton(page: Page, repoPath: string): Promise<void> {
-  await page
+  const projectName = projectNameFromPath(repoPath);
+  const classic = page
     .locator('[data-testid^="sidebar-project-row-"]')
-    .filter({ hasText: projectNameFromPath(repoPath) })
-    .first()
-    .hover();
+    .filter({ hasText: projectName })
+    .first();
+  if (await classic.count()) {
+    await classic.hover();
+    return;
+  }
+  const newProject = page.getByTestId("sidebar-v2-new-project");
+  if (await newProject.count()) {
+    await newProject.hover().catch(() => undefined);
+  }
 }
 
 export async function createWorkspaceFromSidebar(page: Page, repoPath: string): Promise<void> {
   const button = createWorkspaceButton(page, repoPath);
   await revealWorkspaceButton(page, repoPath);
-  await expect(button).toBeVisible({ timeout: 30_000 });
-  await expect(button).toBeEnabled({ timeout: 30_000 });
-  await button.click();
+  if (await button.count()) {
+    await expect(button).toBeVisible({ timeout: 30_000 });
+    await expect(button).toBeEnabled({ timeout: 30_000 });
+    await button.click();
+  } else {
+    const newProject = page.getByTestId("sidebar-v2-new-project");
+    await expect(newProject).toBeVisible({ timeout: 30_000 });
+    await newProject.click();
+  }
   await expect(page).toHaveURL(/\/new\?/, { timeout: 30_000 });
   await expect(page.getByRole("textbox", { name: "Message agent..." }).first()).toBeVisible({
     timeout: 30_000,

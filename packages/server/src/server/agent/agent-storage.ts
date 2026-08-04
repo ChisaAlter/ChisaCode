@@ -308,14 +308,18 @@ export class AgentStorage {
     await this.upsert({ ...record, title, titleSource: "explicit" });
   }
 
-  async setGeneratedTitle(agentId: string, title: string): Promise<StoredAgentRecord> {
+  async setGeneratedTitle(
+    agentId: string,
+    title: string,
+    options?: { force?: boolean },
+  ): Promise<StoredAgentRecord> {
     await this.load();
     await this.waitForPendingWrite(agentId);
     const record = this.cache.get(agentId) ?? null;
     if (!record) {
       throw new Error(`Agent ${agentId} not found`);
     }
-    if (record.title && record.titleSource !== "generated") {
+    if (!options?.force && record.title && record.titleSource !== "generated") {
       return record;
     }
     const nextRecord = {
