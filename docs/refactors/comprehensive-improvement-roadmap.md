@@ -14,30 +14,44 @@
 - **问题**：ChisaCode 左侧栏与 T3 Code SidebarV2 体感差距大——新会话沉底、worktree slug（如 naive-seahorse）闪现成假项目目录、无搜索/scope 过滤/状态分层
 - **影响范围**：`packages/app/src/sidebar-v2/`（新目录：logic/snooze/shelves/projects/agent-adapter/store + SidebarV2/SidebarV2Row/SidebarV2Menu/SidebarV2Search/SidebarV2ScopeMenu 组件）、`packages/app/src/components/left-sidebar.tsx`（正文换成 SidebarV2，保留外壳/host 切换/置顶区）、`packages/app/src/i18n/index.ts`（sidebarV2 键）、`packages/app/src/utils/sidebar-session-groups.ts`（createdAt 排序、worktree hash 归组、新项前置）
 - **方案**：按 T3 `SidebarV2.tsx` + `Sidebar.logic.ts` + `sidebarProjectGrouping.ts` 移植——active 卡片（状态槽/时长/应退让淡化）→ snoozed shelf（默认收起+唤醒倒计时+Woke）→ settled shelf（默认展开+分页 Show more）、搜索、scope 过滤菜单、上下文菜单全套（settle/snooze 预设/重命名/mark-unread/复制路径分支/删除）、行内改名、项目设置对话框、标签持久化（`chisacode.sidebarSettledAt`/`sidebarSnoozedUntil`/`sidebarSettledOverride`）、自动 settle（3 天）。明确不做（对齐 T3）：拖拽重排、分组头
-- **验证**：92 个 sidebar-v2 单测通过、App typecheck 干净、改动文件 lint 0 错误；桌面端实机启动正常
-- **状态**：完成（待桌面实测反馈）
+- **验证**：96 个 sidebar-v2 单测通过（2026-08-04 复跑 96/96）、App typecheck 干净、改动文件 lint 0 错误；桌面端实机启动正常
+- **状态**：完成。桌面实测已自动化（2026-08-04）——`e2e/desktop-slices.script.ts` 与 `e2e/desktop-packaged-slices.script.ts` 追加 SidebarV2 断言（seed thread 行在真实 Electron 侧边栏渲染、点击导航进 workspace 路由，dev 3 轮 + 打包 2 轮全绿）。**e2e testid 迁移期间发现并修复真实行点击 bug**（2026-08-04）：RNW 0.21 `Pressable` 的内部 click handler 覆盖用户 `onClick`（`pressEventHandlers` 在 `rest` 之后展开且只调用 `onPress`），而 `SidebarV2Row` 的 web 策略恰好相反（`onPress` 在 web return、指望 `onClick` 激活）——web/Electron 上点击行完全无效。修复：`onPress` 成为唯一激活通路（修饰键从 `nativeEvent` 提取），删除被吞掉的 `onClick`。诊断证据：原生 click 派发到行元素但 React 合成 onClick 不执行；RNW 源码 `Pressable/index.js` props 展开顺序 + `PressResponder` onClick 语义
 
-### T3 消息发送 / AI 回复渲染丝滑移植（2026-08-03 启动，计划评审中）
+### T3 消息发送 / AI 回复渲染丝滑移植（2026-08-03 启动，2026-08-04 完成）
 
 - **问题**：ChisaCode 的发送与回复渲染在"对话体感"上落后 T3 Code：发送后用户消息直接贴底（T3 是新回合锚定滚动，用户消息停在视口上沿、回复向下生长）；composer busy 绑定 submit Promise 而非服务器投影（T3 用 LocalDispatch 投影 ack，steer/permission/error 都能及时释放）；长会话工具行全展开（T3 折叠已完成回合与 work-log）；web 端 markdown 表现力弱（T3 有路径 chip/表格/details/外链 favicon + Shiki 流式不缓存）。详见 `docs/research/t3code-message-render-ux.md`（代码级全景研究）
 - **影响范围**：`packages/app/src/agent-stream`（turn-anchor 控制器、strategy-web/native、view/model/layout）、`packages/app/src/panels/agent-panel.tsx`、`packages/app/src/composer`（busy 装配）、`packages/app/src/timeline/session-stream-reducers.ts`（projection ack 派生）、`packages/app/src/components/message.tsx` + 新 `assistant-markdown.*` 平台组件；可选 `packages/server` delta 微批
 - **方案**：6 个切片——A 锚定几何纯函数（`turn-anchor-metrics.ts`，0 UI 风险）、B web 新回合锚定滚动（独立 `turn-anchor-controller.ts` 与 bottom-anchor 并行，web 先行 native 不动）、C send projection ack busy（`hasServerAdoptedOptimisticUserMessage` 派生 + 装配层叠加）、D 完成回合/work-log 折叠（`turn-fold.ts` 纯函数）、E web markdown 表现力 + 流式高亮缓存策略（分平台组件，RN 不动）、F 服务端 delta 微批（可选，先采样证明 jank 再做）。详见 `docs/refactors/t3code-message-render-ux-plan.md`
 - **强制门禁**：只跑改动 Vitest 文件（`--bail=1`，无固定 sleep）、App typecheck、改动文件 lint/format；平台验证按切片要求——B/C/D 用真实 web（Playwright 定向 spec），E 必须真实 web + 真实 Electron，不得以 web preview 代替 desktop；native 代码零改动的切片明确声明"未验证 native"；现有 `bottom-anchor-controller.test.ts` / `web-virtualization.test.ts` / reducers 测试全量回归
-- **状态**：Slice A–F 已按计划执行并完成 e2e 验证（分支 `research/t3code-message-render-ux`，2026-08-03/04）——turn-anchor 控制器/度量/折叠纯函数 + web 装配（composer 回调触发锚定、惰性锚行解析、服务器投影 id 变更后回退到末条 user message）、Slice C busy 装配（hook + composer 接线 + queue 路径共用 + 服务端 messageId 回显闭环）、流式高亮不写缓存、work-log 折叠（`turn-fold.ts` + mock 尾置工具模式）。门禁：`turn-anchor.spec.ts`（2 测试）、`work-log-fold.spec.ts`（1 测试，连续 3 轮全绿）、合并回归 5 测试一次通过、`agent-stream-ui.spec.ts` 测试 1、2 全绿；测试 3 为 Soft Home/SidebarV2 迁移造成的分支级预存故障（`openHomeWithProject` 依赖经典 sidebar testid，见审计文档 §2.4）；**桌面验证已完成（2026-08-04）**——真实 Electron 双门禁：dev 模式 `e2e/desktop-slices.script.ts`（3 轮全绿）+ electron-builder 重建 x64 打包产物 `e2e/desktop-packaged-slices.script.ts`（2 轮全绿），B/C/D/E 全绿；新增 server `CHISACODE_ENABLE_DEV_PROVIDERS`（打包/e2e daemon 显式启用 dev-only mock 提供者，生产默认关闭，审计 §3.6）；mock 尾置回合文本加流式代码围栏（Slice E 桌面可观察载体）
+- **状态**：Slice A–F 已按计划执行并完成 e2e 验证（分支 `research/t3code-message-render-ux`，2026-08-03/04）——turn-anchor 控制器/度量/折叠纯函数 + web 装配（composer 回调触发锚定、惰性锚行解析、服务器投影 id 变更后回退到末条 user message）、Slice C busy 装配（hook + composer 接线 + queue 路径共用 + 服务端 messageId 回显闭环）、流式高亮不写缓存、work-log 折叠（`turn-fold.ts` + mock 尾置工具模式）。门禁：`turn-anchor.spec.ts`（2 测试）、`work-log-fold.spec.ts`（1 测试，连续 3 轮全绿）、合并回归 5 测试一次通过、`agent-stream-ui.spec.ts` 测试 1、2 全绿；测试 3 为 Soft Home/SidebarV2 迁移造成的分支级预存故障（`openHomeWithProject` 依赖经典 sidebar testid，见审计文档 §2.4）；**桌面验证已完成（2026-08-04）**——真实 Electron 双门禁：dev 模式 `e2e/desktop-slices.script.ts`（3 轮全绿）+ electron-builder 重建 x64 打包产物 `e2e/desktop-packaged-slices.script.ts`（2 轮全绿），B/C/D/E 全绿；新增 server `CHISACODE_ENABLE_DEV_PROVIDERS`（打包/e2e daemon 显式启用 dev-only mock 提供者，生产默认关闭，审计 §3.6）；mock 尾置回合文本加流式代码围栏（Slice E 桌面可观察载体）。**决策性不做（2026-08-04 如实记录）**：Slice F 服务端 delta 微批——计划定义为可选（需性能采样证明 jank），未做采样，不实施；P2/P3 项（touchmove/pointerdown 脱离、`deriveTurnFolds` 纯函数、缓存 read 守卫、native turn-anchor、LegendList、tail/head 单事件流）决策见 `docs/refactors/t3code-message-render-ux-optimization-plan.md` §3/§4；web-only markdown 表现力（表格/details/favicon）与 native turn-anchor 语义另立条目登记（见下）
 
-### Desktop x64-only packaged rebuild script (`build-x64.js`)（2026-08-04 登记）
+### Desktop x64-only packaged rebuild script (`build-x64.js`)（2026-08-04 登记，2026-08-04 完成）
 
 - **问题**：T3 桌面打包门禁需要频繁重建 win x64 产物，完整 `packages/desktop/scripts/build.js` 同时打 arm64，耗时长且曾在 arm64 完整性步骤失败。新增 `packages/desktop/scripts/build-x64.js` 镜像 asar-integrity-after-rcedit packager 但仅构建 x64 nsis+zip；该脚本已提交但无 npm script / 文档面包屑，与 `build.js` 的 asar 完整性逻辑必须保持同步，否则打包门禁会静默拿到错误产物
 - **影响范围**：`packages/desktop/scripts/build-x64.js`、`packages/desktop/scripts/build.js`、`packages/app/e2e/desktop-packaged-slices.script.ts`
 - **方案**：在 desktop `package.json` 增加 `build:x64` 入口；在 AGENTS.md 或 desktop README 记录「打包 e2e 用 `node scripts/build-x64.js`」；任何改 `build.js` 的 asar-integrity packager 时必须同步 `build-x64.js`
-- **状态**：已登记（脚本可用，文档/npm 入口待补）
+- **状态**：完成（2026-08-04）——`npm run build:x64` 入口（镜像 `build` 依赖链）+ `packages/desktop/README.md` 打包说明（含「改 `build.js` packager 必须同步 `build-x64.js`」提醒）已落地
 
 ### SidebarV2 / Soft Home e2e testid 迁移（2026-08-04 登记）
 
 - **问题**：Soft Home 重定向 + `left-sidebar` 无条件渲染 SidebarV2 后，经典 `sidebar-project-row-*` / `sidebar-workspace-row-*` 永不出现在 DOM；`openHomeWithProject` / `withWorkspace.navigateTo` 等 helper 依赖这些 testid，阻断 `agent-stream-ui.spec.ts` 测试 3 及至少 7 个 workspace 相关 spec。属 SidebarV2 迁移遗留，非 T3 引入，但阻塞全链 e2e
 - **影响范围**：`packages/app/src/sidebar-v2/`（尤其 `SidebarV2Row`）、`packages/app/e2e/helpers/workspace-setup.ts`、`packages/app/e2e/helpers/with-workspace.ts`、`packages/app/e2e/helpers/sidebar.ts`、依赖 `withWorkspace`/`openHomeWithProject` 的 spec
 - **方案**：为 `SidebarV2Row` 补稳定 `testID`（如 `sidebar-v2-thread-{id}` + 项目名可检索），或把 `withWorkspace.navigateTo` 改为路由直开（`buildHostWorkspaceOpenRoute`，与 `openAgentRoute` 同模式）；更新 helper 后重跑被阻断的 7 个 spec
-- **状态**：进行中（独立于 T3 切片）
+- **状态**：核心完成（2026-08-04 提交 `fe201bd1f`）——SidebarV2Row 补 `sidebar-v2-thread-{id}` + `aria-selected`、菜单/scope testID；`withWorkspace.navigateTo` 与全部 helper 路由化（`switchAgentViaSidebar`/`openWorkspaceViaRoute`/`expectSidebarThreadActive`）；10 个 spec 迁移到新 testid。**过程中修复两个真实 bug**：① web/Electron 行点击完全无效（RNW 0.21 Pressable 内部 onClick 覆盖用户 onClick，onPress 成为唯一激活通路）；② 选中态恒 false（`selectedAgentId` 带 `serverId:` 前缀，SidebarV2 按裸 id 比较）。批 1 验证 5 轮从 15 失败降到 6（25 测试 19 绿，含 sidebar 导航/切换/创建流程/branch picker/上下文菜单）。**剩余 6 个失败归因**：4 个（optimistic draft 转换、terminal 类 ×3）与 workspace layout chrome 的「单 tab 隐藏 tab 条」语义相关，属并行迁移会话活跃区（其重写与 launcher helper 未完成）；1 个 GitHub PR 测试依赖假 repo（`test-owner/test-repo` 不存在）但本机 `gh auth` 存在导致 skip 不生效（环境夹具问题）；1 个 mobile panelState 测试依赖经典 `menu-button`，SidebarV2 mobile 结构待评估
+
+### Web-only markdown 表现力（表格/details/外链 favicon）（2026-08-04 登记，待产品决策）
+
+- **问题**：T3 消息渲染移植的 Slice E 原计划引入 react-markdown 提升 web/Electron 端表现力（路径 chip、表格、details、外链 favicon），审计后降级：ChisaCode 已有自研跨端高亮（`@chisacode/highlight` + `HighlightedCodeBlock`）与文件链接解析（`assistant-file-links`）；引入 react-markdown 会新建 web-only 渲染路径、破坏 RN 跨端一致性，并带来 lockfile/包体积/安全面变更（审计 `docs/research/t3code-message-render-ux-audit.md` §3.1）。本次只落地「流式期间不写高亮缓存」策略，零新依赖
+- **影响范围**：`packages/app/src/components/message.tsx`、新 `assistant-markdown.web.tsx`（如实施）
+- **方案**：若产品决策需要 web-only 表现力——分平台组件 `assistant-markdown.web.tsx`（react-markdown + remark-gfm）+ 现有 `HighlightedCodeBlock`；RN 路径保持 `MarkdownRenderer` 不动；需评估 lockfile/包体积/安全面；可单独回滚
+- **状态**：待产品决策（不实施，2026-08-04 登记）
+
+### Native turn-anchor 语义（2026-08-04 登记，P3 评估）
+
+- **问题**：web 端「发送后钉上沿」锚定（T3 anchoring-new-turn）已落地；native 的 `requestTurnAnchor` 委托既有 bottom-anchor `requestLocalAnchor`（sticky-bottom 语义保留，非 no-op），inverted FlatList + `maintainVisibleContentPosition` 已天然实现「回复在上方生长、锚行不动」，但未实现 web 的「钉上沿」对称语义（优化计划 §4.2）
+- **影响范围**：`packages/app/src/agent-stream/strategy-native.tsx`
+- **方案**：如需对齐 web 语义——native strategy 加 `flatListRef.scrollToIndex({ index: userMessageIndex, viewPosition: 0, animated: true })`；当前行为与改造前一致，非回归；建议作为独立 native 体验项评估
+- **状态**：P3 评估（不实施，2026-08-04 登记）
 
 ### T3 切片 C 投影 ack 的 id 失配（2026-08-03 发现，2026-08-04 修复完成）
 
