@@ -289,14 +289,14 @@ async function main(): Promise<void> {
     // Slice B: sending anchors the sent row near the top of the viewport.
     await submitMessage(page, "Anchor this desktop turn.");
     const userRowTop = () =>
-      page
+      page!
         .getByTestId("user-message")
         .last()
         .evaluate((el) => el.getBoundingClientRect().top);
     await pollUntil(
       async () => {
         const top = await userRowTop();
-        const { viewportHeight } = await readScrollMetrics(page);
+        const { viewportHeight } = await readScrollMetrics(page!);
         return top >= 0 && top <= viewportHeight / 2;
       },
       20_000,

@@ -176,15 +176,19 @@ async function main(): Promise<void> {
     });
 
     // The desktop-managed daemon starts asynchronously on boot; poll the
-    // bridge until it reports running.
-    let status: {
-      serverId?: string;
-      status?: string;
-      listen?: string;
-      pid?: number;
-      desktopManaged?: boolean;
-      error?: unknown;
-    } | null = null;
+    // bridge until it reports running. The poll result is written through a
+    // holder object — TS does not model closure writes to a captured `let`,
+    // which would keep it narrowed to its initial null.
+    const statusHolder: {
+      value: {
+        serverId?: string;
+        status?: string;
+        listen?: string;
+        pid?: number;
+        desktopManaged?: boolean;
+        error?: unknown;
+      } | null;
+    } = { value: null };
     await pollUntil(
       async () => {
         const current = await page
@@ -211,19 +215,24 @@ async function main(): Promise<void> {
             }
           })
           .catch(() => null);
-        status = current;
+        statusHolder.value = current ?? null;
+        const daemonStatus = statusHolder.value;
         return (
-          status?.status === "running" &&
-          status.desktopManaged === true &&
-          typeof status.listen === "string" &&
-          status.listen.length > 0
+          daemonStatus?.status === "running" &&
+          daemonStatus.desktopManaged === true &&
+          typeof daemonStatus.listen === "string" &&
+          daemonStatus.listen.length > 0
         );
       },
       120_000,
       "desktop-managed daemon running",
     );
-    console.log("[desktop-packaged] daemon status:", JSON.stringify(status).slice(0, 300));
-    daemonPid = status?.pid ?? null;
+    const daemonStatus = statusHolder.value;
+    if (!daemonStatus) {
+      throw new Error("desktop-managed daemon status missing after poll");
+    }
+    console.log("[desktop-packaged] daemon status:", JSON.stringify(daemonStatus).slice(0, 300));
+    daemonPid = daemonStatus.pid ?? null;
 
     // Seed a mock agent through the desktop-managed daemon and open its route.
     const repo = await createTempGitRepo("packaged-slice-");
@@ -250,7 +259,7 @@ async function main(): Promise<void> {
       }): Promise<{ id: string; status: string }>;
     };
     const seedClient = new DaemonClient({
-      url: `ws://${status.listen}/ws`,
+      url: `ws://${daemonStatus.listen}/ws`,
       clientId: `packaged-seed-${randomUUID()}`,
       clientType: "cli",
       appVersion: "1.0.2",
@@ -327,14 +336,14 @@ async function main(): Promise<void> {
       timeout: 30_000,
     });
     const userRowTop = () =>
-      page
+      page!
         .getByTestId("user-message")
         .last()
         .evaluate((el) => el.getBoundingClientRect().top);
     await pollUntil(
       async () => {
         const top = await userRowTop();
-        const { viewportHeight } = await readScrollMetrics(page);
+        const { viewportHeight } = await readScrollMetrics(page!);
         return top >= 0 && top <= viewportHeight / 2;
       },
       20_000,
