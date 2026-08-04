@@ -18,6 +18,9 @@ import { ImportSessionSheet } from "@/components/import-session-sheet";
 import { ExplorerSidebarAnimationProvider } from "@/contexts/explorer-sidebar-animation-context";
 import { useToast } from "@/contexts/toast-context";
 import { usePanelStore } from "@/stores/panel-store";
+import { useWorkspaceLayoutChrome } from "@/screens/workspace/use-workspace-layout-chrome";
+import { WorkspaceRightPanel } from "@/screens/workspace/workspace-right-panel";
+import { WorkspaceTerminalDrawer } from "@/screens/workspace/workspace-terminal-drawer";
 import { useSessionStore, type WorkspaceDescriptor } from "@/stores/session-store";
 import {
   buildWorkspaceTabPersistenceKey,
@@ -473,7 +476,11 @@ interface WorkspaceTerminalTabActionsInput {
 }
 
 interface WorkspaceTerminalTabActions {
-  handleTerminalCreated: (input: { terminalId: string; paneId?: string }) => void;
+  handleTerminalCreated: (input: {
+    terminalId: string;
+    paneId?: string;
+    openInCenterTab?: boolean;
+  }) => void;
   handleScriptTerminalSelected: (terminalId: string) => void;
   handleWorkspacePathUnavailable: () => void;
   handleTerminalCreateQueued: () => void;
@@ -487,8 +494,20 @@ function useWorkspaceTerminalTabActions({
 }: WorkspaceTerminalTabActionsInput): WorkspaceTerminalTabActions {
   const { t } = useTranslation();
   const handleTerminalCreated = useCallback(
-    ({ terminalId, paneId }: { terminalId: string; paneId?: string }) => {
+    ({
+      terminalId,
+      paneId,
+      openInCenterTab = true,
+    }: {
+      terminalId: string;
+      paneId?: string;
+      openInCenterTab?: boolean;
+    }) => {
       if (!persistenceKey) {
+        return;
+      }
+      // Drawer / right-panel terminal surfaces own the session without forcing a center tab.
+      if (!openInCenterTab) {
         return;
       }
       if (paneId) {
@@ -934,6 +953,41 @@ function WorkspaceScreenContent({
     openWorkspaceChildTabFocused,
     openWorkspaceTabInBackground,
   });
+  const isCreateTerminalPending =
+    createTerminalMutation.isPending || pendingTerminalCreateInput !== null;
+  const {
+    terminalDrawerOpen,
+    rightPanelOpen,
+    rightPanelActiveSurface,
+    activeTerminalId,
+    rightPanelBrowserId,
+    canUseRightPanel,
+    showBrowserSurface,
+    handleToggleTerminalDrawer,
+    handleToggleRightPanel,
+    handleOpenRightPanelSurface,
+    handleCloseRightPanel,
+    handleCloseTerminalDrawer,
+  } = useWorkspaceLayoutChrome({
+    isMobile,
+    isGitCheckout,
+    workspaceDirectory,
+    liveTerminalIds,
+    createTerminal,
+    isCreateTerminalPending,
+  });
+  // Production: right surface rail and floating env card are mutually exclusive.
+  useEffect(() => {
+    if (rightPanelOpen) {
+      setEnvironmentPanelMode("forced-closed");
+    }
+  }, [rightPanelOpen, setEnvironmentPanelMode]);
+  const handleRightPanelOpenWorkspaceFile = useCallback(
+    (request: { location: { path: string; line?: number | null; column?: number | null } }) => {
+      handleOpenFileFromChat(request.location);
+    },
+    [handleOpenFileFromChat],
+  );
   const { showWorkspaceSetup } = useWorkspacePersistenceHydration({
     client,
     isRouteFocused,
@@ -1024,6 +1078,13 @@ function WorkspaceScreenContent({
     onCreateTerminal: handleCreateTerminal,
   });
 
+  const handleOpenRightPanelDiff = useCallback(() => {
+    if (isMobile) {
+      return;
+    }
+    handleOpenRightPanelSurface("diff");
+  }, [handleOpenRightPanelSurface, isMobile]);
+
   const { handleOpenGitDock, handleOpenBrowserContextDock, handleOpenPullRequestDock } =
     useWorkspaceDockActions({
       isMobile,
@@ -1035,6 +1096,7 @@ function WorkspaceScreenContent({
       setEnvironmentPanelMode,
       closeDesktopFileExplorer,
       handleOpenEnvironmentChanges,
+      openRightPanelDiff: handleOpenRightPanelDiff,
       handleCreateTerminal,
       focusWorkspacePane,
       splitWorkspacePaneEmpty,
@@ -1202,19 +1264,28 @@ function WorkspaceScreenContent({
     () => ({
       isGitCheckout,
       isExplorerOpen,
-      canToggleExplorer: Boolean(activeExplorerCheckout),
+      canToggleExplorer: Boolean(activeExplorerCheckout) || canUseRightPanel,
       canShowEnvironmentPanel: Boolean(workspaceDirectory),
+      isTerminalDrawerOpen: terminalDrawerOpen,
+      isRightPanelOpen: rightPanelOpen,
       explorerToggleAccessibilityState,
       onToggleExplorer: handleToggleExplorer,
       onToggleEnvironmentPanel: handleToggleEnvironmentPanel,
+      onToggleTerminalDrawer: handleToggleTerminalDrawer,
+      onToggleRightPanel: handleToggleRightPanel,
     }),
     [
       activeExplorerCheckout,
+      canUseRightPanel,
       explorerToggleAccessibilityState,
       handleToggleEnvironmentPanel,
       handleToggleExplorer,
+      handleToggleRightPanel,
+      handleToggleTerminalDrawer,
       isExplorerOpen,
       isGitCheckout,
+      rightPanelOpen,
+      terminalDrawerOpen,
       workspaceDirectory,
     ],
   );
@@ -1323,6 +1394,38 @@ function WorkspaceScreenContent({
     ],
   );
 
+  const desktopTerminalDrawer = useMemo(() => {
+    if (isMobile) {
+      return null;
+    }
+    return (
+      <WorkspaceTerminalDrawer
+        visible={terminalDrawerOpen}
+        serverId={normalizedServerId}
+        workspaceRoot={workspaceDirectory}
+        terminalId={activeTerminalId}
+        isWorkspaceFocused={isRouteFocused}
+        createDisabled={isCreateTerminalPending}
+        onClose={handleCloseTerminalDrawer}
+        onCreateTerminal={handleCreateTerminal}
+        onOpenFileExplorer={handleToggleExplorer}
+        onOpenWorkspaceFile={handleRightPanelOpenWorkspaceFile}
+      />
+    );
+  }, [
+    activeTerminalId,
+    handleCloseTerminalDrawer,
+    handleCreateTerminal,
+    handleRightPanelOpenWorkspaceFile,
+    handleToggleExplorer,
+    isCreateTerminalPending,
+    isMobile,
+    isRouteFocused,
+    normalizedServerId,
+    terminalDrawerOpen,
+    workspaceDirectory,
+  ]);
+
   return selectWorkspaceRouteContent({
     gate: workspaceScreenGate,
     gatedContent: gatedWorkspaceScreen,
@@ -1356,21 +1459,40 @@ function WorkspaceScreenContent({
                 explorerOpenGesture={explorerOpenGesture}
                 onCenterContentLayout={handleCenterContentLayout}
                 isEnvironmentPanelVisible={isEnvironmentPanelVisible}
-                isCreateTerminalPending={
-                  createTerminalMutation.isPending || pendingTerminalCreateInput !== null
-                }
+                isCreateTerminalPending={isCreateTerminalPending}
                 hasEnvironmentBrowserContext={hasEnvironmentBrowserContext}
                 headerTitleBar={workspaceCenterHeaderTitleBar}
                 headerRightControls={workspaceCenterHeaderRightControls}
                 mobileTabSwitcher={workspaceCenterMobileTabSwitcher}
                 splitContainer={workspaceCenterSplitContainer}
                 environmentPanel={workspaceCenterEnvironmentPanel}
+                terminalDrawer={desktopTerminalDrawer}
               />
             </FloatingPanelPortalHostNameProvider>
 
             <FloatingPanelPortalHost name={workspaceFloatingPanelPortalHostName} />
 
-            {showExplorerSidebar && workspaceDirectory ? (
+            {/* Desktop: unified right surface rail. Mobile keeps legacy explorer. */}
+            {!isMobile && canUseRightPanel ? (
+              <WorkspaceRightPanel
+                visible={rightPanelOpen}
+                activeSurface={rightPanelActiveSurface}
+                serverId={normalizedServerId}
+                workspaceId={normalizedWorkspaceId}
+                workspaceRoot={workspaceDirectory}
+                isGitCheckout={isGitCheckout}
+                showBrowserSurface={showBrowserSurface}
+                terminalId={activeTerminalId}
+                browserId={rightPanelBrowserId}
+                isWorkspaceFocused={isRouteFocused}
+                onClose={handleCloseRightPanel}
+                onOpenSurface={handleOpenRightPanelSurface}
+                onOpenFile={handleOpenFileFromExplorer}
+                onOpenFileExplorer={handleToggleExplorer}
+                onOpenWorkspaceFile={handleRightPanelOpenWorkspaceFile}
+              />
+            ) : null}
+            {isMobile && showExplorerSidebar && workspaceDirectory ? (
               <ExplorerSidebar
                 serverId={normalizedServerId}
                 workspaceId={normalizedWorkspaceId}

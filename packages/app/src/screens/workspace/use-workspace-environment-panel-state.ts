@@ -161,15 +161,18 @@ export function useWorkspaceEnvironmentPanelState(
     if (!activeExplorerCheckout) {
       return;
     }
+    const tab = getEnvironmentExplorerTab(activeExplorerCheckout);
     setExplorerTabForCheckout({
       ...activeExplorerCheckout,
-      tab: getEnvironmentExplorerTab(activeExplorerCheckout),
+      tab,
     });
     openFileExplorerForCheckout({
       isCompact: isMobile,
       checkout: activeExplorerCheckout,
     });
+    // Production: opening Files/Diff right surface always dismisses the floating env card.
     setEnvironmentPanelMode("forced-closed");
+    setEnvironmentDockState((state) => ({ ...state, open: false }));
   }, [activeExplorerCheckout, isMobile, openFileExplorerForCheckout, setExplorerTabForCheckout]);
 
   return {

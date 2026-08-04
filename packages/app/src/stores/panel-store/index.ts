@@ -26,16 +26,22 @@ import {
   MIN_EXPLORER_FILES_SPLIT_RATIO,
   MIN_EXPLORER_SIDEBAR_WIDTH,
   MIN_SIDEBAR_WIDTH,
+  isRightPanelSurface,
   migratePanelState,
+  resolveDefaultRightPanelSurface,
   selectIsAgentListOpen,
   selectIsFileExplorerOpen,
+  selectIsRightPanelOpen,
+  selectIsTerminalDrawerOpen,
   selectPanelVisibility,
+  selectRightPanelActiveSurface,
   type DesktopSidebarState,
   type EnvironmentPanelTabPreference,
   type ExplorerPanelIntent,
   type MobilePanelView,
   type PanelLayoutInput,
   type PanelVisibilityState,
+  type RightPanelSurface,
   type SortOption,
 } from "./state";
 import { isWeb } from "@/constants/platform";
@@ -48,6 +54,7 @@ export type {
   MobilePanelView,
   PanelLayoutInput,
   PanelVisibilityState,
+  RightPanelSurface,
   SortOption,
 } from "./state";
 export {
@@ -64,8 +71,23 @@ export {
   MIN_SIDEBAR_WIDTH,
   selectIsAgentListOpen,
   selectIsFileExplorerOpen,
+  selectIsRightPanelOpen,
+  selectIsTerminalDrawerOpen,
   selectPanelVisibility,
+  selectRightPanelActiveSurface,
+  resolveDefaultRightPanelSurface,
+  isRightPanelSurface,
 };
+
+function explorerTabPatchForSurface(surface: RightPanelSurface): { explorerTab?: ExplorerTab } {
+  if (surface === "files") {
+    return { explorerTab: "files" };
+  }
+  if (surface === "diff") {
+    return { explorerTab: "changes" };
+  }
+  return {};
+}
 
 export interface PanelState {
   // Mobile: which panel is currently shown
@@ -101,6 +123,14 @@ export interface PanelState {
   openFileExplorerForCheckout: (input: ExplorerPanelIntent) => void;
   toggleFileExplorerForCheckout: (input: ExplorerPanelIntent) => void;
 
+  // Desktop unified right panel + terminal drawer
+  toggleTerminalDrawerOpen: () => void;
+  setTerminalDrawerOpen: (open: boolean) => void;
+  toggleRightPanelOpen: (input?: { isGit?: boolean }) => void;
+  openRightPanelSurface: (surface: RightPanelSurface) => void;
+  closeRightPanel: () => void;
+  setRightPanelActiveSurface: (surface: RightPanelSurface | null) => void;
+
   // File explorer settings actions
   setExplorerTab: (tab: ExplorerTab) => void;
   setExplorerTabForCheckout: (params: ExplorerCheckoutContext & { tab: ExplorerTab }) => void;
@@ -128,6 +158,9 @@ export const usePanelStore = create<PanelState>()(
         agentListOpen: DEFAULT_DESKTOP_OPEN,
         fileExplorerOpen: false,
         focusModeEnabled: false,
+        terminalDrawerOpen: false,
+        rightPanelOpen: false,
+        rightPanelActiveSurface: null,
       },
 
       // File explorer defaults
@@ -143,9 +176,25 @@ export const usePanelStore = create<PanelState>()(
       environmentPanelVisibleTabs: [...DEFAULT_ENVIRONMENT_PANEL_TABS],
 
       toggleFocusMode: () =>
-        set((state) => ({
-          desktop: { ...state.desktop, focusModeEnabled: !state.desktop.focusModeEnabled },
-        })),
+        set((state) => {
+          const nextFocus = !state.desktop.focusModeEnabled;
+          if (!nextFocus) {
+            return {
+              desktop: { ...state.desktop, focusModeEnabled: false },
+            };
+          }
+          // Entering focus mode collapses chrome that competes with reading.
+          return {
+            desktop: {
+              ...state.desktop,
+              focusModeEnabled: true,
+              terminalDrawerOpen: false,
+              rightPanelOpen: false,
+              fileExplorerOpen: false,
+              rightPanelActiveSurface: null,
+            },
+          };
+        }),
 
       showMobileAgent: () =>
         set((state) => {
@@ -191,10 +240,111 @@ export const usePanelStore = create<PanelState>()(
 
       closeDesktopFileExplorer: () =>
         set((state) => {
-          if (!state.desktop.fileExplorerOpen) {
+          if (!state.desktop.fileExplorerOpen && !state.desktop.rightPanelOpen) {
             return state;
           }
-          return { desktop: { ...state.desktop, fileExplorerOpen: false } };
+          return {
+            desktop: {
+              ...state.desktop,
+              fileExplorerOpen: false,
+              rightPanelOpen: false,
+              rightPanelActiveSurface: null,
+            },
+          };
+        }),
+
+      toggleTerminalDrawerOpen: () =>
+        set((state) => ({
+          desktop: {
+            ...state.desktop,
+            terminalDrawerOpen: !state.desktop.terminalDrawerOpen,
+          },
+        })),
+
+      setTerminalDrawerOpen: (open) =>
+        set((state) => {
+          if (state.desktop.terminalDrawerOpen === open) {
+            return state;
+          }
+          return {
+            desktop: { ...state.desktop, terminalDrawerOpen: open },
+          };
+        }),
+
+      toggleRightPanelOpen: (_input) =>
+        set((state) => {
+          if (state.desktop.rightPanelOpen) {
+            return {
+              desktop: {
+                ...state.desktop,
+                rightPanelOpen: false,
+                fileExplorerOpen: false,
+                rightPanelActiveSurface: null,
+              },
+            };
+          }
+          // Production: open to empty chooser ("Open a surface").
+          // Explicit surface open paths use openRightPanelSurface instead.
+          return {
+            desktop: {
+              ...state.desktop,
+              rightPanelOpen: true,
+              rightPanelActiveSurface: null,
+              fileExplorerOpen: false,
+            },
+          };
+        }),
+
+      openRightPanelSurface: (surface) =>
+        set((state) => {
+          const isFilesDiff = surface === "files" || surface === "diff";
+          return {
+            desktop: {
+              ...state.desktop,
+              rightPanelOpen: true,
+              rightPanelActiveSurface: surface,
+              fileExplorerOpen: isFilesDiff,
+            },
+            ...explorerTabPatchForSurface(surface),
+          };
+        }),
+
+      closeRightPanel: () =>
+        set((state) => {
+          if (!state.desktop.rightPanelOpen && !state.desktop.fileExplorerOpen) {
+            return state;
+          }
+          return {
+            desktop: {
+              ...state.desktop,
+              rightPanelOpen: false,
+              fileExplorerOpen: false,
+              rightPanelActiveSurface: null,
+            },
+          };
+        }),
+
+      setRightPanelActiveSurface: (surface) =>
+        set((state) => {
+          if (!surface) {
+            return {
+              desktop: {
+                ...state.desktop,
+                rightPanelActiveSurface: null,
+                fileExplorerOpen: false,
+              },
+            };
+          }
+          const isFilesDiff = surface === "files" || surface === "diff";
+          return {
+            desktop: {
+              ...state.desktop,
+              rightPanelOpen: true,
+              rightPanelActiveSurface: surface,
+              fileExplorerOpen: isFilesDiff,
+            },
+            ...explorerTabPatchForSurface(surface),
+          };
         }),
 
       openAgentListForLayout: ({ isCompact }) =>
@@ -301,7 +451,7 @@ export const usePanelStore = create<PanelState>()(
     }),
     {
       name: "panel-state",
-      version: 18,
+      version: 19,
       storage: createJSONStorage(() => AsyncStorage),
       migrate: (persistedState, version) =>
         migratePanelState(persistedState, version, { isWeb }) as unknown as PanelState,

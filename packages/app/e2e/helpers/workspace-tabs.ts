@@ -57,7 +57,11 @@ export async function expectOnlyWorkspaceAgentTabsVisible(
 }
 
 export async function ensureWorkspaceAgentPaneVisible(page: Page): Promise<void> {
-  const toggle = page.getByTestId("workspace-explorer-toggle").first();
+  // Desktop production chrome uses unified right-panel toggle; mobile keeps explorer toggle.
+  const toggle = page
+    .getByTestId("workspace-right-panel-toggle")
+    .or(page.getByTestId("workspace-explorer-toggle"))
+    .first();
   if (!(await toggle.isVisible().catch(() => false))) {
     return;
   }

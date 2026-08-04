@@ -70,6 +70,8 @@ import type { SidebarSessionDraft } from "@/utils/left-sidebar-drafts";
 import { navigateToAgent } from "@/utils/navigate-to-agent";
 import {
   applyStableSidebarSessionOrder,
+  buildWorktreeProjectHintsFromSources,
+  buildWorkspaceDirectoryProjectHintsFromSources,
   PINNED_SIDEBAR_SESSION_GROUP_KEY,
   groupAgentsForSidebar,
   reconcileSidebarSessionOrder,
@@ -1388,6 +1390,21 @@ export function SidebarSessionList({
   const clearHiddenSessionGroupKeys = useSidebarOrderStore(
     (state) => state.clearHiddenSessionGroupKeys,
   );
+  const workspaces = useSessionStore((state) =>
+    serverId ? (state.sessions[serverId]?.workspaces ?? null) : null,
+  );
+  const worktreeProjectHints = useMemo(() => {
+    if (!workspaces || workspaces.size === 0) {
+      return undefined;
+    }
+    return buildWorktreeProjectHintsFromSources(workspaces.values());
+  }, [workspaces]);
+  const workspaceDirectoryHints = useMemo(() => {
+    if (!workspaces || workspaces.size === 0) {
+      return undefined;
+    }
+    return buildWorkspaceDirectoryProjectHintsFromSources(workspaces.values());
+  }, [workspaces]);
   const visibleAgents = useMemo(
     () => agents.filter((agent) => !agent.archivedAt && !suppressedArchiveAgentIds.has(agent.id)),
     [agents, suppressedArchiveAgentIds],
@@ -1401,9 +1418,11 @@ export function SidebarSessionList({
       unknownWorkspaceLabel,
       pinnedGroupLabel: t("sidebar.pinnedSessions"),
       isPinnedAgent: isSidebarAgentPinned,
+      worktreeProjectHints,
+      workspaceDirectoryHints,
     });
     return buildRenderGroups(agentGroups);
-  }, [t, visibleAgents]);
+  }, [t, visibleAgents, worktreeProjectHints, workspaceDirectoryHints]);
   const storedGroupOrder = useMemo(
     () => (serverId ? (sessionGroupOrderByServerId[serverId] ?? []) : []),
     [serverId, sessionGroupOrderByServerId],

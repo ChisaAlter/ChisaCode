@@ -31,17 +31,28 @@ describe("panel-store soft workbench migration", () => {
   });
 });
 
+function makeDesktop(
+  overrides: Partial<PanelCoreState["desktop"]> = {},
+): PanelCoreState["desktop"] {
+  return {
+    agentListOpen: false,
+    fileExplorerOpen: false,
+    focusModeEnabled: false,
+    terminalDrawerOpen: false,
+    rightPanelOpen: false,
+    rightPanelActiveSurface: null,
+    ...overrides,
+  };
+}
+
 function makePanelState(overrides: Partial<PanelCoreState> = {}): PanelCoreState {
+  const { desktop: desktopOverrides, ...rest } = overrides;
   return {
     mobileView: "agent",
-    desktop: {
-      agentListOpen: false,
-      fileExplorerOpen: false,
-      focusModeEnabled: false,
-    },
+    desktop: makeDesktop(desktopOverrides),
     explorerTab: "changes",
     explorerTabByCheckout: {},
-    ...overrides,
+    ...rest,
   };
 }
 
@@ -118,7 +129,11 @@ describe("panel-store visibility selectors", () => {
   it("uses mobileView for compact layout visibility", () => {
     const state = makePanelState({
       mobileView: "file-explorer",
-      desktop: { agentListOpen: true, fileExplorerOpen: false, focusModeEnabled: false },
+      desktop: makeDesktop({
+        agentListOpen: true,
+        fileExplorerOpen: false,
+        focusModeEnabled: false,
+      }),
     });
 
     expect(selectPanelVisibility(state, { isCompact: true })).toEqual({
@@ -132,7 +147,11 @@ describe("panel-store visibility selectors", () => {
   it("uses desktop flags for expanded layout visibility", () => {
     const state = makePanelState({
       mobileView: "file-explorer",
-      desktop: { agentListOpen: true, fileExplorerOpen: false, focusModeEnabled: false },
+      desktop: makeDesktop({
+        agentListOpen: true,
+        fileExplorerOpen: false,
+        focusModeEnabled: false,
+      }),
     });
 
     expect(selectPanelVisibility(state, { isCompact: false })).toEqual({
@@ -177,7 +196,13 @@ describe("panel-store checkout-intent file explorer actions", () => {
 
   it("toggles the explorer closed without changing the active tab", () => {
     const state = makePanelState({
-      desktop: { agentListOpen: false, fileExplorerOpen: true, focusModeEnabled: false },
+      desktop: makeDesktop({
+        agentListOpen: false,
+        fileExplorerOpen: true,
+        focusModeEnabled: false,
+        rightPanelOpen: true,
+        rightPanelActiveSurface: "files",
+      }),
       explorerTab: "files",
     });
 
@@ -187,7 +212,14 @@ describe("panel-store checkout-intent file explorer actions", () => {
     });
 
     expect(patch).toEqual({
-      desktop: { agentListOpen: false, fileExplorerOpen: false, focusModeEnabled: false },
+      desktop: {
+        agentListOpen: false,
+        fileExplorerOpen: false,
+        focusModeEnabled: false,
+        terminalDrawerOpen: false,
+        rightPanelOpen: false,
+        rightPanelActiveSurface: null,
+      },
     });
   });
 

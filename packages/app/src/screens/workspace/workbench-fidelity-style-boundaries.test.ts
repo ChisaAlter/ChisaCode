@@ -39,9 +39,54 @@ describe("workbench fidelity style boundaries", () => {
     expect(tabsSource).toContain('agent: "✦"');
     expect(tabsSource).toContain('terminal: "▸"');
     expect(tabsSource).toContain('browser: "◎"');
-    // Soft topbar title is plain session label (no icon chip in header).
+    // Desktop topbar follows T3 ChatHeader: project lead + session title breadcrumb.
     expect(headerSource).toContain("function DesktopWorkspaceHeaderTitle");
     expect(headerSource).toContain('testID="workspace-header-title"');
+    expect(headerSource).toContain('testID="workspace-header-breadcrumb"');
+    expect(headerSource).toContain("WorkspaceOpenInEditorButton");
+    expect(headerSource).toContain("WorkspaceGitActions");
+    expect(headerSource).toContain('testID="workspace-terminal-drawer-toggle"');
+    expect(headerSource).toContain('testID="workspace-right-panel-toggle"');
+  });
+
+  it("hosts production right panel surfaces and terminal drawer", () => {
+    const rightPanelSource = readSource("./workspace-right-panel.tsx");
+    const drawerSource = readSource("./workspace-terminal-drawer.tsx");
+    const screenSource = readSource("./workspace-screen.tsx");
+    const chromeSource = readSource("./use-workspace-layout-chrome.ts");
+    const centerSource = readSource("./workspace-center-column.tsx");
+    const terminalsSource = readSource("./terminals/use-workspace-terminals.ts");
+    const diffSource = readSource("../../git/diff-pane.tsx");
+    const headerSource = readSource("./workspace-header.tsx");
+
+    expect(rightPanelSource).toContain('testID="workspace-right-panel"');
+    expect(rightPanelSource).toContain('testID="workspace-right-panel-empty"');
+    expect(rightPanelSource).toContain("workspace.rightPanel.openASurface");
+    expect(drawerSource).toContain('testID="workspace-terminal-drawer"');
+    expect(screenSource).toContain("WorkspaceRightPanel");
+    expect(screenSource).toContain("WorkspaceTerminalDrawer");
+    expect(screenSource).toContain("useWorkspaceLayoutChrome");
+    // P0: browser sessions are cleaned on right-panel close/unmount.
+    expect(chromeSource).toContain("removeBrowser");
+    expect(chromeSource).toContain("releaseRightPanelBrowser");
+    // P0: drawer/right-panel terminal creation must not force a center tab.
+    expect(chromeSource).toContain("openInCenterTab: false");
+    expect(terminalsSource).toContain("openInCenterTab");
+    expect(screenSource).toContain("openInCenterTab");
+    // P0: mobile keeps a single Git write path (compact header + review band).
+    expect(centerSource).toContain("WorkspaceGitActions");
+    expect(centerSource).toContain('testID="workspace-mobile-header-actions"');
+    expect(diffSource).toContain("showGitActions={isMobile}");
+    // P1: Open Git dock routes to right-panel Diff, not floating env write UI.
+    const dockSource = readSource("./use-workspace-dock-actions.ts");
+    expect(dockSource).toContain("handleOpenEnvironmentChanges");
+    expect(dockSource).toContain("openRightPanelDiff");
+    expect(dockSource).toContain('command.type === "openGitSummary"');
+    // P1: Git slot can force-load while checkout identity is pending.
+    const gitActionsSource = readSource("../../git/workspace-actions.tsx");
+    expect(gitActionsSource).toContain("forceLoading");
+    expect(headerSource).toContain("forceLoading={isLoading}");
+    expect(headerSource).toContain("showGitSlot");
   });
 
   it("keeps Agent panel wrappers transparent above the Liquid Glass workspace canvas", () => {

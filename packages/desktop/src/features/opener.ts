@@ -2,7 +2,10 @@ import path from "node:path";
 import { app, shell, ipcMain } from "electron";
 import { translateDesktop } from "../i18n.js";
 import { getDesktopSettingsStore } from "../settings/desktop-settings-electron.js";
-import { isMainAppSenderUrl } from "../daemon/daemon-manager.js";
+import {
+  isMainAppSenderUrl,
+  resolveMainAppSenderValidationOptions,
+} from "../daemon/daemon-manager.js";
 
 const ALLOWED_EXTERNAL_URL_PROTOCOLS = new Set(["http:", "https:"]);
 const IPC_PREFIXES = ["chisacode"] as const;
@@ -35,7 +38,12 @@ export function registerOpenerHandlers(): void {
 
   const openPath = async (event: Electron.IpcMainInvokeEvent, value: unknown) => {
     const senderUrl = event.senderFrame?.url ?? event.sender?.getURL?.() ?? "";
-    if (!isMainAppSenderUrl(senderUrl, { packaged: app.isPackaged })) {
+    if (
+      !isMainAppSenderUrl(
+        senderUrl,
+        resolveMainAppSenderValidationOptions({ packaged: app.isPackaged }),
+      )
+    ) {
       throw new Error("Opening local paths is not available from this context");
     }
     if (!isAllowedLocalPath(value)) {

@@ -215,6 +215,26 @@ function createInput(overrides: Partial<BuildGitActionsInput> = {}): BuildGitAct
 }
 
 describe("git-actions-policy", () => {
+  it("returns null primary when clean and in sync on the base branch", () => {
+    const actions = buildGitActions(
+      createInput({
+        hasRemote: true,
+        hasUncommittedChanges: false,
+        aheadOfOrigin: 0,
+        behindOfOrigin: 0,
+        isOnBaseBranch: true,
+      }),
+    );
+
+    expect(actions.primary).toBeNull();
+    expect(actions.secondary.map((action) => action.id)).toEqual(["pull", "push", "pull-and-push"]);
+  });
+
+  it("returns empty actions when not a git checkout", () => {
+    const actions = buildGitActions(createInput({ isGit: false }));
+    expect(actions).toEqual({ primary: null, secondary: [], menu: [] });
+  });
+
   it("shows only remote sync actions on the base branch", () => {
     const actions = buildGitActions(createInput({ hasRemote: true }));
 

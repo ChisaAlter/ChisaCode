@@ -26,6 +26,8 @@ interface UseWorkspaceDockActionsInput {
   setEnvironmentPanelMode: (mode: ForcedEnvironmentPanelMode) => void;
   closeDesktopFileExplorer: () => void;
   handleOpenEnvironmentChanges: () => void;
+  /** Production desktop fallback when explorer checkout is not ready yet. */
+  openRightPanelDiff?: () => void;
   handleCreateTerminal: (input?: { paneId?: string }) => void;
   focusWorkspacePane: (workspaceKey: string, paneId: string) => void;
   splitWorkspacePaneEmpty: (
@@ -57,6 +59,7 @@ export function useWorkspaceDockActions(
     setEnvironmentPanelMode,
     closeDesktopFileExplorer,
     handleOpenEnvironmentChanges,
+    openRightPanelDiff,
     handleCreateTerminal,
     focusWorkspacePane,
     splitWorkspacePaneEmpty,
@@ -84,6 +87,11 @@ export function useWorkspaceDockActions(
         { type: "openDockPane" | "toggleDockPane" | "openGitSummary" }
       >,
     ) => {
+      // Production: git summary is the right-panel Diff surface, not the floating env rail.
+      if (command.type === "openGitSummary") {
+        handleOpenEnvironmentChanges();
+        return;
+      }
       let nextOpen = true;
       setEnvironmentDockState((state) => {
         const nextState = resolveDockStateAfterAction(state, command);
@@ -95,7 +103,13 @@ export function useWorkspaceDockActions(
         closeDesktopFileExplorer();
       }
     },
-    [closeDesktopFileExplorer, isMobile, setEnvironmentDockState, setEnvironmentPanelMode],
+    [
+      closeDesktopFileExplorer,
+      handleOpenEnvironmentChanges,
+      isMobile,
+      setEnvironmentDockState,
+      setEnvironmentPanelMode,
+    ],
   );
 
   const handleOpenTargetInPanePlacement = useCallback(
@@ -189,8 +203,11 @@ export function useWorkspaceDockActions(
   );
 
   const handleOpenGitDock = useCallback(() => {
-    handleExecuteWorkspacePaneCommand({ type: "openGitSummary" });
-  }, [handleExecuteWorkspacePaneCommand]);
+    // Single production path: open Diff right surface (git write CTAs stay on topbar).
+    handleOpenEnvironmentChanges();
+    // If checkout identity is still hydrating, still open the Diff surface shell.
+    openRightPanelDiff?.();
+  }, [handleOpenEnvironmentChanges, openRightPanelDiff]);
 
   const handleOpenBrowserContextDock = useCallback(() => {
     if (!hasEnvironmentBrowserContext) {

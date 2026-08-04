@@ -152,6 +152,10 @@ interface UseGitActionsResult {
   gitActions: GitActions;
   branchLabel: string;
   isGit: boolean;
+  /** True while checkout status is still resolving (slot may reserve a loading placeholder). */
+  isStatusLoading: boolean;
+  /** Non-null when the last status query failed. */
+  statusError: string | null;
 }
 
 function useGitActionStatusInputs(input: { serverId: string; cwd: string; enabled: boolean }) {
@@ -878,5 +882,11 @@ export function useGitActions({
     baseRef,
   ]);
 
-  return { gitActions, branchLabel, isGit };
+  return {
+    gitActions,
+    branchLabel,
+    isGit,
+    isStatusLoading,
+    statusError: status?.error ? String(status.error) : null,
+  };
 }

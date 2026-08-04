@@ -18,6 +18,11 @@ import {
 
 interface PendingTerminalCreateInput {
   paneId?: string;
+  /**
+   * When false, skip focusing a center-pane terminal tab after create.
+   * Used by the bottom terminal drawer / right-panel terminal surface.
+   */
+  openInCenterTab?: boolean;
 }
 
 interface UseWorkspaceTerminalsInput {
@@ -30,7 +35,11 @@ interface UseWorkspaceTerminalsInput {
   workspaceScripts: WorkspaceDescriptor["scripts"];
   hasHydratedWorkspaces: boolean;
   isMissingWorkspaceExecutionAuthority: boolean;
-  onTerminalCreated: (input: { terminalId: string; paneId?: string }) => void;
+  onTerminalCreated: (input: {
+    terminalId: string;
+    paneId?: string;
+    openInCenterTab?: boolean;
+  }) => void;
   onScriptTerminalSelected: (terminalId: string) => void;
   onWorkspacePathUnavailable: () => void;
   onTerminalCreateQueued: () => void;
@@ -129,6 +138,7 @@ export function useWorkspaceTerminals(input: UseWorkspaceTerminalsInput) {
         onTerminalCreated({
           terminalId: createdTerminal.id,
           paneId: createInput?.paneId,
+          openInCenterTab: createInput?.openInCenterTab,
         });
       }
     },

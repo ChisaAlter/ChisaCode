@@ -50,7 +50,6 @@ import { GitHubIcon as GitHubIconBase } from "@/components/icons/github-icon";
 const GitHubIcon = withUnistyles(GitHubIconBase);
 import { ErrorBoundary, SectionErrorFallback } from "@/components/error-boundary";
 import { useWebScrollViewScrollbar } from "@/components/use-web-scrollbar";
-import { GitActionsSplitButton } from "@/git/actions-split-button";
 import { useGitActions } from "@/git/use-actions";
 import { useCheckoutGitActionsStore } from "@/git/actions-store";
 import { useToast } from "@/contexts/toast-context";
@@ -869,7 +868,7 @@ export function GitDiffPane({
                 {branchLabel}
               </Text>
             </View>
-            {isGit ? <GitActionsSplitButton gitActions={gitActions} /> : null}
+            {/* Production single-write-path: Git write CTAs live on desktop topbar only. */}
           </View>
         ) : null}
 
@@ -901,6 +900,9 @@ export function GitDiffPane({
             model={reviewSummaryModel}
             diffModeLabel={diffMode === "uncommitted" ? t("git.uncommitted") : t("git.committed")}
             gitActions={gitActions}
+            // Desktop write CTAs live on the soft topbar only.
+            // Compact/mobile has no soft topbar Git control, so restore a single write path here.
+            showGitActions={isMobile}
           />
         ) : null}
 

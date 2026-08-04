@@ -9,6 +9,8 @@ import {
   isMainAppSenderUrl,
   PRIVILEGED_COMMANDS,
   resolveDesktopDaemonStatus,
+  resolveDesktopDevPort,
+  resolveMainAppSenderValidationOptions,
   shouldRestartForVersion,
 } from "./daemon-manager";
 import type { DesktopDaemonStatus } from "./daemon-manager";
@@ -293,6 +295,12 @@ describe("daemon-manager privileged IPC sender validation", () => {
     );
   });
 
+  it("trusts Metro fallback ports used by desktop dev scripts", () => {
+    expect(isMainAppSenderUrl("http://localhost:8082/", { packaged: false })).toBe(true);
+    expect(isMainAppSenderUrl("http://127.0.0.1:8083/h/srv_1", { packaged: false })).toBe(true);
+    expect(isMainAppSenderUrl("http://localhost:8085/", { packaged: false })).toBe(true);
+  });
+
   it("honors a custom dev port when provided", () => {
     expect(
       isMainAppSenderUrl("http://localhost:3000/h/srv_1/workspace", {
@@ -300,6 +308,17 @@ describe("daemon-manager privileged IPC sender validation", () => {
         devPort: 3000,
       }),
     ).toBe(true);
+  });
+
+  it("resolves the primary dev port from EXPO_PORT / EXPO_DEV_URL", () => {
+    expect(resolveDesktopDevPort({ EXPO_PORT: "8084" })).toBe(8084);
+    expect(resolveDesktopDevPort({ EXPO_DEV_URL: "http://localhost:8082" })).toBe(8082);
+    expect(
+      resolveMainAppSenderValidationOptions({
+        packaged: false,
+        env: { EXPO_DEV_URL: "http://localhost:8082" },
+      }).allowedDevPorts,
+    ).toContain(8082);
   });
 
   it("classifies skills write commands as privileged (sender must be main app)", () => {

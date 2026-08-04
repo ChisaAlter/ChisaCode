@@ -61,6 +61,7 @@ import {
   isDesktopManagedDaemonRunningSync,
   stopDesktopDaemonViaCli,
   isMainAppSenderUrl,
+  resolveMainAppSenderValidationOptions,
 } from "./daemon/daemon-manager.js";
 import {
   createBeforeQuitHandler,
@@ -299,7 +300,12 @@ for (const prefix of IPC_PREFIXES) {
 }
 
 function handleOpenBrowserDevtools(event: Electron.IpcMainInvokeEvent, browserId: unknown) {
-  if (!isMainAppSenderUrl(event.senderFrame?.url ?? "", { packaged: app.isPackaged })) {
+  if (
+    !isMainAppSenderUrl(
+      event.senderFrame?.url ?? "",
+      resolveMainAppSenderValidationOptions({ packaged: app.isPackaged }),
+    )
+  ) {
     log.warn("[browser-devtools] blocked open-devtools from non-main sender", {
       senderUrl: (event.senderFrame?.url ?? "").slice(0, 200),
     });
@@ -353,7 +359,12 @@ async function handleClearBrowserPartition(
   event: Electron.IpcMainInvokeEvent,
   browserId: unknown,
 ): Promise<void> {
-  if (!isMainAppSenderUrl(event.senderFrame?.url ?? "", { packaged: app.isPackaged })) {
+  if (
+    !isMainAppSenderUrl(
+      event.senderFrame?.url ?? "",
+      resolveMainAppSenderValidationOptions({ packaged: app.isPackaged }),
+    )
+  ) {
     log.warn("[browser-partition] blocked clear-partition from non-main sender", {
       senderUrl: (event.senderFrame?.url ?? "").slice(0, 200),
     });

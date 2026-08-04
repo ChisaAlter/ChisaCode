@@ -9,8 +9,24 @@ function fileExplorerEntry(page: Page, name: string) {
 }
 
 export async function openFileExplorer(page: Page): Promise<void> {
-  await page.getByRole("button", { name: "Open explorer" }).first().click();
-  await page.getByTestId("explorer-tab-files").click();
+  // Production desktop: unified right panel host for Files surface.
+  const rightPanelToggle = page.getByTestId("workspace-right-panel-toggle").first();
+  if (await rightPanelToggle.isVisible().catch(() => false)) {
+    const expanded = (await rightPanelToggle.getAttribute("aria-expanded")) === "true";
+    if (!expanded) {
+      await rightPanelToggle.click();
+    }
+    const filesCard = page.getByTestId("workspace-right-panel-card-files");
+    if (await filesCard.isVisible().catch(() => false)) {
+      await filesCard.click();
+    }
+  } else {
+    await page.getByRole("button", { name: "Open explorer" }).first().click();
+    const filesTab = page.getByTestId("explorer-tab-files");
+    if (await filesTab.isVisible().catch(() => false)) {
+      await filesTab.click();
+    }
+  }
   await expect(fileExplorerTree(page)).toBeVisible({ timeout: 30_000 });
 }
 

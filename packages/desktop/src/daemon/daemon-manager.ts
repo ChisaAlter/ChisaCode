@@ -105,13 +105,124 @@ export interface SenderValidationOptions {
    */
   packaged: boolean;
   /**
-   * Optional dev server port. Only consulted in dev mode. Defaults to 8081
-   * (matches DEV_SERVER_URL in main.ts).
+   * Optional primary dev server port. Only consulted in dev mode. Defaults to
+   * the port resolved from EXPO_DEV_URL / EXPO_PORT, then 8081.
    */
   devPort?: number;
+  /**
+   * Optional additional Metro/dev ports to trust. Desktop dev scripts fall back
+   * across 8081-8085 when earlier ports are busy; without this list a fallback
+   * port blocks every privileged IPC (start_desktop_daemon, attachments, …).
+   */
+  allowedDevPorts?: readonly number[];
 }
 
 const DEFAULT_DEV_PORT = 8081;
+/** Ports used by packages/desktop/scripts/dev.ps1 via get-port-cli. */
+const DEFAULT_ALLOWED_DEV_PORTS = [8081, 8082, 8083, 8084, 8085] as const;
+
+/**
+ * Resolves the primary Metro/dev port from the environment used by desktop dev.
+ * @returns A port in 1..65535, or the default 8081 when unset/invalid
+ */
+export function resolveDesktopDevPort(
+  env: NodeJS.ProcessEnv = process.env,
+  fallback = DEFAULT_DEV_PORT,
+): number {
+  const fromExpoPort = parsePortValue(env.EXPO_PORT);
+  if (fromExpoPort !== null) {
+    return fromExpoPort;
+  }
+  const fromDevUrl = parsePortFromUrl(env.EXPO_DEV_URL);
+  if (fromDevUrl !== null) {
+    return fromDevUrl;
+  }
+  return fallback;
+}
+
+/**
+ * Builds sender-validation options for the current desktop process.
+ * Packaged builds only trust chisacode://; dev trusts file:// and localhost
+ * Metro ports from the desktop dev launcher.
+ */
+export function resolveMainAppSenderValidationOptions(
+  input: {
+    packaged: boolean;
+    env?: NodeJS.ProcessEnv;
+  } = { packaged: true },
+): SenderValidationOptions {
+  if (input.packaged) {
+    return { packaged: true };
+  }
+  const env = input.env ?? process.env;
+  const devPort = resolveDesktopDevPort(env);
+  const allowed = new Set<number>(DEFAULT_ALLOWED_DEV_PORTS);
+  allowed.add(devPort);
+  return {
+    packaged: false,
+    devPort,
+    allowedDevPorts: Array.from(allowed).sort((left, right) => left - right),
+  };
+}
+
+function parsePortValue(value: string | undefined): number | null {
+  const trimmed = value?.trim() ?? "";
+  if (!trimmed) {
+    return null;
+  }
+  const port = Number(trimmed);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    return null;
+  }
+  return port;
+}
+
+function parsePortFromUrl(value: string | undefined): number | null {
+  const trimmed = value?.trim() ?? "";
+  if (!trimmed) {
+    return null;
+  }
+  try {
+    const url = new URL(trimmed);
+    if (url.port) {
+      return parsePortValue(url.port);
+    }
+    if (url.protocol === "https:") {
+      return 443;
+    }
+    if (url.protocol === "http:") {
+      return 80;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function isLoopbackHostname(hostname: string): boolean {
+  return (
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    hostname === "[::1]" ||
+    hostname === "::1"
+  );
+}
+
+function resolveAllowedDevPorts(options: SenderValidationOptions): ReadonlySet<string> {
+  const ports = new Set<string>();
+  const primary = options.devPort ?? DEFAULT_DEV_PORT;
+  ports.add(String(primary));
+  // Default HTTP port may be represented as an empty URL.port.
+  if (primary === 80) {
+    ports.add("");
+  }
+  for (const port of options.allowedDevPorts ?? DEFAULT_ALLOWED_DEV_PORTS) {
+    if (Number.isInteger(port) && port >= 1 && port <= 65535) {
+      ports.add(String(port));
+    }
+  }
+  return ports;
+}
 
 export function isMainAppSenderUrl(
   senderUrl: string,
@@ -128,15 +239,15 @@ export function isMainAppSenderUrl(
     if (options.packaged) {
       return false;
     }
-    // Dev mode: trust file:// (static export dev), and localhost on the dev
-    // port. Other localhost ports are rejected to limit blast radius.
+    // Dev mode: trust file:// (static export dev), and loopback on the Metro
+    // ports used by desktop dev. Other hosts/ports stay rejected.
     if (url.protocol === "file:") {
       return true;
     }
     if (
       (url.protocol === "http:" || url.protocol === "https:") &&
-      url.hostname === "localhost" &&
-      url.port === String(options.devPort ?? DEFAULT_DEV_PORT)
+      isLoopbackHostname(url.hostname) &&
+      resolveAllowedDevPorts(options).has(url.port || (url.protocol === "https:" ? "443" : "80"))
     ) {
       return true;
     }
@@ -781,8 +892,14 @@ export function registerDaemonManager(): void {
         if (PRIVILEGED_COMMANDS.has(command)) {
           const senderUrl = event.senderFrame?.url ?? event.sender?.getURL?.() ?? "";
           // The main app loads from the app protocol in packaged builds, file:// in
-          // static exports, or localhost in dev. Webviews use external origins.
-          if (!isMainAppSenderUrl(senderUrl, { packaged: app.isPackaged })) {
+          // static exports, or localhost Metro ports in dev. Webviews use external
+          // origins. Dev ports come from EXPO_DEV_URL / EXPO_PORT plus 8081-8085.
+          if (
+            !isMainAppSenderUrl(
+              senderUrl,
+              resolveMainAppSenderValidationOptions({ packaged: app.isPackaged }),
+            )
+          ) {
             logDesktopDaemonLifecycle("blocked privileged IPC command from non-main sender", {
               command,
               senderUrl: senderUrl.slice(0, 200),

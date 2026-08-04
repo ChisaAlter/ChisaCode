@@ -8,6 +8,8 @@ export interface SidebarSessionGroup {
   projectKey: string | null;
   agents: AggregatedAgent[];
   newestActivityAt: Date;
+  /** Newest creation time in the group; used for T3-style stable ordering. */
+  newestCreatedAt: Date;
 }
 
 /** Group key reserved for the synthetic pinned-agents group in the sidebar. */
@@ -15,9 +17,12 @@ export const PINNED_SIDEBAR_SESSION_GROUP_KEY = "__pinned__";
 
 /**
  * Reconciles a persisted ordering against the keys that currently exist.
+ *
+ * T3 Sidebar V2 puts newly discovered rows on top and never lets activity
+ * reshuffle existing rows. New keys are therefore prepended, not appended.
  * @param storedOrder The previously persisted key order
  * @param currentKeys The keys that exist now
- * @returns The stored order filtered to existing keys, with new keys appended
+ * @returns The stored order filtered to existing keys, with new keys prepended
  */
 export function reconcileSidebarSessionOrder(
   storedOrder: readonly string[],
@@ -26,13 +31,15 @@ export function reconcileSidebarSessionOrder(
   const currentKeySet = new Set(currentKeys);
   const resolved = storedOrder.filter((key) => currentKeySet.has(key));
   const resolvedKeySet = new Set(resolved);
+  const newKeys: string[] = [];
   for (const key of currentKeys) {
     if (!resolvedKeySet.has(key)) {
-      resolved.push(key);
+      newKeys.push(key);
       resolvedKeySet.add(key);
     }
   }
-  return resolved;
+  // Newest-first default: put newly discovered keys ahead of the preserved order.
+  return [...newKeys, ...resolved];
 }
 
 function orderItemsByKeys<T>(
@@ -100,6 +107,8 @@ export function applyStableSidebarSessionOrder<T extends SidebarSessionGroup>(
 const WINDOWS_DRIVE_PREFIX = /^[a-z]:/i;
 const WINDOWS_SEPARATOR = "\\";
 const POSIX_SEPARATOR = "/";
+const MANAGED_WORKTREE_PATH_PATTERN =
+  /(?:^|\/)(?:\.?chisacode(?:-[^/]+)?\/)?worktrees\/([a-z0-9]+)\/([^/]+)/i;
 
 function trimTrailingSeparators(value: string): string {
   let end = value.length;
@@ -150,75 +159,293 @@ export function getAgentCwdGroupLabel(
   return parts.at(-1) ?? cleaned;
 }
 
-function getChisaCodeOwnedProjectRoot(agent: AggregatedAgent): string | null {
-  const placement = agent.projectPlacement;
-  if (placement?.checkout.isChisaCodeOwnedWorktree !== true) {
+function getDateTime(value: Date | null | undefined): number {
+  if (!(value instanceof Date)) {
+    return 0;
+  }
+  const time = value.getTime();
+  return Number.isFinite(time) ? time : 0;
+}
+
+/**
+ * T3 Sidebar V2: static creation order, newest thread on top. Activity never
+ * reorders the list — a row holds its position from open until the user moves it.
+ */
+export function sortAgentsForSidebarV2(agents: readonly AggregatedAgent[]): AggregatedAgent[] {
+  return [...agents].sort((left, right) => {
+    const createdDiff = getDateTime(right.createdAt) - getDateTime(left.createdAt);
+    if (createdDiff !== 0) {
+      return createdDiff;
+    }
+    return left.id.localeCompare(right.id);
+  });
+}
+
+interface ManagedWorktreeParts {
+  hash: string;
+  slug: string;
+}
+
+/**
+ * Detects ChisaCode-managed worktree paths: `$HOME/worktrees/<hash>/<slug>`
+ * or `.../.chisacode/worktrees/<hash>/<slug>`.
+ */
+export function extractManagedWorktreeParts(
+  cwd: string | null | undefined,
+): ManagedWorktreeParts | null {
+  const trimmed = cwd?.trim() ?? "";
+  if (!trimmed) {
     return null;
   }
-  const mainRepoRoot = placement.checkout.mainRepoRoot?.trim() ?? "";
-  if (mainRepoRoot) {
-    return mainRepoRoot;
+  const normalized = trimmed.replaceAll(WINDOWS_SEPARATOR, POSIX_SEPARATOR);
+  const match = normalized.match(MANAGED_WORKTREE_PATH_PATTERN);
+  if (!match?.[1] || !match[2]) {
+    return null;
+  }
+  return { hash: match[1].toLowerCase(), slug: match[2] };
+}
+
+function getPlacementProjectRoot(agent: AggregatedAgent): string | null {
+  const placement = agent.projectPlacement;
+  if (!placement) {
+    return null;
+  }
+  if (placement.checkout.isChisaCodeOwnedWorktree === true) {
+    const mainRepoRoot = placement.checkout.mainRepoRoot?.trim() ?? "";
+    if (mainRepoRoot) {
+      return mainRepoRoot;
+    }
   }
   const projectKey = placement.projectKey.trim();
   return projectKey || null;
 }
 
-function getSidebarSessionGroupKey(agent: AggregatedAgent): string {
-  return normalizeAgentCwdGroupKey(getChisaCodeOwnedProjectRoot(agent) ?? agent.cwd);
+function getPlacementDisplayLabel(agent: AggregatedAgent): string | null {
+  const placement = agent.projectPlacement;
+  if (!placement) {
+    return null;
+  }
+  const projectName = placement.projectName?.trim() ?? "";
+  if (projectName) {
+    // Prefer short repo name when remote-style "owner/repo".
+    const slash = projectName.lastIndexOf("/");
+    if (slash >= 0 && slash < projectName.length - 1) {
+      return projectName.slice(slash + 1);
+    }
+    return projectName;
+  }
+  const root = getPlacementProjectRoot(agent);
+  if (root) {
+    return getAgentCwdGroupLabel(root);
+  }
+  return null;
 }
 
-function getSidebarSessionGroupLabel(
+/** Resolved sidebar group identity for a project/workspace bucket. */
+export interface SidebarGroupIdentity {
+  key: string;
+  label: string;
+  cwd: string | null;
+  projectKey: string | null;
+}
+
+type GroupIdentity = SidebarGroupIdentity;
+
+/** Workspace-like row used to map managed worktree hashes back to a project. */
+export interface SidebarWorktreeProjectHintSource {
+  workspaceDirectory?: string | null;
+  projectRootPath?: string | null;
+  projectId?: string | null;
+  projectDisplayName?: string | null;
+  project?: {
+    projectKey?: string | null;
+    projectName?: string | null;
+    checkout?: {
+      isChisaCodeOwnedWorktree?: boolean | null;
+      mainRepoRoot?: string | null;
+    } | null;
+  } | null;
+}
+
+// eslint-disable-next-line complexity -- Hint resolution walks placement/registry/project fallbacks.
+function identityFromHintSource(source: SidebarWorktreeProjectHintSource): GroupIdentity | null {
+  const placementRoot =
+    (source.project?.checkout?.isChisaCodeOwnedWorktree
+      ? source.project.checkout.mainRepoRoot?.trim()
+      : null) ||
+    source.projectRootPath?.trim() ||
+    source.project?.projectKey?.trim() ||
+    null;
+  if (!placementRoot) {
+    return null;
+  }
+  const projectKey =
+    source.project?.projectKey?.trim() || source.projectId?.trim() || placementRoot;
+  const projectName = source.project?.projectName?.trim() || source.projectDisplayName?.trim();
+  let label = getAgentCwdGroupLabel(placementRoot);
+  if (projectName) {
+    const slash = projectName.lastIndexOf("/");
+    label =
+      slash >= 0 && slash < projectName.length - 1 ? projectName.slice(slash + 1) : projectName;
+  }
+  return {
+    key: normalizeAgentCwdGroupKey(placementRoot),
+    label,
+    cwd: placementRoot,
+    projectKey,
+  };
+}
+
+/**
+ * Builds a hash → project identity index from known workspaces so a brand-new
+ * worktree slug never flashes as its own project group.
+ */
+export function buildWorktreeProjectHintsFromSources(
+  sources: Iterable<SidebarWorktreeProjectHintSource>,
+): Map<string, GroupIdentity> {
+  const byHash = new Map<string, GroupIdentity>();
+  for (const source of sources) {
+    const identity = identityFromHintSource(source);
+    if (!identity) {
+      continue;
+    }
+    const parts = extractManagedWorktreeParts(source.workspaceDirectory);
+    if (parts && !byHash.has(parts.hash)) {
+      byHash.set(parts.hash, identity);
+    }
+  }
+  return byHash;
+}
+
+/**
+ * Builds an exact-cwd → project identity index so a newly created worktree can
+ * inherit the project as soon as its workspace row lands, even before placement
+ * is attached to the agent snapshot.
+ */
+export function buildWorkspaceDirectoryProjectHintsFromSources(
+  sources: Iterable<SidebarWorktreeProjectHintSource>,
+): Map<string, GroupIdentity> {
+  const byDirectory = new Map<string, GroupIdentity>();
+  for (const source of sources) {
+    const identity = identityFromHintSource(source);
+    const directory = source.workspaceDirectory?.trim();
+    if (!identity || !directory) {
+      continue;
+    }
+    const key = normalizeAgentCwdGroupKey(directory);
+    if (!byDirectory.has(key)) {
+      byDirectory.set(key, identity);
+    }
+  }
+  return byDirectory;
+}
+
+function buildWorktreeHashIndex(
+  agents: readonly AggregatedAgent[],
+  externalHints?: ReadonlyMap<string, GroupIdentity>,
+): Map<string, GroupIdentity> {
+  const byHash = new Map<string, GroupIdentity>(externalHints ?? []);
+  for (const agent of agents) {
+    const parts = extractManagedWorktreeParts(agent.cwd);
+    if (!parts || byHash.has(parts.hash)) {
+      continue;
+    }
+    const root = getPlacementProjectRoot(agent);
+    if (!root) {
+      continue;
+    }
+    const key = normalizeAgentCwdGroupKey(root);
+    const label = getPlacementDisplayLabel(agent) ?? getAgentCwdGroupLabel(root);
+    byHash.set(parts.hash, {
+      key,
+      label,
+      cwd: root,
+      projectKey: agent.projectPlacement?.projectKey.trim() || root,
+    });
+  }
+  return byHash;
+}
+
+function resolveSidebarSessionGroupIdentity(
   agent: AggregatedAgent,
-  fallbackLabel = "Unknown workspace",
-): string {
-  const ownedProjectRoot = getChisaCodeOwnedProjectRoot(agent);
-  if (ownedProjectRoot) {
-    return getAgentCwdGroupLabel(ownedProjectRoot, fallbackLabel);
+  worktreeHashIndex: ReadonlyMap<string, GroupIdentity>,
+  workspaceDirectoryHints: ReadonlyMap<string, GroupIdentity> | undefined,
+  fallbackLabel: string,
+): GroupIdentity {
+  const placementRoot = getPlacementProjectRoot(agent);
+  if (placementRoot) {
+    return {
+      key: normalizeAgentCwdGroupKey(placementRoot),
+      label: getPlacementDisplayLabel(agent) ?? getAgentCwdGroupLabel(placementRoot, fallbackLabel),
+      cwd: placementRoot,
+      projectKey: agent.projectPlacement?.projectKey.trim() || placementRoot,
+    };
   }
-  return getAgentCwdGroupLabel(agent.cwd, fallbackLabel);
-}
 
-function getSidebarSessionGroupCwd(agent: AggregatedAgent): string | null {
-  return (getChisaCodeOwnedProjectRoot(agent) ?? agent.cwd)?.trim() || null;
-}
-
-function getSidebarSessionProjectKey(agent: AggregatedAgent): string | null {
-  const projectKey = agent.projectPlacement?.projectKey.trim() ?? "";
-  if (projectKey) {
-    return projectKey;
+  const cwd = agent.cwd?.trim() || null;
+  if (cwd && workspaceDirectoryHints) {
+    const byDirectory = workspaceDirectoryHints.get(normalizeAgentCwdGroupKey(cwd));
+    if (byDirectory) {
+      return byDirectory;
+    }
   }
-  return getSidebarSessionGroupCwd(agent);
+
+  const worktreeParts = extractManagedWorktreeParts(agent.cwd);
+  if (worktreeParts) {
+    const known = worktreeHashIndex.get(worktreeParts.hash);
+    if (known) {
+      return known;
+    }
+    // Keep every unknown slug for this hash in one temporary bucket so the
+    // sidebar never sprouts a second project row per worktree name. Prefer
+    // any known sibling project's label when the hash index later fills in.
+    return {
+      key: `worktree-hash:${worktreeParts.hash}`,
+      label: fallbackLabel,
+      cwd: null,
+      projectKey: null,
+    };
+  }
+
+  return {
+    key: normalizeAgentCwdGroupKey(cwd),
+    label: getAgentCwdGroupLabel(cwd, fallbackLabel),
+    cwd,
+    projectKey: agent.projectPlacement?.projectKey.trim() || cwd,
+  };
 }
 
-function getActivityTime(value: Date): number {
-  const time = value.getTime();
-  return Number.isFinite(time) ? time : 0;
-}
-
-function isNewerActivity(left: Date, right: Date): boolean {
-  return getActivityTime(left) > getActivityTime(right);
-}
-
-function compareActivityDatesDescending(left: Date, right: Date): number {
-  return getActivityTime(right) - getActivityTime(left);
-}
-
-function compareAgentsByActivityDescending(left: AggregatedAgent, right: AggregatedAgent): number {
-  return compareActivityDatesDescending(left.lastActivityAt, right.lastActivityAt);
+function isNewerDate(left: Date, right: Date): boolean {
+  return getDateTime(left) > getDateTime(right);
 }
 
 /**
  * Groups agents into sidebar session sections keyed by workspace, with pinned agents lifted into a leading group.
+ *
+ * Ordering follows T3 Sidebar V2:
+ * - Within a group, agents sort by createdAt descending (newest on top)
+ * - Groups sort by their newest createdAt
+ * - Activity timestamps never reshuffle rows
  * @param agents The agents to group
  * @param options Optional labels for unknown/pinned groups and a pinned-agent predicate
- * @returns The session groups sorted by most recent activity, with the pinned group first when present
+ * @returns The session groups sorted by newest creation time, with the pinned group first when present
  */
+// eslint-disable-next-line complexity -- Grouping walks placement/worktree hints plus pinned lift.
 export function groupAgentsForSidebar(
   agents: AggregatedAgent[],
   options?: {
     unknownWorkspaceLabel?: string;
     pinnedGroupLabel?: string;
     isPinnedAgent?: (agent: AggregatedAgent) => boolean;
+    /**
+     * Optional hash→project hints from the workspace registry so brand-new
+     * managed worktrees group under the real project before placement lands.
+     */
+    worktreeProjectHints?: ReadonlyMap<string, GroupIdentity>;
+    /**
+     * Optional exact workspace-directory → project hints for brand-new worktrees.
+     */
+    workspaceDirectoryHints?: ReadonlyMap<string, GroupIdentity>;
   },
 ): SidebarSessionGroup[] {
   const groups = new Map<string, SidebarSessionGroup>();
@@ -226,6 +453,7 @@ export function groupAgentsForSidebar(
   const pinnedGroupLabel = options?.pinnedGroupLabel ?? "Pinned";
   const isPinnedAgent = options?.isPinnedAgent ?? (() => false);
   const pinnedAgents: AggregatedAgent[] = [];
+  const worktreeHashIndex = buildWorktreeHashIndex(agents, options?.worktreeProjectHints);
 
   for (const agent of agents) {
     if (isPinnedAgent(agent)) {
@@ -233,24 +461,64 @@ export function groupAgentsForSidebar(
       continue;
     }
 
-    const key = getSidebarSessionGroupKey(agent);
-    const existing = groups.get(key);
+    const identity = resolveSidebarSessionGroupIdentity(
+      agent,
+      worktreeHashIndex,
+      options?.workspaceDirectoryHints,
+      unknownWorkspaceLabel,
+    );
+    const existing = groups.get(identity.key);
     if (existing) {
       existing.agents.push(agent);
-      if (isNewerActivity(agent.lastActivityAt, existing.newestActivityAt)) {
+      if (isNewerDate(agent.lastActivityAt, existing.newestActivityAt)) {
         existing.newestActivityAt = agent.lastActivityAt;
+      }
+      if (isNewerDate(agent.createdAt, existing.newestCreatedAt)) {
+        existing.newestCreatedAt = agent.createdAt;
+      }
+      // Prefer a real project label over a transient worktree slug.
+      if (identity.projectKey && !existing.projectKey) {
+        existing.label = identity.label;
+        existing.cwd = identity.cwd;
+        existing.projectKey = identity.projectKey;
+      } else if (
+        identity.label &&
+        existing.projectKey === null &&
+        identity.key.startsWith("worktree-hash:") === false
+      ) {
+        existing.label = identity.label;
       }
       continue;
     }
 
-    groups.set(key, {
-      key,
-      label: getSidebarSessionGroupLabel(agent, unknownWorkspaceLabel),
-      cwd: getSidebarSessionGroupCwd(agent),
-      projectKey: getSidebarSessionProjectKey(agent),
+    groups.set(identity.key, {
+      key: identity.key,
+      label: identity.label,
+      cwd: identity.cwd,
+      projectKey: identity.projectKey,
       agents: [agent],
       newestActivityAt: agent.lastActivityAt,
+      newestCreatedAt: agent.createdAt,
     });
+  }
+
+  // Second pass: if a hash-only group later gained a sibling with placement in
+  // another key, merge is already handled via worktreeHashIndex. Re-label any
+  // remaining hash groups that now have a placement-bearing agent.
+  for (const group of groups.values()) {
+    if (!group.key.startsWith("worktree-hash:")) {
+      continue;
+    }
+    for (const agent of group.agents) {
+      const label = getPlacementDisplayLabel(agent);
+      const root = getPlacementProjectRoot(agent);
+      if (label && root) {
+        group.label = label;
+        group.cwd = root;
+        group.projectKey = agent.projectPlacement?.projectKey.trim() || root;
+        break;
+      }
+    }
   }
 
   const groupedAgents = Array.from(groups.values())
@@ -260,17 +528,22 @@ export function groupAgentsForSidebar(
       cwd: group.cwd,
       projectKey: group.projectKey,
       newestActivityAt: group.newestActivityAt,
-      agents: group.agents.slice().sort(compareAgentsByActivityDescending),
+      newestCreatedAt: group.newestCreatedAt,
+      agents: sortAgentsForSidebarV2(group.agents),
     }))
     .sort((left, right) => {
-      return compareActivityDatesDescending(left.newestActivityAt, right.newestActivityAt);
+      const createdDiff = getDateTime(right.newestCreatedAt) - getDateTime(left.newestCreatedAt);
+      if (createdDiff !== 0) {
+        return createdDiff;
+      }
+      return left.key.localeCompare(right.key);
     });
 
   if (pinnedAgents.length === 0) {
     return groupedAgents;
   }
 
-  const sortedPinnedAgents = pinnedAgents.slice().sort(compareAgentsByActivityDescending);
+  const sortedPinnedAgents = sortAgentsForSidebarV2(pinnedAgents);
   return [
     {
       key: PINNED_SIDEBAR_SESSION_GROUP_KEY,
@@ -279,6 +552,7 @@ export function groupAgentsForSidebar(
       projectKey: null,
       agents: sortedPinnedAgents,
       newestActivityAt: sortedPinnedAgents[0]?.lastActivityAt ?? new Date(0),
+      newestCreatedAt: sortedPinnedAgents[0]?.createdAt ?? new Date(0),
     },
     ...groupedAgents,
   ];

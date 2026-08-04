@@ -1,12 +1,11 @@
 import { useCallback, useMemo } from "react";
 import { Pressable, Text, View, type PressableStateCallbackType } from "react-native";
 import {
-  ChevronDown,
   Copy,
   Ellipsis,
   EllipsisVertical,
+  Folder,
   Globe,
-  ListTree,
   PanelRight,
   Settings,
   SquarePen,
@@ -29,6 +28,8 @@ import {
   TitlebarDragRegion,
   TITLEBAR_NO_DRAG_VIEW_STYLE,
 } from "@/components/desktop/titlebar-drag-region";
+import { WorkspaceGitActions } from "@/git/workspace-actions";
+import { WorkspaceOpenInEditorButton } from "@/screens/workspace/workspace-open-in-editor-button";
 import { WorkspaceScriptsButton } from "@/screens/workspace/workspace-scripts-button";
 import { WorkspaceTabPresentationResolver } from "@/screens/workspace/workspace-tab-presentation";
 import type { WorkspaceTabDescriptor } from "@/screens/workspace/workspace-tabs-types";
@@ -42,8 +43,8 @@ import { getIsElectron, isWeb } from "@/constants/platform";
 const ThemedCopy = withUnistyles(Copy);
 const ThemedEllipsis = withUnistyles(Ellipsis);
 const ThemedEllipsisVertical = withUnistyles(EllipsisVertical);
+const ThemedFolder = withUnistyles(Folder);
 const ThemedGlobe = withUnistyles(Globe);
-const ThemedListTree = withUnistyles(ListTree);
 const ThemedPanelRight = withUnistyles(PanelRight);
 const ThemedSettings = withUnistyles(Settings);
 const ThemedSquarePen = withUnistyles(SquarePen);
@@ -63,7 +64,7 @@ const MENU_GIT_DOCK_ICON = <ThemedSourceControlPanelIcon size={16} uniProps={mut
 const MENU_BROWSER_CONTEXT_ICON = <ThemedGlobe size={16} uniProps={mutedColorMapping} />;
 
 const EXPLORER_TOGGLE_KEYS: ShortcutKey[] = ["mod", "E"];
-const ENVIRONMENT_TOGGLE_KEYS: ShortcutKey[] = [];
+const TERMINAL_TOGGLE_KEYS: ShortcutKey[] = ["mod", "`"];
 
 interface WorkspaceHeaderMenuProps {
   normalizedWorkspaceId: string;
@@ -441,57 +442,10 @@ function resolveSoftWorkspaceCtxLabel(
   return name;
 }
 
-function SoftContextPill({
-  label,
-  testID,
-  accessibilityLabel,
-  onPress,
-}: {
-  label: string;
-  testID: string;
-  accessibilityLabel: string;
-  onPress?: () => void;
-}) {
-  const triggerStyle = useCallback(
-    ({ hovered = false, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
-      styles.softContextPill,
-      (Boolean(hovered) || pressed) && styles.softContextPillHovered,
-    ],
-    [],
-  );
-
-  // Conversation shell: working directory is display-only (no chevron / no picker).
-  if (!onPress) {
-    return (
-      <View testID={testID} accessibilityLabel={accessibilityLabel} style={styles.softContextPill}>
-        <Text style={styles.softContextPillText} numberOfLines={1}>
-          {label}
-        </Text>
-      </View>
-    );
-  }
-
-  return (
-    <Pressable
-      testID={testID}
-      accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel}
-      onPress={onPress}
-      style={triggerStyle}
-    >
-      <Text style={styles.softContextPillText} numberOfLines={1}>
-        {label}
-      </Text>
-      <ChevronDown size={12} color="#6f7686" />
-    </Pressable>
-  );
-}
-
 /**
- * Soft Workbench desktop topbar: session title + tools.
- * Conversation tabs also show workspace/branch ctx pills (right cluster).
- * Draft Soft Home keeps path/branch above the composer instead.
- * Matches design `.topbar` (height 48, title left, ctx + tools right cluster).
+ * Desktop topbar aligned to T3 ChatHeader:
+ * left project/session breadcrumb, right action cluster, then panel toggles.
+ * Env/explorer icons sit immediately left of window-control reserve (user request).
  */
 export function WorkspaceDesktopSoftTopbar({
   isLoading,
@@ -503,6 +457,8 @@ export function WorkspaceDesktopSoftTopbar({
   isGitCheckout,
   normalizedServerId,
   normalizedWorkspaceId,
+  workspaceScripts,
+  liveTerminalIds,
   showWorkspaceSetup,
   showCreateBrowserTab,
   createTerminalDisabled,
@@ -511,9 +467,13 @@ export function WorkspaceDesktopSoftTopbar({
   canToggleExplorer,
   isEnvironmentPanelVisible,
   canShowEnvironmentPanel,
+  isTerminalDrawerOpen = false,
+  isRightPanelOpen = false,
   explorerToggleAccessibilityState,
   onToggleExplorer,
   onToggleEnvironmentPanel,
+  onToggleTerminalDrawer,
+  onToggleRightPanel,
   onCreateDraftTab,
   onCreateTerminal,
   onCreateBrowser,
@@ -522,6 +482,9 @@ export function WorkspaceDesktopSoftTopbar({
   onCopyWorkspacePath,
   onCopyBranchName,
   onOpenSetupTab,
+  onScriptTerminalStarted,
+  onViewScriptTerminal,
+  onOpenUrlInBrowserTab,
 }: {
   isLoading: boolean;
   title: string;
@@ -532,6 +495,8 @@ export function WorkspaceDesktopSoftTopbar({
   isGitCheckout: boolean;
   normalizedServerId: string;
   normalizedWorkspaceId: string;
+  workspaceScripts: WorkspaceDescriptor["scripts"];
+  liveTerminalIds: string[];
   showWorkspaceSetup: boolean;
   showCreateBrowserTab: boolean;
   createTerminalDisabled: boolean;
@@ -540,9 +505,13 @@ export function WorkspaceDesktopSoftTopbar({
   canToggleExplorer: boolean;
   isEnvironmentPanelVisible: boolean;
   canShowEnvironmentPanel: boolean;
+  isTerminalDrawerOpen?: boolean;
+  isRightPanelOpen?: boolean;
   explorerToggleAccessibilityState: { expanded: boolean };
   onToggleExplorer: () => void;
   onToggleEnvironmentPanel: () => void;
+  onToggleTerminalDrawer?: () => void;
+  onToggleRightPanel?: () => void;
   onCreateDraftTab: () => void;
   onCreateTerminal: () => void;
   onCreateBrowser: () => void;
@@ -551,24 +520,30 @@ export function WorkspaceDesktopSoftTopbar({
   onCopyWorkspacePath: () => void;
   onCopyBranchName: () => void;
   onOpenSetupTab: () => void;
+  onScriptTerminalStarted: (terminalId: string) => void;
+  onViewScriptTerminal: (terminalId: string) => void;
+  onOpenUrlInBrowserTab: (url: string) => void;
 }) {
   const { t } = useTranslation();
-  // Soft .ctx workspace: project short name only (not workspace/branch folder name).
-  // Conversation: directory is read-only display; branch remains switchable.
-  const workspaceCtxLabel = resolveSoftWorkspaceCtxLabel(title, subtitle, currentBranchName);
-  const branchCtxLabel = currentBranchName;
-
-  // Draft Soft Home: directory + branch live above the composer, not in the topbar.
-  // Only conversation (and other non-draft tabs) move path/branch to the top cluster.
-  // Wait for an active tab so draft entry does not flash top ctx pills while loading.
-  const showSoftCtxPills = activeTab != null && activeTab.kind !== "draft";
+  // Project short name leads the breadcrumb (T3: project always leads the header).
+  const projectLabel = resolveSoftWorkspaceCtxLabel(title, subtitle, currentBranchName);
   const titleFallback = title.trim().length > 0 ? title : "";
-  const showWorkspacePill = showSoftCtxPills && workspaceCtxLabel.length > 0;
-  const showBranchPill = showSoftCtxPills && isGitCheckout && Boolean(branchCtxLabel);
+  const showProjectLead = projectLabel.length > 0;
+  const openInCwd = isAbsolutePath(normalizedWorkspaceId) ? normalizedWorkspaceId : "";
+  const showScripts = workspaceScripts.length > 0;
+  // Reserve Git geometry whenever we have a cwd and either know it's git or are still loading.
+  const showGitSlot = openInCwd.length > 0 && (isGitCheckout || isLoading);
   // Native caption buttons overlay the right of this 48px row (no separate white titlebar).
   const softTopbarStyle = useMemo(
     () =>
       getIsElectron() ? [styles.softTopbar, SOFT_TOPBAR_ELECTRON_RIGHT_PAD] : styles.softTopbar,
+    [],
+  );
+  const projectLeadStyle = useCallback(
+    ({ hovered = false, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
+      styles.softBreadcrumbProject,
+      (Boolean(hovered) || pressed) && styles.softBreadcrumbProjectHovered,
+    ],
     [],
   );
 
@@ -580,36 +555,63 @@ export function WorkspaceDesktopSoftTopbar({
         {isLoading && !activeTab && titleFallback.length === 0 ? (
           <View style={styles.headerTitleSkeleton} />
         ) : (
-          <DesktopWorkspaceHeaderTitle
-            activeTab={activeTab}
-            fallbackTitle={titleFallback}
-            serverId={normalizedServerId}
-            workspaceId={normalizedWorkspaceId}
-          />
+          <View style={styles.softBreadcrumbRow} testID="workspace-header-breadcrumb">
+            {showProjectLead ? (
+              <>
+                <Pressable
+                  testID="workspace-header-workspace-ctx"
+                  accessibilityRole="button"
+                  accessibilityLabel={t("workspace.newAgentCurrentWorkspace")}
+                  onPress={onCreateDraftTab}
+                  style={projectLeadStyle}
+                >
+                  <ThemedFolder size={14} uniProps={mutedColorMapping} />
+                  <Text style={styles.softBreadcrumbProjectText} numberOfLines={1}>
+                    {projectLabel}
+                  </Text>
+                </Pressable>
+                <Text style={styles.softBreadcrumbSeparator} accessibilityElementsHidden>
+                  /
+                </Text>
+              </>
+            ) : null}
+            <DesktopWorkspaceHeaderTitle
+              activeTab={activeTab}
+              fallbackTitle={titleFallback}
+              serverId={normalizedServerId}
+              workspaceId={normalizedWorkspaceId}
+            />
+          </View>
         )}
       </View>
 
       <View style={SOFT_TOPBAR_RIGHT_CLUSTER_STYLE}>
-        <View style={styles.softCtxCluster}>
-          {showWorkspacePill ? (
-            <SoftContextPill
-              testID="workspace-header-workspace-ctx"
-              label={workspaceCtxLabel}
-              accessibilityLabel={t("workspace.title")}
-            />
-          ) : null}
-          {showBranchPill ? (
-            <BranchSwitcher
-              currentBranchName={currentBranchName}
-              title={branchCtxLabel ?? ""}
+        <View style={SOFT_TOP_ACTIONS_STYLE} testID="workspace-header-actions">
+          {showScripts ? (
+            <WorkspaceScriptsButton
               serverId={normalizedServerId}
               workspaceId={normalizedWorkspaceId}
-              isGitCheckout={isGitCheckout}
-              presentation="soft-pill"
+              scripts={workspaceScripts}
+              liveTerminalIds={liveTerminalIds}
+              onScriptTerminalStarted={onScriptTerminalStarted}
+              onViewTerminal={onViewScriptTerminal}
+              onOpenUrlInBrowserTab={onOpenUrlInBrowserTab}
+              presentation="split"
+            />
+          ) : null}
+          {openInCwd.length > 0 ? (
+            <WorkspaceOpenInEditorButton serverId={normalizedServerId} cwd={openInCwd} />
+          ) : null}
+          {showGitSlot ? (
+            <WorkspaceGitActions
+              serverId={normalizedServerId}
+              cwd={openInCwd}
+              forceLoading={isLoading}
             />
           ) : null}
         </View>
 
+        {/* T3 layout slot: terminal drawer + right panel (P1 skeleton → existing surfaces). */}
         <View style={SOFT_TOP_TOOLS_STYLE}>
           <WorkspaceHeaderRightControls
             isMobile={false}
@@ -618,9 +620,15 @@ export function WorkspaceDesktopSoftTopbar({
             canToggleExplorer={canToggleExplorer}
             isEnvironmentPanelVisible={isEnvironmentPanelVisible}
             canShowEnvironmentPanel={canShowEnvironmentPanel}
+            createTerminalDisabled={createTerminalDisabled}
+            isTerminalDrawerOpen={isTerminalDrawerOpen}
+            isRightPanelOpen={isRightPanelOpen}
             explorerToggleAccessibilityState={explorerToggleAccessibilityState}
             onToggleExplorer={onToggleExplorer}
             onToggleEnvironmentPanel={onToggleEnvironmentPanel}
+            onToggleTerminalDrawer={onToggleTerminalDrawer}
+            onToggleRightPanel={onToggleRightPanel}
+            onCreateTerminal={onCreateTerminal}
           />
           <WorkspaceHeaderMenu
             normalizedWorkspaceId={normalizedWorkspaceId}
@@ -646,7 +654,8 @@ export function WorkspaceDesktopSoftTopbar({
 }
 
 /**
- * Renders explorer and environment-panel header toggles for the active form factor.
+ * Desktop layout controls (T3 titlebar cluster skeleton):
+ * terminal drawer + right panel. Mobile keeps explorer toggle only.
  * @param props Toggle visibility, availability, and callbacks
  * @returns The workspace header action controls
  */
@@ -655,11 +664,17 @@ export function WorkspaceHeaderRightControls({
   isGitCheckout,
   isExplorerOpen,
   canToggleExplorer,
-  isEnvironmentPanelVisible,
-  canShowEnvironmentPanel,
+  isEnvironmentPanelVisible: _isEnvironmentPanelVisible,
+  canShowEnvironmentPanel: _canShowEnvironmentPanel,
+  createTerminalDisabled = false,
+  isTerminalDrawerOpen = false,
+  isRightPanelOpen = false,
   explorerToggleAccessibilityState,
   onToggleExplorer,
-  onToggleEnvironmentPanel,
+  onToggleEnvironmentPanel: _onToggleEnvironmentPanel,
+  onToggleTerminalDrawer,
+  onToggleRightPanel,
+  onCreateTerminal,
 }: {
   isMobile: boolean;
   isGitCheckout: boolean;
@@ -667,20 +682,80 @@ export function WorkspaceHeaderRightControls({
   canToggleExplorer: boolean;
   isEnvironmentPanelVisible: boolean;
   canShowEnvironmentPanel: boolean;
+  createTerminalDisabled?: boolean;
+  isTerminalDrawerOpen?: boolean;
+  isRightPanelOpen?: boolean;
   explorerToggleAccessibilityState: { expanded: boolean };
   onToggleExplorer: () => void;
   onToggleEnvironmentPanel: () => void;
+  /** Production: toggle bottom terminal drawer (creates terminal if needed). */
+  onToggleTerminalDrawer?: () => void;
+  /** Production: toggle unified right surface panel. */
+  onToggleRightPanel?: () => void;
+  /** @deprecated Prefer onToggleTerminalDrawer. Kept for older call sites. */
+  onCreateTerminal?: () => void;
 }) {
   const { t } = useTranslation();
-  const environmentToggleAccessibilityState = useMemo(
-    () => ({ expanded: isEnvironmentPanelVisible }),
-    [isEnvironmentPanelVisible],
+  const rightPanelOpen = isRightPanelOpen || isExplorerOpen;
+  const handleTerminalToggle = useCallback(() => {
+    if (onToggleTerminalDrawer) {
+      onToggleTerminalDrawer();
+      return;
+    }
+    onCreateTerminal?.();
+  }, [onCreateTerminal, onToggleTerminalDrawer]);
+  const handleRightPanelToggle = useCallback(() => {
+    if (onToggleRightPanel) {
+      onToggleRightPanel();
+      return;
+    }
+    onToggleExplorer();
+  }, [onToggleExplorer, onToggleRightPanel]);
+  const terminalToggleAccessibilityState = useMemo(
+    () => ({ expanded: isTerminalDrawerOpen }),
+    [isTerminalDrawerOpen],
   );
-  const environmentToggleLabel = isEnvironmentPanelVisible
-    ? t("workspace.environment.hideFloatingPanel")
-    : t("workspace.environment.showFloatingPanel");
+  const rightPanelToggleAccessibilityState = useMemo(
+    () => ({ expanded: rightPanelOpen }),
+    [rightPanelOpen],
+  );
+  const terminalToggleDisabled =
+    createTerminalDisabled || (!onToggleTerminalDrawer && !onCreateTerminal);
 
-  const explorerButton = (
+  // Unified right panel toggle (Files/Diff/Terminal/Browser host).
+  const rightPanelButton = (
+    <HeaderToggleButton
+      testID="workspace-right-panel-toggle"
+      onPress={handleRightPanelToggle}
+      tooltipLabel={t("workspace.rightPanel.title")}
+      tooltipKeys={EXPLORER_TOGGLE_KEYS}
+      tooltipSide="left"
+      style={styles.headerActionButton}
+      disabled={!canToggleExplorer && !onToggleRightPanel}
+      accessible
+      accessibilityRole="button"
+      accessibilityLabel={
+        rightPanelOpen ? t("workspace.rightPanel.close") : t("workspace.rightPanel.title")
+      }
+      accessibilityState={rightPanelToggleAccessibilityState}
+    >
+      {({ hovered }) => {
+        const colorMapping = rightPanelOpen || hovered ? foregroundColorMapping : mutedColorMapping;
+        return isGitCheckout ? (
+          <ThemedSourceControlPanelIcon
+            size={16}
+            uniProps={colorMapping}
+            {...sourceControlPanelStrokeWidth15}
+          />
+        ) : (
+          <ThemedPanelRight size={16} uniProps={colorMapping} />
+        );
+      }}
+    </HeaderToggleButton>
+  );
+
+  // Compat test id for mobile/explorer consumers that still query the old name.
+  const mobileExplorerButton = (
     <HeaderToggleButton
       testID="workspace-explorer-toggle"
       onPress={onToggleExplorer}
@@ -712,32 +787,36 @@ export function WorkspaceHeaderRightControls({
   );
 
   if (isMobile) {
-    return <View style={styles.headerRight}>{explorerButton}</View>;
+    return <View style={styles.headerRight}>{mobileExplorerButton}</View>;
   }
 
-  // Soft .top-tools: explorer + environment (file tree / env panel), then more menu outside.
+  // T3-style layout cluster: terminal drawer + right panel (left of window controls).
   return (
-    <View style={styles.headerRight}>
-      {explorerButton}
+    <View style={styles.headerRight} testID="workspace-layout-controls">
       <HeaderToggleButton
-        testID="workspace-environment-toggle"
-        onPress={onToggleEnvironmentPanel}
-        tooltipLabel={environmentToggleLabel}
-        tooltipKeys={ENVIRONMENT_TOGGLE_KEYS}
+        testID="workspace-terminal-drawer-toggle"
+        onPress={handleTerminalToggle}
+        tooltipLabel={
+          isTerminalDrawerOpen ? t("workspace.terminalDrawer.hide") : t("workspace.newTerminal")
+        }
+        tooltipKeys={TERMINAL_TOGGLE_KEYS}
         tooltipSide="left"
         style={styles.headerActionButton}
-        disabled={!canShowEnvironmentPanel}
+        disabled={terminalToggleDisabled}
         accessible
         accessibilityRole="button"
-        accessibilityLabel={environmentToggleLabel}
-        accessibilityState={environmentToggleAccessibilityState}
+        accessibilityLabel={
+          isTerminalDrawerOpen ? t("workspace.terminalDrawer.hide") : t("workspace.newTerminal")
+        }
+        accessibilityState={terminalToggleAccessibilityState}
       >
         {({ hovered }) => {
           const colorMapping =
-            isEnvironmentPanelVisible || hovered ? foregroundColorMapping : mutedColorMapping;
-          return <ThemedListTree size={16} uniProps={colorMapping} />;
+            isTerminalDrawerOpen || hovered ? foregroundColorMapping : mutedColorMapping;
+          return <ThemedSquareTerminal size={16} uniProps={colorMapping} />;
         }}
       </HeaderToggleButton>
+      {rightPanelButton}
     </View>
   );
 }
@@ -907,40 +986,51 @@ const styles = StyleSheet.create((theme) => ({
     flexShrink: 0,
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: 8,
   },
-  softCtxCluster: {
+  // T3 ChatHeader left: project lead + "/" + session title.
+  softBreadcrumbRow: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    overflow: "hidden",
+  },
+  softBreadcrumbProject: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
+    flexShrink: 0,
+    maxWidth: 160,
+    minWidth: 0,
+    borderRadius: 6,
+    paddingHorizontal: 2,
+    paddingVertical: 2,
+  },
+  softBreadcrumbProjectHovered: {
+    opacity: 0.85,
+  },
+  softBreadcrumbProjectText: {
+    color: theme.colors.foregroundMuted,
+    fontSize: 13.5,
+    lineHeight: 18,
+    fontWeight: "500",
     flexShrink: 1,
     minWidth: 0,
   },
-  // Soft .ctx: h30 pill, border, surface, 12px, max-width 130.
-  softContextPill: {
-    height: 30,
-    maxWidth: 130,
-    paddingHorizontal: 10,
-    borderRadius: theme.borderRadius.full,
-    borderWidth: theme.borderWidth[1],
-    borderColor: theme.colors.border,
-    backgroundColor: theme.colors.surface0,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    flexShrink: 1,
-    minWidth: 0,
-  },
-  softContextPillHovered: {
-    backgroundColor: theme.colors.surface1,
-  },
-  softContextPillText: {
-    // design --text-2
+  softBreadcrumbSeparator: {
     color: theme.colors.foregroundSubtleText,
-    fontSize: 12,
-    lineHeight: 16,
-    flexShrink: 1,
-    minWidth: 0,
+    fontSize: 13.5,
+    lineHeight: 18,
+    opacity: 0.55,
+    flexShrink: 0,
+  },
+  softTopActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    flexShrink: 0,
   },
   softTopTools: {
     flexDirection: "row",
@@ -954,6 +1044,7 @@ const SOFT_TOPBAR_RIGHT_CLUSTER_STYLE = [
   styles.softTopbarRightCluster,
   TITLEBAR_NO_DRAG_VIEW_STYLE,
 ];
+const SOFT_TOP_ACTIONS_STYLE = [styles.softTopActions, TITLEBAR_NO_DRAG_VIEW_STYLE];
 const SOFT_TOP_TOOLS_STYLE = [styles.softTopTools, TITLEBAR_NO_DRAG_VIEW_STYLE];
 const SOFT_TOPBAR_ELECTRON_RIGHT_PAD = {
   paddingRight: 12 + DESKTOP_WINDOW_CONTROLS_WIDTH,

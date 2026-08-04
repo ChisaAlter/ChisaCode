@@ -203,15 +203,18 @@ export function DiffPaneControls({
   );
 }
 
-/** Renders review totals, pull-request state, checks, and compact Git actions. */
+/** Renders review totals, pull-request state, and checks (read-only on desktop). */
 export function ReviewSummaryBand({
   model,
   diffModeLabel,
   gitActions,
+  showGitActions = false,
 }: {
   model: ReviewSummaryModel;
   diffModeLabel: string;
   gitActions: GitActions;
+  /** Desktop keeps write CTAs on the topbar only; mobile may still show compact actions. */
+  showGitActions?: boolean;
 }) {
   const { t } = useTranslation();
   return (
@@ -248,7 +251,7 @@ export function ReviewSummaryBand({
             {t(`git.reviewDecision.${model.reviewDecision}`)}
           </Text>
         ) : null}
-        <GitActionsSplitButton gitActions={gitActions} hideLabels />
+        {showGitActions ? <GitActionsSplitButton gitActions={gitActions} hideLabels /> : null}
       </View>
     </View>
   );

@@ -38,6 +38,12 @@ const foregroundMutedColorMapping = (theme: Theme) => ({
 interface GitActionsSplitButtonProps {
   gitActions: GitActions;
   hideLabels?: boolean;
+  /**
+   * When policy has no primary action (clean, in-sync branch), still reserve the
+   * primary chip so the topbar Git slot never collapses next to Open.
+   */
+  idleLabel?: string;
+  loading?: boolean;
 }
 
 interface GitActionMenuItemProps {
@@ -86,21 +92,171 @@ function GitActionMenuItem({
   );
 }
 
-export function GitActionsSplitButton({ gitActions, hideLabels }: GitActionsSplitButtonProps) {
+function resolveGitActionDisplayLabel(action: GitAction): string {
+  if (action.status === "pending") return action.pendingLabel;
+  if (action.status === "success") return action.successLabel;
+  return action.label;
+}
+
+function resolvePrimaryChipState(input: {
+  primary: GitAction | null;
+  loading: boolean;
+  idleLabel: string;
+  checkingLabel: string;
+}): {
+  showPrimaryChip: boolean;
+  primaryDisabled: boolean;
+  primaryIsPending: boolean;
+  primaryLabel: string;
+  primaryAccessibilityLabel: string;
+  canPressPrimary: boolean;
+} {
+  const { primary, loading, idleLabel, checkingLabel } = input;
+  const showIdlePrimary = !primary && !loading;
+  const primaryDisabled = primary ? primary.disabled : true;
+  const primaryIsPending = primary?.status === "pending" || loading;
+  let primaryLabel = idleLabel;
+  if (primary) {
+    primaryLabel = resolveGitActionDisplayLabel(primary);
+  } else if (loading) {
+    primaryLabel = checkingLabel;
+  }
+  return {
+    showPrimaryChip: Boolean(primary) || showIdlePrimary || loading,
+    primaryDisabled,
+    primaryIsPending,
+    primaryLabel,
+    primaryAccessibilityLabel: primary?.label ?? idleLabel,
+    canPressPrimary: Boolean(primary) && !primaryDisabled,
+  };
+}
+
+function GitPrimarySplit({
+  primary,
+  secondary,
+  hideLabels,
+  loading,
+  idleLabel,
+  onSelect,
+  archiveShortcutKeys,
+}: {
+  primary: GitAction | null;
+  secondary: GitAction[];
+  hideLabels?: boolean;
+  loading: boolean;
+  idleLabel: string;
+  onSelect: (action: GitAction) => void;
+  archiveShortcutKeys?: ShortcutKey[][] | null;
+}) {
+  const { t } = useTranslation();
+  const chip = resolvePrimaryChipState({
+    primary,
+    loading,
+    idleLabel,
+    checkingLabel: t("git.checkingRepository"),
+  });
+
+  const primaryPressableStyle = useCallback(
+    ({ hovered, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
+      styles.splitButtonPrimary,
+      (Boolean(hovered) || pressed) && !chip.primaryDisabled && styles.splitButtonPrimaryHovered,
+      chip.primaryDisabled && styles.splitButtonPrimaryDisabled,
+    ],
+    [chip.primaryDisabled],
+  );
+
+  const caretTriggerStyle = useCallback(
+    ({ hovered, pressed, open }: { hovered: boolean; pressed: boolean; open: boolean }) => [
+      styles.splitButtonCaret,
+      (hovered || pressed || open) && styles.splitButtonCaretHovered,
+    ],
+    [],
+  );
+
+  const handlePrimaryPress = useCallback(() => {
+    if (!primary) return;
+    onSelect(primary);
+  }, [onSelect, primary]);
+
+  const primaryAccessibilityState = useMemo(
+    () => ({ disabled: !chip.canPressPrimary }),
+    [chip.canPressPrimary],
+  );
+
+  if (!chip.showPrimaryChip) {
+    return null;
+  }
+
+  return (
+    <View style={styles.splitButton}>
+      <Pressable
+        testID="changes-primary-cta"
+        style={primaryPressableStyle}
+        onPress={handlePrimaryPress}
+        disabled={!chip.canPressPrimary}
+        accessibilityRole="button"
+        accessibilityLabel={chip.primaryAccessibilityLabel}
+        accessibilityState={primaryAccessibilityState}
+      >
+        <View style={styles.splitButtonContent}>
+          {chip.primaryIsPending ? (
+            <ThemedActivityIndicator
+              size="small"
+              style={styles.splitButtonSpinnerOnly}
+              uniProps={foregroundColorMapping}
+            />
+          ) : (
+            primary?.icon
+          )}
+          {!hideLabels ? <Text style={styles.splitButtonText}>{chip.primaryLabel}</Text> : null}
+        </View>
+      </Pressable>
+      {secondary.length > 0 ? (
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            testID="changes-primary-cta-caret"
+            style={caretTriggerStyle}
+            accessibilityRole="button"
+            accessibilityLabel={t("git.moreOptions")}
+          >
+            <ThemedChevronDown size={16} uniProps={foregroundMutedColorMapping} />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" testID="changes-primary-cta-menu">
+            {secondary.map((action, index) => (
+              <GitActionMenuItem
+                key={action.id}
+                action={action}
+                onSelect={onSelect}
+                archiveShortcutKeys={archiveShortcutKeys}
+                needsSeparator={action.startsGroup}
+                showSeparator={index > 0}
+                closeOnSelect={
+                  action.status === "idle" && action.id === "pr" && action.label === "View PR"
+                }
+              />
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ) : null}
+    </View>
+  );
+}
+
+export function GitActionsSplitButton({
+  gitActions,
+  hideLabels,
+  idleLabel,
+  loading = false,
+}: GitActionsSplitButtonProps) {
   const { t } = useTranslation();
   const toast = useToast();
   const archiveShortcutKeys = useShortcutKeys("archive-worktree");
+  const resolvedIdleLabel = idleLabel ?? t("git.actionUpToDate");
 
   const unavailableToastIcon = useMemo(
     () => <ThemedInfo size={16} uniProps={foregroundColorMapping} />,
     [],
   );
-
-  const getActionDisplayLabel = useCallback((action: GitAction): string => {
-    if (action.status === "pending") return action.pendingLabel;
-    if (action.status === "success") return action.successLabel;
-    return action.label;
-  }, []);
 
   const handleActionSelect = useCallback(
     (action: GitAction) => {
@@ -116,91 +272,19 @@ export function GitActionsSplitButton({ gitActions, hideLabels }: GitActionsSpli
     [toast, unavailableToastIcon],
   );
 
-  const handlePrimaryPress = useCallback(() => {
-    if (!gitActions.primary) {
-      return;
-    }
-    handleActionSelect(gitActions.primary);
-  }, [gitActions.primary, handleActionSelect]);
-
   const overflowMenuButtonStyle = useMemo(() => [styles.iconButton, styles.overflowMenuButton], []);
 
-  const primaryDisabled = gitActions.primary?.disabled;
-  const primaryPressableStyle = useCallback(
-    ({ hovered, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
-      styles.splitButtonPrimary,
-      (Boolean(hovered) || pressed) && styles.splitButtonPrimaryHovered,
-      primaryDisabled && styles.splitButtonPrimaryDisabled,
-    ],
-    [primaryDisabled],
-  );
-
-  const caretTriggerStyle = useCallback(
-    ({ hovered, pressed, open }: { hovered: boolean; pressed: boolean; open: boolean }) => [
-      styles.splitButtonCaret,
-      (hovered || pressed || open) && styles.splitButtonCaretHovered,
-    ],
-    [],
-  );
-
   return (
-    <View style={styles.row}>
-      {gitActions.primary ? (
-        <View style={styles.splitButton}>
-          <Pressable
-            testID="changes-primary-cta"
-            style={primaryPressableStyle}
-            onPress={handlePrimaryPress}
-            disabled={gitActions.primary.disabled}
-            accessibilityRole="button"
-            accessibilityLabel={gitActions.primary.label}
-          >
-            {gitActions.primary.status === "pending" ? (
-              <ThemedActivityIndicator
-                size="small"
-                style={styles.splitButtonSpinnerOnly}
-                uniProps={foregroundColorMapping}
-              />
-            ) : (
-              <View style={styles.splitButtonContent}>
-                {gitActions.primary.icon}
-                {!hideLabels && (
-                  <Text style={styles.splitButtonText}>
-                    {getActionDisplayLabel(gitActions.primary)}
-                  </Text>
-                )}
-              </View>
-            )}
-          </Pressable>
-          {gitActions.secondary.length > 0 ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                testID="changes-primary-cta-caret"
-                style={caretTriggerStyle}
-                accessibilityRole="button"
-                accessibilityLabel={t("git.moreOptions")}
-              >
-                <ThemedChevronDown size={16} uniProps={foregroundMutedColorMapping} />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" testID="changes-primary-cta-menu">
-                {gitActions.secondary.map((action, index) => (
-                  <GitActionMenuItem
-                    key={action.id}
-                    action={action}
-                    onSelect={handleActionSelect}
-                    archiveShortcutKeys={archiveShortcutKeys}
-                    needsSeparator={action.startsGroup}
-                    showSeparator={index > 0}
-                    closeOnSelect={
-                      action.status === "idle" && action.id === "pr" && action.label === "View PR"
-                    }
-                  />
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : null}
-        </View>
-      ) : null}
+    <View style={styles.row} testID="git-actions-split-button">
+      <GitPrimarySplit
+        primary={gitActions.primary}
+        secondary={gitActions.secondary}
+        hideLabels={hideLabels}
+        loading={loading}
+        idleLabel={resolvedIdleLabel}
+        onSelect={handleActionSelect}
+        archiveShortcutKeys={archiveShortcutKeys}
+      />
       {gitActions.menu.length > 0 ? (
         <DropdownMenu>
           <DropdownMenuTrigger

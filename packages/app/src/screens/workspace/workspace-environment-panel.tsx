@@ -24,7 +24,6 @@ import { useToast } from "@/contexts/toast-context";
 import { checkoutStatusQueryKey } from "@/git/query-keys";
 import { useBranchSwitcher } from "@/hooks/use-branch-switcher";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
-import { WorkspaceEnvironmentGitPopover } from "@/screens/workspace/workspace-environment-git-popover";
 import type {
   AgentProgressItem,
   AgentProgressModel,
@@ -273,20 +272,7 @@ function EnvironmentInfoCard({
             isGitCheckout={isGitCheckout}
           />
 
-          <WorkspaceEnvironmentGitPopover
-            serverId={serverId}
-            cwd={workspaceDirectory}
-            currentBranchName={currentBranchName}
-          >
-            <View style={styles.rowLeading}>
-              <View style={styles.rowIcon}>
-                <RowIcon name="commit" />
-              </View>
-              <Text style={styles.rowLabel} numberOfLines={1}>
-                {t("workspace.environment.commitOrPush")}
-              </Text>
-            </View>
-          </WorkspaceEnvironmentGitPopover>
+          {/* Git write actions live only on the topbar Git control (P0 de-dupe). */}
 
           <Pressable
             accessibilityRole="button"

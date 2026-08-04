@@ -5,27 +5,26 @@ function getAgentSourceKey(agent: Pick<AggregatedAgent, "serverId" | "id">): str
   return `${agent.serverId}:${agent.id}`;
 }
 
-function getActivityTime(agent: AggregatedAgent): number {
-  const value = agent.lastActivityAt.getTime();
+function getCreatedTime(agent: AggregatedAgent): number {
+  const value = agent.createdAt.getTime();
   return Number.isFinite(value) ? value : 0;
 }
 
+/**
+ * T3 Sidebar V2: newest created first. Activity never reshuffles this list.
+ */
 function compareSidebarLiveAgents(left: AggregatedAgent, right: AggregatedAgent): number {
-  const leftRunning = left.status === "running";
-  const rightRunning = right.status === "running";
-  if (leftRunning && !rightRunning) {
-    return -1;
+  const createdDiff = getCreatedTime(right) - getCreatedTime(left);
+  if (createdDiff !== 0) {
+    return createdDiff;
   }
-  if (!leftRunning && rightRunning) {
-    return 1;
-  }
-  return getActivityTime(right) - getActivityTime(left);
+  return left.id.localeCompare(right.id);
 }
 
 /**
  * Builds non-archived live agents for the left sidebar from a session store map
  * @param input Agents map, active server id, and display label for that server
- * @returns Aggregated live agents sorted with running agents first by activity
+ * @returns Aggregated live agents sorted by createdAt descending (newest first)
  */
 export function buildSidebarLiveAgents(input: {
   agents: Map<string, Agent> | undefined;

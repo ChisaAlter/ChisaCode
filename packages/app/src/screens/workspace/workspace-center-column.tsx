@@ -34,9 +34,11 @@ import {
   WorkspaceDesktopSoftTopbar,
 } from "@/screens/workspace/workspace-header";
 import { WorkspaceEnvironmentPanelRail } from "@/screens/workspace/workspace-environment-panel";
+import { WorkspaceGitActions } from "@/git/workspace-actions";
 import { shouldShowMobileWorkspaceTabSwitcher } from "@/screens/workspace/workspace-tab-layout";
 import { supportsDesktopPaneSplits } from "@/constants/layout";
 import { getIsElectron, isWeb } from "@/constants/platform";
+import { isAbsolutePath } from "@/utils/path";
 
 const COMPACT_WEB_GESTURE_TOUCH_ACTION = isWeb ? "auto" : "pan-y";
 const ThemedActivityIndicator = withUnistyles(ActivityIndicator);
@@ -219,6 +221,8 @@ interface WorkspaceCenterColumnProps {
   mobileTabSwitcher: WorkspaceMobileTabSwitcherInput;
   splitContainer: WorkspaceSplitContainerInput;
   environmentPanel: WorkspaceEnvironmentPanelInput;
+  /** Optional bottom terminal drawer (desktop production chrome). */
+  terminalDrawer?: ReactNode;
 }
 
 /**
@@ -251,6 +255,7 @@ export function WorkspaceCenterColumn({
   mobileTabSwitcher,
   splitContainer,
   environmentPanel,
+  terminalDrawer = null,
 }: WorkspaceCenterColumnProps) {
   const { t } = useTranslation();
   const showCreateBrowserTab = getIsElectron();
@@ -285,18 +290,46 @@ export function WorkspaceCenterColumn({
     return map;
   }, [mobileTabSwitcher.tabs]);
 
-  const headerRight = useMemo(
-    () => (
+  const headerRight = useMemo(() => {
+    if (isMobile) {
+      const openInCwd = isAbsolutePath(normalizedWorkspaceId) ? normalizedWorkspaceId : "";
+      // Compact has no soft topbar action cluster; mount the single Git write path here.
+      return (
+        <View style={styles.mobileHeaderRight} testID="workspace-mobile-header-actions">
+          {headerRightControls.isGitCheckout && openInCwd.length > 0 ? (
+            <WorkspaceGitActions serverId={normalizedServerId} cwd={openInCwd} hideLabels />
+          ) : null}
+          <WorkspaceHeaderRightControls
+            {...headerRightControls}
+            isMobile
+            isEnvironmentPanelVisible={isEnvironmentPanelVisible}
+            createTerminalDisabled={isCreateTerminalPending}
+            onCreateTerminal={headerTitleBar.onCreateTerminal}
+          />
+        </View>
+      );
+    }
+    return (
       <WorkspaceHeaderRightControls
         {...headerRightControls}
-        isMobile={isMobile}
+        isMobile={false}
         isEnvironmentPanelVisible={isEnvironmentPanelVisible}
+        createTerminalDisabled={isCreateTerminalPending}
+        onCreateTerminal={headerTitleBar.onCreateTerminal}
       />
-    ),
-    [headerRightControls, isEnvironmentPanelVisible, isMobile],
-  );
+    );
+  }, [
+    headerRightControls,
+    headerTitleBar.onCreateTerminal,
+    isCreateTerminalPending,
+    isEnvironmentPanelVisible,
+    isMobile,
+    normalizedServerId,
+    normalizedWorkspaceId,
+  ]);
 
-  // Soft desktop topbar owns title + ctx pills + tools; tabs row keeps only tab chrome.
+  // Desktop topbar owns T3-style breadcrumb + action cluster + panel toggles.
+  // Tabs row keeps only tab chrome.
   const desktopSoftTopbar = useMemo(() => {
     if (isMobile) return null;
     return (
@@ -440,7 +473,9 @@ export function WorkspaceCenterColumn({
         ) : (
           <View style={styles.content}>{desktopContent}</View>
         )}
+        {!isMobile ? terminalDrawer : null}
       </View>
+      {/* Legacy floating env rail kept for task progress; git writes live on topbar only. */}
       {!isMobile ? (
         <WorkspaceEnvironmentPanelRail {...environmentPanel} visible={environmentRailVisible} />
       ) : null}
@@ -514,6 +549,12 @@ const styles = StyleSheet.create((theme) => ({
     minHeight: 0,
     backgroundColor: resolveThemeWorkbenchSurfaceRoles(theme).content,
     position: "relative",
+  },
+  mobileHeaderRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    flexShrink: 0,
   },
   mobileMountedTabSlotVisible: {
     ...StyleSheet.absoluteFillObject,
