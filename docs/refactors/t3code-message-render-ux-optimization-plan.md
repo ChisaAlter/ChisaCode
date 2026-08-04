@@ -205,13 +205,13 @@ AGENTS.md 第 41/49 行要求系统性问题建独立 roadmap 条目：
 
 ### 5.1 阶段一：P0（已完成，2026-08-04）
 
-| 项                           | 改动                                                               | 状态                                      |
-| ---------------------------- | ------------------------------------------------------------------ | ----------------------------------------- |
-| 1.1 dev 脚本端口预检         | `desktop-slices.script.ts` 移植 `ensurePortFree`                   | ✅                                        |
-| 1.2 打包脚本 daemon 清杀兜底 | pid 必填 + bounded client.close + node-entrypoint-runner 退路      | ✅                                        |
-| 1.3 Slice E web spec         | `highlight-streaming.spec.ts` + mock code-fence 模式 + server 单测 | ✅ 单测 8/8；web e2e 待定向 Playwright 跑 |
-| 1.4 审计文档纠正             | controller 21、native 委托措辞、asar 可复现声明、read-skip 差异    | ✅                                        |
-| 1.5 roadmap 2 条目           | `build-x64.js` + SidebarV2 testid 迁移                             | ✅                                        |
+| 项                           | 改动                                                               | 状态                                                                       |
+| ---------------------------- | ------------------------------------------------------------------ | -------------------------------------------------------------------------- |
+| 1.1 dev 脚本端口预检         | `desktop-slices.script.ts` 移植 `ensurePortFree`                   | ✅                                                                         |
+| 1.2 打包脚本 daemon 清杀兜底 | pid 必填 + bounded client.close + node-entrypoint-runner 退路      | ✅                                                                         |
+| 1.3 Slice E web spec         | `highlight-streaming.spec.ts` + mock code-fence 模式 + server 单测 | ✅ 单测 8/8；web e2e 1/1 绿（与 turn-anchor 2 + work-log-fold 1 合并 4/4） |
+| 1.4 审计文档纠正             | controller 21、native 委托措辞、asar 可复现声明、read-skip 差异    | ✅                                                                         |
+| 1.5 roadmap 2 条目           | `build-x64.js` + SidebarV2 testid 迁移                             | ✅                                                                         |
 
 ### 5.2 阶段二：P1（已完成，2026-08-04）
 
