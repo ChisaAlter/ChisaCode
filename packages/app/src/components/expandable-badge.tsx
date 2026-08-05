@@ -34,15 +34,12 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import Svg, { Defs, LinearGradient as SvgLinearGradient, Rect, Stop } from "react-native-svg";
-import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import { StyleSheet } from "react-native-unistyles";
 
+import { ThemedIconHost } from "@/components/themed-icon-host";
 import { isNative, isWeb } from "@/constants/platform";
 import type { Theme } from "@/styles/theme";
 import { getExpandableBadgeLayoutStyles } from "./message-layout";
-
-const ThemedFileSymlinkIcon = withUnistyles(FileSymlink);
-const ThemedTriangleAlertIcon = withUnistyles(TriangleAlertIcon);
-const ThemedChevronRightIcon = withUnistyles(ChevronRight);
 
 const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
 const foregroundMutedColorMapping = (theme: Theme) => ({
@@ -52,7 +49,6 @@ const mutedForegroundColorMapping = (theme: Theme) => ({
   color: theme.colors.mutedForeground,
 });
 const destructiveColorMapping = (theme: Theme) => ({ color: theme.colors.destructive });
-type IconColorMapping = (theme: Theme) => { color: string };
 const MessageOuterSpacingContext = createContext(false);
 
 /** Provides a default outer-spacing policy for grouped timeline messages. */
@@ -695,7 +691,8 @@ function ExpandableBadgeLabelRow({
           style={expandableBadgeStylesheet.openFileButton}
           hitSlop={6}
         >
-          <ThemedFileSymlinkIcon
+          <ThemedIconHost
+            Icon={FileSymlink}
             size={14}
             uniProps={isOpenFileHovered ? foregroundColorMapping : foregroundMutedColorMapping}
           />
@@ -744,31 +741,35 @@ function ExpandableBadgeLabelRow({
 // with a tight viewBox per icon — see option (2) in the design discussion.
 const LUCIDE_TOOL_ICON_NUDGE_LEFT: ViewStyle = { marginLeft: -1 };
 const LUCIDE_CHEVRON_NUDGE_LEFT: ViewStyle = { marginLeft: -4 };
+const ERROR_ICON_STYLE: ViewStyle = { marginLeft: -1, opacity: 0.8 };
 const WORKBENCH_CHEVRON_DOWN_STYLE: ViewStyle = {
   marginLeft: -1,
   transform: [{ rotate: "90deg" }],
 };
 
+type ThemedBadgeIcon = ComponentType<{ size?: number; color?: string }>;
+
 function renderExpandableBadgeIcon({
   isError,
   isActive,
-  ThemedIcon,
+  icon,
 }: {
   isError: boolean;
   isActive: boolean;
-  ThemedIcon: ComponentType<{ size?: number; uniProps?: IconColorMapping }> | null;
+  icon: ThemedBadgeIcon | undefined;
 }): ReactNode {
   if (isError) {
     return (
-      <View style={LUCIDE_TOOL_ICON_NUDGE_LEFT}>
-        <ThemedTriangleAlertIcon size={12} opacity={0.8} uniProps={destructiveColorMapping} />
+      <View style={ERROR_ICON_STYLE}>
+        <ThemedIconHost Icon={TriangleAlertIcon} size={12} uniProps={destructiveColorMapping} />
       </View>
     );
   }
-  if (ThemedIcon) {
+  if (icon) {
     return (
       <View style={LUCIDE_TOOL_ICON_NUDGE_LEFT}>
-        <ThemedIcon
+        <ThemedIconHost
+          Icon={icon as ComponentType<{ color: string; size: number }>}
           size={12}
           uniProps={isActive ? foregroundColorMapping : mutedForegroundColorMapping}
         />
@@ -789,7 +790,9 @@ function renderExpandableBadgeIconSlot({
 }): ReactNode {
   if (showChevron) {
     return (
-      <ThemedChevronRightIcon size={12} style={chevronStyle} uniProps={foregroundColorMapping} />
+      <View style={chevronStyle}>
+        <ThemedIconHost Icon={ChevronRight} size={12} uniProps={foregroundColorMapping} />
+      </View>
     );
   }
   return iconNode;
@@ -1158,15 +1161,12 @@ export const ExpandableBadge = memo(function ExpandableBadge({
     [isExpanded],
   );
 
-  const ThemedIcon = useMemo(() => (icon ? withUnistyles(icon) : null), [icon]);
-  const iconNode = renderExpandableBadgeIcon({ isError, isActive, ThemedIcon });
+  const iconNode = renderExpandableBadgeIcon({ isError, isActive, icon });
   const iconSlotNode =
     presentation === "workbench" && !isExpanded ? (
-      <ThemedChevronRightIcon
-        size={10}
-        style={WORKBENCH_CHEVRON_DOWN_STYLE}
-        uniProps={mutedForegroundColorMapping}
-      />
+      <View style={WORKBENCH_CHEVRON_DOWN_STYLE}>
+        <ThemedIconHost Icon={ChevronRight} size={10} uniProps={mutedForegroundColorMapping} />
+      </View>
     ) : (
       renderExpandableBadgeIconSlot({
         showChevron: isInteractive && isHovered,

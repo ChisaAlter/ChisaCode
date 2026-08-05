@@ -39,7 +39,7 @@ import {
   MicVocal,
   Cog,
 } from "lucide-react-native";
-import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import { StyleSheet } from "react-native-unistyles";
 import { type Theme } from "@/styles/theme";
 import { resolveThemeWorkbenchSurfaceRoles } from "@/styles/workbench-surface-roles";
 import {
@@ -62,6 +62,7 @@ import { buildToolCallPresentation } from "@/tool-calls/presentation";
 import { resolveToolCallIcon } from "@/utils/tool-call-icon";
 import { useStableEvent } from "@/hooks/use-stable-event";
 import { HighlightedCodeBlock } from "@/components/highlighted-code-block";
+import { ThemedIconHost } from "@/components/themed-icon-host";
 import { GenerativeHtmlPreview } from "@/components/generative-html-preview";
 import { GenerativeUiRenderer } from "@/generative-ui/generative-ui-renderer";
 import { splitMarkdownBlocks } from "@/utils/split-markdown-blocks";
@@ -152,17 +153,6 @@ const MARKDOWN_ALLOWED_IMAGE_HANDLERS: string[] = [
   "http://",
 ];
 const MARKDOWN_TOP_LEVEL_MAX_EXCEEDED_ITEM = <Text key="dotdotdot">...</Text>;
-
-const ThemedMicVocal = withUnistyles(MicVocal);
-const ThemedTodoCheckIcon = withUnistyles(Check);
-const ThemedCog = withUnistyles(Cog);
-const ThemedActivityCircle = withUnistyles(Circle);
-const ThemedActivityInfo = withUnistyles(Info);
-const ThemedActivityCheckCircle = withUnistyles(CheckCircle);
-const ThemedActivityXCircle = withUnistyles(XCircle);
-const ThemedActivityFileText = withUnistyles(FileText);
-const ThemedActivityChevronDown = withUnistyles(ChevronDown);
-const ThemedActivityChevronRight = withUnistyles(ChevronRight);
 
 const foregroundMutedColorMapping = (theme: Theme) => ({
   color: theme.colors.foregroundMuted,
@@ -681,7 +671,7 @@ export const AssistantTurnHeader = memo(function AssistantTurnHeader({
   return (
     <View style={assistantTurnHeaderStylesheet.container} testID="assistant-turn-header">
       <View style={assistantTurnHeaderStylesheet.badge} accessibilityLabel="AI">
-        <ThemedCog size={12} uniProps={assistantTurnIconColorMapping} />
+        <ThemedIconHost Icon={Cog} size={12} uniProps={assistantTurnIconColorMapping} />
       </View>
       <Text style={assistantTurnHeaderStylesheet.name}>AI</Text>
       {durationMs !== undefined ? (
@@ -1546,7 +1536,7 @@ export const SpeakMessage = memo(function SpeakMessage({
   return (
     <View testID="speak-message" style={containerStyle}>
       <View style={speakMessageStylesheet.header}>
-        <ThemedMicVocal size={12} uniProps={foregroundMutedColorMapping} />
+        <ThemedIconHost Icon={MicVocal} size={12} uniProps={foregroundMutedColorMapping} />
         <Text style={speakMessageStylesheet.headerLabel}>{t("message.spokenLabel")}</Text>
       </View>
       <Text style={speakMessageStylesheet.text}>{message}</Text>
@@ -1566,8 +1556,8 @@ interface ActivityLogProps {
   disableOuterSpacing?: boolean;
 }
 
-// Activity log icon color mappings for withUnistyles-wrapped lucide icons, so
-// the theme-reactive `color` flows through `uniProps` without `useUnistyles()`.
+// Activity log icon color mappings are passed through ThemedIconHost so only
+// known SVG props reach the lucide leaf on web.
 const activityLogSystemColorMapping = (theme: Theme) => ({
   color: theme.colors.foregroundMuted,
 });
@@ -1696,31 +1686,31 @@ export const ActivityLog = memo(function ActivityLog({
     system: {
       bg: activityLogStylesheet.systemBg,
       textStyle: activityLogStylesheet.systemText,
-      Icon: ThemedActivityCircle,
+      Icon: Circle,
       iconUniProps: activityLogSystemColorMapping,
     },
     info: {
       bg: activityLogStylesheet.infoBg,
       textStyle: activityLogStylesheet.infoText,
-      Icon: ThemedActivityInfo,
+      Icon: Info,
       iconUniProps: activityLogInfoColorMapping,
     },
     success: {
       bg: activityLogStylesheet.successBg,
       textStyle: activityLogStylesheet.successText,
-      Icon: ThemedActivityCheckCircle,
+      Icon: CheckCircle,
       iconUniProps: activityLogSuccessColorMapping,
     },
     error: {
       bg: activityLogStylesheet.errorBg,
       textStyle: activityLogStylesheet.errorText,
-      Icon: ThemedActivityXCircle,
+      Icon: XCircle,
       iconUniProps: activityLogErrorColorMapping,
     },
     artifact: {
       bg: activityLogStylesheet.artifactBg,
       textStyle: activityLogStylesheet.artifactText,
-      Icon: ThemedActivityFileText,
+      Icon: FileText,
       iconUniProps: activityLogArtifactColorMapping,
     },
   };
@@ -1759,7 +1749,7 @@ export const ActivityLog = memo(function ActivityLog({
       <View style={activityLogStylesheet.content}>
         <View style={activityLogStylesheet.row}>
           <View style={activityLogStylesheet.iconContainer}>
-            <IconComponent size={16} uniProps={config.iconUniProps} />
+            <ThemedIconHost Icon={IconComponent} size={16} uniProps={config.iconUniProps} />
           </View>
           <View style={activityLogStylesheet.textContainer}>
             <Text style={messageTextStyle} selectable>
@@ -1771,9 +1761,17 @@ export const ActivityLog = memo(function ActivityLog({
                   {t("message.activityDetails")}
                 </Text>
                 {isExpanded ? (
-                  <ThemedActivityChevronDown size={12} uniProps={foregroundMutedColorMapping} />
+                  <ThemedIconHost
+                    Icon={ChevronDown}
+                    size={12}
+                    uniProps={foregroundMutedColorMapping}
+                  />
                 ) : (
-                  <ThemedActivityChevronRight size={12} uniProps={foregroundMutedColorMapping} />
+                  <ThemedIconHost
+                    Icon={ChevronRight}
+                    size={12}
+                    uniProps={foregroundMutedColorMapping}
+                  />
                 )}
               </View>
             )}
@@ -1863,7 +1861,7 @@ function TodoListItemRow({ text, completed }: TodoListItemRowProps) {
     <View style={todoListCardStylesheet.itemRow}>
       <View style={badgeStyle}>
         {completed ? (
-          <ThemedTodoCheckIcon size={12} uniProps={primaryForegroundColorMapping} />
+          <ThemedIconHost Icon={Check} size={12} uniProps={primaryForegroundColorMapping} />
         ) : null}
       </View>
       <Text style={textStyle}>{text}</Text>
@@ -2002,7 +2000,7 @@ export const TodoListCard = memo(function TodoListCard({
             <View key={item.text} style={todoListCardStylesheet.workbenchItemRow}>
               <View style={todoListCardStylesheet.workbenchCheck}>
                 {item.completed ? (
-                  <ThemedTodoCheckIcon size={10} uniProps={primaryForegroundColorMapping} />
+                  <ThemedIconHost Icon={Check} size={10} uniProps={primaryForegroundColorMapping} />
                 ) : null}
               </View>
               <Text style={todoListCardStylesheet.workbenchItemText}>{item.text}</Text>

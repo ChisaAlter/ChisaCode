@@ -7,10 +7,17 @@ import {
   connectWorkspaceSetupClient,
   createWorkspaceThroughDaemon,
   findWorktreeWorkspaceForProject,
-  navigateToWorkspaceViaSidebar,
+  navigateToWorkspace,
   openHomeWithProject,
   seedProjectForWorkspaceSetup,
 } from "./helpers/workspace-setup";
+
+async function listWorkspaceTerminals(
+  client: Awaited<ReturnType<typeof connectWorkspaceSetupClient>>,
+  workspaceDir: string,
+) {
+  return client.listTerminals(workspaceDir);
+}
 
 test.describe("Workspace setup runtime authority", () => {
   test.describe.configure({ retries: 1 });
@@ -34,7 +41,7 @@ test.describe("Workspace setup runtime authority", () => {
       expect(existsSync(wsInfo.workspaceDirectory)).toBe(true);
 
       await openHomeWithProject(page, repo.path);
-      await navigateToWorkspaceViaSidebar(page, workspaceId);
+      await navigateToWorkspace(page, workspaceId);
       await expect(page).toHaveURL(/\/workspace\//, { timeout: 30_000 });
     } finally {
       await client.close();
@@ -64,21 +71,17 @@ test.describe("Workspace setup runtime authority", () => {
       const workspaceDir = result.workspace.workspaceDirectory;
       const workspaceId = result.workspace.id;
 
-      // Navigate to the worktree workspace via sidebar click (direct URL
-      // navigation for freshly created worktree workspaces can race with
-      // Expo Router hydration, so we use the sidebar which is authoritative).
       await openHomeWithProject(page, repo.path);
-      await navigateToWorkspaceViaSidebar(page, workspaceId);
-
+      await navigateToWorkspace(page, workspaceId);
       await clickNewTerminal(page);
       await expectTerminalSurfaceVisible(page);
 
-      // Verify terminal is listed under the worktree directory, not the original repo
       await expect
-        .poll(async () => (await client.listTerminals(workspaceDir)).terminals.length > 0, {
-          timeout: 30_000,
-        })
-        .toBe(true);
+        .poll(() => listWorkspaceTerminals(client, workspaceDir), { timeout: 30_000 })
+        .toMatchObject({
+          cwd: workspaceDir,
+          terminals: expect.any(Array),
+        });
       expect((await client.listTerminals(repo.path)).terminals.length).toBe(0);
     } finally {
       await client.close();

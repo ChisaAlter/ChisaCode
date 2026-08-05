@@ -5,7 +5,7 @@ import { getServerId } from "./server-id";
 
 // ─── Navigation ────────────────────────────────────────────────────────────
 
-/** Navigate to a workspace and wait for the tab bar to appear. */
+/** Navigate to a workspace and wait for the workspace surface to appear. */
 export async function gotoWorkspace(page: Page, cwd: string): Promise<void> {
   const route = buildHostWorkspaceRoute(getServerId(), cwd);
   await page.goto(route);
@@ -14,13 +14,11 @@ export async function gotoWorkspace(page: Page, cwd: string): Promise<void> {
 
 // ─── Tab bar queries ───────────────────────────────────────────────────────
 
-/** Wait for the workspace tab bar to be visible. */
+/** Wait for the workspace surface to hydrate; the tab strip is hidden for single-tab panes. */
 export async function waitForTabBar(page: Page): Promise<void> {
   await expect(
-    page.getByTestId("workspace-tabs-row").filter({ visible: true }).first(),
-  ).toBeVisible({
-    timeout: 30_000,
-  });
+    page.locator('[data-testid^="workspace-deck-entry-"]').filter({ visible: true }).first(),
+  ).toBeVisible({ timeout: 30_000 });
 }
 
 /** Return all tab test IDs currently in the tab bar. */
@@ -85,18 +83,26 @@ export async function assertTerminalTileVisible(page: Page): Promise<void> {
 
 // ─── Tab creation actions ─────────────────────────────────────────────────
 
-/** Click the new agent tab button to create a draft/chat tab. */
+/**
+ * Create a draft/chat tab via the always-visible header menu. The desktop tab
+ * strip (and its workspace-new-agent-tab button) only renders for multi-tab
+ * panes after the workbench redesign.
+ */
 export async function clickNewChat(page: Page): Promise<void> {
-  const button = page.getByTestId("workspace-new-agent-tab").filter({ visible: true }).first();
-  await expect(button).toBeVisible({ timeout: 10_000 });
-  await button.click();
+  await page.getByTestId("workspace-header-menu-trigger").click();
+  await page.getByTestId("workspace-header-new-agent").click();
 }
 
-/** Click the new terminal button to create a terminal tab. */
+/**
+ * Create a terminal via the always-visible header toggle. Drawer terminals do
+ * not force a center tab, which matches the current workbench chrome.
+ */
 export async function clickNewTerminal(page: Page): Promise<void> {
-  const button = page.getByTestId("workspace-new-terminal").filter({ visible: true }).first();
-  await expect(button).toBeVisible({ timeout: 10_000 });
-  await button.click();
+  await page.getByTestId("workspace-header-menu-trigger").click();
+  const item = page.getByTestId("workspace-header-new-terminal");
+  await expect(item).toBeVisible({ timeout: 10_000 });
+  await expect(item).not.toBeDisabled({ timeout: 10_000 });
+  await item.click();
 }
 
 // ─── Tab title assertions ──────────────────────────────────────────────────

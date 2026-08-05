@@ -638,7 +638,7 @@ function TabChip({
       } as const)
     : undefined;
 
-  const tabChipStyle = useCallback(
+  const tabContainerStyle = useMemo(
     () => [
       styles.tab,
       isHighlighted && styles.tabHighlighted,
@@ -713,7 +713,7 @@ function TabChip({
   );
 
   return (
-    <View ref={middleClickRef}>
+    <View ref={middleClickRef} style={tabContainerStyle}>
       <ContextMenu key={tab.key}>
         <Tooltip delayDuration={400} enabledOnDesktop enabledOnMobile={false}>
           <TooltipTrigger asChild triggerRefProp="triggerRef">
@@ -723,7 +723,7 @@ function TabChip({
               testID={`workspace-tab-${buildDeterministicWorkspaceTabId(tab.target)}`}
               triggerRef={dragHandleProps?.setActivatorNodeRef as unknown as undefined}
               enabledOnMobile={false}
-              style={tabChipStyle}
+              style={styles.tabTrigger}
               onHoverIn={handleTabHoverIn}
               onHoverOut={handleTabHoverOut}
               onPressIn={handleNavigateTab}
@@ -740,35 +740,6 @@ function TabChip({
                 tabLabelSkeletonStyle={tabLabelSkeletonStyle}
                 tabLabelStyle={tabLabelStyle}
               />
-
-              {showCloseButton ? (
-                <Pressable
-                  {...(closeButtonDragBlockers as object | undefined)}
-                  testID={closeButtonTestId}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${t("workspace.tabMenu.close")}: ${tooltipLabel}`}
-                  disabled={isClosingTab}
-                  onPressIn={handleCloseButtonPressIn}
-                  onHoverIn={handleCloseButtonHoverIn}
-                  onHoverOut={handleCloseButtonHoverOut}
-                  onPress={handleCloseButtonPress}
-                  style={closeButtonStyle}
-                >
-                  {({ hovered: closeHovered, pressed }) =>
-                    isClosingTab ? (
-                      <ThemedActivityIndicator
-                        size={12}
-                        style={closeHovered || pressed ? ICON_FOREGROUND_STYLE : ICON_MUTED_STYLE}
-                      />
-                    ) : (
-                      <ThemedX
-                        size={12}
-                        style={closeHovered || pressed ? ICON_FOREGROUND_STYLE : ICON_MUTED_STYLE}
-                      />
-                    )
-                  }
-                </Pressable>
-              ) : null}
             </ContextMenuTrigger>
           </TooltipTrigger>
           <TooltipContent side="bottom" align="center" offset={8}>
@@ -793,6 +764,34 @@ function TabChip({
           )}
         </ContextMenuContent>
       </ContextMenu>
+      {showCloseButton ? (
+        <Pressable
+          {...(closeButtonDragBlockers as object | undefined)}
+          testID={closeButtonTestId}
+          accessibilityRole="button"
+          accessibilityLabel={`${t("workspace.tabMenu.close")}: ${tooltipLabel}`}
+          disabled={isClosingTab}
+          onPressIn={handleCloseButtonPressIn}
+          onHoverIn={handleCloseButtonHoverIn}
+          onHoverOut={handleCloseButtonHoverOut}
+          onPress={handleCloseButtonPress}
+          style={closeButtonStyle}
+        >
+          {({ hovered: closeHovered, pressed }) =>
+            isClosingTab ? (
+              <ThemedActivityIndicator
+                size={12}
+                style={closeHovered || pressed ? ICON_FOREGROUND_STYLE : ICON_MUTED_STYLE}
+              />
+            ) : (
+              <ThemedX
+                size={12}
+                style={closeHovered || pressed ? ICON_FOREGROUND_STYLE : ICON_MUTED_STYLE}
+              />
+            )
+          }
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -1283,6 +1282,12 @@ const styles = StyleSheet.create((theme) => ({
   tabHighlighted: {
     // Soft drag/highlight wash: hover family surface, not permanent solid fill.
     backgroundColor: theme.colors.surfaceSidebarHover,
+  },
+  tabTrigger: {
+    flex: 1,
+    minWidth: 0,
+    alignItems: "center",
+    justifyContent: "center",
   },
   tabActive: {
     backgroundColor: theme.colors.surfaceWorkspace,

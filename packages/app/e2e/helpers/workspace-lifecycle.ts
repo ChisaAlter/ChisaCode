@@ -1,13 +1,10 @@
 import { expect, type Page } from "@playwright/test";
 import { clickNewChat, clickNewTerminal } from "./launcher";
 import { setupDeterministicPrompt, waitForTerminalContent } from "./terminal-perf";
+import { composerInput } from "./app";
 
 function terminalSurface(page: Page) {
   return page.locator('[data-testid="terminal-surface"]').first();
-}
-
-function composerInput(page: Page) {
-  return page.getByRole("textbox", { name: "Message agent..." }).first();
 }
 
 export async function expectTerminalCwd(page: Page, expectedPath: string): Promise<void> {

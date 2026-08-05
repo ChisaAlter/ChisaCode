@@ -324,6 +324,14 @@ async function main(): Promise<void> {
     await expectComposerEditable(page);
     console.log("[desktop-slices] agent route open, composer editable");
 
+    // SidebarV2 smoke runs before the longer T3 slices so a later stream
+    // timing failure cannot hide the real Electron sidebar contract.
+    const sidebarThreadRow = page.getByTestId(`sidebar-v2-thread-${agent.id}`);
+    await expect(sidebarThreadRow).toBeVisible({ timeout: 30_000 });
+    await sidebarThreadRow.click();
+    await expect(page).toHaveURL(/\/workspace\//, { timeout: 60_000 });
+    console.log("[desktop-slices] SidebarV2: thread row click navigated to workspace route");
+
     // Slice D + E first (same order as the packaged gate): a short
     // trailing-tool-run turn drains in a few seconds, folds to "+N", and
     // streams the fenced code block. Doing this before the 60s stream avoids
@@ -378,16 +386,6 @@ async function main(): Promise<void> {
     await expectQueuedMessageButton(page);
     await sendQueuedMessageNow(page);
     console.log("[desktop-slices] Slice C: busy released, second message queued and flushed");
-
-    // SidebarV2 smoke: the seeded thread row renders in the real Electron
-    // sidebar, and clicking it navigates to the workspace route (same
-    // semantics as the web switchAgentViaSidebar helper). Runs last so the
-    // navigation cannot disturb the B/C/D/E slice assertions above.
-    const threadRow = page.getByTestId(`sidebar-v2-thread-${agent.id}`);
-    await expect(threadRow).toBeVisible({ timeout: 30_000 });
-    await threadRow.click();
-    await expect(page).toHaveURL(/\/workspace\//, { timeout: 60_000 });
-    console.log("[desktop-slices] SidebarV2: thread row click navigated to workspace route");
 
     console.log("[desktop-slices] ALL DESKTOP SLICES PASSED");
   } finally {

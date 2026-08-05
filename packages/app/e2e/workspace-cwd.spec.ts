@@ -1,4 +1,5 @@
 import { expect, test } from "./fixtures";
+import { composerInput } from "./helpers/app";
 import { clickNewChat, clickNewTerminal } from "./helpers/launcher";
 import { captureWsSessionFrames } from "./helpers/rename";
 import {
@@ -12,6 +13,10 @@ import {
 interface CreateAgentFrame {
   initialPrompt: string | null;
   cwd: string | null;
+}
+
+function normalizePath(value: string): string {
+  return value.replaceAll("\\", "/").replace(/\/$/, "").toLocaleLowerCase();
 }
 
 function cwdForPrompt(frames: CreateAgentFrame[], prompt: string): string | null {
@@ -51,7 +56,7 @@ test.describe("Workspace cwd correctness", () => {
     await workspace.navigateTo();
 
     await clickNewChat(page);
-    const composer = page.getByRole("textbox", { name: "Message agent..." }).first();
+    const composer = composerInput(page);
     const message = `cwd draft create ${Date.now()}`;
     await expect(composer).toBeEditable({ timeout: 15_000 });
     await composer.fill(message);
@@ -65,8 +70,14 @@ test.describe("Workspace cwd correctness", () => {
     });
 
     await expect
-      .poll(() => cwdForPrompt(createAgentFrames, message), { timeout: 30_000 })
-      .toBe(workspace.repoPath);
+      .poll(
+        () => {
+          const cwd = cwdForPrompt(createAgentFrames, message);
+          return cwd ? normalizePath(cwd) : null;
+        },
+        { timeout: 30_000 },
+      )
+      .toBe(normalizePath(workspace.repoPath));
   });
 
   test("worktree workspace opens terminals in the worktree directory", async ({

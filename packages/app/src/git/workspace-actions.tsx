@@ -1,4 +1,3 @@
-import { withUnistyles } from "react-native-unistyles";
 import {
   Archive,
   ArrowDownUp,
@@ -10,6 +9,7 @@ import {
 } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { GitHubIcon } from "@/components/icons/github-icon";
+import { ThemedIconHost } from "@/components/themed-icon-host";
 import { GitActionsSplitButton } from "@/git/actions-split-button";
 import { useGitActions } from "@/git/use-actions";
 import type { GitActions } from "@/git/policy";
@@ -26,32 +26,23 @@ interface WorkspaceGitActionsProps {
   forceLoading?: boolean;
 }
 
-const ThemedGitCommitHorizontal = withUnistyles(GitCommitHorizontal);
-const ThemedDownload = withUnistyles(Download);
-const ThemedUpload = withUnistyles(Upload);
-const ThemedArrowDownUp = withUnistyles(ArrowDownUp);
-const ThemedGitHubIcon = withUnistyles(GitHubIcon);
-const ThemedGitMerge = withUnistyles(GitMerge);
-const ThemedRefreshCcw = withUnistyles(RefreshCcw);
-const ThemedArchive = withUnistyles(Archive);
-
 const mutedColorMapping = (theme: Theme) => ({
   color: theme.colors.foregroundMuted,
 });
 
 const ICONS = {
-  commit: <ThemedGitCommitHorizontal size={16} uniProps={mutedColorMapping} />,
-  pull: <ThemedDownload size={16} uniProps={mutedColorMapping} />,
-  push: <ThemedUpload size={16} uniProps={mutedColorMapping} />,
-  pullAndPush: <ThemedArrowDownUp size={16} uniProps={mutedColorMapping} />,
-  viewPr: <ThemedGitHubIcon size={16} uniProps={mutedColorMapping} />,
-  createPr: <ThemedGitHubIcon size={16} uniProps={mutedColorMapping} />,
-  mergePrSquash: <ThemedGitHubIcon size={16} uniProps={mutedColorMapping} />,
-  mergePrMerge: <ThemedGitHubIcon size={16} uniProps={mutedColorMapping} />,
-  mergePrRebase: <ThemedGitHubIcon size={16} uniProps={mutedColorMapping} />,
-  merge: <ThemedGitMerge size={16} uniProps={mutedColorMapping} />,
-  mergeFromBase: <ThemedRefreshCcw size={16} uniProps={mutedColorMapping} />,
-  archive: <ThemedArchive size={16} uniProps={mutedColorMapping} />,
+  commit: <ThemedIconHost Icon={GitCommitHorizontal} size={16} uniProps={mutedColorMapping} />,
+  pull: <ThemedIconHost Icon={Download} size={16} uniProps={mutedColorMapping} />,
+  push: <ThemedIconHost Icon={Upload} size={16} uniProps={mutedColorMapping} />,
+  pullAndPush: <ThemedIconHost Icon={ArrowDownUp} size={16} uniProps={mutedColorMapping} />,
+  viewPr: <ThemedIconHost Icon={GitHubIcon} size={16} uniProps={mutedColorMapping} />,
+  createPr: <ThemedIconHost Icon={GitHubIcon} size={16} uniProps={mutedColorMapping} />,
+  mergePrSquash: <ThemedIconHost Icon={GitHubIcon} size={16} uniProps={mutedColorMapping} />,
+  mergePrMerge: <ThemedIconHost Icon={GitHubIcon} size={16} uniProps={mutedColorMapping} />,
+  mergePrRebase: <ThemedIconHost Icon={GitHubIcon} size={16} uniProps={mutedColorMapping} />,
+  merge: <ThemedIconHost Icon={GitMerge} size={16} uniProps={mutedColorMapping} />,
+  mergeFromBase: <ThemedIconHost Icon={RefreshCcw} size={16} uniProps={mutedColorMapping} />,
+  archive: <ThemedIconHost Icon={Archive} size={16} uniProps={mutedColorMapping} />,
 };
 
 const EMPTY_GIT_ACTIONS: GitActions = {

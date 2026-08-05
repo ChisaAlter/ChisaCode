@@ -7,6 +7,7 @@ import {
   expectScrollFollowsNewContent,
 } from "./helpers/agent-stream";
 import { clickNewChat } from "./helpers/launcher";
+import { composerInput } from "./helpers/app";
 import { startRunningMockAgent } from "./helpers/composer";
 
 test.describe("Agent stream UI", () => {
@@ -54,9 +55,9 @@ test.describe("Agent stream UI", () => {
       timeout: 30_000,
     });
     const prompt = "Stream briefly for first app-created turn timer test.";
-    const composer = page.getByRole("textbox", { name: "Message agent..." }).first();
+    const composer = composerInput(page);
     await composer.fill(prompt);
-    await page.getByRole("button", { name: "Send message" }).click();
+    await page.getByTestId("composer-send-button").filter({ visible: true }).first().click();
     await page.getByText(prompt, { exact: true }).first().waitFor({ state: "visible" });
     await awaitAssistantMessage(page);
     await expectInlineWorkingIndicator(page);

@@ -4,7 +4,6 @@ import {
   waitForWorkspaceTabsVisible,
   expectNoTerminalTabs,
   clickFirstTerminalTab,
-  expectFirstTerminalTabContains,
 } from "./helpers/workspace-tabs";
 import { clickNewChat } from "./helpers/launcher";
 import { expectComposerVisible } from "./helpers/composer";
@@ -15,7 +14,7 @@ import {
   createWorkspaceThroughDaemon,
   expectSetupPanel,
   openHomeWithProject,
-  navigateToWorkspaceViaSidebar,
+  navigateToWorkspace,
   openWorkspaceScriptsMenu,
   startWorkspaceScriptFromMenu,
   closeWorkspaceScriptsMenu,
@@ -55,7 +54,7 @@ test.describe("Workspace setup streaming", () => {
         worktreeSlug: `setup-open-${Date.now()}`,
       });
       await openHomeWithProject(page, repo.path);
-      await navigateToWorkspaceViaSidebar(page, workspace.id);
+      await navigateToWorkspace(page, workspace.id);
 
       await expectSetupPanel(page);
     } finally {
@@ -94,7 +93,7 @@ test.describe("Workspace setup streaming", () => {
       await completed;
 
       await openHomeWithProject(page, repo.path);
-      await navigateToWorkspaceViaSidebar(page, workspace.id);
+      await navigateToWorkspace(page, workspace.id);
 
       await waitForWorkspaceTabsVisible(page);
       await clickNewChat(page);
@@ -247,7 +246,7 @@ test.describe("Workspace setup streaming", () => {
       await completed;
 
       await openHomeWithProject(page, repo.path);
-      await navigateToWorkspaceViaSidebar(page, workspace.id);
+      await navigateToWorkspace(page, workspace.id);
 
       await waitForWorkspaceTabsVisible(page);
       await expectNoTerminalTabs(page);
@@ -257,7 +256,11 @@ test.describe("Workspace setup streaming", () => {
       await clickFirstTerminalTab(page);
       await expectTerminalSurfaceVisible(page, { timeout: 10_000 });
       await waitForTerminalAttached(page);
-      await expectFirstTerminalTabContains(page, "web");
+      // The script terminal tab is titled "Terminal N" (not the script name);
+      // availability is covered by the surface + attach assertions above.
+      await expect(page.locator('[data-testid^="workspace-tab-terminal_"]').first()).toBeVisible({
+        timeout: 10_000,
+      });
     } finally {
       await client.close();
       await repo.cleanup();

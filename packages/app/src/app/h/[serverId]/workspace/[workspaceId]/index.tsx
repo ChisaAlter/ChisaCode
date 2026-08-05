@@ -7,6 +7,8 @@ import {
   useRootNavigationState,
 } from "expo-router";
 import { HostRouteBootstrapBoundary } from "@/components/host-route-bootstrap-boundary";
+import { useSessionStore } from "@/stores/session-store";
+import { useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import {
   type ActiveWorkspaceSelection,
   useActiveWorkspaceSelection,
@@ -100,6 +102,10 @@ function HostWorkspaceRouteContent() {
   const workspaceId = workspaceValue
     ? (decodeWorkspaceIdFromPathSegment(workspaceValue) ?? "")
     : "";
+  const isConnected = useHostRuntimeIsConnected(serverId);
+  const hasHydratedWorkspaces = useSessionStore((state) =>
+    serverId ? (state.sessions[serverId]?.hasHydratedWorkspaces ?? false) : false,
+  );
   const openValue = getParamValue(globalParams.open);
   useEffect(() => {
     if (!openValue) {
@@ -165,6 +171,10 @@ function HostWorkspaceRouteContent() {
     openValue && (!openIntent || !isWorkspaceScreenOpenIntent(openIntent));
 
   if (shouldWaitForRouteIntent && (!intentConsumed || !hasHydratedWorkspaceLayoutStore)) {
+    return null;
+  }
+
+  if (serverId && isConnected && !hasHydratedWorkspaces) {
     return null;
   }
 

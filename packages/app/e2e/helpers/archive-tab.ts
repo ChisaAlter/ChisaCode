@@ -170,17 +170,21 @@ export async function openWorkspaceWithAgents(
 }
 
 export async function expectWorkspaceTabVisible(page: Page, agentId: string): Promise<void> {
-  await expect(
-    page.getByTestId(`workspace-tab-agent_${agentId}`).filter({ visible: true }).first(),
-  ).toBeVisible({ timeout: 30_000 });
+  const tab = page.getByTestId(`workspace-tab-agent_${agentId}`).filter({ visible: true });
+  const panel = page.getByTestId(`agent-panel-${agentId}`).filter({ visible: true });
+  await expect(tab.or(panel).first()).toBeVisible({ timeout: 30_000 });
 }
 
 export async function expectWorkspaceTabHidden(page: Page, agentId: string): Promise<void> {
   await expect(
     page.getByTestId(`workspace-tab-agent_${agentId}`).filter({ visible: true }),
-  ).toHaveCount(0, {
-    timeout: 30_000,
-  });
+  ).toHaveCount(0, { timeout: 30_000 });
+  await expect(page.getByTestId(`agent-panel-${agentId}`).filter({ visible: true })).toHaveCount(
+    0,
+    {
+      timeout: 30_000,
+    },
+  );
 }
 
 export async function expectWorkspaceArchiveOutcome(
@@ -262,7 +266,7 @@ export async function clickSessionRow(page: Page, title: string): Promise<void> 
 export async function expectSessionsEmptyState(page: Page): Promise<void> {
   // Guard: if session rows appear, a prior spec polluted the shared daemon — see 00-sessions-empty.spec.ts.
   await expect(page.locator(AGENT_ROW_SELECTOR)).toHaveCount(0, { timeout: 5_000 });
-  await expect(page.getByText("No sessions yet")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId("sessions-empty-state")).toBeVisible({ timeout: 30_000 });
 }
 
 export async function archiveAgentFromSessions(

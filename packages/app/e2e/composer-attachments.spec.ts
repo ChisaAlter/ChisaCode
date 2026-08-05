@@ -25,7 +25,7 @@ import {
 } from "./helpers/composer";
 import { delayBrowserAgentCreatedStatus, openNewWorkspaceComposer } from "./helpers/new-workspace";
 import { gotoAppShell } from "./helpers/app";
-import { waitForSidebarHydration, switchWorkspaceViaSidebar } from "./helpers/workspace-ui";
+import { waitForSidebarHydration, openWorkspaceViaRoute } from "./helpers/workspace-ui";
 import { seedWorkspace } from "./helpers/seed-client";
 import { hasGithubAuth, createTempGithubRepo } from "./helpers/github-fixtures";
 import { getServerId } from "./helpers/server-id";
@@ -241,15 +241,12 @@ test.describe("Composer attachments", () => {
     try {
       await gotoAppShell(page);
       await waitForSidebarHydration(page);
-      await switchWorkspaceViaSidebar({
-        page,
-        serverId,
-        targetWorkspacePath: workspace.workspaceId,
-      });
+      // SidebarV2 lists agent threads; seedWorkspace has no agent, so open by
+      // route (same as navigateToWorkspace).
+      await openWorkspaceViaRoute(page, serverId, workspace.workspaceId);
 
       await openNewWorkspaceComposer(page, {
-        projectKey: workspace.projectId,
-        projectDisplayName: workspace.projectDisplayName,
+        workspaceDirectory: workspace.workspaceDirectory,
       });
       await fillComposerDraft(page, "lock test prompt");
       const createButton = page

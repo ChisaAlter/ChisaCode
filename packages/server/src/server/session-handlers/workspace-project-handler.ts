@@ -356,6 +356,7 @@ export class WorkspaceProjectHandler implements DisposableHandler {
         throw new Error("Use worktree archive for ChisaCode worktrees");
       }
       const archivedAt = new Date().toISOString();
+      await this.context.terminalController.killTerminalsUnderPath(existing.cwd);
       await this.context.archiveWorkspaceRecord(existing.workspaceId, archivedAt);
       await this.context.emitWorkspaceUpdateForCwd(existing.cwd);
       this.context.emit({

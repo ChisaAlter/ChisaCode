@@ -509,7 +509,7 @@ test.describe("ad hoc startup wire metrics", () => {
     await page.waitForTimeout(1_000);
 
     const workspaceTestIds = await page
-      .locator('[data-testid^="sidebar-workspace-row-"]:visible')
+      .locator('[data-testid^="sidebar-v2-thread-"]:visible')
       .evaluateAll(extractWorkspaceTestIds);
 
     monitor.setPhase("workspace_clicks");

@@ -7,6 +7,7 @@ import {
   type PressableStateCallbackType,
 } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import { ThemedIconHost } from "@/components/themed-icon-host";
 import { ChevronDown, Info, MoreVertical } from "lucide-react-native";
 import {
   DropdownMenu,
@@ -24,9 +25,6 @@ import { useTranslation } from "react-i18next";
 import { type Theme } from "@/styles/theme";
 
 const ThemedActivityIndicator = withUnistyles(ActivityIndicator);
-const ThemedChevronDown = withUnistyles(ChevronDown);
-const ThemedMoreVertical = withUnistyles(MoreVertical);
-const ThemedInfo = withUnistyles(Info);
 
 const foregroundColorMapping = (theme: Theme) => ({
   color: theme.colors.foreground,
@@ -219,7 +217,7 @@ function GitPrimarySplit({
             accessibilityRole="button"
             accessibilityLabel={t("git.moreOptions")}
           >
-            <ThemedChevronDown size={16} uniProps={foregroundMutedColorMapping} />
+            <ThemedIconHost Icon={ChevronDown} size={16} uniProps={foregroundMutedColorMapping} />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" testID="changes-primary-cta-menu">
             {secondary.map((action, index) => (
@@ -254,7 +252,7 @@ export function GitActionsSplitButton({
   const resolvedIdleLabel = idleLabel ?? t("git.actionUpToDate");
 
   const unavailableToastIcon = useMemo(
-    () => <ThemedInfo size={16} uniProps={foregroundColorMapping} />,
+    () => <ThemedIconHost Icon={Info} size={16} uniProps={foregroundColorMapping} />,
     [],
   );
 
@@ -294,7 +292,7 @@ export function GitActionsSplitButton({
             accessibilityRole="button"
             accessibilityLabel={t("git.moreActions")}
           >
-            <ThemedMoreVertical size={16} uniProps={foregroundMutedColorMapping} />
+            <ThemedIconHost Icon={MoreVertical} size={16} uniProps={foregroundMutedColorMapping} />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" width={220} testID="changes-overflow-content">
             {gitActions.menu.map((action) => (

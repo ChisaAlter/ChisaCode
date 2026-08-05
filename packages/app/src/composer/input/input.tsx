@@ -795,6 +795,7 @@ function SendButtonTooltip({
         disabled={isSendButtonDisabled}
         accessibilityLabel={submitAccessibilityLabel}
         accessibilityRole="button"
+        testID="composer-send-button"
         style={sendButtonCombinedStyle}
       >
         <SendButtonContent

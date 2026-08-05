@@ -309,7 +309,7 @@ if (args[0] === "pr" && args[1] === "list") {
   process.exit(0);
 }
 
-if (args[0] === "pr" && args[1] === "view" && args[2] === "--json" && args[3]) {
+if (args[0] === "pr" && args[1] === "view") {
   const fixture = path.join(process.cwd(), ".chisacode-e2e-pr.json");
   if (fs.existsSync(fixture)) {
     console.log(fs.readFileSync(fixture, "utf8"));
@@ -336,6 +336,12 @@ forwardToRealGh();
 `,
   );
   await chmod(ghPath, 0o755);
+  // Windows: CreateProcess resolves "gh" via PATHEXT (.COM/.EXE/.BAT/.CMD)
+  // and skips extension-less files, so the daemon would resolve the real
+  // gh.exe and the mock never runs. Provide a .cmd shim that routes to the
+  // node script (POSIX uses the extension-less "gh" directly).
+  const ghCmdPath = path.join(binDir, "gh.cmd");
+  await writeFile(ghCmdPath, '@echo off\r\nnode "%~dp0gh" %*\r\n');
 
   const fakeEditorSource = `#!/usr/bin/env node
 const fs = require("fs");
@@ -355,6 +361,12 @@ if (recordPath) {
     const editorPath = path.join(binDir, editorCommand);
     await writeFile(editorPath, fakeEditorSource);
     await chmod(editorPath, 0o755);
+    if (process.platform === "win32") {
+      await writeFile(
+        path.join(binDir, `${editorCommand}.cmd`),
+        `@echo off\r\nnode "%~dp0${editorCommand}" %*\r\n`,
+      );
+    }
   }
 
   return binDir;

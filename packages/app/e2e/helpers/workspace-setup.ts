@@ -2,17 +2,20 @@ import { realpathSync } from "node:fs";
 import { expect, type Page } from "@playwright/test";
 import type { DaemonClient as InternalDaemonClient } from "@chisacode/client/internal/daemon-client";
 import { parseHostWorkspaceRouteFromPathname } from "../../src/utils/host-routes";
-import { gotoAppShell } from "./app";
+import { gotoAppShell, composerInput } from "./app";
 import { connectDaemonClient } from "./daemon-client-loader";
 import { getServerId } from "./server-id";
-import { switchWorkspaceViaSidebar } from "./workspace-ui";
+import { openWorkspaceViaRoute } from "./workspace-ui";
 import type { SessionOutboundMessage } from "@chisacode/protocol/messages";
 
 type WorkspaceSetupDaemonClient = Pick<
   InternalDaemonClient,
   | "close"
   | "connect"
+  | "archiveChisaCodeWorktree"
+  | "archiveWorkspace"
   | "createChisaCodeWorktree"
+  | "createTerminal"
   | "fetchAgent"
   | "fetchAgents"
   | "fetchWorkspaces"
@@ -73,16 +76,7 @@ function createWorkspaceButton(page: Page, repoPath: string) {
   });
 }
 
-async function revealWorkspaceButton(page: Page, repoPath: string): Promise<void> {
-  const projectName = projectNameFromPath(repoPath);
-  const classic = page
-    .locator('[data-testid^="sidebar-project-row-"]')
-    .filter({ hasText: projectName })
-    .first();
-  if (await classic.count()) {
-    await classic.hover();
-    return;
-  }
+async function revealWorkspaceButton(page: Page): Promise<void> {
   const newProject = page.getByTestId("sidebar-v2-new-project");
   if (await newProject.count()) {
     await newProject.hover().catch(() => undefined);
@@ -91,7 +85,7 @@ async function revealWorkspaceButton(page: Page, repoPath: string): Promise<void
 
 export async function createWorkspaceFromSidebar(page: Page, repoPath: string): Promise<void> {
   const button = createWorkspaceButton(page, repoPath);
-  await revealWorkspaceButton(page, repoPath);
+  await revealWorkspaceButton(page);
   if (await button.count()) {
     await expect(button).toBeVisible({ timeout: 30_000 });
     await expect(button).toBeEnabled({ timeout: 30_000 });
@@ -102,7 +96,7 @@ export async function createWorkspaceFromSidebar(page: Page, repoPath: string): 
     await newProject.click();
   }
   await expect(page).toHaveURL(/\/new\?/, { timeout: 30_000 });
-  await expect(page.getByRole("textbox", { name: "Message agent..." }).first()).toBeVisible({
+  await expect(composerInput(page)).toBeVisible({
     timeout: 30_000,
   });
 }
@@ -132,7 +126,7 @@ export async function createChatAgentFromWorkspaceSetup(
   page: Page,
   input: { message: string },
 ): Promise<void> {
-  const messageInput = page.getByRole("textbox", { name: "Message agent..." }).first();
+  const messageInput = composerInput(page);
   await expect(messageInput).toBeVisible({ timeout: 15_000 });
   await messageInput.fill(input.message);
   await messageInput.press("Enter");
@@ -267,15 +261,20 @@ export async function fetchWorkspaceById(
   return workspace;
 }
 
+/**
+ * Navigates to a workspace. SidebarV2 lists agent threads, not workspaces, so
+ * navigation to an agent-less workspace is route-based.
+ */
+export async function navigateToWorkspace(page: Page, workspaceId: string): Promise<void> {
+  await openWorkspaceViaRoute(page, getServerId(), workspaceId);
+}
+
+/** @deprecated Prefer navigateToWorkspace (route-based under SidebarV2). */
 export async function navigateToWorkspaceViaSidebar(
   page: Page,
   workspaceId: string,
 ): Promise<void> {
-  await switchWorkspaceViaSidebar({
-    page,
-    serverId: getServerId(),
-    targetWorkspacePath: workspaceId,
-  });
+  await navigateToWorkspace(page, workspaceId);
 }
 
 export async function openWorkspaceScriptsMenu(page: Page): Promise<void> {

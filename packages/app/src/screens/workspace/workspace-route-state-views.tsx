@@ -130,7 +130,7 @@ function WorkspaceConnecting({ hostName }: { hostName: string }) {
   const { t } = useTranslation();
 
   return (
-    <View style={styles.emptyState}>
+    <View style={styles.emptyState} testID="workspace-route-gate">
       <ThemedLoadingSpinner size="small" uniProps={foregroundMutedColorMapping} />
       <View style={styles.textStack}>
         <Text style={styles.title}>{t("workspace.routeState.loadingWorkspace")}</Text>
@@ -168,7 +168,7 @@ function WorkspaceUnreachable({
   }
 
   return (
-    <View style={styles.emptyState}>
+    <View style={styles.emptyState} testID="workspace-route-gate">
       {isConnectingLike ? (
         <ThemedLoadingSpinner size="small" uniProps={foregroundMutedColorMapping} />
       ) : null}
@@ -205,7 +205,7 @@ function WorkspaceUnreachable({
 function WorkspaceMissing({ hostName, onDismiss }: { hostName: string; onDismiss: () => void }) {
   const { t } = useTranslation();
   return (
-    <View style={styles.emptyState}>
+    <View style={styles.emptyState} testID="workspace-route-gate">
       <View style={styles.textStack}>
         <Text style={styles.title}>{t("workspace.routeState.missingWorkspace")}</Text>
         <Text style={styles.description}>{hostName}</Text>

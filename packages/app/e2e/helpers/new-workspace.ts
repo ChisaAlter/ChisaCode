@@ -1,9 +1,10 @@
 import { expect, type Page } from "@playwright/test";
+import { composerInput } from "./app";
 import type { DaemonClient as InternalDaemonClient } from "@chisacode/client/internal/daemon-client";
 import { decodeWorkspaceIdFromPathSegment } from "@/utils/host-routes";
 import { connectDaemonClient } from "./daemon-client-loader";
 import { daemonWsRoutePattern } from "./daemon-port";
-import { expectWorkspaceHeader, workspaceLabelFromPath } from "./workspace-ui";
+import { expectNewWorkspaceHeader } from "./workspace-ui";
 
 type NewWorkspaceDaemonClient = Pick<
   InternalDaemonClient,
@@ -11,8 +12,10 @@ type NewWorkspaceDaemonClient = Pick<
   | "archiveWorkspace"
   | "close"
   | "connect"
+  | "createAgent"
   | "createChisaCodeWorktree"
   | "openProject"
+  | "waitForAgentUpsert"
 >;
 
 type OpenProjectPayload = Awaited<ReturnType<NewWorkspaceDaemonClient["openProject"]>>;
@@ -22,6 +25,7 @@ export interface OpenedProject {
   projectKey: string;
   projectDisplayName: string;
   workspaceName: string;
+  workspaceDirectory: string;
 }
 
 function requireWorkspace(payload: OpenProjectPayload) {
@@ -61,6 +65,7 @@ export async function openProjectViaDaemon(
     projectKey: workspace.projectId,
     projectDisplayName: workspace.projectDisplayName,
     workspaceName: workspace.name,
+    workspaceDirectory: workspace.workspaceDirectory,
   };
 }
 
@@ -104,43 +109,66 @@ export async function createWorktreeViaDaemon(
     projectKey: workspace.projectId,
     projectDisplayName: workspace.projectDisplayName,
     workspaceName: workspace.name,
+    workspaceDirectory: workspace.workspaceDirectory,
   };
 }
 
+/**
+ * Opens the new-workspace composer from the SidebarV2 sidebar. SidebarV2 has
+ * no per-project "new worktree" button: the new-project button lands on Soft
+ * Home `/new`, then the workspace directory is picked in the directory
+ * combobox (which activates the starting-ref picker).
+ */
 export async function openNewWorkspaceComposer(
   page: Page,
-  input: { projectKey: string; projectDisplayName: string },
+  input: { workspaceDirectory: string },
 ): Promise<void> {
-  const projectRow = page.getByTestId(`sidebar-project-row-${input.projectKey}`).first();
-  await expect(projectRow).toBeVisible({ timeout: 30_000 });
-  await projectRow.hover();
-
-  const button = page.getByTestId(`sidebar-project-new-worktree-${input.projectKey}`).first();
-  await expect(button).toBeVisible({ timeout: 30_000 });
-  await button.click();
+  await page.getByTestId("sidebar-v2-new-project").click();
 
   await expect(page).toHaveURL(/\/h\/[^/]+\/new(?:\?.*)?$/, {
     timeout: 30_000,
   });
+
+  await page
+    .getByTestId("new-workspace-directory-trigger")
+    .filter({ visible: true })
+    .first()
+    .click();
+  const directoryOption = page
+    .getByTestId("combobox-desktop-container")
+    .getByRole("button")
+    .filter({ hasText: input.workspaceDirectory })
+    .first();
+  await expect(directoryOption).toBeVisible({ timeout: 30_000 });
+  await directoryOption.click();
+  await expect(page.getByTestId("combobox-desktop-container")).toHaveCount(0, {
+    timeout: 15_000,
+  });
+
+  const composer = composerInput(page);
+  await expect(composer).toBeVisible({ timeout: 30_000 });
 }
 
 export async function clickNewWorkspaceButton(
   page: Page,
-  input: { projectKey: string; projectDisplayName: string; prompt?: string },
+  input: { workspaceDirectory: string; prompt?: string },
 ): Promise<void> {
   await openNewWorkspaceComposer(page, input);
-  const composer = page.getByRole("textbox", { name: "Message agent..." });
+  const composer = composerInput(page);
   await expect(composer).toBeVisible({ timeout: 30_000 });
   await composer.fill(input.prompt ?? "Hello from e2e");
   const createButton = page
     .getByTestId("message-input-root")
-    .getByRole("button", { name: "Create" });
+    .getByRole("button", { name: /^(Create|创建)$/ });
   await expect(createButton).toBeVisible({ timeout: 30_000 });
   await createButton.click();
 }
 
 export async function openStartingRefPicker(page: Page): Promise<void> {
-  const trigger = page.getByTestId("new-workspace-ref-picker-trigger");
+  const trigger = page
+    .getByTestId("new-workspace-ref-picker-trigger")
+    .filter({ visible: true })
+    .first();
   await expect(trigger).toBeVisible({ timeout: 30_000 });
   await trigger.click();
 }
@@ -161,20 +189,29 @@ export async function expectStartingRefPickerTriggerPr(
   page: Page,
   input: { number: number; title: string; headRef: string },
 ): Promise<void> {
-  const trigger = page.getByRole("button", { name: "Starting ref" });
+  const trigger = page
+    .getByTestId("new-workspace-ref-picker-trigger")
+    .filter({ visible: true })
+    .first();
   await expect(trigger).toContainText(`#${input.number}`);
   await expect(trigger).toContainText(input.title);
   await expect(trigger).not.toContainText(input.headRef);
 }
 
 export async function openBranchPicker(page: Page): Promise<void> {
-  const trigger = page.getByRole("button", { name: "Starting ref" });
+  const trigger = page
+    .getByTestId("new-workspace-ref-picker-trigger")
+    .filter({ visible: true })
+    .first();
   await expect(trigger).toBeVisible({ timeout: 30_000 });
   await trigger.click();
 }
 
 export async function selectPickerOptionByKeyboard(page: Page, label: string): Promise<void> {
-  const searchInput = page.getByPlaceholder("Search branches and PRs");
+  const searchInput = page
+    .getByPlaceholder(/Search branches and PRs|搜索分支和 PR/i)
+    .filter({ visible: true })
+    .first();
   await expect(searchInput).toBeVisible({ timeout: 30_000 });
   await page.keyboard.type(label);
   await page.keyboard.press("ArrowDown");
@@ -196,7 +233,10 @@ export async function expectPickerClosed(page: Page): Promise<void> {
 }
 
 export async function expectPickerSelected(page: Page, label: string): Promise<void> {
-  const trigger = page.getByRole("button", { name: "Starting ref" });
+  const trigger = page
+    .getByTestId("new-workspace-ref-picker-trigger")
+    .filter({ visible: true })
+    .first();
   await expect(trigger).toContainText(label);
 }
 
@@ -212,7 +252,12 @@ export async function expectComposerGithubAttachmentPill(
 
 export async function assertNewWorkspaceSidebarAndHeader(
   page: Page,
-  input: { serverId: string; previousWorkspaceId: string; projectDisplayName: string },
+  input: {
+    serverId: string;
+    previousWorkspaceId: string;
+    projectDisplayName: string;
+    previousAgentIds?: readonly string[];
+  },
 ): Promise<{ workspaceId: string }> {
   // Wait for URL to redirect to the newly created workspace.
   // Uses URL as source of truth to avoid picking up sidebar rows from concurrent tests.
@@ -230,15 +275,26 @@ export async function assertNewWorkspaceSidebarAndHeader(
     throw new Error(`Expected URL to redirect to a new workspace.\nCurrent URL: ${page.url()}`);
   }
 
-  const createdWorkspaceRow = page.getByTestId(
-    `sidebar-workspace-row-${input.serverId}:${workspaceId}`,
-  );
-  await expect(createdWorkspaceRow.first()).toBeVisible({ timeout: 30_000 });
+  // SidebarV2 shows agent threads, not workspace rows. Prefer a new thread row
+  // not in previousAgentIds when provided; otherwise just assert header.
+  const previous = new Set(input.previousAgentIds ?? []);
+  await expect
+    .poll(
+      async () => {
+        const ids = await page
+          .locator('[data-testid^="sidebar-v2-thread-"]')
+          .evaluateAll((els) =>
+            els.map((el) =>
+              (el.getAttribute("data-testid") ?? "").replace(/^sidebar-v2-thread-/, ""),
+            ),
+          );
+        return ids.filter((id) => id && !previous.has(id));
+      },
+      { timeout: 30_000 },
+    )
+    .not.toHaveLength(0);
 
-  await expectWorkspaceHeader(page, {
-    title: workspaceLabelFromPath(workspaceId),
-    subtitle: input.projectDisplayName,
-  });
+  await expectNewWorkspaceHeader(page, input.projectDisplayName);
 
   return { workspaceId };
 }

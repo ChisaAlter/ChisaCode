@@ -2,8 +2,9 @@ import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "
 import { Pressable, Text, View } from "react-native";
 import { ChevronDown, ChevronRight } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
-import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import { StyleSheet } from "react-native-unistyles";
 import { SyncedLoader } from "@/components/synced-loader";
+import { ThemedIconHost } from "@/components/themed-icon-host";
 import { Fonts } from "@/constants/theme";
 import type { Theme } from "@/styles/theme";
 import type { ThoughtStatus } from "@/types/stream";
@@ -14,9 +15,6 @@ export interface ThoughtMessageProps {
   defaultCollapsed?: boolean;
   isLastInSequence?: boolean;
 }
-
-const ThemedChevronDown = withUnistyles(ChevronDown);
-const ThemedChevronRight = withUnistyles(ChevronRight);
 
 const foregroundMutedColorMapping = (theme: Theme) => ({
   color: theme.colors.foregroundMuted,
@@ -34,7 +32,6 @@ export const ThoughtMessage = memo(function ThoughtMessage({
   const [isExpanded, setIsExpanded] = useState(() => hasContent && !defaultCollapsed);
   const previousStatusRef = useRef(status);
   const label = isLoading ? t("stream.thinkingRunning") : t("stream.thinking");
-  const Icon = isExpanded ? ThemedChevronDown : ThemedChevronRight;
 
   useEffect(() => {
     if (!hasContent) {
@@ -84,7 +81,13 @@ export const ThoughtMessage = memo(function ThoughtMessage({
           </Text>
         ) : null}
         {hasContent ? (
-          <Icon size={14} style={styles.chevron} uniProps={foregroundMutedColorMapping} />
+          <View style={styles.chevron}>
+            <ThemedIconHost
+              Icon={isExpanded ? ChevronDown : ChevronRight}
+              size={14}
+              uniProps={foregroundMutedColorMapping}
+            />
+          </View>
         ) : null}
       </Pressable>
       {isExpanded && hasContent ? (

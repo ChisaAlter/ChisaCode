@@ -111,7 +111,7 @@ function SessionsScreenContent({ serverId }: { serverId: string }) {
         </View>
       ) : null}
       {!isInitialLoad && sortedAgents.length === 0 ? (
-        <View style={styles.emptyContainer}>
+        <View style={styles.emptyContainer} testID="sessions-empty-state">
           <Text style={styles.emptyText}>{t("sidebar.noSessions")}</Text>
           <Button variant="ghost" leftIcon={ChevronLeft} onPress={handleBack}>
             {t("common.back")}

@@ -1,7 +1,7 @@
 import { memo, useCallback, useMemo, useState, type ReactElement } from "react";
 import { Text, View } from "react-native";
 import { FileText, Layers, MessageSquare, Undo2 } from "lucide-react-native";
-import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import { StyleSheet } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
 import {
   DropdownMenu,
@@ -11,6 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { ThemedIconHost } from "@/components/themed-icon-host";
 import type { Theme } from "@/styles/theme";
 import { type RewindMode, useRewindCapabilities } from "./use-rewind-capabilities";
 import type { AgentCapabilityFlags } from "@chisacode/protocol/agent-types";
@@ -25,11 +26,6 @@ interface RewindMenuProps {
   testID?: string;
 }
 
-const ThemedUndo2 = withUnistyles(Undo2);
-const ThemedMessageSquare = withUnistyles(MessageSquare);
-const ThemedFileText = withUnistyles(FileText);
-const ThemedLayers = withUnistyles(Layers);
-
 const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
 const foregroundMutedColorMapping = (theme: Theme) => ({
   color: theme.colors.foregroundMuted,
@@ -38,11 +34,11 @@ const foregroundMutedColorMapping = (theme: Theme) => ({
 function getIcon(mode: RewindMode): ReactElement {
   switch (mode) {
     case "conversation":
-      return <ThemedMessageSquare size={16} uniProps={foregroundColorMapping} />;
+      return <ThemedIconHost Icon={MessageSquare} size={16} uniProps={foregroundColorMapping} />;
     case "files":
-      return <ThemedFileText size={16} uniProps={foregroundColorMapping} />;
+      return <ThemedIconHost Icon={FileText} size={16} uniProps={foregroundColorMapping} />;
     case "both":
-      return <ThemedLayers size={16} uniProps={foregroundColorMapping} />;
+      return <ThemedIconHost Icon={Layers} size={16} uniProps={foregroundColorMapping} />;
   }
 }
 
@@ -122,7 +118,8 @@ export const RewindMenu = memo(function RewindMenu({
               testID={`${testID}-trigger`}
             >
               {({ hovered, open }) => (
-                <ThemedUndo2
+                <ThemedIconHost
+                  Icon={Undo2}
                   size={16}
                   uniProps={hovered || open ? foregroundColorMapping : foregroundMutedColorMapping}
                 />

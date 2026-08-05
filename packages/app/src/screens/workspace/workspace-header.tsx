@@ -11,12 +11,13 @@ import {
   SquarePen,
   SquareTerminal,
 } from "lucide-react-native";
-import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import { StyleSheet } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
 
 import { BranchSwitcher } from "@/components/branch-switcher";
 import { HeaderToggleButton } from "@/components/headers/header-toggle-button";
 import { SourceControlPanelIcon } from "@/components/icons/source-control-panel-icon";
+import { ThemedIconHost } from "@/components/themed-icon-host";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -40,28 +41,29 @@ import { isAbsolutePath } from "@/utils/path";
 import { DESKTOP_WINDOW_CONTROLS_WIDTH } from "@/constants/layout";
 import { getIsElectron, isWeb } from "@/constants/platform";
 
-const ThemedCopy = withUnistyles(Copy);
-const ThemedEllipsis = withUnistyles(Ellipsis);
-const ThemedEllipsisVertical = withUnistyles(EllipsisVertical);
-const ThemedFolder = withUnistyles(Folder);
-const ThemedGlobe = withUnistyles(Globe);
-const ThemedPanelRight = withUnistyles(PanelRight);
-const ThemedSettings = withUnistyles(Settings);
-const ThemedSquarePen = withUnistyles(SquarePen);
-const ThemedSquareTerminal = withUnistyles(SquareTerminal);
-const ThemedSourceControlPanelIcon = withUnistyles(SourceControlPanelIcon);
-
 const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 const sourceControlPanelStrokeWidth15 = { strokeWidth: 1.5 };
 
-const MENU_NEW_AGENT_ICON = <ThemedSquarePen size={16} uniProps={mutedColorMapping} />;
-const MENU_NEW_TERMINAL_ICON = <ThemedSquareTerminal size={16} uniProps={mutedColorMapping} />;
-const MENU_NEW_BROWSER_ICON = <ThemedGlobe size={16} uniProps={mutedColorMapping} />;
-const MENU_COPY_ICON = <ThemedCopy size={16} uniProps={mutedColorMapping} />;
-const MENU_SETTINGS_ICON = <ThemedSettings size={16} uniProps={mutedColorMapping} />;
-const MENU_GIT_DOCK_ICON = <ThemedSourceControlPanelIcon size={16} uniProps={mutedColorMapping} />;
-const MENU_BROWSER_CONTEXT_ICON = <ThemedGlobe size={16} uniProps={mutedColorMapping} />;
+const MENU_NEW_AGENT_ICON = (
+  <ThemedIconHost Icon={SquarePen} size={16} uniProps={mutedColorMapping} />
+);
+const MENU_NEW_TERMINAL_ICON = (
+  <ThemedIconHost Icon={SquareTerminal} size={16} uniProps={mutedColorMapping} />
+);
+const MENU_NEW_BROWSER_ICON = (
+  <ThemedIconHost Icon={Globe} size={16} uniProps={mutedColorMapping} />
+);
+const MENU_COPY_ICON = <ThemedIconHost Icon={Copy} size={16} uniProps={mutedColorMapping} />;
+const MENU_SETTINGS_ICON = (
+  <ThemedIconHost Icon={Settings} size={16} uniProps={mutedColorMapping} />
+);
+const MENU_GIT_DOCK_ICON = (
+  <ThemedIconHost Icon={SourceControlPanelIcon} size={16} uniProps={mutedColorMapping} />
+);
+const MENU_BROWSER_CONTEXT_ICON = (
+  <ThemedIconHost Icon={Globe} size={16} uniProps={mutedColorMapping} />
+);
 
 const EXPLORER_TOGGLE_KEYS: ShortcutKey[] = ["mod", "E"];
 const TERMINAL_TOGGLE_KEYS: ShortcutKey[] = ["mod", "`"];
@@ -93,9 +95,9 @@ function WorkspaceHeaderMenuTriggerIcon({
   open: boolean;
   isMobile: boolean;
 }) {
-  const Icon = isMobile ? ThemedEllipsisVertical : ThemedEllipsis;
+  const Icon = isMobile ? EllipsisVertical : Ellipsis;
   const colorMapping = hovered || open ? foregroundColorMapping : mutedColorMapping;
-  return <Icon size={16} uniProps={colorMapping} />;
+  return <ThemedIconHost Icon={Icon} size={16} uniProps={colorMapping} />;
 }
 
 function WorkspaceHeaderMenu({
@@ -565,7 +567,7 @@ export function WorkspaceDesktopSoftTopbar({
                   onPress={onCreateDraftTab}
                   style={projectLeadStyle}
                 >
-                  <ThemedFolder size={14} uniProps={mutedColorMapping} />
+                  <ThemedIconHost Icon={Folder} size={14} uniProps={mutedColorMapping} />
                   <Text style={styles.softBreadcrumbProjectText} numberOfLines={1}>
                     {projectLabel}
                   </Text>
@@ -742,13 +744,14 @@ export function WorkspaceHeaderRightControls({
       {({ hovered }) => {
         const colorMapping = rightPanelOpen || hovered ? foregroundColorMapping : mutedColorMapping;
         return isGitCheckout ? (
-          <ThemedSourceControlPanelIcon
+          <ThemedIconHost
+            Icon={SourceControlPanelIcon}
             size={16}
             uniProps={colorMapping}
             {...sourceControlPanelStrokeWidth15}
           />
         ) : (
-          <ThemedPanelRight size={16} uniProps={colorMapping} />
+          <ThemedIconHost Icon={PanelRight} size={16} uniProps={colorMapping} />
         );
       }}
     </HeaderToggleButton>
@@ -774,13 +777,14 @@ export function WorkspaceHeaderRightControls({
       {({ hovered }) => {
         const colorMapping = isExplorerOpen || hovered ? foregroundColorMapping : mutedColorMapping;
         return isGitCheckout ? (
-          <ThemedSourceControlPanelIcon
+          <ThemedIconHost
+            Icon={SourceControlPanelIcon}
             size={16}
             uniProps={colorMapping}
             {...sourceControlPanelStrokeWidth15}
           />
         ) : (
-          <ThemedPanelRight size={16} uniProps={colorMapping} />
+          <ThemedIconHost Icon={PanelRight} size={16} uniProps={colorMapping} />
         );
       }}
     </HeaderToggleButton>
@@ -813,7 +817,7 @@ export function WorkspaceHeaderRightControls({
         {({ hovered }) => {
           const colorMapping =
             isTerminalDrawerOpen || hovered ? foregroundColorMapping : mutedColorMapping;
-          return <ThemedSquareTerminal size={16} uniProps={colorMapping} />;
+          return <ThemedIconHost Icon={SquareTerminal} size={16} uniProps={colorMapping} />;
         }}
       </HeaderToggleButton>
       {rightPanelButton}

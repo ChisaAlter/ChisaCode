@@ -1200,7 +1200,7 @@ function ChatAgentReadyContent({
 
   return (
     <RewindComposerRestoreProvider text={agentInputDraft.text} setText={agentInputDraft.setText}>
-      <View style={styles.root}>
+      <View style={styles.root} testID={agentId ? `agent-panel-${agentId}` : undefined}>
         <FileDropZone onFilesDropped={handleFilesDropped} disabled={isArchivingCurrentAgent}>
           <ConversationAspectColumn>
             <View style={styles.contentContainer}>

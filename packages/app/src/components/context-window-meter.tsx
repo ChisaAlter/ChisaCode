@@ -1,7 +1,8 @@
 import { Pressable, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import Svg, { Circle } from "react-native-svg";
-import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import { StyleSheet } from "react-native-unistyles";
+import { useUnistyles } from "react-native-unistyles";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { Theme } from "@/styles/theme";
 
@@ -16,8 +17,6 @@ const CENTER = SVG_SIZE / 2;
 const RADIUS = 7;
 const STROKE_WIDTH = 2.25;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
-
-const ThemedCircle = withUnistyles(Circle);
 
 const trackStrokeMapping = (theme: Theme) => ({
   stroke: theme.colors.surfaceWorkspace,
@@ -89,6 +88,7 @@ export function ContextWindowMeter({
   usedTokens,
   totalCostUsd,
 }: ContextWindowMeterProps) {
+  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const percentage = getUsagePercentage(maxTokens, usedTokens);
 
@@ -100,6 +100,8 @@ export function ContextWindowMeter({
   const roundedPercentage = Math.round(percentage);
   const dashOffset = CIRCUMFERENCE - (clampedPercentage / 100) * CIRCUMFERENCE;
   const progressStrokeMapping = getProgressStrokeMapping(clampedPercentage);
+  const trackStroke = trackStrokeMapping(theme).stroke;
+  const progressStroke = progressStrokeMapping(theme).stroke;
   const formattedSessionCost =
     typeof totalCostUsd === "number" ? formatSessionCost(totalCostUsd) : null;
 
@@ -116,27 +118,25 @@ export function ContextWindowMeter({
             height={SVG_SIZE}
             viewBox={`0 0 ${SVG_SIZE} ${SVG_SIZE}`}
             style={styles.svg}
-            accessibilityElementsHidden
-            importantForAccessibility="no-hide-descendants"
           >
-            <ThemedCircle
+            <Circle
               cx={CENTER}
               cy={CENTER}
               r={RADIUS}
               fill="none"
+              stroke={trackStroke}
               strokeWidth={STROKE_WIDTH}
-              uniProps={trackStrokeMapping}
             />
-            <ThemedCircle
+            <Circle
               cx={CENTER}
               cy={CENTER}
               r={RADIUS}
               fill="none"
+              stroke={progressStroke}
               strokeWidth={STROKE_WIDTH}
               strokeLinecap="round"
               strokeDasharray={CIRCUMFERENCE}
               strokeDashoffset={dashOffset}
-              uniProps={progressStrokeMapping}
             />
           </Svg>
         </Pressable>

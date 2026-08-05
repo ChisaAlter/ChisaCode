@@ -110,6 +110,10 @@ async function rebuildElectronNativeModules(appOutDir, platform, arch) {
     return;
   }
 
+  for (const moduleName of modulesToRebuild) {
+    ensureNativeBuildInputs(moduleName, path.join(nodeModules, moduleName));
+  }
+
   console.log(
     `Rebuilding Electron native modules for ${platform}-${arch}: ${modulesToRebuild.join(", ")}`,
   );
@@ -134,9 +138,46 @@ async function rebuildElectronNativeModules(appOutDir, platform, arch) {
       mode: "sequential",
       types: ["prod", "optional"],
     });
+    verifyElectronNativeModules(unpackedAppDir, modulesToRebuild, arch);
   } finally {
     if (shouldRemoveSyntheticPackageJson) {
       rmSafe(syntheticPackageJson);
+    }
+  }
+}
+
+function ensureNativeBuildInputs(moduleName, targetModuleDir) {
+  const sourceEntry = require.resolve(moduleName);
+  const sourceModuleDir = path.dirname(path.dirname(sourceEntry));
+  for (const relativePath of ["binding.gyp", "src", "deps"]) {
+    const sourcePath = path.join(sourceModuleDir, relativePath);
+    if (!fs.existsSync(sourcePath)) {
+      throw new Error(`Missing native build input for ${moduleName}: ${sourcePath}`);
+    }
+    fs.cpSync(sourcePath, path.join(targetModuleDir, relativePath), { recursive: true });
+  }
+}
+
+function verifyElectronNativeModules(unpackedAppDir, modules, arch) {
+  const expectedAbi = require("node-abi").getAbi(ELECTRON_VERSION, "electron");
+  const expectedMetadata = `${arch}--${expectedAbi}`;
+  for (const moduleName of modules) {
+    const metadataPath = path.join(
+      unpackedAppDir,
+      "node_modules",
+      moduleName,
+      "build",
+      "Release",
+      ".forge-meta",
+    );
+    const actualMetadata = fs.existsSync(metadataPath)
+      ? fs.readFileSync(metadataPath, "utf8").trim()
+      : null;
+    if (actualMetadata !== expectedMetadata) {
+      throw new Error(
+        `Electron native rebuild verification failed for ${moduleName}: ` +
+          `expected ${expectedMetadata}, got ${actualMetadata ?? "<missing>"}`,
+      );
     }
   }
 }

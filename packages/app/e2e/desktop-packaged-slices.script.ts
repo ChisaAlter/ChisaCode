@@ -10,7 +10,7 @@
  * packaged desktop surface. Run with `tsx` from packages/app.
  */
 import { spawnSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import net from "node:net";
@@ -88,16 +88,33 @@ async function ensurePortFree(port: number): Promise<void> {
 
 /** Extracts the packaged win build once and returns the ChisaCode.exe path. */
 async function ensurePackagedBuild(): Promise<string> {
-  if (existsSync(packagedExe)) {
-    return packagedExe;
-  }
   const zips = ["ChisaCode-Setup-1.0.2-x64.zip", "ChisaCode-Setup-1.0.2.zip"]
     .map((name) => path.join(releaseDir, name))
     .filter((p) => existsSync(p));
   if (zips.length === 0) {
+    if (existsSync(packagedExe)) {
+      return packagedExe;
+    }
     throw new Error("no packaged build zip in packages/desktop/release");
   }
+
   const zip = zips[0];
+  const extractedBuildIsCurrent = (() => {
+    try {
+      return existsSync(packagedExe) && statSync(packagedExe).mtimeMs >= statSync(zip).mtimeMs;
+    } catch {
+      return false;
+    }
+  })();
+  if (extractedBuildIsCurrent) {
+    return packagedExe;
+  }
+
+  if (existsSync(unpackedDir)) {
+    console.log("[desktop-packaged] removing stale extracted build:", unpackedDir);
+    rmSync(unpackedDir, { recursive: true, force: true });
+  }
+
   console.log("[desktop-packaged] extracting", path.basename(zip), "->", unpackedDir);
   mkdirSync(unpackedDir, { recursive: true });
   // `unzip` handles the zip; fall back to PowerShell Expand-Archive if absent.
@@ -293,6 +310,14 @@ async function main(): Promise<void> {
     await expectComposerEditable(page);
     console.log("[desktop-packaged] agent route open, composer editable");
 
+    // SidebarV2 smoke runs before the longer T3 slices so a later stream
+    // timing failure cannot hide the real packaged Electron sidebar contract.
+    const sidebarThreadRow = page.getByTestId(`sidebar-v2-thread-${agent.id}`);
+    await expect(sidebarThreadRow).toBeVisible({ timeout: 30_000 });
+    await sidebarThreadRow.click();
+    await expect(page).toHaveURL(/\/workspace\//, { timeout: 60_000 });
+    console.log("[desktop-packaged] SidebarV2: thread row click navigated to workspace route");
+
     // Slice D + E first: the trailing-tool-run turn drains in a few seconds,
     // the tool run folds to a "+N" badge once complete, and the streamed
     // fenced code block renders (streaming highlight cache path).
@@ -300,24 +325,7 @@ async function main(): Promise<void> {
     const moreButton = page.getByRole("button", {
       name: /Show \d+ more tool calls|Show fewer tool calls/,
     });
-    try {
-      await expect(moreButton).toHaveCount(1, { timeout: 60_000 });
-    } catch (error) {
-      const diag = await page.evaluate(() => ({
-        userRows: [...document.querySelectorAll('[data-testid="user-message"]')].map((el) =>
-          (el.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, 60),
-        ),
-        assistantBlocks: [...document.querySelectorAll('[data-testid="assistant-message"]')].map(
-          (el) => (el.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, 60),
-        ),
-        badges: document.querySelectorAll('[data-testid="tool-call-badge"]').length,
-        stopButtons: [...document.querySelectorAll("button")].filter((b) =>
-          /stop|cancel|停止|取消/i.test(b.getAttribute("aria-label") ?? ""),
-        ).length,
-      }));
-      console.log("[desktop-packaged] fold diag:", JSON.stringify(diag));
-      throw error;
-    }
+    await expect(moreButton).toHaveCount(1, { timeout: 60_000 });
     const badges = page.getByTestId("tool-call-badge");
     await expect(badges).toHaveCount(1, { timeout: 15_000 });
     await expect(moreButton).toHaveText("+3");
@@ -360,36 +368,9 @@ async function main(): Promise<void> {
     // replaces the running turn with a new one (replaceRunning).
     await fillComposerDraft(page, "Second packaged message.");
     await sendDraftToQueue(page);
-    try {
-      await expectQueuedMessageButton(page);
-    } catch (error) {
-      const diag = await page.evaluate(() => {
-        const input = document.querySelector<HTMLTextAreaElement>(
-          'textarea[aria-label*="Message agent" i], textarea[aria-label*="给智能体发消息" i]',
-        );
-        const stopButtons = [...document.querySelectorAll("button")].filter((b) =>
-          /stop|cancel|停止|取消/i.test(b.getAttribute("aria-label") ?? ""),
-        ).length;
-        const userRows = [...document.querySelectorAll('[data-testid="user-message"]')].map((el) =>
-          (el.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, 60),
-        );
-        return { inputValue: input?.value ?? null, stopButtons, userRows };
-      });
-      console.log("[desktop-packaged] Slice C queue diag:", JSON.stringify(diag));
-      throw error;
-    }
+    await expectQueuedMessageButton(page);
     await sendQueuedMessageNow(page);
     console.log("[desktop-packaged] Slice C: busy released, second message queued and flushed");
-
-    // SidebarV2 smoke: the seeded thread row renders in the real packaged
-    // Electron sidebar, and clicking it navigates to the workspace route
-    // (same semantics as the web switchAgentViaSidebar helper). Runs last so
-    // the navigation cannot disturb the B/C/D/E slice assertions above.
-    const threadRow = page.getByTestId(`sidebar-v2-thread-${agent.id}`);
-    await expect(threadRow).toBeVisible({ timeout: 30_000 });
-    await threadRow.click();
-    await expect(page).toHaveURL(/\/workspace\//, { timeout: 60_000 });
-    console.log("[desktop-packaged] SidebarV2: thread row click navigated to workspace route");
 
     console.log("[desktop-packaged] ALL PACKAGED SLICES PASSED");
   } finally {

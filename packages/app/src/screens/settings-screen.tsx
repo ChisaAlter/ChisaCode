@@ -39,6 +39,7 @@ import { SidebarHeaderRow } from "@/components/sidebar/sidebar-header-row";
 import { SidebarSeparator } from "@/components/sidebar/sidebar-separator";
 import { ScreenTitle } from "@/components/headers/screen-title";
 import { HeaderIconBadge } from "@/components/headers/header-icon-badge";
+import { ThemedIconHost } from "@/components/themed-icon-host";
 import { SettingsSection } from "@/screens/settings/settings-section";
 import {
   useSettings,
@@ -165,18 +166,9 @@ const SIDEBAR_SECTION_ITEMS: SidebarSectionItem[] = [
 // Theme helpers (General section)
 // ---------------------------------------------------------------------------
 
-// Lucide icons (and the dynamic sidebar/detail icons) only accept
-// `color`/`size` as non-style props, so wrap each one with `withUnistyles` and
-// feed the theme-reactive color through `uniProps`. Only the icon node
-// re-renders on theme changes; the surrounding tree does not. `iconSize` is a
-// static constant (`ICON_SIZE`), so it is passed directly as a prop.
-const ThemedMonitor = withUnistyles(Monitor);
-const ThemedChevronDown = withUnistyles(ChevronDown);
-const ThemedFolder = withUnistyles(Folder);
-const ThemedServer = withUnistyles(Server);
-const ThemedPlus = withUnistyles(Plus);
-// ScreenHeader takes `backgroundColor` as a plain prop (not `style`), so wrap
-// it and map the glass-aware background through `uniProps`.
+// Lucide icons receive theme-reactive colors through `ThemedIconHost`, which
+// keeps styling props away from the underlying SVG DOM node. The screen header
+// remains wrapped because it is a regular React component, not an SVG leaf.
 const ThemedScreenHeader = withUnistyles(ScreenHeader);
 
 const foregroundMutedColorMapping = (theme: Theme) => ({
@@ -191,7 +183,7 @@ const glassHeaderBackgroundMapping = (theme: Theme) => ({
 
 function ThemeIcon({ theme, size }: { theme: AppSettings["theme"]; size: number }) {
   return theme === "auto" ? (
-    <ThemedMonitor size={size} uniProps={foregroundMutedColorMapping} />
+    <ThemedIconHost Icon={Monitor} size={size} uniProps={foregroundMutedColorMapping} />
   ) : (
     <ThemePreview theme={theme} width={size + 4} height={size} />
   );
@@ -419,7 +411,11 @@ function GeneralSection({
               <Text style={styles.themeTriggerText}>
                 {t(`settings.general.theme.options.${settings.theme}`)}
               </Text>
-              <ThemedChevronDown size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
+              <ThemedIconHost
+                Icon={ChevronDown}
+                size={ICON_SIZE.sm}
+                uniProps={foregroundMutedColorMapping}
+              />
             </DropdownMenuTrigger>
             <DropdownMenuContent side="bottom" align="end" width={200}>
               {THEME_PICKER_OPTIONS.map((themeValue) => (
@@ -444,7 +440,11 @@ function GeneralSection({
               <Text style={styles.themeTriggerText}>
                 {t(`settings.general.language.options.${settings.language}`)}
               </Text>
-              <ThemedChevronDown size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
+              <ThemedIconHost
+                Icon={ChevronDown}
+                size={ICON_SIZE.sm}
+                uniProps={foregroundMutedColorMapping}
+              />
             </DropdownMenuTrigger>
             <DropdownMenuContent side="bottom" align="end" width={200}>
               {APP_LANGUAGE_VALUES.map((value) => (
@@ -497,7 +497,11 @@ function GeneralSection({
                 <Text style={styles.themeTriggerText}>
                   {t(`settings.general.serviceUrls.options.${settings.serviceUrlBehavior}`)}
                 </Text>
-                <ThemedChevronDown size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
+                <ThemedIconHost
+                  Icon={ChevronDown}
+                  size={ICON_SIZE.sm}
+                  uniProps={foregroundMutedColorMapping}
+                />
               </DropdownMenuTrigger>
               <DropdownMenuContent side="bottom" align="end" width={200}>
                 {SERVICE_URL_BEHAVIOR_VALUES.map((value) => (
@@ -1082,7 +1086,6 @@ function SidebarSectionButton({
   isSelected,
   onSelect,
 }: SidebarSectionButtonProps) {
-  const ThemedIcon = useMemo(() => withUnistyles(IconComponent), [IconComponent]);
   const handlePress = useCallback(() => {
     onSelect(itemId);
   }, [onSelect, itemId]);
@@ -1099,7 +1102,11 @@ function SidebarSectionButton({
       testID={`settings-section-${itemId}`}
       style={isSelected ? selectedSidebarItemStyle : sidebarItemStyle}
     >
-      <ThemedIcon size={ICON_SIZE.md} uniProps={foregroundMutedColorMapping} />
+      <ThemedIconHost
+        Icon={IconComponent}
+        size={ICON_SIZE.md}
+        uniProps={foregroundMutedColorMapping}
+      />
       <Text style={labelStyle} numberOfLines={1}>
         {label}
       </Text>
@@ -1127,7 +1134,7 @@ function SidebarProjectsButton({ isSelected, onSelect }: SidebarProjectsButtonPr
       testID="settings-projects"
       style={isSelected ? selectedSidebarItemStyle : sidebarItemStyle}
     >
-      <ThemedFolder size={ICON_SIZE.md} uniProps={foregroundMutedColorMapping} />
+      <ThemedIconHost Icon={Folder} size={ICON_SIZE.md} uniProps={foregroundMutedColorMapping} />
       <Text style={labelStyle} numberOfLines={1}>
         {t("settings.projects")}
       </Text>
@@ -1163,7 +1170,8 @@ function SidebarHostItem({ serverId, label, isSelected, isLocal, onSelect }: Sid
       {isLocal ? (
         <View style={sidebarStyles.localDot} />
       ) : (
-        <ThemedServer
+        <ThemedIconHost
+          Icon={Server}
           size={ICON_SIZE.md}
           uniProps={isSelected ? accentColorMapping : foregroundMutedColorMapping}
         />
@@ -1280,7 +1288,7 @@ function SettingsSidebar({
         testID="settings-add-host"
         style={sidebarStyles.addHostItem}
       >
-        <ThemedPlus size={ICON_SIZE.sm} uniProps={accentColorMapping} />
+        <ThemedIconHost Icon={Plus} size={ICON_SIZE.sm} uniProps={accentColorMapping} />
         <Text style={sidebarStyles.addHostLabel} numberOfLines={1}>
           {t("settings.addHost")}
         </Text>
@@ -1547,7 +1555,7 @@ export default function SettingsScreen({ view }: SettingsScreenProps) {
       if (!host) return null;
       return {
         title: host.label,
-        Icon: ThemedServer,
+        Icon: Server,
         titleAccessory: <HostRenameButton host={host} />,
       };
     }
@@ -1557,17 +1565,12 @@ export default function SettingsScreen({ view }: SettingsScreenProps) {
       return { title: t(item.labelKey), Icon: item.icon };
     }
     if (view.kind === "project" || view.kind === "projects") {
-      return { title: t("settings.projects"), Icon: ThemedFolder };
+      return { title: t("settings.projects"), Icon: Folder };
     }
     return null;
   })();
 
-  // Wrap the dynamic detail-header icon with withUnistyles so its color flows
-  // through uniProps without a useUnistyles hook read.
-  const ThemedDetailIcon = useMemo(
-    () => (detailHeader ? withUnistyles(detailHeader.Icon) : null),
-    [detailHeader],
-  );
+  const detailHeaderIcon = detailHeader?.Icon ?? null;
 
   // eslint-disable-next-line complexity
   const content = (() => {
@@ -1750,8 +1753,12 @@ export default function SettingsScreen({ view }: SettingsScreenProps) {
               detailHeader ? (
                 <>
                   <HeaderIconBadge variant="settings">
-                    {ThemedDetailIcon ? (
-                      <ThemedDetailIcon size={ICON_SIZE.sm} uniProps={accentColorMapping} />
+                    {detailHeaderIcon ? (
+                      <ThemedIconHost
+                        Icon={detailHeaderIcon}
+                        size={ICON_SIZE.sm}
+                        uniProps={accentColorMapping}
+                      />
                     ) : null}
                   </HeaderIconBadge>
                   <ScreenTitle

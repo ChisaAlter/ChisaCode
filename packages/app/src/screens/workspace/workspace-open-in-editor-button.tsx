@@ -13,6 +13,7 @@ import { useTranslation } from "react-i18next";
 import type { EditorTargetDescriptorPayload } from "@chisacode/protocol/messages";
 import { EditorAppIcon } from "@/components/icons/editor-app-icons";
 import { GitHubIcon } from "@/components/icons/github-icon";
+import { ThemedIconHost } from "@/components/themed-icon-host";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -47,9 +48,8 @@ interface OpenTarget {
 
 const ThemedActivityIndicator = withUnistyles(ActivityIndicator);
 const ThemedEditorAppIcon = withUnistyles(EditorAppIcon);
-const ThemedGitHubIcon = withUnistyles(GitHubIcon);
-const ThemedChevronDown = withUnistyles(ChevronDown);
-const ThemedCheckIcon = withUnistyles(Check);
+const ThemedChevronDown = ThemedIconHost;
+const ThemedCheckIcon = ThemedIconHost;
 
 const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
@@ -63,7 +63,10 @@ interface OpenTargetMenuItemProps {
 function OpenTargetMenuItem({ target, isPreferred, onOpen }: OpenTargetMenuItemProps) {
   const handleSelect = useCallback(() => onOpen(target), [onOpen, target]);
   const trailing = useMemo(
-    () => (isPreferred ? <ThemedCheckIcon size={16} uniProps={mutedColorMapping} /> : undefined),
+    () =>
+      isPreferred ? (
+        <ThemedCheckIcon Icon={Check} size={16} uniProps={mutedColorMapping} />
+      ) : undefined,
     [isPreferred],
   );
   return (
@@ -156,7 +159,7 @@ export function WorkspaceOpenInEditorButton({
     return {
       id: "github",
       label: "GitHub",
-      icon: <ThemedGitHubIcon size={16} uniProps={mutedColorMapping} />,
+      icon: <ThemedIconHost Icon={GitHubIcon} size={16} uniProps={mutedColorMapping} />,
       requiresLocalDaemon: false,
       onOpen: () => openExternalUrl(url),
     };
@@ -254,7 +257,7 @@ export function WorkspaceOpenInEditorButton({
               accessibilityRole="button"
               accessibilityLabel={t("workspace.selectEditor")}
             >
-              <ThemedChevronDown size={16} uniProps={mutedColorMapping} />
+              <ThemedChevronDown Icon={ChevronDown} size={16} uniProps={mutedColorMapping} />
             </DropdownMenuTrigger>
             <DropdownMenuContent
               align="end"

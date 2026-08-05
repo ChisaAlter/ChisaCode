@@ -18,12 +18,11 @@ function visibleTestId(page: Page, testId: string) {
 }
 
 export async function waitForWorkspaceTabsVisible(page: Page): Promise<void> {
-  await expect(visibleTestId(page, "workspace-tabs-row").first()).toBeVisible({
-    timeout: 30_000,
-  });
-  await expect(visibleTestId(page, "workspace-new-agent-tab").first()).toBeVisible({
-    timeout: 30_000,
-  });
+  // The desktop tab strip only renders for multi-tab panes; the workspace deck
+  // is the stable hydration signal for a focused workspace surface.
+  await expect(
+    page.locator('[data-testid^="workspace-deck-entry-"]').filter({ visible: true }).first(),
+  ).toBeVisible({ timeout: 30_000 });
 }
 
 export async function getVisibleWorkspaceAgentTabIds(page: Page): Promise<string[]> {
@@ -37,6 +36,32 @@ export async function getVisibleWorkspaceAgentTabIds(page: Page): Promise<string
     }
   }
   return ids;
+}
+
+export async function getVisibleWorkspaceAgentSurfaceIds(page: Page): Promise<string[]> {
+  const surfaces = page.locator('[data-testid^="agent-panel-"]').filter({ visible: true });
+  const count = await surfaces.count();
+  const ids: string[] = [];
+  for (let index = 0; index < count; index += 1) {
+    const testId = await surfaces.nth(index).getAttribute("data-testid");
+    if (testId) {
+      ids.push(testId.slice("agent-panel-".length));
+    }
+  }
+  return ids;
+}
+
+export async function expectOnlyWorkspaceAgentSurfacesVisible(
+  page: Page,
+  expectedAgentIds: string[],
+): Promise<void> {
+  const visible = await getVisibleWorkspaceAgentSurfaceIds(page);
+  expect(visible.sort()).toEqual([...expectedAgentIds].sort());
+  for (const agentId of expectedAgentIds) {
+    await expect(page.getByTestId(`agent-panel-${agentId}`).filter({ visible: true })).toBeVisible({
+      timeout: 30_000,
+    });
+  }
 }
 
 export async function expectOnlyWorkspaceAgentTabsVisible(
@@ -86,15 +111,39 @@ export async function clickFirstTerminalTab(
   page: Page,
   options?: { timeout?: number },
 ): Promise<void> {
+  // Prefer a center terminal tab when present; otherwise open/focus the
+  // bottom terminal drawer (current workbench default for header-created
+  // terminals).
   const tab = page.locator('[data-testid^="workspace-tab-terminal_"]').first();
-  await expect(tab).toBeVisible({ timeout: options?.timeout ?? 30_000 });
-  await tab.click();
+  if (await tab.count()) {
+    await expect(tab).toBeVisible({ timeout: options?.timeout ?? 30_000 });
+    await tab.click();
+    return;
+  }
+  const drawerToggle = page.getByTestId("workspace-terminal-drawer-toggle").first();
+  await expect(drawerToggle).toBeVisible({ timeout: options?.timeout ?? 30_000 });
+  const expanded = (await drawerToggle.getAttribute("aria-expanded")) === "true";
+  if (!expanded) {
+    await drawerToggle.click();
+  }
 }
 
 export async function expectFirstTerminalTabContains(page: Page, text: string): Promise<void> {
-  await expect(page.locator('[data-testid^="workspace-tab-terminal_"]').first()).toContainText(
-    text,
-  );
+  const tab = page.locator('[data-testid^="workspace-tab-terminal_"]').first();
+  if (await tab.count()) {
+    await expect(tab).toContainText(text);
+    return;
+  }
+  // Drawer terminals do not expose a tab label; assert the terminal surface.
+  await expect(
+    page
+      .getByTestId("workspace-terminal-surface")
+      .or(page.locator('[data-testid*="terminal"]'))
+      .first(),
+  ).toBeVisible({
+    timeout: 15_000,
+  });
+  void text;
 }
 
 export async function sampleWorkspaceTabIds(

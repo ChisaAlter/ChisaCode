@@ -1,21 +1,22 @@
 import { expect, type Page } from "@playwright/test";
 import { buildHostWorkspaceRoute } from "@/utils/host-routes";
-import { gotoHome } from "./app";
-import { escapeRegex } from "./regex";
+import { composerInput, gotoHome } from "./app";
 
 export async function openNewAgentComposer(page: Page): Promise<void> {
   await gotoHome(page);
 }
 
 /**
- * Wait for the sidebar to show at least one project row, indicating that the
- * WebSocket connection is up and workspace hydration has completed.
+ * Wait for the v2 sidebar project surface (scope menu new-project button),
+ * indicating the WebSocket is up and workspace hydration has completed.
  */
 export async function waitForSidebarHydration(page: Page, timeout = 60_000): Promise<void> {
-  await page
-    .locator('[data-testid^="sidebar-project-row-"]')
-    .first()
-    .waitFor({ state: "visible", timeout });
+  await page.getByTestId("sidebar-v2-new-project").waitFor({ state: "visible", timeout });
+}
+
+/** The v2 sidebar row for an agent thread. */
+export function sidebarThreadRowLocator(page: Page, agentId: string) {
+  return page.getByTestId(`sidebar-v2-thread-${agentId}`);
 }
 
 export function workspaceLabelFromPath(value: string): string {
@@ -24,76 +25,57 @@ export function workspaceLabelFromPath(value: string): string {
   return parts[parts.length - 1] ?? normalized;
 }
 
-function candidateWorkspaceIds(inputPath: string): string[] {
-  const trimmed = inputPath.replace(/\/+$/, "");
-  const candidates = new Set<string>([trimmed]);
-  if (trimmed.startsWith("/var/")) {
-    candidates.add(`/private${trimmed}`);
-  }
-  if (trimmed.startsWith("/private/var/")) {
-    candidates.add(trimmed.replace(/^\/private/, ""));
-  }
-  return Array.from(candidates);
+/** Project basename shown by the desktop soft topbar breadcrumb lead. */
+function projectLabelFromDisplayName(displayName: string): string {
+  const slash = Math.max(displayName.lastIndexOf("/"), displayName.lastIndexOf("\\"));
+  const label = slash >= 0 ? displayName.slice(slash + 1) : displayName;
+  return label.length > 0 ? label : displayName;
 }
 
-function workspaceRowLocator(page: Page, serverId: string, workspacePath: string) {
-  const ids = candidateWorkspaceIds(workspacePath).map(
-    (id) => `[data-testid="sidebar-workspace-row-${serverId}:${id}"]`,
-  );
-  return page.locator(ids.join(",")).first();
-}
-
-export async function expectSidebarWorkspaceSelected(input: {
-  page: Page;
-  serverId: string;
-  workspaceId: string;
-  selected?: boolean;
-}): Promise<void> {
-  const row = workspaceRowLocator(input.page, input.serverId, input.workspaceId);
-  await expect(row).toBeVisible({ timeout: 30_000 });
-  const expected = input.selected === false ? "false" : "true";
-
-  const hasDataSelected = await row.getAttribute("data-selected");
-  if (hasDataSelected !== null) {
-    await expect(row).toHaveAttribute("data-selected", expected, {
-      timeout: 30_000,
-    });
-    return;
-  }
-
-  await expect(row).toHaveAttribute("aria-selected", expected, {
-    timeout: 30_000,
-  });
-}
-
-export async function switchWorkspaceViaSidebar(input: {
-  page: Page;
-  serverId: string;
-  targetWorkspacePath: string;
-}): Promise<void> {
-  const row = workspaceRowLocator(input.page, input.serverId, input.targetWorkspacePath);
+/**
+ * Opens a workspace by clicking its agent thread in the SidebarV2 sidebar.
+ * The agent route redirects to the workspace route.
+ */
+export async function switchAgentViaSidebar(page: Page, agentId: string): Promise<void> {
+  const row = sidebarThreadRowLocator(page, agentId);
   await expect(row).toBeVisible({ timeout: 30_000 });
   await row.click();
+  await expect(page).toHaveURL(/\/workspace\//, { timeout: 30_000 });
+}
 
-  const targetWorkspaceRoute = buildHostWorkspaceRoute(input.serverId, input.targetWorkspacePath);
-  await expect(input.page).toHaveURL(new RegExp(escapeRegex(targetWorkspaceRoute)), {
+/**
+ * Opens a workspace by route. SidebarV2 lists agent threads, not workspaces,
+ * so agent-less workspaces are reachable only by URL.
+ */
+export async function openWorkspaceViaRoute(
+  page: Page,
+  serverId: string,
+  workspaceId: string,
+): Promise<void> {
+  await page.goto(buildHostWorkspaceRoute(serverId, workspaceId), {
+    waitUntil: "domcontentloaded",
+  });
+  await page.waitForURL((url) => url.pathname.includes("/workspace/"), { timeout: 60_000 });
+}
+
+export async function expectSidebarThreadActive(input: {
+  page: Page;
+  agentId: string;
+  selected?: boolean;
+}): Promise<void> {
+  const row = sidebarThreadRowLocator(input.page, input.agentId);
+  await expect(row).toBeVisible({ timeout: 30_000 });
+  await expect(row).toHaveAttribute("aria-selected", input.selected === false ? "false" : "true", {
     timeout: 30_000,
   });
 }
 
 /**
- * Wait for a workspace's sidebar row to appear, confirming the workspace
- * descriptor has been hydrated into the session store.
+ * Wait for an agent's thread row to appear in the sidebar, confirming the
+ * agent snapshot has been hydrated into the session store.
  */
-export async function waitForWorkspaceInSidebar(
-  page: Page,
-  input: { serverId: string; workspaceId: string },
-): Promise<void> {
-  const candidates = candidateWorkspaceIds(input.workspaceId);
-  const selector = candidates
-    .map((id) => `[data-testid="sidebar-workspace-row-${input.serverId}:${id}"]`)
-    .join(",");
-  await page.locator(selector).first().waitFor({ state: "visible", timeout: 60_000 });
+export async function waitForThreadInSidebar(page: Page, agentId: string): Promise<void> {
+  await sidebarThreadRowLocator(page, agentId).waitFor({ state: "visible", timeout: 60_000 });
 }
 
 export async function expectWorkspaceHeader(
@@ -101,14 +83,39 @@ export async function expectWorkspaceHeader(
   input: { title: string; subtitle: string },
 ): Promise<void> {
   const titleLocator = page.getByTestId("workspace-header-title").filter({ visible: true });
-  const subtitleLocator = page.getByTestId("workspace-header-subtitle").filter({ visible: true });
+  // Desktop soft topbar renders the project as a breadcrumb lead
+  // (workspace-header-workspace-ctx) instead of a subtitle; mobile keeps the
+  // subtitle testid. Match on the project basename, which both surfaces show.
+  const projectSurface = page
+    .getByTestId("workspace-header-subtitle")
+    .filter({ visible: true })
+    .or(page.getByTestId("workspace-header-workspace-ctx").filter({ visible: true }));
+  const projectLabel = projectLabelFromDisplayName(input.subtitle);
 
   await expect(titleLocator.first()).toHaveText(input.title, {
     timeout: 30_000,
   });
-  await expect(subtitleLocator.first()).toHaveText(input.subtitle, {
+  await expect(projectSurface.first()).toContainText(projectLabel, {
     timeout: 30_000,
   });
+}
+
+/**
+ * Asserts the workspace header after a freshly created workspace opens. The
+ * new workspace's agent title is daemon-generated (unpredictable), so only
+ * the header title presence and the breadcrumb project label are asserted.
+ */
+export async function expectNewWorkspaceHeader(
+  page: Page,
+  projectDisplayName: string,
+): Promise<void> {
+  await expect(
+    page.getByTestId("workspace-header-title").filter({ visible: true }).first(),
+  ).toBeVisible({ timeout: 30_000 });
+  const projectLabel = projectLabelFromDisplayName(projectDisplayName);
+  await expect(
+    page.getByTestId("workspace-header-workspace-ctx").filter({ visible: true }).first(),
+  ).toContainText(projectLabel, { timeout: 30_000 });
 }
 
 export async function expectReconnectingToastVisible(
@@ -133,13 +140,19 @@ export async function expectHostConnectingOrOffline(
   page: Page,
   options?: { timeout?: number },
 ): Promise<void> {
-  await expect(
-    page.getByText(/^Connecting$|localhost is offline|Cannot reach localhost/i),
-  ).toBeVisible({ timeout: options?.timeout ?? 30_000 });
+  await expect(page.getByTestId("workspace-route-gate")).toBeVisible({
+    timeout: options?.timeout ?? 30_000,
+  });
 }
 
 export async function expectMenuButtonVisible(page: Page): Promise<void> {
-  await expect(page.getByTestId("menu-button")).toBeVisible();
+  await expect(
+    page
+      .getByTestId("menu-button")
+      .or(page.getByTestId("sidebar-settings"))
+      .filter({ visible: true })
+      .first(),
+  ).toBeVisible({ timeout: 10_000 });
 }
 
 export async function expectWorkspaceHeaderAbsent(page: Page): Promise<void> {
@@ -155,7 +168,7 @@ export async function expectWorkspaceDeckEntryCount(page: Page, count: number): 
 }
 
 export async function seedWorkspaceActivity(page: Page, marker: string): Promise<void> {
-  const input = page.getByRole("textbox", { name: "Message agent..." });
+  const input = composerInput(page);
   await expect(input).toBeEditable({ timeout: 30_000 });
   await input.fill(marker);
   await input.press("Enter");

@@ -5,9 +5,14 @@ export const gotoAppShell = async (page: Page) => {
   await page.goto("/");
 };
 
+/** Composer textbox locator, bilingual by accessibility name. */
+export function composerInput(page: Page) {
+  return page.getByRole("textbox", { name: /Message agent|给智能体发消息/i }).first();
+}
+
 export const gotoHome = async (page: Page) => {
   await gotoAppShell(page);
-  const composer = page.getByRole("textbox", { name: "Message agent..." }).first();
+  const composer = composerInput(page);
   const entryButton = page
     .getByText("Add a project", { exact: true })
     .or(page.getByText("Add project", { exact: true }))
@@ -157,7 +162,7 @@ export const setWorkingDirectory = async (page: Page, directory: string) => {
 };
 
 export const ensureHostSelected = async (page: Page) => {
-  const input = page.getByRole("textbox", { name: "Message agent..." });
+  const input = composerInput(page);
   await expect(input).toBeVisible();
 
   if (await input.isEditable()) {
@@ -186,7 +191,7 @@ export const ensureHostSelected = async (page: Page) => {
 };
 
 export const createAgent = async (page: Page, message: string) => {
-  const input = page.getByRole("textbox", { name: "Message agent..." });
+  const input = composerInput(page);
   await expect(input).toBeEditable();
   await preferFastThinkingOption(page);
   await input.fill(message);
