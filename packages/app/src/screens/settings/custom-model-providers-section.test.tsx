@@ -7,8 +7,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ProviderSnapshotEntry } from "@chisacode/protocol/agent-types";
 import type { MutableDaemonConfig } from "@chisacode/protocol/messages";
 
-const { theme, configState, snapshotState, patchConfigMock, refreshMock, errorLogger } = vi.hoisted(
-  () => ({
+const { theme, configState, snapshotState, patchConfigMock, refreshMock, errorLogger, clientMock } =
+  vi.hoisted(() => ({
     theme: {
       spacing: { 1: 4, 2: 8, 3: 12, 4: 16 },
       iconSize: { sm: 14, md: 18 },
@@ -25,6 +25,7 @@ const { theme, configState, snapshotState, patchConfigMock, refreshMock, errorLo
         foregroundMuted: "#aaa",
         border: "#555",
         destructive: "#f00",
+        success: "#0f0",
       },
     },
     configState: {
@@ -36,10 +37,18 @@ const { theme, configState, snapshotState, patchConfigMock, refreshMock, errorLo
     patchConfigMock: vi.fn<(patch?: unknown) => Promise<MutableDaemonConfig | undefined>>(
       async () => undefined,
     ),
-    refreshMock: vi.fn<() => Promise<void>>(async () => undefined),
+    refreshMock: vi.fn<(providerIds?: string[]) => Promise<void>>(async () => undefined),
     errorLogger: { error: vi.fn() },
-  }),
-);
+    clientMock: {
+      runModelGatewayTest: vi.fn(async () => ({
+        requestId: "test-request",
+        gatewayId: "zai",
+        modelId: "glm-5",
+        result: { ok: true, durationMs: 42, status: 200, error: null },
+        error: null,
+      })),
+    },
+  }));
 
 vi.mock("react-native", () => ({
   View: ({ children, testID }: { children?: React.ReactNode; testID?: string; style?: unknown }) =>
@@ -117,8 +126,22 @@ vi.mock("lucide-react-native", () => {
     Pencil: icon("Pencil"),
     Plus: icon("Plus"),
     Trash2: icon("Trash2"),
+    Zap: icon("Zap"),
   };
 });
+
+vi.mock("@/runtime/host-runtime", () => ({
+  useHostRuntimeClient: () => clientMock,
+}));
+
+vi.mock("@/stores/session-store", () => ({
+  useSessionStore: (selector: (state: { sessions: Record<string, unknown> }) => unknown) =>
+    selector({
+      sessions: {
+        "server-1": { serverInfo: { features: { modelGatewaySupplyScope: true } } },
+      },
+    }),
+}));
 
 vi.mock("@/constants/platform", () => ({ isWeb: true }));
 
@@ -158,24 +181,36 @@ vi.mock("react-i18next", () => ({
         "customModelProviders.modelNamePlaceholder": "Model id, e.g. gpt-4o",
         "customModelProviders.openaiOnlyHint":
           "Configure the upstream API for the selected protocol",
-        "customModelProviders.protocolPreset": "Protocol",
-        "customModelProviders.protocolPresetHint":
-          "Primary API protocol; controls which agents list this model by default.",
+        "customModelProviders.protocolPreset": "Upstream protocol",
+        "customModelProviders.protocolPresetHint": "Primary upstream API protocol for the model.",
         "customModelProviders.protocolClaude": "Claude (Messages)",
         "customModelProviders.protocolCodex": "Codex (Responses)",
         "customModelProviders.protocolOpenai": "OpenAI-compatible (Chat)",
-        "customModelProviders.protocolClaudeHint":
-          "Anthropic Messages; attaches to Claude by default",
-        "customModelProviders.protocolCodexHint": "OpenAI Responses; attaches to Codex by default",
-        "customModelProviders.protocolOpenaiHint":
-          "Chat Completions; attaches to OpenCode / Pi / Kimi by default",
-        "customModelProviders.thinkingMode": "Thinking intensity",
-        "customModelProviders.thinkingModeHint":
-          "Levels map to Codex/Claude reasoning effort; toggle is a simple on/off control.",
-        "customModelProviders.thinkingModeOff": "Off",
-        "customModelProviders.thinkingModeSingle": "Toggle",
-        "customModelProviders.thinkingModeLevels": "Levels (low/medium/high)",
+        "customModelProviders.protocolClaudeHint": "Anthropic Messages protocol",
+        "customModelProviders.protocolCodexHint": "OpenAI Responses protocol",
+        "customModelProviders.protocolOpenaiHint": "Chat Completions protocol",
+        "customModelProviders.supplyScope": "Supply scope",
+        "customModelProviders.supplyScopeHint":
+          "Choose which agents receive this model via the gateway.",
+        "customModelProviders.supplyAll": "All agents",
+        "customModelProviders.supplyMatched": "Matched protocol only",
         "customModelProviders.attachToAllAgents": "Attach to all agents",
+        "customModelProviders.attachToAllAgentsSubtitle":
+          "Supplies Claude / Codex / OpenCode / MiMoCode / Pi / Kimi via gateway protocol conversion",
+        "customModelProviders.attachToAllAgentsHint":
+          "Exposes this model to all agents via gateway conversion.",
+        "customModelProviders.allAgentsBadge": "All agents",
+        "customModelProviders.matchedAgentsBadge": "Matched only",
+        "customModelProviders.thinkingMode": "Thinking intensity",
+        "customModelProviders.thinkingModeHint": "Select one or more thinking levels.",
+        "customModelProviders.thinkingLow": "Low",
+        "customModelProviders.thinkingMedium": "Medium",
+        "customModelProviders.thinkingHigh": "High",
+        "customModelProviders.thinkingVeryHigh": "Very High",
+        "customModelProviders.thinkingMax": "Max",
+        "customModelProviders.testModel": `Test ${model}`,
+        "customModelProviders.testLatency": "42 ms",
+        "customModelProviders.testUnavailable": "Unavailable",
         "customModelProviders.supportsImagesBadge": "Images",
         "customModelProviders.supportsToolsBadge": "Tools",
         "customModelProviders.supportsThinkingBadge": "Thinking",
@@ -378,6 +413,7 @@ describe("CustomModelProvidersSection", () => {
     patchConfigMock.mockResolvedValue(makeConfig());
     refreshMock.mockReset();
     refreshMock.mockResolvedValue(undefined);
+    clientMock.runModelGatewayTest.mockClear();
     errorLogger.error.mockReset();
   });
 
@@ -400,6 +436,27 @@ describe("CustomModelProvidersSection", () => {
     expect(container.querySelector('[data-testid="delete-saved-model-zai-glm-5"]')).not.toBeNull();
   });
 
+  it("tests a saved model and renders measured latency", async () => {
+    act(() => {
+      root.render(<CustomModelProvidersSection serverId="server-1" />);
+    });
+
+    act(() => {
+      container
+        .querySelector<HTMLButtonElement>('[data-testid="test-saved-model-zai-glm-5"]')!
+        .click();
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(clientMock.runModelGatewayTest).toHaveBeenCalledWith({
+      gatewayId: "zai",
+      modelId: "glm-5",
+      targetFormat: "chatCompletions",
+    });
+    expect(container.textContent).toContain("42 ms");
+  });
   it("opens the OpenAI-compatible editor when adding a model", () => {
     act(() => {
       root.render(<CustomModelProvidersSection serverId="server-1" />);
@@ -417,16 +474,132 @@ describe("CustomModelProvidersSection", () => {
     expect(container.querySelector('[data-testid="custom-model-editor-sheet"]')).not.toBeNull();
     expect(container.textContent).toContain("Add model");
     expect(container.textContent).toContain(
-      "Chat Completions; attaches to OpenCode / Pi / Kimi by default",
+      "Supplies Claude / Codex / OpenCode / MiMoCode / Pi / Kimi via gateway protocol conversion",
     );
     expect(container.querySelector('[data-testid="custom-model-base-url-input"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="custom-model-api-key-input"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="custom-model-id-input"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="protocol-preset-openai"]')).not.toBeNull();
-    expect(container.querySelector('[data-testid="thinking-mode-levels"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="supply-scope-all"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="supply-scope-matched"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="thinking-level-low"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="thinking-level-medium"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="thinking-level-high"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="thinking-level-very-high"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="thinking-level-max"]')).not.toBeNull();
     expect(container.textContent).toContain("Tool calling");
     expect(container.textContent).toContain("Image input");
     expect(container.textContent).toContain("Thinking intensity");
+  });
+
+  it("switching to matched protocol disables attach-to-all on save", async () => {
+    refreshMock.mockImplementationOnce(() => new Promise(() => undefined));
+
+    act(() => {
+      root.render(<CustomModelProvidersSection serverId="server-1" />);
+    });
+
+    act(() => {
+      container
+        .querySelector<HTMLButtonElement>('[data-testid="add-custom-model-button"]')!
+        .click();
+    });
+
+    // New gateways default to "All agents"; switch to "Matched protocol only".
+    act(() => {
+      container.querySelector<HTMLButtonElement>('[data-testid="supply-scope-matched"]')!.click();
+    });
+
+    const idInput = container.querySelector<HTMLInputElement>(
+      '[data-testid="custom-model-id-input"]',
+    )!;
+    const baseUrlInput = container.querySelector<HTMLInputElement>(
+      '[data-testid="custom-model-base-url-input"]',
+    )!;
+    const apiKeyInput = container.querySelector<HTMLInputElement>(
+      '[data-testid="custom-model-api-key-input"]',
+    )!;
+    idInput.value = "gpt-4o";
+    baseUrlInput.value = "https://api.example.com/v1";
+    apiKeyInput.value = "sk-test";
+    act(() => {
+      idInput.dispatchEvent(new Event("input", { bubbles: true }));
+      baseUrlInput.dispatchEvent(new Event("input", { bubbles: true }));
+      apiKeyInput.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    await act(async () => {
+      container
+        .querySelector<HTMLButtonElement>('[data-testid="custom-model-save-button"]')!
+        .click();
+      await Promise.resolve();
+    });
+
+    expect(patchConfigMock).toHaveBeenCalledTimes(1);
+    const patchArg = patchConfigMock.mock.calls[0]?.[0] as unknown as {
+      modelGateways?: Record<string, Record<string, unknown>>;
+    };
+    const gateway = (patchArg.modelGateways?.gpt4o ?? patchArg.modelGateways?.["gpt-4o"]) as
+      | Record<string, unknown>
+      | undefined;
+    expect(gateway).toBeTruthy();
+    expect(gateway?.protocolPreset).toBe("openai");
+    expect(gateway?.supplyScope).toBe("matched");
+    expect(gateway?.attachToAllAgents).toBeUndefined();
+  });
+
+  it("saves a new gateway that defaults to attaching all agents", async () => {
+    refreshMock.mockImplementationOnce(() => new Promise(() => undefined));
+
+    act(() => {
+      root.render(<CustomModelProvidersSection serverId="server-1" />);
+    });
+
+    act(() => {
+      container
+        .querySelector<HTMLButtonElement>('[data-testid="add-custom-model-button"]')!
+        .click();
+    });
+
+    // Default supply scope is "All agents" — do not touch it.
+    const idInput = container.querySelector<HTMLInputElement>(
+      '[data-testid="custom-model-id-input"]',
+    )!;
+    const baseUrlInput = container.querySelector<HTMLInputElement>(
+      '[data-testid="custom-model-base-url-input"]',
+    )!;
+    const apiKeyInput = container.querySelector<HTMLInputElement>(
+      '[data-testid="custom-model-api-key-input"]',
+    )!;
+    idInput.value = "glm-air";
+    baseUrlInput.value = "https://api.example.com/v1";
+    apiKeyInput.value = "sk-test";
+    act(() => {
+      idInput.dispatchEvent(new Event("input", { bubbles: true }));
+      baseUrlInput.dispatchEvent(new Event("input", { bubbles: true }));
+      apiKeyInput.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    await act(async () => {
+      container
+        .querySelector<HTMLButtonElement>('[data-testid="custom-model-save-button"]')!
+        .click();
+      await Promise.resolve();
+    });
+
+    expect(patchConfigMock).toHaveBeenCalledTimes(1);
+    const patchArg = patchConfigMock.mock.calls[0]?.[0] as unknown as {
+      modelGateways?: Record<string, Record<string, unknown>>;
+    };
+    const gateway = patchArg.modelGateways?.["glm-air"] as Record<string, unknown> | undefined;
+    expect(gateway).toBeTruthy();
+    expect(gateway?.protocolPreset).toBe("openai");
+    expect(gateway?.supplyScope).toBe("all");
+    expect(gateway?.attachToAllAgents).toBeUndefined();
+    expect(refreshMock).toHaveBeenCalledTimes(1);
+    const refreshProviderIds = refreshMock.mock.calls[0]?.[0] as string[] | undefined;
+    expect(Array.isArray(refreshProviderIds)).toBe(true);
+    expect(refreshProviderIds?.length).toBe(6);
   });
 
   it("saves an edited model and closes without waiting for provider refresh", async () => {
@@ -436,13 +609,10 @@ describe("CustomModelProvidersSection", () => {
       root.render(<CustomModelProvidersSection serverId="server-1" />);
     });
 
-    const editButton = container.querySelector<HTMLButtonElement>(
-      '[data-testid="edit-saved-model-zai-glm-5"]',
-    );
-    expect(editButton).not.toBeNull();
-
     act(() => {
-      editButton!.click();
+      container
+        .querySelector<HTMLButtonElement>('[data-testid="edit-saved-model-zai-glm-5"]')!
+        .click();
     });
 
     expect(container.querySelector('[data-testid="custom-model-editor-sheet"]')).not.toBeNull();

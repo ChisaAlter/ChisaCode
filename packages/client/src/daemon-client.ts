@@ -53,6 +53,7 @@ import type {
   ProviderToolingActionResponseMessage,
   AgentPresetsListResponseMessage,
   ModelGatewayMoaTestResponseMessage,
+  ModelGatewayTestResponseMessage,
   DaemonGetStatusResponse,
   DaemonGetPairingOfferResponse,
   AgentSkillManagementScope,
@@ -281,6 +282,7 @@ export type DiagnosticsPayload = DiagnosticsResponse["payload"];
 type ProviderToolingActionPayload = ProviderToolingActionResponseMessage["payload"];
 type AgentPresetsListPayload = AgentPresetsListResponseMessage["payload"];
 type ModelGatewayMoaTestPayload = ModelGatewayMoaTestResponseMessage["payload"];
+type ModelGatewayTestPayload = ModelGatewayTestResponseMessage["payload"];
 type DaemonStatusPayload = DaemonGetStatusResponse["payload"];
 type DaemonPairingOfferPayload = DaemonGetPairingOfferResponse["payload"];
 type ReadProjectConfigPayload = Extract<
@@ -320,6 +322,13 @@ export interface RunModelGatewayMoaTestInput {
   gatewayId: string;
   syntheticModel: SyntheticModelConfig;
   prompt: string;
+  requestId?: string;
+}
+
+export interface RunModelGatewayTestInput {
+  gatewayId: string;
+  modelId: string;
+  targetFormat?: "anthropic" | "chatCompletions" | "responses";
   requestId?: string;
 }
 type CloseItemsPayload = CloseItemsResponse["payload"];
@@ -1491,6 +1500,10 @@ export class DaemonClient {
     input: RunModelGatewayMoaTestInput,
   ): Promise<ModelGatewayMoaTestPayload> {
     return this.providerCommands.runModelGatewayMoaTest(input);
+  }
+
+  async runModelGatewayTest(input: RunModelGatewayTestInput): Promise<ModelGatewayTestPayload> {
+    return this.providerCommands.runModelGatewayTest(input);
   }
 
   async listCommands(agentId: string, requestId?: string): Promise<ListCommandsPayload>;

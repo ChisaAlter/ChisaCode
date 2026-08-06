@@ -114,7 +114,7 @@
 - **问题**：Models 设置页结构混乱；自定义模型（含 Grok）在 Codex 等 agent 下无思考强度；不存在识图副模型管线。
 - **影响范围**：`packages/app` Models 设置与 Soft thinking UI、`packages/protocol` modelGateway schema、`packages/server` provider-registry materialize、send-prompt 入口 vision fallback。
 - **方案**：`protocolPreset` + 按 preset 生成 agent faces；自定义模型思考档位 `off|single|levels(low/medium/high)`；运行中 thinking 控件 `length > 0` 显示；全局 `visionFallbackModel` + turn 前描述注入。
-- **状态**：PR1/PR2 已落地并通过聚焦测试与 lint；PR3 识图副模型 MVP（配置 + prompt 预处理 + unit）已接好，待端到端手动验收（重存 grok 思考档位 + Codex 强度 + 非 vision 主模型附图）。
+- **状态**：PR1/PR2 已落地并通过聚焦测试与 lint；PR3 识图副模型 MVP（配置 + prompt 预处理 + unit）已接好，待端到端手动验收（重存 grok 思考档位 + Codex 强度 + 非 vision 主模型附图）。2026-08-06 回归网关默认全挂语义：新建网关默认 `attachToAllAgents=true`，"供给范围"升为协议选择正下方的主流程 radio（全部 Agent / 仅匹配协议），协议类型回归纯上游接入语义；服务端协议转换层与 `disallowedTools` 不动；旧网关不自动迁移，需手动切换到"全部 Agent"。2026-08-06 生产级重做（模型网关）落地：`supplyScope`（`all|matched`）取代 `attachToAllAgents` 成为供给范围单一真源——协议层 schema + `server_info.features.modelGatewaySupplyScope` 特征门控（旧 daemon 写路径回退 `attachToAllAgents`、UI 隐藏供给范围 radio）、服务端 `resolveGatewayAgentFaces` 语义闭集（supplyScope 优先，matched 按 preset 收窄 claude→1/codex→1/openai→4，无 preset 走 legacy 上游推断）、数据层恒写 `supplyScope` 消除 deepMerge 短路、读路径归一化公式镜像服务端分支；转换层修复 7 项（timeout 键树遍历清洗、tool_calls id 兜底统一、responses→chat 输入白名单化、server_tool_use/mcp_tool_use 同等转换、流式缺 index 聚合、anthropic/responses 上游流式 tool-call 累积转发、参数透传决策表），参考矩阵见 `docs/model-gateway-conversion.md`；测试矩阵绿（provider-registry 36 / custom-model-providers 16 / daemon-config-store 12 / synthetic 9 / model-gateway 42）；旧 `custom-models` section 裁剪与供给范围 UI 重做（HTML 原型 `prototypes/model-gateway-redesign.html`）按原型审核 gate 后实施，实机验证待用户本机执行。
 
 ### Electron / Android 工作台视觉重构（2026-07-15 启动）
 

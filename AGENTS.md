@@ -6,6 +6,21 @@
 - `docs/` holds repo-specific architecture, workflow, and gotcha docs. For non-trivial work, list it and skim the relevant file before editing.
 - `CLAUDE.md` has longer standing guidance; prefer this file for the compact checklist and consult the docs it references for details.
 
+## Production-Grade Development Rules
+
+These rules apply to every development task in this repository. No minimal-plan shortcuts, no downgraded delivery.
+
+1. **Review before planning**: before any task, review the relevant code (the whole project when necessary — delegate to subagents) before producing a plan.
+2. **Complete plans only**: plans must target the fully complete, commercial, production-delivery level. Minimal plans are not allowed.
+3. **Adversarial review of plans**: every plan must pass an adversarial review (find loopholes, downgrade points, omissions) before it is shown to the user. Only the revised plan is presented.
+4. **HTML prototype gate for UI**: any UI-layout work requires an HTML prototype first (landed in `prototypes/`), reviewed and approved by the user, before implementation.
+5. **Per-module gates**: for multi-module plans, each finished module must be re-reviewed (code review + adversarial review for downgrade) before the next module starts.
+6. **Final adversarial review**: after all modules complete, one more overall adversarial review must confirm the task is truly done and not downgraded.
+7. **Real-machine verification is required**: development is not complete without real-surface verification (QA-tester-level coverage). Static checks / unit tests passing ≠ verified. Anything not verified on the real surface must be explicitly labeled as unverified. UI changes must match the approved prototype pixel-for-pixel.
+8. **Tests are still written**: unit tests follow the Testing section below; real-machine verification covers UI/end-to-end behavior. The two layers are not conflated.
+
+These align with the Quick Check before Any Change, Improvement Tracking, and Testing sections below — they do not replace them.
+
 ## Package Map
 
 - `packages/server`: local daemon, WebSocket API, MCP server, agent lifecycle, file-backed state under `$CHISACODE_HOME/agents/`. Session class is being decomposed into per-domain handlers under `src/server/session-handlers/` (see `docs/refactors/session-decomposition-plan.md`).

@@ -7,7 +7,7 @@
 import { CLIENT_CAPS } from "@chisacode/protocol/client-capabilities";
 
 import { getErrorMessage } from "@chisacode/protocol/error-utils";
-import { runSyntheticModelTest } from "../model-gateway/model-gateway.js";
+import { runSyntheticModelTest, runModelGatewayTest } from "../model-gateway/model-gateway.js";
 import { createDaemonDiagnosticReport } from "../diagnostics-report.js";
 import type { SessionInboundMessage } from "../messages.js";
 import type {
@@ -470,6 +470,54 @@ export class ProviderHandler implements DisposableHandler {
           requestType: msg.type,
           error: `Failed to list agent presets: ${err.message}`,
           code: "agent_presets_list_failed",
+        },
+      });
+    }
+  }
+
+  /** Handle model gateway connectivity and latency test request. */
+  async handleModelGatewayTestRequest(
+    msg: Extract<SessionInboundMessage, { type: "model_gateway.test.request" }>,
+  ): Promise<void> {
+    const gateway = this.context.daemonConfigStore.get().modelGateways[msg.gatewayId];
+    if (!gateway || gateway.enabled === false) {
+      this.context.emit({
+        type: "model_gateway.test.response",
+        payload: {
+          requestId: msg.requestId,
+          gatewayId: msg.gatewayId,
+          modelId: msg.modelId,
+          result: null,
+          error: "Unknown model gateway",
+        },
+      });
+      return;
+    }
+    try {
+      const result = await runModelGatewayTest({
+        gateway,
+        modelId: msg.modelId,
+        targetFormat: msg.targetFormat,
+      });
+      this.context.emit({
+        type: "model_gateway.test.response",
+        payload: {
+          requestId: msg.requestId,
+          gatewayId: msg.gatewayId,
+          modelId: msg.modelId,
+          result,
+          error: null,
+        },
+      });
+    } catch (error) {
+      this.context.emit({
+        type: "model_gateway.test.response",
+        payload: {
+          requestId: msg.requestId,
+          gatewayId: msg.gatewayId,
+          modelId: msg.modelId,
+          result: null,
+          error: getErrorMessage(error),
         },
       });
     }

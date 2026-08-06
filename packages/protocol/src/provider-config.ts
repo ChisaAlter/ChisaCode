@@ -164,6 +164,25 @@ export const SyntheticModelConfigSchema = z
  */
 export const ModelGatewayProtocolPresetSchema = z.enum(["claude", "codex", "openai", "all"]);
 
+/**
+ * Which agent faces a gateway supplies models to.
+ * - all: materialize every agent face (gateway format conversion bridges the rest)
+ * - matched: narrow faces to the protocols covered by `protocolPreset`
+ *
+ * Closed-set semantics (single source of truth lives in
+ * `resolveGatewayAgentFaces` on the server):
+ * - `supplyScope === "all"` → all 6 faces, regardless of preset/attachToAllAgents
+ * - `supplyScope === "matched"` → narrowed by protocolPreset
+ *   (claude → 1, codex → 1, openai → 4, all → 6); without a preset, falls back
+ *   to legacy upstream inference
+ * - `supplyScope` omitted → legacy behavior: `attachToAllAgents === true` or
+ *   `protocolPreset === "all"` → all 6 faces; preset narrows; no preset infers
+ *   from enabled upstreams
+ * - When both `supplyScope` and `attachToAllAgents` are present, `supplyScope`
+ *   wins.
+ */
+export const ModelGatewaySupplyScopeSchema = z.enum(["all", "matched"]);
+
 export const ModelGatewayConfigSchema = z
   .object({
     id: z.string().min(1),
@@ -177,8 +196,17 @@ export const ModelGatewayConfigSchema = z
      */
     protocolPreset: ModelGatewayProtocolPresetSchema.optional(),
     /**
+     * Explicit supply scope for this gateway. Optional for backward
+     * compatibility; when omitted the registry derives the scope from
+     * `attachToAllAgents` / `protocolPreset` / enabled upstreams.
+     */
+    supplyScope: ModelGatewaySupplyScopeSchema.optional(),
+    /**
      * When true, generate every agent face even if protocolPreset is a single
      * protocol (gateway format conversion bridges the rest).
+     * @deprecated Prefer `supplyScope: "all"`; kept for backward compatibility
+     * with configs written by older clients. When both are present, supplyScope
+     * takes precedence.
      */
     attachToAllAgents: z.boolean().optional(),
     upstreams: z
@@ -328,6 +356,7 @@ export type SyntheticModelLayer = z.infer<typeof SyntheticModelLayerSchema>;
 export type SyntheticModelMoa = z.infer<typeof SyntheticModelMoaSchema>;
 export type SyntheticModelConfig = z.infer<typeof SyntheticModelConfigSchema>;
 export type ModelGatewayProtocolPreset = z.infer<typeof ModelGatewayProtocolPresetSchema>;
+export type ModelGatewaySupplyScope = z.infer<typeof ModelGatewaySupplyScopeSchema>;
 export type ModelGatewayConfig = z.infer<typeof ModelGatewayConfigSchema>;
 export type ModelGatewayConfigs = z.infer<typeof ModelGatewayConfigsSchema>;
 export type AgentProviderRuntimeSettingsMap = Partial<

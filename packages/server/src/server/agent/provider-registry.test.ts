@@ -1015,6 +1015,128 @@ test("resolveGatewayAgentFaces narrows faces by protocolPreset", () => {
   });
 });
 
+const ALL_GATEWAY_FACES = {
+  claude: true,
+  codex: true,
+  opencode: true,
+  mimocode: true,
+  pi: true,
+  kimi: true,
+} as const;
+
+test("resolveGatewayAgentFaces supplyScope all wins over preset and legacy fields", () => {
+  for (const protocolPreset of ["claude", "codex", "openai", "all", undefined] as const) {
+    expect(
+      resolveGatewayAgentFaces({
+        supplyScope: "all",
+        protocolPreset,
+        attachToAllAgents: false,
+        upstreams: { responses: { enabled: true } },
+      }),
+    ).toEqual(ALL_GATEWAY_FACES);
+  }
+});
+
+test("resolveGatewayAgentFaces supplyScope matched narrows by protocolPreset", () => {
+  expect(resolveGatewayAgentFaces({ supplyScope: "matched", protocolPreset: "claude" })).toEqual({
+    claude: true,
+    codex: false,
+    opencode: false,
+    mimocode: false,
+    pi: false,
+    kimi: false,
+  });
+
+  expect(resolveGatewayAgentFaces({ supplyScope: "matched", protocolPreset: "codex" })).toEqual({
+    claude: false,
+    codex: true,
+    opencode: false,
+    mimocode: false,
+    pi: false,
+    kimi: false,
+  });
+
+  // openai + matched → the 4 OpenAI-family faces only
+  expect(resolveGatewayAgentFaces({ supplyScope: "matched", protocolPreset: "openai" })).toEqual({
+    claude: false,
+    codex: false,
+    opencode: true,
+    mimocode: true,
+    pi: true,
+    kimi: true,
+  });
+
+  // matched + preset "all" covers every protocol → all six faces
+  expect(resolveGatewayAgentFaces({ supplyScope: "matched", protocolPreset: "all" })).toEqual(
+    ALL_GATEWAY_FACES,
+  );
+});
+
+test("resolveGatewayAgentFaces supplyScope matched without preset falls back to upstream inference", () => {
+  expect(
+    resolveGatewayAgentFaces({
+      supplyScope: "matched",
+      upstreams: { chatCompletions: { enabled: true } },
+    }),
+  ).toEqual({
+    claude: false,
+    codex: false,
+    opencode: true,
+    mimocode: true,
+    pi: true,
+    kimi: true,
+  });
+
+  expect(
+    resolveGatewayAgentFaces({
+      supplyScope: "matched",
+      upstreams: {
+        anthropic: { enabled: true },
+        chatCompletions: { enabled: true },
+      },
+    }),
+  ).toEqual(ALL_GATEWAY_FACES);
+});
+
+test("resolveGatewayAgentFaces supplyScope wins over conflicting attachToAllAgents", () => {
+  // matched + attachToAllAgents=true → matched wins, single claude face
+  expect(
+    resolveGatewayAgentFaces({
+      supplyScope: "matched",
+      protocolPreset: "claude",
+      attachToAllAgents: true,
+    }),
+  ).toEqual({
+    claude: true,
+    codex: false,
+    opencode: false,
+    mimocode: false,
+    pi: false,
+    kimi: false,
+  });
+
+  // all + attachToAllAgents=false → all wins
+  expect(
+    resolveGatewayAgentFaces({
+      supplyScope: "all",
+      protocolPreset: "openai",
+      attachToAllAgents: false,
+    }),
+  ).toEqual(ALL_GATEWAY_FACES);
+});
+
+test("matched openai supply scope materializes only the OpenAI-family candidate faces", () => {
+  // Vision fallback and model pickers rely on the materialized face set; the
+  // matched+openai scope must expose exactly the four OpenAI-family faces.
+  const faces = resolveGatewayAgentFaces({ supplyScope: "matched", protocolPreset: "openai" });
+  const providerIds = Object.entries(faces)
+    .filter(([, enabled]) => enabled)
+    .map(([face]) => `vision-${face}`);
+  expect(providerIds).toEqual(["vision-opencode", "vision-mimocode", "vision-pi", "vision-kimi"]);
+  expect(providerIds).not.toContain("vision-claude");
+  expect(providerIds).not.toContain("vision-codex");
+});
+
 test("model gateway with codex protocolPreset only materializes codex face", async () => {
   const registry = buildProviderRegistry(logger, {
     modelGateways: {

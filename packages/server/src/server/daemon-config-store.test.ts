@@ -387,4 +387,135 @@ describe("DaemonConfigStore", () => {
       env: {},
     });
   });
+
+  test("deepMerge keeps existing gateway keys when the patch omits them", () => {
+    const chisacodeHome = mkdtempSync(path.join(tmpdir(), "chisacode-daemon-config-store-"));
+    tempDirs.push(chisacodeHome);
+
+    const store = new DaemonConfigStore(
+      chisacodeHome,
+      {
+        mcp: { injectIntoAgents: false },
+        providers: {},
+        modelGateways: {},
+        autoArchiveAfterMerge: false,
+        appendSystemPrompt: "",
+        metadataGeneration: { providers: [] },
+      },
+      undefined,
+    );
+
+    store.patch({
+      modelGateways: {
+        zai: {
+          id: "zai",
+          label: "ZAI",
+          enabled: true,
+          supplyScope: "all",
+          models: [{ id: "glm-5", label: "GLM 5", isDefault: true }],
+          upstreams: {
+            anthropic: { enabled: false, baseUrl: "", apiKey: "" },
+            chatCompletions: { enabled: true, baseUrl: "https://api.z.ai/v1", apiKey: "sk" },
+            responses: { enabled: false, baseUrl: "", apiKey: "" },
+          },
+        },
+      },
+    });
+
+    // Patch that omits supplyScope must not resurrect or clear it.
+    store.patch({
+      modelGateways: {
+        zai: {
+          models: [
+            { id: "glm-5", label: "GLM 5", isDefault: true },
+            { id: "glm-5-air", label: "GLM 5 Air" },
+          ],
+        },
+      },
+    });
+
+    const persisted = loadPersistedConfig(chisacodeHome);
+    expect(persisted.agents?.modelGateways?.zai?.supplyScope).toBe("all");
+    expect(persisted.agents?.modelGateways?.zai?.models).toHaveLength(2);
+  });
+
+  test("always-written supplyScope overrides the stale legacy value", () => {
+    const chisacodeHome = mkdtempSync(path.join(tmpdir(), "chisacode-daemon-config-store-"));
+    tempDirs.push(chisacodeHome);
+
+    const store = new DaemonConfigStore(
+      chisacodeHome,
+      {
+        mcp: { injectIntoAgents: false },
+        providers: {},
+        modelGateways: {},
+        autoArchiveAfterMerge: false,
+        appendSystemPrompt: "",
+        metadataGeneration: { providers: [] },
+      },
+      undefined,
+    );
+
+    // Legacy config: attachToAllAgents=true with no supplyScope.
+    store.patch({
+      modelGateways: {
+        zai: {
+          id: "zai",
+          label: "ZAI",
+          enabled: true,
+          attachToAllAgents: true,
+          models: [{ id: "glm-5", label: "GLM 5", isDefault: true }],
+          upstreams: {
+            anthropic: { enabled: false, baseUrl: "", apiKey: "" },
+            chatCompletions: { enabled: true, baseUrl: "https://api.z.ai/v1", apiKey: "sk" },
+            responses: { enabled: false, baseUrl: "", apiKey: "" },
+          },
+        },
+      },
+    });
+
+    // New write path always writes supplyScope so the scope actually flips.
+    store.patch({
+      modelGateways: {
+        zai: {
+          supplyScope: "matched",
+        },
+      },
+    });
+
+    const persisted = loadPersistedConfig(chisacodeHome);
+    expect(persisted.agents?.modelGateways?.zai?.supplyScope).toBe("matched");
+  });
+
+  test("commit short-circuits without notifying when the patch changes nothing", () => {
+    const chisacodeHome = mkdtempSync(path.join(tmpdir(), "chisacode-daemon-config-store-"));
+    tempDirs.push(chisacodeHome);
+
+    const store = new DaemonConfigStore(
+      chisacodeHome,
+      {
+        mcp: { injectIntoAgents: false },
+        providers: {},
+        modelGateways: {},
+        autoArchiveAfterMerge: false,
+        appendSystemPrompt: "",
+        metadataGeneration: { providers: [] },
+      },
+      undefined,
+    );
+
+    let notifications = 0;
+    store.onChange(() => {
+      notifications += 1;
+    });
+
+    store.patch({ appendSystemPrompt: "" });
+    expect(notifications).toBe(0);
+
+    store.patch({ appendSystemPrompt: "Prefer terse replies." });
+    expect(notifications).toBe(1);
+
+    store.patch({ appendSystemPrompt: "Prefer terse replies." });
+    expect(notifications).toBe(1);
+  });
 });

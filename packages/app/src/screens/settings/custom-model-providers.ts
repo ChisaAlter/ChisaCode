@@ -1,5 +1,6 @@
 import type {
   ModelGatewayProtocolPreset,
+  ModelGatewaySupplyScope,
   ProviderProfileModel,
 } from "@chisacode/protocol/provider-config";
 import type { MutableDaemonConfig, MutableDaemonConfigPatch } from "@chisacode/protocol/messages";
@@ -20,6 +21,21 @@ export type CustomModelProtocolPreset = "claude" | "codex" | "openai";
  * - levels: low/medium/high multi-level (Codex/Claude friendly)
  */
 export type CustomModelThinkingMode = "off" | "single" | "levels";
+export type CustomModelThinkingLevel = "low" | "medium" | "high" | "very-high" | "max";
+
+export interface CustomModelThinkingOption {
+  id: CustomModelThinkingLevel;
+  label: string;
+  isDefault?: boolean;
+}
+
+export const CUSTOM_MODEL_THINKING_OPTIONS: readonly CustomModelThinkingOption[] = [
+  { id: "low", label: "Low" },
+  { id: "medium", label: "Medium", isDefault: true },
+  { id: "high", label: "High" },
+  { id: "very-high", label: "Very High" },
+  { id: "max", label: "Max" },
+];
 
 export interface CustomModelProviderEndpoint {
   enabled: boolean;
@@ -41,6 +57,7 @@ export interface CustomModelProviderModelInput {
   /** Explicit thinking options; when set, overrides supportsThinking boolean. */
   thinkingOptions?: Array<{ id: string; label: string; isDefault?: boolean }>;
   thinkingMode?: CustomModelThinkingMode;
+  thinkingLevels?: CustomModelThinkingLevel[];
 }
 
 export interface CollectedSavedModel {
@@ -54,7 +71,11 @@ export interface CollectedSavedModel {
   supportsTools?: boolean;
   supportsThinking?: boolean;
   thinkingMode?: CustomModelThinkingMode;
+  thinkingLevels?: CustomModelThinkingLevel[];
+  thinkingOptions?: Array<{ id: string; label: string; isDefault?: boolean }>;
   protocolPreset?: CustomModelProtocolPreset | "all";
+  /** Effective supply scope after read-path normalization; mirrors the server closed set. */
+  supplyScope?: ModelGatewaySupplyScope;
   attachToAllAgents?: boolean;
   providerIds: string[];
   baseUrl?: string;
@@ -76,11 +97,27 @@ export interface SaveOpenAiCompatibleModelInput {
   /** @deprecated Prefer thinkingMode */
   supportsThinking?: boolean;
   thinkingMode?: CustomModelThinkingMode;
+  thinkingLevels?: CustomModelThinkingLevel[];
   /** Primary protocol preset. Defaults to openai when omitted. */
   protocolPreset?: CustomModelProtocolPreset;
   /**
-   * When true, materialize all agent faces (gateway conversion).
-   * Defaults false for new models with a single preset.
+   * Supply scope when the daemon supports `supplyScope` persistence
+   * (`server_info.features.modelGatewaySupplyScope`). When omitted on a
+   * supporting daemon, the save path derives the scope from
+   * `attachToAllAgents` / `protocolPreset`.
+   */
+  supplyScope?: ModelGatewaySupplyScope;
+  /**
+   * Whether the connected daemon persists `supplyScope`
+   * (`server_info.features.modelGatewaySupplyScope === true`). When false the
+   * save path falls back to legacy `attachToAllAgents` writes so old daemons
+   * keep rejecting nothing and the scope keeps working.
+   */
+  supplyScopeSupported?: boolean;
+  /**
+   * @deprecated Prefer `supplyScope` on daemons that support it. Kept for
+   * legacy daemons without the `modelGatewaySupplyScope` feature gate, where
+   * `attachToAllAgents === true` is the only way to express "all agents".
    */
   attachToAllAgents?: boolean;
   /** When true, use the advanced multi-endpoint fields below instead of simple single-protocol. */
@@ -94,6 +131,8 @@ export interface DeleteSavedModelInput {
   currentGateways: MutableDaemonConfig["modelGateways"] | undefined;
   gatewayId: string;
   modelId: string;
+  /** Whether the daemon persists `supplyScope` (feature gate). */
+  supplyScopeSupported?: boolean;
 }
 
 export interface SaveCustomModelProviderInput {
@@ -106,6 +145,11 @@ export interface SaveCustomModelProviderInput {
   openai: CustomModelProviderOpenAIEndpoint;
   responses: CustomModelProviderEndpoint;
   protocolPreset?: ModelGatewayProtocolPreset;
+  /** Explicit supply scope; on supporting daemons the patch always writes it. */
+  supplyScope?: ModelGatewaySupplyScope;
+  /** Whether the daemon persists `supplyScope` (feature gate). */
+  supplyScopeSupported?: boolean;
+  /** @deprecated Legacy daemon fallback; prefer `supplyScope`. */
   attachToAllAgents?: boolean;
 }
 
@@ -196,10 +240,27 @@ export function buildModelGatewayProviderIds(id: string): {
   };
 }
 
+function resolveProviderIdsForPreset(
+  ids: ReturnType<typeof buildModelGatewayProviderIds>,
+  protocolPreset: ModelGatewayProtocolPreset | CustomModelProtocolPreset | null | undefined,
+): string[] | null {
+  if (protocolPreset === "claude") {
+    return [ids.claudeProviderId];
+  }
+  if (protocolPreset === "codex") {
+    return [ids.codexProviderId];
+  }
+  if (protocolPreset === "openai") {
+    return [ids.opencodeProviderId, ids.mimocodeProviderId, ids.piProviderId, ids.kimiProviderId];
+  }
+  return null;
+}
+
 export function buildModelGatewayProviderIdList(
   id: string,
   options?: {
     protocolPreset?: ModelGatewayProtocolPreset | CustomModelProtocolPreset | null;
+    supplyScope?: ModelGatewaySupplyScope | null;
     attachToAllAgents?: boolean;
   },
 ): string[] {
@@ -212,27 +273,21 @@ export function buildModelGatewayProviderIdList(
     ids.piProviderId,
     ids.kimiProviderId,
   ];
-  if (options?.attachToAllAgents === true || options?.protocolPreset === "all") {
+  const presetIds = resolveProviderIdsForPreset(ids, options?.protocolPreset);
+  if (options?.supplyScope === "all" || options?.protocolPreset === "all") {
     return all;
   }
-  if (options?.protocolPreset === "claude") {
-    return [ids.claudeProviderId];
+  if (options?.supplyScope === "matched") {
+    return presetIds ?? all;
   }
-  if (options?.protocolPreset === "codex") {
-    return [ids.codexProviderId];
+  if (options?.attachToAllAgents === true) {
+    return all;
   }
-  if (options?.protocolPreset === "openai") {
-    return [ids.opencodeProviderId, ids.mimocodeProviderId, ids.piProviderId, ids.kimiProviderId];
-  }
-  return all;
+  return presetIds ?? all;
 }
 
-/** Codex/Claude-friendly multi-level thinking options. */
-export const CUSTOM_MODEL_THINKING_LEVELS = [
-  { id: "low", label: "Low" },
-  { id: "medium", label: "Medium", isDefault: true },
-  { id: "high", label: "High" },
-] as const;
+/** Thinking options shown by the model editor. */
+export const CUSTOM_MODEL_THINKING_LEVELS = CUSTOM_MODEL_THINKING_OPTIONS.slice(0, 3);
 
 /** Single on/off thinking option that survives Codex normalize (maps to medium effort). */
 export const CUSTOM_MODEL_THINKING_SINGLE = [
@@ -260,6 +315,35 @@ export function inferProtocolPresetFromUpstreams(upstreams: {
   return "openai";
 }
 
+/**
+ * Resolves the effective supply scope for badge display and face materialization.
+ * Mirrors the server branch order in `resolveGatewayAgentFaces`: stored
+ * `supplyScope` wins, legacy `attachToAllAgents === true` maps to "all", then
+ * the stored preset (all → "all", single protocol → "matched"), then upstream
+ * inference (multi-upstream → "all").
+ */
+export function resolveEffectiveSupplyScope(input: {
+  supplyScope?: ModelGatewaySupplyScope | null;
+  attachToAllAgents?: boolean;
+  protocolPreset?: ModelGatewayProtocolPreset | null;
+  upstreams?: {
+    anthropic?: { enabled?: boolean };
+    chatCompletions?: { enabled?: boolean };
+    responses?: { enabled?: boolean };
+  };
+}): ModelGatewaySupplyScope {
+  if (input.supplyScope === "all" || input.supplyScope === "matched") {
+    return input.supplyScope;
+  }
+  if (input.attachToAllAgents === true) {
+    return "all";
+  }
+  if (input.protocolPreset) {
+    return input.protocolPreset === "all" ? "all" : "matched";
+  }
+  return inferProtocolPresetFromUpstreams(input.upstreams ?? {}) === "all" ? "all" : "matched";
+}
+
 export function resolveThinkingModeFromModel(
   model: ProviderProfileModel | undefined,
 ): CustomModelThinkingMode {
@@ -283,9 +367,23 @@ export function buildThinkingOptionsForMode(
     return undefined;
   }
   if (resolved === "levels") {
-    return CUSTOM_MODEL_THINKING_LEVELS.slice();
+    return CUSTOM_MODEL_THINKING_OPTIONS.map((option) => ({ ...option }));
   }
   return CUSTOM_MODEL_THINKING_SINGLE.slice();
+}
+
+export function buildThinkingOptionsForLevels(
+  levels: CustomModelThinkingLevel[],
+): Array<{ id: string; label: string; isDefault?: boolean }> | undefined {
+  const selected = new Set(levels);
+  if (selected.size === 0) {
+    return undefined;
+  }
+  return CUSTOM_MODEL_THINKING_OPTIONS.filter((option) => selected.has(option.id)).map((option) =>
+    Object.assign({}, option, {
+      isDefault: option.id === "medium" || (!selected.has("medium") && option.id === levels[0]),
+    }),
+  );
 }
 
 export function buildCustomModelProviderIds(id: string): {
@@ -331,6 +429,18 @@ function normalizeModelInput(
   return typeof model === "string" ? { id: model } : model;
 }
 
+function resolveThinkingOptions(
+  input: CustomModelProviderModelInput,
+): Array<{ id: string; label: string; isDefault?: boolean }> | undefined {
+  if (input.thinkingOptions && input.thinkingOptions.length > 0) {
+    return input.thinkingOptions;
+  }
+  if (input.thinkingLevels && input.thinkingLevels.length > 0) {
+    return buildThinkingOptionsForLevels(input.thinkingLevels);
+  }
+  return buildThinkingOptionsForMode(input.thinkingMode, input.supportsThinking);
+}
+
 function normalizeModels(
   models: Array<string | CustomModelProviderModelInput>,
 ): ProviderProfileModel[] {
@@ -345,10 +455,7 @@ function normalizeModels(
     seen.add(id);
     const label = trim(input.label) || id;
     const contextWindowMaxTokens = normalizePositiveInteger(input.contextWindowMaxTokens);
-    const thinkingOptions =
-      input.thinkingOptions && input.thinkingOptions.length > 0
-        ? input.thinkingOptions
-        : buildThinkingOptionsForMode(input.thinkingMode, input.supportsThinking);
+    const thinkingOptions = resolveThinkingOptions(input);
     result.push({
       id,
       label,
@@ -425,57 +532,104 @@ function modelHasThinking(model: ProviderProfileModel): boolean {
 export function collectSavedModels(
   gateways: MutableDaemonConfig["modelGateways"] | undefined,
 ): CollectedSavedModel[] {
-  const rows: CollectedSavedModel[] = [];
-  for (const gateway of Object.values(gateways ?? {})) {
-    if (!gateway?.id || gateway.enabled === false) {
-      continue;
-    }
-    const gatewayLabel = gateway.label ?? gateway.id;
-    const protocolPreset =
-      gateway.protocolPreset ?? inferProtocolPresetFromUpstreams(gateway.upstreams ?? {});
-    const attachToAllAgents = gateway.attachToAllAgents === true;
-    const providerIds = buildModelGatewayProviderIdList(gateway.id, {
-      protocolPreset,
-      attachToAllAgents,
-    });
-    const baseUrl = pickPrimaryBaseUrl(gateway);
-    for (const model of gateway.models ?? []) {
-      const modelId = trim(model.id);
-      if (!modelId) {
-        continue;
-      }
-      const thinkingMode = resolveThinkingModeFromModel(model);
-      rows.push({
-        key: `${gateway.id}:${modelId}`,
-        gatewayId: gateway.id,
-        gatewayLabel,
-        modelId,
-        label: trim(model.label) || modelId,
-        ...(typeof model.contextWindowMaxTokens === "number"
-          ? { contextWindowMaxTokens: model.contextWindowMaxTokens }
-          : {}),
-        ...(model.supportsImages === true ? { supportsImages: true } : {}),
-        ...(model.supportsTools === true ? { supportsTools: true } : {}),
-        ...(modelHasThinking(model) ? { supportsThinking: true } : {}),
-        thinkingMode,
-        protocolPreset,
-        ...(attachToAllAgents ? { attachToAllAgents: true } : {}),
-        providerIds,
-        ...(baseUrl ? { baseUrl } : {}),
-      });
-    }
-  }
-  return rows.sort((a, b) => {
-    const labelCompare = a.label.localeCompare(b.label);
-    if (labelCompare !== 0) {
-      return labelCompare;
-    }
-    const gatewayCompare = a.gatewayLabel.localeCompare(b.gatewayLabel);
-    if (gatewayCompare !== 0) {
-      return gatewayCompare;
-    }
-    return a.modelId.localeCompare(b.modelId);
+  const rows = Object.values(gateways ?? {})
+    .filter(
+      (gateway): gateway is ModelGatewayConfig => Boolean(gateway?.id) && gateway.enabled !== false,
+    )
+    .flatMap(collectGatewaySavedModelRows);
+  return rows.sort(compareSavedModels);
+}
+
+function collectGatewaySavedModelRows(gateway: ModelGatewayConfig): CollectedSavedModel[] {
+  const gatewayLabel = gateway.label ?? gateway.id;
+  const protocolPreset =
+    gateway.protocolPreset ?? inferProtocolPresetFromUpstreams(gateway.upstreams ?? {});
+  const attachToAllAgents = gateway.attachToAllAgents === true;
+  const supplyScope = resolveEffectiveSupplyScope({
+    supplyScope: gateway.supplyScope,
+    attachToAllAgents,
+    protocolPreset: gateway.protocolPreset ?? null,
+    upstreams: gateway.upstreams,
   });
+  const providerIds = buildModelGatewayProviderIdList(gateway.id, {
+    protocolPreset,
+    supplyScope,
+    attachToAllAgents,
+  });
+  const baseUrl = pickPrimaryBaseUrl(gateway);
+  return (gateway.models ?? [])
+    .map((model) =>
+      buildSavedModelRow({
+        gateway,
+        gatewayLabel,
+        protocolPreset,
+        supplyScope,
+        attachToAllAgents,
+        providerIds,
+        baseUrl,
+        model,
+      }),
+    )
+    .filter((row): row is CollectedSavedModel => row !== null);
+}
+
+function buildSavedModelRow(input: {
+  gateway: ModelGatewayConfig;
+  gatewayLabel: string;
+  protocolPreset: ModelGatewayProtocolPreset;
+  supplyScope: ModelGatewaySupplyScope;
+  attachToAllAgents: boolean;
+  providerIds: string[];
+  baseUrl: string;
+  model: ProviderProfileModel;
+}): CollectedSavedModel | null {
+  const modelId = trim(input.model.id);
+  if (!modelId) {
+    return null;
+  }
+  const thinkingOptions = input.model.thinkingOptions;
+  const thinkingLevels = thinkingOptions
+    ?.map((option) => option.id)
+    .filter(isCustomModelThinkingLevel);
+  return {
+    key: `${input.gateway.id}:${modelId}`,
+    gatewayId: input.gateway.id,
+    gatewayLabel: input.gatewayLabel,
+    modelId,
+    label: trim(input.model.label) || modelId,
+    ...(typeof input.model.contextWindowMaxTokens === "number"
+      ? { contextWindowMaxTokens: input.model.contextWindowMaxTokens }
+      : {}),
+    ...(input.model.supportsImages === true ? { supportsImages: true } : {}),
+    ...(input.model.supportsTools === true ? { supportsTools: true } : {}),
+    ...(modelHasThinking(input.model) ? { supportsThinking: true } : {}),
+    thinkingMode: resolveThinkingModeFromModel(input.model),
+    ...(thinkingOptions && thinkingOptions.length > 0
+      ? { thinkingOptions: thinkingOptions.map((option) => ({ ...option })) }
+      : {}),
+    ...(thinkingOptions && thinkingOptions.length > 0 ? { thinkingLevels } : {}),
+    protocolPreset: input.protocolPreset,
+    supplyScope: input.supplyScope,
+    ...(input.attachToAllAgents ? { attachToAllAgents: true } : {}),
+    providerIds: input.providerIds,
+    ...(input.baseUrl ? { baseUrl: input.baseUrl } : {}),
+  };
+}
+
+function isCustomModelThinkingLevel(id: string): id is CustomModelThinkingLevel {
+  return id === "low" || id === "medium" || id === "high" || id === "very-high" || id === "max";
+}
+
+function compareSavedModels(a: CollectedSavedModel, b: CollectedSavedModel): number {
+  const labelCompare = a.label.localeCompare(b.label);
+  if (labelCompare !== 0) {
+    return labelCompare;
+  }
+  const gatewayCompare = a.gatewayLabel.localeCompare(b.gatewayLabel);
+  if (gatewayCompare !== 0) {
+    return gatewayCompare;
+  }
+  return a.modelId.localeCompare(b.modelId);
 }
 
 function emptyEndpoint(): CustomModelProviderEndpoint {
@@ -546,14 +700,25 @@ function resolveSimpleOpenAiEndpoints(input: SaveOpenAiCompatibleModelInput): {
   };
 }
 
+function resolveThinkingMode(input: SaveOpenAiCompatibleModelInput): CustomModelThinkingMode {
+  if (input.thinkingMode) {
+    return input.thinkingMode;
+  }
+  if (input.thinkingLevels && input.thinkingLevels.length > 0) {
+    return "levels";
+  }
+  return input.supportsThinking === true ? "single" : "off";
+}
+
 function buildNextModelInput(
   input: SaveOpenAiCompatibleModelInput,
   modelId: string,
   modelLabel: string,
 ): CustomModelProviderModelInput {
-  const thinkingMode: CustomModelThinkingMode =
-    input.thinkingMode ?? (input.supportsThinking === true ? "single" : "off");
-  const thinkingOptions = buildThinkingOptionsForMode(thinkingMode);
+  const thinkingMode = resolveThinkingMode(input);
+  const thinkingOptions = input.thinkingLevels
+    ? buildThinkingOptionsForLevels(input.thinkingLevels)
+    : buildThinkingOptionsForMode(thinkingMode);
   return {
     id: modelId,
     label: modelLabel,
@@ -563,6 +728,7 @@ function buildNextModelInput(
     ...(input.supportsImages ? { supportsImages: true } : {}),
     ...(input.supportsTools ? { supportsTools: true } : {}),
     thinkingMode,
+    ...(input.thinkingLevels ? { thinkingLevels: input.thinkingLevels } : {}),
     ...(thinkingOptions ? { thinkingOptions, supportsThinking: true } : {}),
   };
 }
@@ -678,6 +844,8 @@ export function buildSaveOpenAiCompatibleModelPatch(
     openai,
     responses,
     protocolPreset,
+    supplyScope: input.supplyScope,
+    supplyScopeSupported: input.supplyScopeSupported,
     attachToAllAgents: input.attachToAllAgents === true,
   });
 }
@@ -715,6 +883,15 @@ export function buildDeleteSavedModelPatch(input: DeleteSavedModelInput): Mutabl
     },
     responses: endpointFromUpstream(gateway.upstreams?.responses),
     protocolPreset: gateway.protocolPreset,
+    // Normalize legacy configs on supporting daemons so the re-save always
+    // carries an explicit supplyScope (no deepMerge short-circuit).
+    supplyScope: resolveEffectiveSupplyScope({
+      supplyScope: gateway.supplyScope,
+      attachToAllAgents: gateway.attachToAllAgents === true,
+      protocolPreset: gateway.protocolPreset ?? null,
+      upstreams: gateway.upstreams,
+    }),
+    supplyScopeSupported: input.supplyScopeSupported,
     attachToAllAgents: gateway.attachToAllAgents === true,
   });
 }
@@ -790,6 +967,20 @@ export function buildDisableCustomModelProviderPatch(id: string): MutableDaemonC
   };
 }
 
+function buildSupplyScopePatch(
+  supported: boolean,
+  scope: ModelGatewaySupplyScope | undefined,
+  attachToAllAgents: boolean,
+): { supplyScope: ModelGatewaySupplyScope } | { attachToAllAgents: true } | Record<string, never> {
+  if (supported && scope) {
+    return { supplyScope: scope };
+  }
+  if (attachToAllAgents) {
+    return { attachToAllAgents: true };
+  }
+  return {};
+}
+
 export function buildSaveCustomModelProviderPatch(
   input: SaveCustomModelProviderInput,
 ): MutableDaemonConfigPatch {
@@ -826,7 +1017,25 @@ export function buildSaveCustomModelProviderPatch(
       chatCompletions: input.openai,
       responses: input.responses,
     });
+  const supplyScopeSupported = input.supplyScopeSupported === true;
   const attachToAllAgents = input.attachToAllAgents === true;
+  // On supporting daemons always write an explicit supplyScope so a later edit
+  // that flips the scope can never be short-circuited by the config-store
+  // deepMerge (missing key → old value survives). Legacy daemons cannot parse
+  // the new key (strict schema), so keep the old attachToAllAgents write path.
+  const effectiveSupplyScope: ModelGatewaySupplyScope | undefined = supplyScopeSupported
+    ? (input.supplyScope ??
+      resolveEffectiveSupplyScope({
+        supplyScope: null,
+        attachToAllAgents,
+        protocolPreset,
+        upstreams: {
+          anthropic: input.anthropic,
+          chatCompletions: input.openai,
+          responses: input.responses,
+        },
+      }))
+    : undefined;
 
   gatewayPatches[id] = {
     id,
@@ -834,7 +1043,7 @@ export function buildSaveCustomModelProviderPatch(
     enabled: true,
     models,
     protocolPreset,
-    ...(attachToAllAgents ? { attachToAllAgents: true } : {}),
+    ...buildSupplyScopePatch(supplyScopeSupported, effectiveSupplyScope, attachToAllAgents),
     upstreams: {
       anthropic: normalizeGatewayEndpoint(input.anthropic),
       chatCompletions: normalizeGatewayEndpoint(input.openai),

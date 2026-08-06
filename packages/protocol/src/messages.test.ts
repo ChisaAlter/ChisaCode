@@ -40,6 +40,34 @@ function fetchWorkspacesResponse(workspace: Record<string, unknown>) {
   };
 }
 
+describe("model gateway test messages", () => {
+  test("parses an optional target format for connectivity checks", () => {
+    const inbound = SessionInboundMessageSchema.parse({
+      type: "model_gateway.test.request",
+      requestId: "gateway-test-1",
+      gatewayId: "zai",
+      modelId: "glm-5",
+      targetFormat: "chatCompletions",
+    });
+    expect(inbound).toMatchObject({
+      type: "model_gateway.test.request",
+      targetFormat: "chatCompletions",
+    });
+
+    const outbound = SessionOutboundMessageSchema.parse({
+      type: "model_gateway.test.response",
+      payload: {
+        requestId: "gateway-test-1",
+        gatewayId: "zai",
+        modelId: "glm-5",
+        result: { ok: true, durationMs: 42, status: 200, error: null },
+        error: null,
+      },
+    });
+    expect(outbound.type).toBe("model_gateway.test.response");
+  });
+});
+
 describe("workspace descriptor message compatibility", () => {
   test("old-shaped fetch_workspaces_response without project still parses", () => {
     const parsed = SessionOutboundMessageSchema.parse(

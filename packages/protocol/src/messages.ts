@@ -119,6 +119,15 @@ export const ModelGatewayMoaTestRequestMessageSchema = z.object({
   prompt: z.string().min(1),
 });
 
+export const ModelGatewayTestRequestMessageSchema = z.object({
+  type: z.literal("model_gateway.test.request"),
+  requestId: z.string(),
+  gatewayId: z.string().min(1),
+  modelId: z.string().min(1),
+  // Optional format hint lets saved multi-protocol rows test their intended upstream.
+  targetFormat: z.enum(["anthropic", "chatCompletions", "responses"]).optional(),
+});
+
 export const ProjectRenameResponsePayloadSchema = z.object({
   requestId: z.string(),
   projectId: z.string(),
@@ -162,6 +171,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   ...DaemonInboundMessageSchemas,
   ...AgentExtensionInboundMessageSchemas,
   ModelGatewayMoaTestRequestMessageSchema,
+  ModelGatewayTestRequestMessageSchema,
   ...CheckoutInboundMessageSchemas,
   ...WorkspaceInboundMessageSchemas,
   ...ProviderInboundMessageSchemas,
@@ -280,6 +290,8 @@ export const ServerInfoStatusPayloadSchema = z
         generativeUi: z.boolean().optional(),
         // COMPAT(cindyModules): added in v0.1.102, remove no earlier than 2027-07-29 when client/daemon floor >= v0.1.102.
         cindyModules: z.boolean().optional(),
+        // COMPAT(modelGatewaySupplyScope): added in v0.1.103; remove the gate when daemon floor >= the version that persists supplyScope.
+        modelGatewaySupplyScope: z.boolean().optional(),
       })
       .optional(),
   })
@@ -386,6 +398,24 @@ const ModelGatewayMoaTestResultSchema = z.object({
   aggregator: ModelGatewayMoaAggregatorTraceSchema,
 });
 
+const ModelGatewayTestResultSchema = z.object({
+  ok: z.boolean(),
+  durationMs: z.number().nonnegative(),
+  status: z.number().int().nullable(),
+  error: z.string().nullable(),
+});
+
+export const ModelGatewayTestResponseMessageSchema = z.object({
+  type: z.literal("model_gateway.test.response"),
+  payload: z.object({
+    requestId: z.string(),
+    gatewayId: z.string(),
+    modelId: z.string(),
+    result: ModelGatewayTestResultSchema.nullable(),
+    error: z.string().nullable(),
+  }),
+});
+
 export const ModelGatewayMoaTestResponseMessageSchema = z.object({
   type: z.literal("model_gateway.moa.test.response"),
   payload: z.object({
@@ -413,6 +443,7 @@ type SessionOutboundMessageSchemaOptions = [
   typeof CloseItemsResponseSchema,
   ...typeof CheckoutOutboundMessageSchemas,
   typeof ModelGatewayMoaTestResponseMessageSchema,
+  typeof ModelGatewayTestResponseMessageSchema,
   ...typeof AgentExtensionOutboundMessageSchemas,
   ...typeof TerminalOutboundMessageSchemas,
   ...typeof AutomationOutboundMessageSchemas,
@@ -440,6 +471,7 @@ export const SessionOutboundMessageSchema: z.ZodDiscriminatedUnion<
   CloseItemsResponseSchema,
   ...CheckoutOutboundMessageSchemas,
   ModelGatewayMoaTestResponseMessageSchema,
+  ModelGatewayTestResponseMessageSchema,
   ...AgentExtensionOutboundMessageSchemas,
   ...TerminalOutboundMessageSchemas,
   ...AutomationOutboundMessageSchemas,
@@ -462,6 +494,7 @@ export type ProjectRenameResponsePayload = z.infer<typeof ProjectRenameResponseP
 export type ModelGatewayMoaTestResponseMessage = z.infer<
   typeof ModelGatewayMoaTestResponseMessageSchema
 >;
+export type ModelGatewayTestResponseMessage = z.infer<typeof ModelGatewayTestResponseMessageSchema>;
 
 // Type exports for payload types
 export type ActivityLogPayload = z.infer<typeof ActivityLogPayloadSchema>;
@@ -470,6 +503,7 @@ export type ActivityLogPayload = z.infer<typeof ActivityLogPayloadSchema>;
 export type ModelGatewayMoaTestRequestMessage = z.infer<
   typeof ModelGatewayMoaTestRequestMessageSchema
 >;
+export type ModelGatewayTestRequestMessage = z.infer<typeof ModelGatewayTestRequestMessageSchema>;
 
 export type ProjectRenameRequest = z.infer<typeof ProjectRenameRequestSchema>;
 export type ClientHeartbeatMessage = z.infer<typeof ClientHeartbeatMessageSchema>;

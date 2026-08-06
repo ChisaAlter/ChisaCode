@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildDeleteSavedModelPatch,
   buildDisableCustomModelProviderPatch,
+  buildModelGatewayProviderIdList,
   buildModelGatewayProviderIds,
   buildSaveCustomModelProviderPatch,
   buildSaveOpenAiCompatibleModelPatch,
@@ -352,7 +353,10 @@ describe("custom model provider helpers", () => {
         supportsTools: true,
         supportsThinking: true,
         thinkingMode: "single",
+        thinkingLevels: [],
+        thinkingOptions: [{ id: "default", label: "Thinking", isDefault: true }],
         protocolPreset: "openai",
+        supplyScope: "matched",
         providerIds: ["zai-opencode", "zai-mimocode", "zai-pi", "zai-kimi"],
         baseUrl: "https://api.z.ai/v1",
       },
@@ -365,8 +369,55 @@ describe("custom model provider helpers", () => {
         supportsImages: true,
         thinkingMode: "off",
         protocolPreset: "openai",
+        supplyScope: "matched",
         providerIds: ["zai-opencode", "zai-mimocode", "zai-pi", "zai-kimi"],
         baseUrl: "https://api.z.ai/v1",
+      },
+    ]);
+  });
+
+  it("flattens attachToAllAgents gateways into all six provider ids", () => {
+    const gateways = {
+      deepseek: {
+        id: "deepseek",
+        label: "DeepSeek",
+        enabled: true,
+        models: [{ id: "deepseek-chat", label: "DeepSeek Chat" }],
+        syntheticModels: [],
+        protocolPreset: "openai",
+        attachToAllAgents: true,
+        upstreams: {
+          anthropic: { enabled: false, baseUrl: "", apiKey: "" },
+          chatCompletions: {
+            enabled: true,
+            baseUrl: "https://api.deepseek.com/v1",
+            apiKey: "sk",
+          },
+          responses: { enabled: false, baseUrl: "", apiKey: "" },
+        },
+      },
+    } satisfies NonNullable<MutableDaemonConfig["modelGateways"]>;
+
+    expect(collectSavedModels(gateways)).toEqual([
+      {
+        key: "deepseek:deepseek-chat",
+        gatewayId: "deepseek",
+        gatewayLabel: "DeepSeek",
+        modelId: "deepseek-chat",
+        label: "DeepSeek Chat",
+        thinkingMode: "off",
+        protocolPreset: "openai",
+        supplyScope: "all",
+        attachToAllAgents: true,
+        providerIds: [
+          "deepseek-claude",
+          "deepseek-codex",
+          "deepseek-opencode",
+          "deepseek-mimocode",
+          "deepseek-pi",
+          "deepseek-kimi",
+        ],
+        baseUrl: "https://api.deepseek.com/v1",
       },
     ]);
   });
@@ -401,10 +452,42 @@ describe("custom model provider helpers", () => {
             { id: "low", label: "Low" },
             { id: "medium", label: "Medium", isDefault: true },
             { id: "high", label: "High" },
+            { id: "very-high", label: "Very High" },
+            { id: "max", label: "Max" },
           ],
           isDefault: true,
         },
       ],
+      upstreams: {
+        anthropic: { enabled: false, baseUrl: "", apiKey: "" },
+        chatCompletions: {
+          enabled: true,
+          baseUrl: "https://api.example.com/v1",
+          apiKey: "sk-test",
+        },
+        responses: { enabled: false, baseUrl: "", apiKey: "" },
+      },
+    });
+  });
+
+  it("writes attachToAllAgents and keeps the protocol preset when attaching to all agents", () => {
+    const patch = buildSaveOpenAiCompatibleModelPatch({
+      currentGateways: {},
+      modelId: "glm-air",
+      label: "GLM Air",
+      baseUrl: "https://api.example.com/v1",
+      apiKey: "sk-test",
+      supportsTools: true,
+      thinkingMode: "off",
+      protocolPreset: "openai",
+      attachToAllAgents: true,
+    });
+
+    expect(patch.modelGateways?.["glm-air"]).toMatchObject({
+      id: "glm-air",
+      enabled: true,
+      protocolPreset: "openai",
+      attachToAllAgents: true,
       upstreams: {
         anthropic: { enabled: false, baseUrl: "", apiKey: "" },
         chatCompletions: {
@@ -482,5 +565,282 @@ describe("custom model provider helpers", () => {
         zai: { enabled: false },
       },
     });
+  });
+
+  it("always writes supplyScope on a supporting daemon and derives it when omitted", () => {
+    const derivedPatch = buildSaveOpenAiCompatibleModelPatch({
+      currentGateways: {},
+      supplyScopeSupported: true,
+      modelId: "derived-model",
+      label: "Derived",
+      baseUrl: "https://api.example.com/v1",
+      apiKey: "sk-test",
+      protocolPreset: "openai",
+    });
+    expect(derivedPatch.modelGateways?.["derived"]).toMatchObject({
+      supplyScope: "matched",
+    });
+    expect(derivedPatch.modelGateways?.["derived"]).not.toHaveProperty("attachToAllAgents");
+
+    const explicitPatch = buildSaveOpenAiCompatibleModelPatch({
+      currentGateways: {},
+      supplyScopeSupported: true,
+      supplyScope: "all",
+      modelId: "explicit-model",
+      label: "Explicit",
+      baseUrl: "https://api.example.com/v1",
+      apiKey: "sk-test",
+      protocolPreset: "openai",
+    });
+    expect(explicitPatch.modelGateways?.["explicit"]).toMatchObject({
+      supplyScope: "all",
+    });
+    expect(explicitPatch.modelGateways?.["explicit"]).not.toHaveProperty("attachToAllAgents");
+  });
+
+  it("overrides a legacy attachToAllAgents gateway with explicit supplyScope on save", () => {
+    const currentGateways = {
+      legacy: {
+        id: "legacy",
+        label: "Legacy",
+        enabled: true,
+        protocolPreset: "openai",
+        attachToAllAgents: true,
+        models: [{ id: "legacy-model", label: "Legacy Model" }],
+        syntheticModels: [],
+        upstreams: {
+          anthropic: { enabled: false, baseUrl: "", apiKey: "" },
+          chatCompletions: {
+            enabled: true,
+            baseUrl: "https://api.example.com/v1",
+            apiKey: "sk",
+          },
+          responses: { enabled: false, baseUrl: "", apiKey: "" },
+        },
+      },
+    } satisfies NonNullable<MutableDaemonConfig["modelGateways"]>;
+
+    const patch = buildSaveOpenAiCompatibleModelPatch({
+      currentGateways,
+      gatewayId: "legacy",
+      previousModelId: "legacy-model",
+      supplyScopeSupported: true,
+      supplyScope: "matched",
+      modelId: "legacy-model",
+      label: "Legacy Model",
+      baseUrl: "https://api.example.com/v1",
+      apiKey: "sk",
+      protocolPreset: "openai",
+    });
+
+    expect(patch.modelGateways?.legacy).toMatchObject({
+      supplyScope: "matched",
+    });
+    // The stale attachToAllAgents key must not be re-written by the new path.
+    expect(patch.modelGateways?.legacy).not.toHaveProperty("attachToAllAgents");
+  });
+
+  it("falls back to attachToAllAgents writes on daemons without supplyScope support", () => {
+    const patch = buildSaveOpenAiCompatibleModelPatch({
+      currentGateways: {},
+      supplyScopeSupported: false,
+      supplyScope: "all",
+      modelId: "legacy-daemon",
+      label: "Legacy Daemon",
+      baseUrl: "https://api.example.com/v1",
+      apiKey: "sk-test",
+      protocolPreset: "openai",
+      attachToAllAgents: true,
+    });
+    expect(patch.modelGateways?.["legacy-daemon"]).toMatchObject({
+      attachToAllAgents: true,
+    });
+    expect(patch.modelGateways?.["legacy-daemon"]).not.toHaveProperty("supplyScope");
+
+    const matchedPatch = buildSaveOpenAiCompatibleModelPatch({
+      currentGateways: {},
+      supplyScopeSupported: false,
+      supplyScope: "matched",
+      modelId: "legacy-daemon-matched",
+      label: "Legacy Daemon Matched",
+      baseUrl: "https://api.example.com/v1",
+      apiKey: "sk-test",
+      protocolPreset: "openai",
+      attachToAllAgents: false,
+    });
+    expect(matchedPatch.modelGateways?.["legacy-daemon-matched"]).not.toHaveProperty("supplyScope");
+    expect(matchedPatch.modelGateways?.["legacy-daemon-matched"]).not.toHaveProperty(
+      "attachToAllAgents",
+    );
+  });
+
+  it("normalizes supplyScope when re-saving a gateway through the delete path", () => {
+    const currentGateways = {
+      zai: {
+        id: "zai",
+        label: "ZAI",
+        enabled: true,
+        protocolPreset: "openai",
+        attachToAllAgents: true,
+        models: [
+          { id: "glm-5", label: "GLM 5", isDefault: true },
+          { id: "glm-5-air", label: "GLM 5 Air" },
+        ],
+        syntheticModels: [],
+        upstreams: {
+          anthropic: { enabled: false, baseUrl: "", apiKey: "" },
+          chatCompletions: {
+            enabled: true,
+            baseUrl: "https://api.z.ai/v1",
+            apiKey: "sk",
+          },
+          responses: { enabled: false, baseUrl: "", apiKey: "" },
+        },
+      },
+    } satisfies NonNullable<MutableDaemonConfig["modelGateways"]>;
+
+    const patch = buildDeleteSavedModelPatch({
+      currentGateways,
+      supplyScopeSupported: true,
+      gatewayId: "zai",
+      modelId: "glm-5-air",
+    });
+
+    expect(patch.modelGateways?.zai).toMatchObject({
+      supplyScope: "all",
+    });
+  });
+
+  it("resolves effective supply scope on the read path mirroring the server closed set", () => {
+    const collect = (gateway: NonNullable<MutableDaemonConfig["modelGateways"]>[string]) =>
+      collectSavedModels({ zai: gateway })[0]?.supplyScope;
+
+    const baseUpstreams = {
+      anthropic: { enabled: false, baseUrl: "", apiKey: "" },
+      chatCompletions: { enabled: true, baseUrl: "https://api.z.ai/v1", apiKey: "sk" },
+      responses: { enabled: false, baseUrl: "", apiKey: "" },
+    };
+
+    // stored supplyScope wins over everything else
+    expect(
+      collect({
+        id: "zai",
+        label: "ZAI",
+        enabled: true,
+        supplyScope: "all",
+        attachToAllAgents: false,
+        protocolPreset: "openai",
+        models: [{ id: "m", label: "M" }],
+        syntheticModels: [],
+        upstreams: baseUpstreams,
+      }),
+    ).toBe("all");
+
+    // legacy attachToAllAgents=true maps to "all"
+    expect(
+      collect({
+        id: "zai",
+        label: "ZAI",
+        enabled: true,
+        attachToAllAgents: true,
+        protocolPreset: "openai",
+        models: [{ id: "m", label: "M" }],
+        syntheticModels: [],
+        upstreams: baseUpstreams,
+      }),
+    ).toBe("all");
+
+    // stored preset "all" → "all"
+    expect(
+      collect({
+        id: "zai",
+        label: "ZAI",
+        enabled: true,
+        protocolPreset: "all",
+        models: [{ id: "m", label: "M" }],
+        syntheticModels: [],
+        upstreams: baseUpstreams,
+      }),
+    ).toBe("all");
+
+    // stored preset wins over a multi-upstream inference (reverse scenario)
+    expect(
+      collect({
+        id: "zai",
+        label: "ZAI",
+        enabled: true,
+        protocolPreset: "claude",
+        models: [{ id: "m", label: "M" }],
+        syntheticModels: [],
+        upstreams: {
+          anthropic: { enabled: true, baseUrl: "https://a.example.com", apiKey: "k1" },
+          chatCompletions: { enabled: true, baseUrl: "https://c.example.com/v1", apiKey: "k2" },
+          responses: { enabled: false, baseUrl: "", apiKey: "" },
+        },
+      }),
+    ).toBe("matched");
+
+    // no preset, single upstream → "matched"
+    expect(
+      collect({
+        id: "zai",
+        label: "ZAI",
+        enabled: true,
+        models: [{ id: "m", label: "M" }],
+        syntheticModels: [],
+        upstreams: baseUpstreams,
+      }),
+    ).toBe("matched");
+
+    // no preset, multiple upstreams → "all"
+    expect(
+      collect({
+        id: "zai",
+        label: "ZAI",
+        enabled: true,
+        models: [{ id: "m", label: "M" }],
+        syntheticModels: [],
+        upstreams: {
+          anthropic: { enabled: true, baseUrl: "https://a.example.com", apiKey: "k1" },
+          chatCompletions: { enabled: true, baseUrl: "https://c.example.com/v1", apiKey: "k2" },
+          responses: { enabled: false, baseUrl: "", apiKey: "" },
+        },
+      }),
+    ).toBe("all");
+  });
+
+  it("builds provider id lists from supplyScope semantics", () => {
+    const allScope = buildModelGatewayProviderIdList("zai", {
+      supplyScope: "all",
+      protocolPreset: "openai",
+    });
+    expect(allScope).toEqual([
+      "zai-claude",
+      "zai-codex",
+      "zai-opencode",
+      "zai-mimocode",
+      "zai-pi",
+      "zai-kimi",
+    ]);
+
+    const matchedScope = buildModelGatewayProviderIdList("zai", {
+      supplyScope: "matched",
+      protocolPreset: "openai",
+    });
+    expect(matchedScope).toEqual(["zai-opencode", "zai-mimocode", "zai-pi", "zai-kimi"]);
+
+    const matchedClaude = buildModelGatewayProviderIdList("zai", {
+      supplyScope: "matched",
+      protocolPreset: "claude",
+    });
+    expect(matchedClaude).toEqual(["zai-claude"]);
+
+    // supplyScope beats a conflicting attachToAllAgents
+    const scopeWins = buildModelGatewayProviderIdList("zai", {
+      supplyScope: "matched",
+      protocolPreset: "claude",
+      attachToAllAgents: true,
+    });
+    expect(scopeWins).toEqual(["zai-claude"]);
   });
 });

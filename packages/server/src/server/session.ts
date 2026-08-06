@@ -1286,6 +1286,8 @@ export class Session {
         return this.providerHandler.handleAgentPresetsListRequest(msg);
       case "model_gateway.moa.test.request":
         return this.providerHandler.handleModelGatewayMoaTestRequest(msg);
+      case "model_gateway.test.request":
+        return this.providerHandler.handleModelGatewayTestRequest(msg);
       default:
         return undefined;
     }

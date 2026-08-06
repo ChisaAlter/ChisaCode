@@ -1,8 +1,9 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 
 import {
   handleModelGatewayRequest,
   listModelGatewayModels,
+  runModelGatewayTest,
   runSyntheticModelTest,
 } from "./model-gateway.js";
 import type { ModelGatewayConfig } from "@chisacode/protocol/provider-config";
@@ -60,6 +61,82 @@ function makeGatewayWithOnly(
 }
 
 describe("model gateway", () => {
+  test("measures successful upstream connectivity for each gateway format", async () => {
+    for (const format of ["anthropic", "chatCompletions", "responses"] as const) {
+      const calls: Request[] = [];
+      const result = await runModelGatewayTest({
+        gateway: makeGatewayWithOnly(format),
+        modelId: "glm-5",
+        fetchImpl: async (input, init) => {
+          calls.push(new Request(input, init));
+          return Response.json({ choices: [{ message: { content: "ok" } }] }, { status: 200 });
+        },
+      });
+
+      expect(result).toMatchObject({ ok: true, status: 200, error: null });
+      expect(result.durationMs).toBeGreaterThanOrEqual(0);
+      expect(calls).toHaveLength(1);
+      expect(await calls[0]?.json()).toMatchObject({ model: "glm-5" });
+    }
+  });
+
+  test("returns HTTP failures and fetch errors with latency measurements", async () => {
+    const httpFailure = await runModelGatewayTest({
+      gateway: makeGatewayWithOnly("chatCompletions"),
+      modelId: "glm-5",
+      fetchImpl: async () => Response.json({ error: "bad key" }, { status: 401 }),
+    });
+    expect(httpFailure).toMatchObject({
+      ok: false,
+      status: 401,
+      error: "Upstream returned HTTP 401",
+    });
+    expect(httpFailure.durationMs).toBeGreaterThanOrEqual(0);
+
+    const networkFailure = await runModelGatewayTest({
+      gateway: makeGatewayWithOnly("chatCompletions"),
+      modelId: "glm-5",
+      fetchImpl: async () => {
+        throw new Error("socket closed");
+      },
+    });
+    expect(networkFailure).toMatchObject({
+      ok: false,
+      status: null,
+      error: "socket closed",
+    });
+  });
+
+  test("reports an unconfigured gateway without making a request", async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async () => Response.json({ choices: [] }));
+    const result = await runModelGatewayTest({
+      gateway: makeGatewayWithOnly("chatCompletions"),
+      modelId: "glm-5",
+      fetchImpl,
+    });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(result.ok).toBe(true);
+
+    const noUpstream = await runModelGatewayTest({
+      gateway: makeGateway({
+        upstreams: {
+          anthropic: { enabled: false, baseUrl: "", apiKey: "" },
+          chatCompletions: { enabled: false, baseUrl: "", apiKey: "" },
+          responses: { enabled: false, baseUrl: "", apiKey: "" },
+        },
+      }),
+      modelId: "glm-5",
+      fetchImpl,
+    });
+    expect(noUpstream).toEqual({
+      ok: false,
+      durationMs: 0,
+      status: null,
+      error: "No enabled upstream is configured",
+    });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
   test("synthesizes a configured model from references and an aggregator", async () => {
     const fetchCalls: Array<{ body: unknown }> = [];
     const response = await handleModelGatewayRequest({
@@ -1404,5 +1481,387 @@ describe("model gateway", () => {
         },
       ],
     });
+  });
+
+  test("sanitizes timeout keys at any nesting depth in tool call arguments", async () => {
+    const response = await handleModelGatewayRequest({
+      gateway: makeGatewayWithOnly("chatCompletions"),
+      targetFormat: "responses",
+      requestBody: {
+        model: "glm-5",
+        stream: true,
+        input: [{ type: "message", role: "user", content: "run" }],
+      },
+      fetchImpl: async () => {
+        const args = JSON.stringify({
+          task: { timeout_ms: 15000.0 },
+          items: [{ command_timeout_ms: 2.75 }],
+          plain: 1.5,
+        });
+        const sse = [
+          `data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_nested","function":{"name":"shell_command","arguments":${JSON.stringify(args)}}}]}}]}\n\n`,
+          'data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}\n\n',
+          "data: [DONE]\n\n",
+        ].join("");
+        return new Response(sse, {
+          status: 200,
+          headers: { "Content-Type": "text/event-stream" },
+        });
+      },
+    });
+
+    const body = await response.text();
+    // Nested and array-element timeout keys are truncated; unrelated floats survive.
+    expect(body).toMatch(/timeout_ms\\?":\s*15000\b/);
+    expect(body).not.toMatch(/timeout_ms\\?":\s*15000\.0\b/);
+    expect(body).toMatch(/command_timeout_ms\\?":\s*2\b/);
+    expect(body).not.toMatch(/command_timeout_ms\\?":\s*2\.75\b/);
+    expect(body).toMatch(/plain\\?":\s*1\.5/);
+  });
+
+  test("keeps invalid JSON tool arguments untouched", async () => {
+    const response = await handleModelGatewayRequest({
+      gateway: makeGatewayWithOnly("chatCompletions"),
+      targetFormat: "responses",
+      requestBody: {
+        model: "glm-5",
+        stream: true,
+        input: [{ type: "message", role: "user", content: "run" }],
+      },
+      fetchImpl: async () => {
+        const sse = [
+          `data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_broken","function":{"name":"shell_command","arguments":"{\\"broken\\""}}]}}]}\n\n`,
+          'data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}\n\n',
+          "data: [DONE]\n\n",
+        ].join("");
+        return new Response(sse, {
+          status: 200,
+          headers: { "Content-Type": "text/event-stream" },
+        });
+      },
+    });
+
+    const body = await response.text();
+    expect(body).toContain('{\\"broken\\"');
+  });
+
+  test("does not reserialize tool arguments without timeout floats", async () => {
+    const response = await handleModelGatewayRequest({
+      gateway: makeGatewayWithOnly("chatCompletions"),
+      targetFormat: "responses",
+      requestBody: {
+        model: "glm-5",
+        stream: true,
+        input: [{ type: "message", role: "user", content: "run" }],
+      },
+      fetchImpl: async () => {
+        const sse = [
+          `data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_keep","function":{"name":"shell_command","arguments":"{\\"ratio\\": 1.5}"}}]}}]}\n\n`,
+          'data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}\n\n',
+          "data: [DONE]\n\n",
+        ].join("");
+        return new Response(sse, {
+          status: 200,
+          headers: { "Content-Type": "text/event-stream" },
+        });
+      },
+    });
+
+    const body = await response.text();
+    // Original spacing survives: no change → original text returned, not re-serialized.
+    expect(body).toContain('{\\"ratio\\": 1.5}');
+  });
+
+  test("converts server_tool_use and mcp_tool_use like tool_use", async () => {
+    let upstreamBody: unknown;
+    await handleModelGatewayRequest({
+      gateway: makeGatewayWithOnly("chatCompletions"),
+      targetFormat: "anthropic",
+      requestBody: {
+        model: "glm-5",
+        max_tokens: 128,
+        messages: [
+          { role: "user", content: "run" },
+          {
+            role: "assistant",
+            content: [
+              { type: "server_tool_use", id: "server_1", name: "web_search", input: { q: "x" } },
+              { type: "mcp_tool_use", id: "mcp_1", name: "git_status", input: {} },
+            ],
+          },
+        ],
+      },
+      fetchImpl: async (_url, init) => {
+        upstreamBody = JSON.parse(String(init?.body ?? "{}"));
+        return Response.json({
+          choices: [{ message: { role: "assistant", content: "ok" }, finish_reason: "stop" }],
+        });
+      },
+    });
+
+    const messages = (upstreamBody as { messages: Array<Record<string, unknown>> }).messages;
+    const assistant = messages.find((m) => m.role === "assistant");
+    const toolCalls = (assistant?.tool_calls ?? []) as Array<{
+      id: string;
+      function: { name: string; arguments: string };
+    }>;
+    expect(toolCalls).toHaveLength(2);
+    expect(toolCalls[0]?.function.name).toBe("web_search");
+    expect(toolCalls[0]?.id).toBe("server_1");
+    expect(toolCalls[1]?.function.name).toBe("git_status");
+    expect(toolCalls[1]?.id).toBe("mcp_1");
+  });
+
+  test("skips reasoning items without breaking function_call pairing", async () => {
+    let upstreamBody: unknown;
+    await handleModelGatewayRequest({
+      gateway: makeGatewayWithOnly("chatCompletions"),
+      targetFormat: "responses",
+      requestBody: {
+        model: "glm-5",
+        input: [
+          { type: "message", role: "user", content: "run ls" },
+          { type: "reasoning", summary: [{ type: "summary_text", text: "thinking" }] },
+          {
+            type: "function_call",
+            call_id: "call_shell",
+            name: "shell",
+            arguments: "{}",
+          },
+          { type: "reasoning", summary: [{ type: "summary_text", text: "more thinking" }] },
+          {
+            type: "function_call_output",
+            call_id: "call_shell",
+            output: "done",
+          },
+        ],
+      },
+      fetchImpl: async (_url, init) => {
+        upstreamBody = JSON.parse(String(init?.body ?? "{}"));
+        return Response.json({
+          choices: [{ message: { role: "assistant", content: "ok" }, finish_reason: "stop" }],
+        });
+      },
+    });
+
+    const messages = (upstreamBody as { messages: Array<Record<string, unknown>> }).messages;
+    expect(messages).toHaveLength(3);
+    expect(messages[0]?.role).toBe("user");
+    expect(messages[1]?.role).toBe("assistant");
+    expect(messages[2]?.role).toBe("tool");
+    expect(messages[2]).toMatchObject({ tool_call_id: "call_shell" });
+  });
+
+  test("assigns missing tool_calls index to a new call instead of merging into the previous", async () => {
+    const response = await handleModelGatewayRequest({
+      gateway: makeGatewayWithOnly("chatCompletions"),
+      targetFormat: "responses",
+      requestBody: {
+        model: "glm-5",
+        stream: true,
+        input: [{ type: "message", role: "user", content: "run" }],
+      },
+      fetchImpl: async () => {
+        const sse = [
+          'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_a","function":{"name":"shell","arguments":"{}"}}]}}]}\n\n',
+          // Missing index + new name → must start a NEW tool call, not merge into shell.
+          'data: {"choices":[{"delta":{"tool_calls":[{"function":{"name":"read","arguments":"{\\"path\\":"}}]}}]}\n\n',
+          // Missing index + no name → fragment of the in-flight call (read).
+          'data: {"choices":[{"delta":{"tool_calls":[{"function":{"arguments":"\\"sample.ts\\"}"}}]}}]}\n\n',
+          'data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}\n\n',
+          "data: [DONE]\n\n",
+        ].join("");
+        return new Response(sse, {
+          status: 200,
+          headers: { "Content-Type": "text/event-stream" },
+        });
+      },
+    });
+
+    const body = await response.text();
+    expect(body).toContain('"name":"shell"');
+    expect(body).toContain('"name":"read"');
+    expect(body).toContain('\\"path\\"');
+    expect(body).toContain('\\"sample.ts\\"');
+    // Two distinct tool call items are emitted (one per call), each with a
+    // stable id echoed in both `id` and `call_id`.
+    const callIds = new Set([...body.matchAll(/"call_id":"([^"]+)"/g)].map((match) => match[1]));
+    expect(callIds.size).toBe(2);
+  });
+
+  test("forwards temperature/top_p/stop_sequences/tool_choice from Anthropic to chat", async () => {
+    let upstreamBody: unknown;
+    await handleModelGatewayRequest({
+      gateway: makeGatewayWithOnly("chatCompletions"),
+      targetFormat: "anthropic",
+      requestBody: {
+        model: "glm-5",
+        temperature: 0.7,
+        top_p: 0.9,
+        stop_sequences: ["END"],
+        max_tokens: 256,
+        tool_choice: { type: "tool", name: "Read" },
+        messages: [{ role: "user", content: "hi" }],
+      },
+      fetchImpl: async (_url, init) => {
+        upstreamBody = JSON.parse(String(init?.body ?? "{}"));
+        return Response.json({
+          choices: [{ message: { role: "assistant", content: "ok" }, finish_reason: "stop" }],
+        });
+      },
+    });
+
+    const body = upstreamBody as Record<string, unknown>;
+    expect(body.temperature).toBe(0.7);
+    expect(body.top_p).toBe(0.9);
+    expect(body.stop).toEqual(["END"]);
+    expect(body.tool_choice).toEqual({ type: "function", function: { name: "Read" } });
+    expect(body.max_tokens).toBe(256);
+  });
+
+  test("maps chat stop and tool_choice to Anthropic stop_sequences and tool tool_choice", async () => {
+    let upstreamBody: unknown;
+    await handleModelGatewayRequest({
+      gateway: makeGatewayWithOnly("anthropic"),
+      targetFormat: "chatCompletions",
+      requestBody: {
+        model: "glm-5",
+        temperature: 0.5,
+        stop: "END",
+        tool_choice: { type: "function", function: { name: "Read" } },
+        messages: [{ role: "user", content: "hi" }],
+      },
+      fetchImpl: async (_url, init) => {
+        upstreamBody = JSON.parse(String(init?.body ?? "{}"));
+        return Response.json({ content: [{ type: "text", text: "ok" }] });
+      },
+    });
+
+    const body = upstreamBody as Record<string, unknown>;
+    expect(body.temperature).toBe(0.5);
+    expect(body.stop_sequences).toEqual(["END"]);
+    expect(body.tool_choice).toEqual({ type: "tool", name: "Read" });
+  });
+
+  test("drops stop when targeting Responses and maps tool_choice to {type,name}", async () => {
+    let upstreamBody: unknown;
+    await handleModelGatewayRequest({
+      gateway: makeGatewayWithOnly("responses"),
+      targetFormat: "chatCompletions",
+      requestBody: {
+        model: "glm-5",
+        temperature: 0.3,
+        stop: "END",
+        tool_choice: { type: "function", function: { name: "Read" } },
+        messages: [{ role: "user", content: "hi" }],
+      },
+      fetchImpl: async (_url, init) => {
+        upstreamBody = JSON.parse(String(init?.body ?? "{}"));
+        return Response.json({ output: [{ type: "message", content: [] }] });
+      },
+    });
+
+    const body = upstreamBody as Record<string, unknown>;
+    expect(body.temperature).toBe(0.3);
+    expect(body).not.toHaveProperty("stop");
+    expect(body.tool_choice).toEqual({ type: "function", name: "Read" });
+  });
+
+  test("converts streaming Anthropic tool_use deltas into chat tool_calls", async () => {
+    const response = await handleModelGatewayRequest({
+      gateway: makeGatewayWithOnly("anthropic"),
+      targetFormat: "chatCompletions",
+      requestBody: {
+        model: "glm-5",
+        stream: true,
+        messages: [{ role: "user", content: "read sample.ts" }],
+      },
+      fetchImpl: async () => {
+        const sse = [
+          `event: content_block_start\ndata: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}\n\n`,
+          `event: content_block_delta\ndata: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"hi"}}\n\n`,
+          `event: content_block_stop\ndata: {"type":"content_block_stop","index":0}\n\n`,
+          `event: content_block_start\ndata: {"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"toolu_1","name":"Read","input":{}}}\n\n`,
+          `event: content_block_delta\ndata: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"{\\"path\\":"}}\n\n`,
+          `event: content_block_delta\ndata: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"\\"sample.ts\\"}"}}\n\n`,
+          `event: content_block_stop\ndata: {"type":"content_block_stop","index":1}\n\n`,
+          `event: message_delta\ndata: {"type":"message_delta","delta":{"stop_reason":"tool_use","stop_sequence":null}}\n\n`,
+          `event: message_stop\ndata: {"type":"message_stop"}\n\n`,
+        ].join("");
+        return new Response(sse, {
+          status: 200,
+          headers: { "Content-Type": "text/event-stream" },
+        });
+      },
+    });
+
+    const body = await response.text();
+    expect(body).toContain('"content":"hi"');
+    expect(body).toContain('"type":"function"');
+    expect(body).toContain('"name":"Read"');
+    expect(body).toContain('"arguments":"{\\"path\\":\\"sample.ts\\"}"');
+    expect(body).toContain('"finish_reason":"tool_calls"');
+  });
+
+  test("converts streaming Responses function_call items into chat tool_calls", async () => {
+    const response = await handleModelGatewayRequest({
+      gateway: makeGatewayWithOnly("responses"),
+      targetFormat: "chatCompletions",
+      requestBody: {
+        model: "glm-5",
+        stream: true,
+        input: [{ type: "message", role: "user", content: "read sample.ts" }],
+      },
+      fetchImpl: async () => {
+        const sse = [
+          `event: response.output_item.added\ndata: {"type":"response.output_item.added","output_index":0,"item":{"id":"fc_1","type":"function_call","call_id":"fc_1","name":"Read","arguments":"","status":"in_progress"}}\n\n`,
+          `event: response.function_call_arguments.delta\ndata: {"type":"response.function_call_arguments.delta","item_id":"fc_1","output_index":0,"delta":"{\\"path\\":"}\n\n`,
+          `event: response.function_call_arguments.delta\ndata: {"type":"response.function_call_arguments.delta","item_id":"fc_1","output_index":0,"delta":"\\"sample.ts\\"}"}\n\n`,
+          `event: response.output_item.done\ndata: {"type":"response.output_item.done","output_index":0,"item":{"id":"fc_1","type":"function_call","call_id":"fc_1","name":"Read","arguments":"{\\"path\\":\\"sample.ts\\"}","status":"completed"}}\n\n`,
+          "data: [DONE]\n\n",
+        ].join("");
+        return new Response(sse, {
+          status: 200,
+          headers: { "Content-Type": "text/event-stream" },
+        });
+      },
+    });
+
+    const body = await response.text();
+    expect(body).toContain('"type":"function"');
+    expect(body).toContain('"name":"Read"');
+    expect(body).toContain('"arguments":"{\\"path\\":\\"sample.ts\\"}"');
+    expect(body).toContain('"finish_reason":"tool_calls"');
+  });
+
+  test("fills missing Anthropic tool_use ids so chat tool_calls stay non-empty", async () => {
+    let upstreamBody: unknown;
+    await handleModelGatewayRequest({
+      gateway: makeGatewayWithOnly("chatCompletions"),
+      targetFormat: "anthropic",
+      requestBody: {
+        model: "glm-5",
+        messages: [
+          { role: "user", content: "run" },
+          {
+            role: "assistant",
+            content: [{ type: "tool_use", name: "shell", input: { command: "ls" } }],
+          },
+        ],
+      },
+      fetchImpl: async (_url, init) => {
+        upstreamBody = JSON.parse(String(init?.body ?? "{}"));
+        return Response.json({
+          choices: [{ message: { role: "assistant", content: "ok" }, finish_reason: "stop" }],
+        });
+      },
+    });
+
+    const messages = (upstreamBody as { messages: Array<Record<string, unknown>> }).messages;
+    const assistant = messages.find((m) => m.role === "assistant");
+    const toolCalls = (assistant?.tool_calls ?? []) as Array<{ id: string }>;
+    expect(toolCalls).toHaveLength(1);
+    expect(toolCalls[0]?.id.length).toBeGreaterThan(0);
+    expect(toolCalls[0]?.id).not.toBe("");
   });
 });

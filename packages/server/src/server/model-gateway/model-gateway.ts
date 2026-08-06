@@ -409,6 +409,14 @@ function anthropicToChat(body: JsonRecord): JsonRecord {
     model: body.model,
     messages,
     ...(typeof body.max_tokens === "number" ? { max_tokens: body.max_tokens } : {}),
+    // Parameter passthrough decision table (see docs/refactors/…gateway conversion):
+    // temperature/top_p forward as-is; stop_sequences → stop; tool_choice maps.
+    ...(typeof body.temperature === "number" ? { temperature: body.temperature } : {}),
+    ...(typeof body.top_p === "number" ? { top_p: body.top_p } : {}),
+    ...(Array.isArray(body.stop_sequences)
+      ? { stop: body.stop_sequences.filter((item): item is string => typeof item === "string") }
+      : {}),
+    ...convertAnthropicToolChoiceToChat(body.tool_choice),
     stream: body.stream === true,
     ...convertAnthropicToolsToChat(body.tools),
   };
@@ -510,12 +518,19 @@ function convertAnthropicToolsToChat(tools: unknown): { tools?: JsonRecord[] } {
 function readAnthropicToolCalls(content: unknown[]): JsonRecord[] {
   return content.flatMap((part) => {
     const record = asRecord(part);
-    if (!record || record.type !== "tool_use") {
+    // server_tool_use / mcp_tool_use share the tool_use shape (id/name/input) and
+    // must convert exactly like tool_use so pairing survives format bridges.
+    if (
+      !record ||
+      (record.type !== "tool_use" &&
+        record.type !== "server_tool_use" &&
+        record.type !== "mcp_tool_use")
+    ) {
       return [];
     }
     return [
       {
-        id: typeof record.id === "string" ? record.id : "",
+        id: typeof record.id === "string" && record.id.length > 0 ? record.id : newToolCallId(),
         type: "function",
         function: {
           name: typeof record.name === "string" ? record.name : "",
@@ -543,6 +558,11 @@ function responsesToChat(body: JsonRecord): JsonRecord {
     model: body.model,
     messages,
     ...(typeof body.max_output_tokens === "number" ? { max_tokens: body.max_output_tokens } : {}),
+    // Parameter passthrough: temperature/top_p and stop (string|string[]) forward as-is.
+    ...(typeof body.temperature === "number" ? { temperature: body.temperature } : {}),
+    ...(typeof body.top_p === "number" ? { top_p: body.top_p } : {}),
+    ...(typeof body.stop === "string" || Array.isArray(body.stop) ? { stop: body.stop } : {}),
+    ...convertResponsesToolChoiceToChat(body.tool_choice),
     stream: body.stream === true,
     ...convertResponsesToolsToChat(body.tools),
   };
@@ -557,6 +577,11 @@ function responsesToChat(body: JsonRecord): JsonRecord {
  * assistant message (or a short status line) between `function_call` and
  * `function_call_output`; inserting that as a separate chat message breaks pairing
  * and makes upstream models treat shell/read results as missing.
+ *
+ * Only `message` / `function_call` / `function_call_output` items are converted.
+ * Any other item type (`reasoning`, `web_search_call`, `computer_call`, ...) is
+ * skipped without flushing the pending assistant so tool_call/tool_result pairing
+ * is never split by noise items.
  *
  * @param input Responses request `input` array
  * @param messages Mutable chat message list to append into
@@ -618,51 +643,46 @@ function appendResponsesInputAsChatMessages(input: unknown[], messages: JsonReco
       continue;
     }
 
-    // Message-like items (role + content)
-    if (typeof record.role === "string" || record.type === "message") {
-      const role = normalizeMessageRole(record.role);
-      const text = readTextContent(record.content ?? record.text);
+    // Message-like items (role + content). Other item types (reasoning,
+    // web_search_call, computer_call, ...) are whitelisted out below.
+    if (record.type !== "message" && typeof record.role !== "string") {
+      // Unknown item type — skip without touching pending assistant pairing.
+      continue;
+    }
+    const role = normalizeMessageRole(record.role);
+    const text = readTextContent(record.content ?? record.text);
 
-      // Empty non-assistant placeholders are noise.
-      if (text.length === 0 && role !== "assistant") {
-        continue;
-      }
-
-      // Empty assistant messages must not split tool_calls from tool results.
-      // Codex routinely inserts them between function_call and function_call_output.
-      if (role === "assistant" && text.length === 0) {
-        continue;
-      }
-
-      if (role === "assistant") {
-        if (pendingToolCalls.length > 0) {
-          // Merge status text into the same assistant message that owns tool_calls.
-          pendingAssistantText =
-            pendingAssistantText && pendingAssistantText.length > 0
-              ? `${pendingAssistantText}\n${text}`
-              : text;
-          continue;
-        }
-        flushPendingAssistant();
-        messages.push({ role: "assistant", content: text });
-        continue;
-      }
-
-      // user/system: end any open tool_call assistant first.
-      flushPendingAssistant();
-      messages.push({
-        role,
-        content: text,
-      });
+    // Empty non-assistant placeholders are noise.
+    if (text.length === 0 && role !== "assistant") {
       continue;
     }
 
-    // Fallback: unknown item with textual content.
-    const fallbackText = readTextContent(record.content ?? record.text ?? record.output);
-    if (fallbackText.length > 0) {
-      flushPendingAssistant();
-      messages.push({ role: "user", content: fallbackText });
+    // Empty assistant messages must not split tool_calls from tool results.
+    // Codex routinely inserts them between function_call and function_call_output.
+    if (role === "assistant" && text.length === 0) {
+      continue;
     }
+
+    if (role === "assistant") {
+      if (pendingToolCalls.length > 0) {
+        // Merge status text into the same assistant message that owns tool_calls.
+        pendingAssistantText =
+          pendingAssistantText && pendingAssistantText.length > 0
+            ? `${pendingAssistantText}\n${text}`
+            : text;
+        continue;
+      }
+      flushPendingAssistant();
+      messages.push({ role: "assistant", content: text });
+      continue;
+    }
+
+    // user/system: end any open tool_call assistant first.
+    flushPendingAssistant();
+    messages.push({
+      role,
+      content: text,
+    });
   }
 
   flushPendingAssistant();
@@ -724,6 +744,143 @@ function normalizeMessageRole(role: unknown): string {
   return "user";
 }
 
+/**
+ * Maps a chat-completions `stop` value (string or string[]) to Anthropic
+ * `stop_sequences` (string[]), or undefined when absent/empty.
+ * @param value Raw chat `stop` field
+ * @returns Anthropic stop_sequences array, or undefined
+ */
+function chatStopToAnthropicStopSequences(value: unknown): string[] | undefined {
+  if (Array.isArray(value)) {
+    const strings = value.filter((item): item is string => typeof item === "string");
+    return strings.length > 0 ? strings : undefined;
+  }
+  if (typeof value === "string" && value.length > 0) {
+    return [value];
+  }
+  return undefined;
+}
+
+/**
+ * Maps a chat-completions `tool_choice` to Anthropic form.
+ * chat `{type:"function",function:{name}}` → `{type:"tool",name}`; plain
+ * "auto"/"none" pass through; unknown shapes are dropped (documented as
+ * known-dropped in the gateway conversion matrix).
+ * @param value Raw chat `tool_choice`
+ * @returns Anthropic tool_choice spread, or empty when absent
+ */
+function convertChatToolChoiceToAnthropic(value: unknown): { tool_choice?: JsonRecord } {
+  if (typeof value === "string") {
+    if (value === "auto" || value === "none") {
+      return { tool_choice: { type: value } };
+    }
+    return {};
+  }
+  const record = asRecord(value);
+  if (!record) {
+    return {};
+  }
+  if (record.type === "auto" || record.type === "none") {
+    return { tool_choice: { type: record.type } };
+  }
+  if (record.type === "function") {
+    const fn = asRecord(record.function);
+    if (fn && typeof fn.name === "string") {
+      return { tool_choice: { type: "tool", name: fn.name } };
+    }
+  }
+  return {};
+}
+
+/**
+ * Maps a chat-completions `tool_choice` to Responses-API form:
+ * `{type:"function",function:{name}}` → `{type:"function",name}`.
+ * @param value Raw chat `tool_choice`
+ * @returns Responses tool_choice spread, or empty when absent
+ */
+function convertChatToolChoiceToResponses(value: unknown): { tool_choice?: JsonRecord } {
+  if (typeof value === "string") {
+    if (value === "auto" || value === "none" || value === "required") {
+      return { tool_choice: { type: value } };
+    }
+    return {};
+  }
+  const record = asRecord(value);
+  if (!record) {
+    return {};
+  }
+  if (record.type === "auto" || record.type === "none" || record.type === "required") {
+    return { tool_choice: { type: record.type } };
+  }
+  if (record.type === "function") {
+    const fn = asRecord(record.function);
+    if (fn && typeof fn.name === "string") {
+      return { tool_choice: { type: "function", name: fn.name } };
+    }
+  }
+  return {};
+}
+
+/**
+ * Maps an Anthropic `tool_choice` to chat-completions form:
+ * `{type:"tool",name}` → `{type:"function",function:{name}}`; "auto"/"none"
+ * pass through; "any" and unknown shapes are dropped (documented as
+ * known-dropped in the gateway conversion matrix).
+ * @param value Raw Anthropic tool_choice
+ * @returns Chat tool_choice spread, or empty when absent
+ */
+function convertAnthropicToolChoiceToChat(value: unknown): { tool_choice?: JsonRecord } {
+  if (typeof value === "string") {
+    if (value === "auto" || value === "none") {
+      return { tool_choice: { type: value } };
+    }
+    return {};
+  }
+  const record = asRecord(value);
+  if (!record) {
+    return {};
+  }
+  if (record.type === "auto" || record.type === "none") {
+    return { tool_choice: { type: record.type } };
+  }
+  if (record.type === "tool") {
+    const name = typeof record.name === "string" ? record.name : "";
+    if (name.length > 0) {
+      return { tool_choice: { type: "function", function: { name } } };
+    }
+  }
+  return {};
+}
+
+/**
+ * Maps a Responses-API `tool_choice` to chat-completions form:
+ * `{type:"function",name}` → `{type:"function",function:{name}}`.
+ * @param value Raw Responses tool_choice
+ * @returns Chat tool_choice spread, or empty when absent
+ */
+function convertResponsesToolChoiceToChat(value: unknown): { tool_choice?: JsonRecord } {
+  if (typeof value === "string") {
+    if (value === "auto" || value === "none" || value === "required") {
+      return { tool_choice: { type: value } };
+    }
+    return {};
+  }
+  const record = asRecord(value);
+  if (!record) {
+    return {};
+  }
+  if (record.type === "auto" || record.type === "none" || record.type === "required") {
+    return { tool_choice: { type: record.type } };
+  }
+  if (record.type === "function") {
+    const name = typeof record.name === "string" ? record.name : "";
+    if (name.length > 0) {
+      return { tool_choice: { type: "function", function: { name } } };
+    }
+  }
+  return {};
+}
+
 function chatToAnthropic(body: JsonRecord): JsonRecord {
   const messages: JsonRecord[] = [];
   const systemMessages: string[] = [];
@@ -736,11 +893,18 @@ function chatToAnthropic(body: JsonRecord): JsonRecord {
     appendChatMessageAsAnthropic(record, messages, systemMessages);
   }
 
+  const stopSequences = chatStopToAnthropicStopSequences(body.stop);
+
   return {
     model: body.model,
     messages,
     ...(systemMessages.length > 0 ? { system: systemMessages.join("\n\n") } : {}),
     ...(typeof body.max_tokens === "number" ? { max_tokens: body.max_tokens } : {}),
+    // Parameter passthrough: temperature/top_p as-is; stop → stop_sequences; tool_choice maps.
+    ...(typeof body.temperature === "number" ? { temperature: body.temperature } : {}),
+    ...(typeof body.top_p === "number" ? { top_p: body.top_p } : {}),
+    ...(stopSequences !== undefined ? { stop_sequences: stopSequences } : {}),
+    ...convertChatToolChoiceToAnthropic(body.tool_choice),
     stream: body.stream === true,
     ...convertChatToolsToAnthropic(body.tools),
   };
@@ -819,7 +983,10 @@ function readChatToolUseContent(toolCalls: unknown): JsonRecord[] {
     return [
       {
         type: "tool_use",
-        id: typeof toolCallRecord.id === "string" ? toolCallRecord.id : "",
+        id:
+          typeof toolCallRecord.id === "string" && toolCallRecord.id.length > 0
+            ? toolCallRecord.id
+            : newToolCallId(),
         name: typeof fn.name === "string" ? fn.name : "",
         input: parseJsonObject(fn.arguments),
       },
@@ -893,6 +1060,12 @@ function chatToResponses(body: JsonRecord): JsonRecord {
     input,
     ...(instructions.length > 0 ? { instructions: instructions.join("\n\n") } : {}),
     ...(typeof body.max_tokens === "number" ? { max_output_tokens: body.max_tokens } : {}),
+    // Parameter passthrough: temperature/top_p forward as-is; `stop` is
+    // intentionally dropped for the Responses target (known-dropped, see the
+    // gateway conversion matrix); tool_choice maps to {type,name}.
+    ...(typeof body.temperature === "number" ? { temperature: body.temperature } : {}),
+    ...(typeof body.top_p === "number" ? { top_p: body.top_p } : {}),
+    ...convertChatToolChoiceToResponses(body.tool_choice),
     stream: body.stream === true,
     ...convertChatToolsToResponses(body.tools),
   };
@@ -1146,6 +1319,10 @@ function chatToResponsesResponse(chatResponse: JsonRecord, fallbackModel: unknow
  * Codex shell tools reject floating-point timeout fields (`expected u64`). Grok often
  * emits `timeout_ms: 15000.0` in tool arguments; coerce known numeric timeout keys to
  * integers so the app-server can execute instead of returning parse errors in a loop.
+ *
+ * Walks the full parsed JSON tree (any nesting depth) instead of regex-matching top
+ * levels, so `timeout_ms` inside nested objects/arrays is also normalized. Falls back
+ * to the original text when the payload is not valid JSON.
  * @param name Tool / function name
  * @param argumentsJson Raw JSON arguments string
  * @returns Sanitized arguments JSON string
@@ -1154,39 +1331,65 @@ function sanitizeToolCallArguments(name: string, argumentsJson: string): string 
   if (!argumentsJson || argumentsJson.trim().length === 0) {
     return argumentsJson;
   }
-  // Fast path: rewrite float literals in timeout fields without full parse.
-  // Codex rejects `timeout_ms: 15000.0` (expected u64). JS number equality cannot
-  // detect the trailing `.0` once parsed, so operate on the raw JSON text too.
-  const floatTimeoutFixed = argumentsJson.replace(
-    /("(?:timeout_ms|timeoutMs|timeout|command_timeout_ms)"\s*:\s*)(-?\d+)\.0+\b/g,
-    "$1$2",
-  );
+  let parsed: unknown;
   try {
-    const parsed = JSON.parse(floatTimeoutFixed) as unknown;
-    const record = asRecord(parsed);
-    if (!record) {
-      return floatTimeoutFixed;
-    }
-    let changed = floatTimeoutFixed !== argumentsJson;
-    for (const key of ["timeout_ms", "timeoutMs", "timeout", "command_timeout_ms"]) {
-      const value = record[key];
-      if (typeof value === "number" && Number.isFinite(value)) {
-        const asInt = Math.max(0, Math.trunc(value));
-        if (asInt !== value) {
-          record[key] = asInt;
-          changed = true;
-        } else if (!Number.isInteger(value)) {
-          record[key] = asInt;
-          changed = true;
-        }
-      }
-    }
-    // shell_command / exec tools are the main offenders; still safe for other tools.
-    void name;
-    return changed ? JSON.stringify(record) : floatTimeoutFixed;
+    parsed = JSON.parse(argumentsJson) as unknown;
   } catch {
-    return floatTimeoutFixed;
+    // Not valid JSON — keep the original payload untouched (existing fallback).
+    return argumentsJson;
   }
+  const record = asRecord(parsed);
+  if (!record) {
+    return argumentsJson;
+  }
+  const changed = normalizeTimeoutKeys(record);
+  if (!changed) {
+    return argumentsJson;
+  }
+  // shell_command / exec tools are the main offenders; still safe for other tools.
+  void name;
+  try {
+    return JSON.stringify(record);
+  } catch {
+    return argumentsJson;
+  }
+}
+
+const TIMEOUT_KEYS = new Set(["timeout_ms", "timeoutMs", "timeout", "command_timeout_ms"]);
+
+/**
+ * Recursively truncates floating-point values under known timeout keys to integers.
+ * Mutates the tree in place; returns whether anything changed.
+ * @param value Any node of a parsed JSON tree
+ * @returns True when at least one timeout value was normalized
+ */
+function normalizeTimeoutKeys(value: unknown): boolean {
+  if (Array.isArray(value)) {
+    let changed = false;
+    for (const item of value) {
+      changed = normalizeTimeoutKeys(item) || changed;
+    }
+    return changed;
+  }
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const record = value as JsonRecord;
+  let changed = false;
+  for (const [key, child] of Object.entries(record)) {
+    if (TIMEOUT_KEYS.has(key) && typeof child === "number" && Number.isFinite(child)) {
+      const asInt = Math.max(0, Math.trunc(child));
+      if (asInt !== child) {
+        record[key] = asInt;
+        changed = true;
+      }
+      continue;
+    }
+    if (Array.isArray(child) || (typeof child === "object" && child !== null)) {
+      changed = normalizeTimeoutKeys(child) || changed;
+    }
+  }
+  return changed;
 }
 
 /**
@@ -1257,6 +1460,12 @@ function readStreamDelta(parsed: JsonRecord, format: ModelGatewayTargetFormat): 
   if (format === "anthropic") {
     const delta = asRecord(parsed.delta) ?? {};
     return typeof delta.text === "string" ? delta.text : "";
+  }
+  // Only response.output_text.delta carries display text. Other string `delta`
+  // payloads (e.g. response.function_call_arguments.delta argument fragments)
+  // must not leak into the text stream.
+  if (parsed.type !== "response.output_text.delta") {
+    return "";
   }
   return typeof parsed.delta === "string" ? parsed.delta : "";
 }
@@ -1357,6 +1566,7 @@ function createStreamFormatter(targetFormat: ModelGatewayTargetFormat): {
 
   if (targetFormat === "chatCompletions") {
     const id = `chatcmpl_${Date.now()}`;
+    let toolCallIndex = 0;
     return {
       start: () => "",
       delta: (text: string) =>
@@ -1365,6 +1575,30 @@ function createStreamFormatter(targetFormat: ModelGatewayTargetFormat): {
           object: "chat.completion.chunk",
           choices: [{ index: 0, delta: { content: text }, finish_reason: null }],
         })}\n\n`,
+      toolCall: (call) => {
+        const index = toolCallIndex;
+        toolCallIndex += 1;
+        return `data: ${JSON.stringify({
+          id,
+          object: "chat.completion.chunk",
+          choices: [
+            {
+              index: 0,
+              delta: {
+                tool_calls: [
+                  {
+                    index,
+                    id: call.id && call.id.length > 0 ? call.id : newToolCallId(),
+                    type: "function",
+                    function: { name: call.name, arguments: call.arguments },
+                  },
+                ],
+              },
+              finish_reason: null,
+            },
+          ],
+        })}\n\n`;
+      },
       finish: (hasToolCalls) =>
         [
           `data: ${JSON.stringify({
@@ -1510,10 +1744,10 @@ function createStreamingTextTransform(
   const encoder = new TextEncoder();
   const formatter = createStreamFormatter(targetFormat);
   let buffer = "";
-  // Track tool calls across chunks so we can emit them on finish when the
-  // upstream streams chatCompletions tool_calls deltas. Text deltas are still
-  // streamed live for responsiveness.
-  const toolCallAccumulator = new Map<number, { id: string; name: string; arguments: string }>();
+  // Track tool calls across chunks so we can emit them on finish. Text deltas
+  // are still streamed live for responsiveness.
+  const toolCallAccumulator = new Map<number, ToolCallAccumulatorEntry>();
+  const responsesToolCallState: ResponsesToolCallState = { itemSeq: new Map(), nextIndex: 0 };
 
   function emit(value: string, controller: TransformStreamDefaultController<Uint8Array>): void {
     if (value.length > 0) {
@@ -1537,6 +1771,10 @@ function createStreamingTextTransform(
       // Then accumulate tool_calls deltas (emitted on finish)
       if (upstreamFormat === "chatCompletions") {
         accumulateChatToolCallDeltas(block, toolCallAccumulator);
+      } else if (upstreamFormat === "anthropic") {
+        accumulateAnthropicToolCallDeltas(block, toolCallAccumulator);
+      } else if (upstreamFormat === "responses") {
+        accumulateResponsesToolCallDeltas(block, toolCallAccumulator, responsesToolCallState);
       }
     }
   }
@@ -1558,6 +1796,10 @@ function createStreamingTextTransform(
         }
         if (upstreamFormat === "chatCompletions") {
           accumulateChatToolCallDeltas(buffer, toolCallAccumulator);
+        } else if (upstreamFormat === "anthropic") {
+          accumulateAnthropicToolCallDeltas(buffer, toolCallAccumulator);
+        } else if (upstreamFormat === "responses") {
+          accumulateResponsesToolCallDeltas(buffer, toolCallAccumulator, responsesToolCallState);
         }
       }
       // Emit accumulated tool calls before finish. Fill missing ids once so
@@ -1580,16 +1822,26 @@ function createStreamingTextTransform(
   });
 }
 
+interface ToolCallAccumulatorEntry {
+  id: string;
+  name: string;
+  arguments: string;
+}
+
 /**
  * Parses a chatCompletions SSE block for tool_calls deltas and accumulates them
  * by index, concatenating argument fragments into complete tool calls.
+ *
+ * Some upstreams omit `tool_calls[].index` on argument fragments. When the index
+ * is missing, the fragment continues the last in-flight tool call (empty name,
+ * no new id) or starts a new one (name/id present) at the next index.
  * @param block A single SSE block (double-newline-terminated chunk)
  * @param accumulator Map keyed by tool_calls index to the accumulated call
  */
 // eslint-disable-next-line complexity
 function accumulateChatToolCallDeltas(
   block: string,
-  accumulator: Map<number, { id: string; name: string; arguments: string }>,
+  accumulator: Map<number, ToolCallAccumulatorEntry>,
 ): void {
   for (const line of block.split(/\r?\n/u)) {
     if (!line.startsWith("data:")) {
@@ -1609,8 +1861,13 @@ function accumulateChatToolCallDeltas(
       for (const tc of toolCalls) {
         const tcRecord = asRecord(tc);
         if (!tcRecord) continue;
-        const index = typeof tcRecord.index === "number" ? tcRecord.index : 0;
         const fn = asRecord(tcRecord.function) ?? {};
+        let index: number;
+        if (typeof tcRecord.index === "number") {
+          index = tcRecord.index;
+        } else {
+          index = resolveMissingToolCallIndex(tcRecord, fn, accumulator);
+        }
         const existing = accumulator.get(index) ?? { id: "", name: "", arguments: "" };
         if (typeof tcRecord.id === "string" && existing.id === "") {
           existing.id = tcRecord.id;
@@ -1620,6 +1877,155 @@ function accumulateChatToolCallDeltas(
         }
         if (typeof fn.arguments === "string") {
           existing.arguments += fn.arguments;
+        }
+        accumulator.set(index, existing);
+      }
+    } catch {
+      // Ignore malformed deltas
+    }
+  }
+}
+
+/**
+ * Resolves the tool_calls index for a delta that omits `index`: continue the last
+ * in-flight tool call when the fragment carries no name and no new id, otherwise
+ * allocate the next index.
+ * @param tcRecord The raw tool_calls delta entry
+ * @param fn The parsed `function` record of the delta
+ * @param accumulator Current accumulator state
+ * @returns The index the fragment belongs to
+ */
+function resolveMissingToolCallIndex(
+  tcRecord: JsonRecord,
+  fn: JsonRecord,
+  accumulator: Map<number, ToolCallAccumulatorEntry>,
+): number {
+  const lastKey = accumulator.size > 0 ? Math.max(...accumulator.keys()) : undefined;
+  if (lastKey === undefined) {
+    return 0;
+  }
+  const deltaId = typeof tcRecord.id === "string" ? tcRecord.id : "";
+  const deltaName = typeof fn.name === "string" ? fn.name : "";
+  const lastEntry = accumulator.get(lastKey);
+  const startsNewTool = deltaName.length > 0 || (deltaId.length > 0 && deltaId !== lastEntry?.id);
+  return startsNewTool ? lastKey + 1 : lastKey;
+}
+
+/**
+ * Parses an Anthropic SSE block for tool_use content_block events and accumulates
+ * `input_json_delta` fragments keyed by content_block index, so tool calls from
+ * an Anthropic upstream survive the bridge into chat/responses targets.
+ * @param block A single SSE block (double-newline-terminated chunk)
+ * @param accumulator Map keyed by content_block index to the accumulated call
+ */
+// eslint-disable complexity, max-depth
+function accumulateAnthropicToolCallDeltas(
+  block: string,
+  accumulator: Map<number, ToolCallAccumulatorEntry>,
+): void {
+  for (const line of block.split(/\r?\n/u)) {
+    if (!line.startsWith("data:")) {
+      continue;
+    }
+    const payload = line.slice("data:".length).trim();
+    if (!payload || payload === "[DONE]") {
+      continue;
+    }
+    try {
+      const parsed = JSON.parse(payload) as unknown;
+      const record = asRecord(parsed) ?? {};
+      const eventType = typeof record.type === "string" ? record.type : "";
+      if (eventType === "content_block_start") {
+        const index = typeof record.index === "number" ? record.index : 0;
+        const contentBlock = asRecord(record.content_block) ?? {};
+        if (contentBlock.type === "tool_use" && !accumulator.has(index)) {
+          accumulator.set(index, {
+            id: typeof contentBlock.id === "string" ? contentBlock.id : "",
+            name: typeof contentBlock.name === "string" ? contentBlock.name : "",
+            arguments: "",
+          });
+        }
+      } else if (eventType === "content_block_delta") {
+        const index = typeof record.index === "number" ? record.index : 0;
+        const delta = asRecord(record.delta) ?? {};
+        if (delta.type === "input_json_delta" && typeof delta.partial_json === "string") {
+          const existing = accumulator.get(index) ?? { id: "", name: "", arguments: "" };
+          existing.arguments += delta.partial_json;
+          accumulator.set(index, existing);
+        }
+      }
+    } catch {
+      // Ignore malformed deltas
+    }
+  }
+}
+
+interface ResponsesToolCallState {
+  /** Responses item_id → accumulator index, kept across SSE blocks */
+  itemSeq: Map<string, number>;
+  /** Next accumulator index to allocate for a new function_call item */
+  nextIndex: number;
+}
+
+/**
+ * Parses a Responses-API SSE block for function_call items and accumulates them
+ * keyed by an allocated sequence number, so tool calls from a Responses upstream
+ * survive the bridge into chat/anthropic targets.
+ * @param block A single SSE block (double-newline-terminated chunk)
+ * @param accumulator Map keyed by sequence number to the accumulated call
+ * @param state Cross-block item_id → index mapping
+ */
+// eslint-disable complexity, max-depth
+function accumulateResponsesToolCallDeltas(
+  block: string,
+  accumulator: Map<number, ToolCallAccumulatorEntry>,
+  state: ResponsesToolCallState,
+): void {
+  for (const line of block.split(/\r?\n/u)) {
+    if (!line.startsWith("data:")) {
+      continue;
+    }
+    const payload = line.slice("data:".length).trim();
+    if (!payload || payload === "[DONE]") {
+      continue;
+    }
+    try {
+      const parsed = JSON.parse(payload) as unknown;
+      const record = asRecord(parsed) ?? {};
+      const eventType = typeof record.type === "string" ? record.type : "";
+      if (eventType === "response.output_item.added") {
+        const item = asRecord(record.item) ?? {};
+        if (item.type === "function_call") {
+          const itemId = firstStringField(item, "id", "call_id");
+          let index = itemId.length > 0 ? state.itemSeq.get(itemId) : undefined;
+          if (index === undefined) {
+            index = state.nextIndex;
+            state.nextIndex += 1;
+            if (itemId.length > 0) {
+              state.itemSeq.set(itemId, index);
+            }
+          }
+          const existing = accumulator.get(index) ?? { id: "", name: "", arguments: "" };
+          if (existing.id === "") {
+            existing.id = firstStringField(item, "id", "call_id");
+          }
+          if (existing.name === "") {
+            existing.name = typeof item.name === "string" ? item.name : "";
+          }
+          if (existing.arguments === "" && typeof item.arguments === "string") {
+            existing.arguments = item.arguments;
+          }
+          accumulator.set(index, existing);
+        }
+      } else if (eventType === "response.function_call_arguments.delta") {
+        const itemId = typeof record.item_id === "string" ? record.item_id : "";
+        const index = itemId.length > 0 ? state.itemSeq.get(itemId) : undefined;
+        if (index === undefined) {
+          continue;
+        }
+        const existing = accumulator.get(index) ?? { id: "", name: "", arguments: "" };
+        if (typeof record.delta === "string") {
+          existing.arguments += record.delta;
         }
         accumulator.set(index, existing);
       }
@@ -2194,6 +2600,95 @@ async function runSyntheticModel(input: {
     throw new Error(result.aggregator.error ?? "MoA aggregator failed");
   }
   return result.finalText;
+}
+
+export interface ModelGatewayTestResult {
+  ok: boolean;
+  durationMs: number;
+  status: number | null;
+  error: string | null;
+}
+
+/**
+ * Sends a minimal non-streaming completion through a gateway and measures the
+ * end-to-end response latency.
+ * @param gateway Gateway configuration to test
+ * @param modelId Model id sent to the selected upstream
+ * @param fetchImpl Optional fetch implementation for tests
+ * @returns Connectivity, HTTP status, error, and elapsed milliseconds
+ */
+function buildModelGatewayTestRequestBody(
+  targetFormat: ModelGatewayTargetFormat,
+  modelId: string,
+): JsonRecord {
+  if (targetFormat === "anthropic") {
+    return {
+      model: modelId,
+      max_tokens: 1,
+      messages: [{ role: "user", content: "ping" }],
+    };
+  }
+  if (targetFormat === "responses") {
+    return {
+      model: modelId,
+      max_output_tokens: 1,
+      input: [{ type: "message", role: "user", content: "ping" }],
+    };
+  }
+  return {
+    model: modelId,
+    max_tokens: 1,
+    messages: [{ role: "user", content: "ping" }],
+  };
+}
+
+export async function runModelGatewayTest(input: {
+  gateway: ModelGatewayConfig;
+  modelId: string;
+  targetFormat?: ModelGatewayTargetFormat;
+  fetchImpl?: typeof fetch;
+}): Promise<ModelGatewayTestResult> {
+  const { gateway, modelId, targetFormat, fetchImpl = fetch } = input;
+  const enabledFormats: ModelGatewayTargetFormat[] = targetFormat
+    ? [targetFormat]
+    : ["anthropic", "responses", "chatCompletions"];
+  const selectedFormat = enabledFormats.find((format) =>
+    isConfigured(getUpstreamForFormat(gateway, format)),
+  );
+  if (!selectedFormat) {
+    return {
+      ok: false,
+      durationMs: 0,
+      status: null,
+      error: "No enabled upstream is configured",
+    };
+  }
+
+  const requestBody = buildModelGatewayTestRequestBody(selectedFormat, modelId);
+
+  const startedAt = performance.now();
+  try {
+    const response = await handleModelGatewayRequest({
+      gateway,
+      targetFormat: selectedFormat,
+      requestBody,
+      fetchImpl,
+    });
+    await response.arrayBuffer();
+    return {
+      ok: response.ok,
+      durationMs: Math.max(0, Math.round(performance.now() - startedAt)),
+      status: response.status,
+      error: response.ok ? null : `Upstream returned HTTP ${response.status}`,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      durationMs: Math.max(0, Math.round(performance.now() - startedAt)),
+      status: null,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
 }
 
 export async function runSyntheticModelTest(input: {

@@ -58,6 +58,34 @@ describe("synthetic model helpers", () => {
     ]);
   });
 
+  it("keeps gateway supplyScope untouched when patching synthetic models", () => {
+    const gatewaysWithScope = {
+      zai: {
+        ...modelGateways.zai,
+        supplyScope: "all" as const,
+      },
+    } satisfies NonNullable<MutableDaemonConfig["modelGateways"]>;
+
+    const patch = buildSaveSyntheticModelPatch({
+      currentGateways: gatewaysWithScope,
+      gatewayId: "zai",
+      id: "moa-reviewer",
+      label: "MoA Reviewer",
+      references: ["glm-5", "glm-4.6"],
+      aggregatorModel: "glm-5",
+      rounds: 2,
+    });
+
+    // The gateway patch only carries models/syntheticModels; supplyScope is not
+    // overwritten, so the config-store deepMerge keeps the stored value.
+    expect(patch.modelGateways?.zai).not.toHaveProperty("supplyScope");
+    expect(patch.modelGateways?.zai).not.toHaveProperty("attachToAllAgents");
+    expect(patch.modelGateways?.zai?.syntheticModels).toEqual([
+      expect.objectContaining({ id: "moa-coder" }),
+      expect.objectContaining({ id: "moa-reviewer" }),
+    ]);
+  });
+
   it("builds a gateway patch for a synthetic model", () => {
     expect(
       buildSaveSyntheticModelPatch({

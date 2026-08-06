@@ -35,6 +35,9 @@ function createHandlerContext(
     supports: () => options.supportsCustomModeIcons === true,
     isProviderVisibleToClient: (provider: string) => provider !== "hidden-provider",
     providerSnapshotManager: manager,
+    daemonConfigStore: {
+      get: () => ({ modelGateways: {} }),
+    },
   } as unknown as ProviderHandlerContext;
 
   return {
@@ -116,6 +119,31 @@ describe("ProviderHandler provider snapshot push", () => {
     expect(on).toHaveBeenCalledTimes(1);
   });
 
+  it("returns an RPC error payload for an unknown model gateway test", async () => {
+    const emitted: SessionOutboundMessage[] = [];
+    const { context } = createHandlerContext(emitted);
+    const handler = new ProviderHandler(context);
+
+    await handler.handleModelGatewayTestRequest({
+      type: "model_gateway.test.request",
+      requestId: "gateway-test-unknown",
+      gatewayId: "missing",
+      modelId: "glm-5",
+    });
+
+    expect(emitted).toEqual([
+      {
+        type: "model_gateway.test.response",
+        payload: {
+          requestId: "gateway-test-unknown",
+          gatewayId: "missing",
+          modelId: "glm-5",
+          result: null,
+          error: "Unknown model gateway",
+        },
+      },
+    ]);
+  });
   it("contains projection failures without throwing to the manager", () => {
     const emitted: SessionOutboundMessage[] = [];
     const { context, emitChange } = createHandlerContext(emitted);

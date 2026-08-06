@@ -166,4 +166,35 @@ describe("ProviderCommandClient", () => {
       },
     ]);
   });
+
+  test("maps model gateway connectivity tests with the intended upstream format", async () => {
+    const requests: Array<Parameters<DaemonCommandTransport["request"]>[0]> = [];
+    const client = new ProviderCommandClient({
+      request: async (params) => {
+        requests.push(params);
+        return {} as never;
+      },
+    });
+
+    await client.runModelGatewayTest({
+      gatewayId: "zai",
+      modelId: "glm-5",
+      targetFormat: "chatCompletions",
+      requestId: "gateway-test-1",
+    });
+
+    expect(requests).toEqual([
+      {
+        requestId: "gateway-test-1",
+        message: {
+          type: "model_gateway.test.request",
+          gatewayId: "zai",
+          modelId: "glm-5",
+          targetFormat: "chatCompletions",
+        },
+        responseType: "model_gateway.test.response",
+        timeout: 30000,
+      },
+    ]);
+  });
 });

@@ -1,4 +1,4 @@
-import { Brain, Pencil, Plus, Trash2 } from "lucide-react-native";
+import { Brain, Pencil, Plus, Trash2, Zap } from "lucide-react-native";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, Text, View, type PressableStateCallbackType } from "react-native";
@@ -15,6 +15,8 @@ import { Switch } from "@/components/ui/switch";
 import { isWeb } from "@/constants/platform";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
+import { useHostRuntimeClient } from "@/runtime/host-runtime";
+import { useSessionStore } from "@/stores/session-store";
 import { useUserVisibleErrorReporter } from "@/hooks/use-user-visible-error";
 import { SettingsSection } from "@/screens/settings/settings-section";
 import {
@@ -25,6 +27,7 @@ import {
   type CollectedSavedModel,
   type CustomModelProtocolPreset,
   type CustomModelProviderEndpoint,
+  type CustomModelThinkingLevel,
   type CustomModelThinkingMode,
   type CustomOpenAIWireApi,
 } from "@/screens/settings/custom-model-providers";
@@ -37,6 +40,7 @@ const ThemedPencil = withUnistyles(Pencil);
 const ThemedTrash2 = withUnistyles(Trash2);
 const ThemedPlus = withUnistyles(Plus);
 const ThemedBrain = withUnistyles(Brain);
+const ThemedZap = withUnistyles(Zap);
 
 const foregroundMutedColorMapping = (theme: Theme) => ({
   color: theme.colors.foregroundMuted,
@@ -46,9 +50,25 @@ const destructiveColorMapping = (theme: Theme) => ({
 });
 
 const FLEX_1_STYLE = { flex: 1 };
+const NOOP = () => undefined;
 
 function DeleteModelSheetHeader(t: (key: string) => string): SheetHeader {
   return { title: t("customModelProviders.deleteConfirmTitle") };
+}
+
+function resolveTestTargetFormat(
+  protocolPreset: CollectedSavedModel["protocolPreset"],
+): "anthropic" | "chatCompletions" | "responses" | undefined {
+  if (protocolPreset === "claude") {
+    return "anthropic";
+  }
+  if (protocolPreset === "codex") {
+    return "responses";
+  }
+  if (protocolPreset === "openai") {
+    return "chatCompletions";
+  }
+  return undefined;
 }
 
 interface CustomModelProvidersSectionProps {
@@ -68,6 +88,7 @@ interface ModelEditorValues {
   supportsTools: boolean;
   supportsImages: boolean;
   thinkingMode: CustomModelThinkingMode;
+  thinkingLevels: CustomModelThinkingLevel[];
   protocolPreset: CustomModelProtocolPreset;
   attachToAllAgents: boolean;
   customProtocol: boolean;
@@ -106,8 +127,9 @@ function createEmptyEditorValues(): ModelEditorValues {
     supportsTools: true,
     supportsImages: false,
     thinkingMode: "off",
+    thinkingLevels: [],
     protocolPreset: "openai",
-    attachToAllAgents: false,
+    attachToAllAgents: true,
     customProtocol: false,
     contextWindowText: "",
     anthropicEnabled: false,
@@ -120,6 +142,19 @@ function createEmptyEditorValues(): ModelEditorValues {
     responsesBaseUrl: "",
     responsesApiKey: "",
   };
+}
+
+function resolveProtocolSubtitle(values: ModelEditorValues, t: (key: string) => string): string {
+  if (values.attachToAllAgents) {
+    return t("customModelProviders.attachToAllAgentsSubtitle");
+  }
+  if (values.protocolPreset === "claude") {
+    return t("customModelProviders.protocolClaudeHint");
+  }
+  if (values.protocolPreset === "codex") {
+    return t("customModelProviders.protocolCodexHint");
+  }
+  return t("customModelProviders.protocolOpenaiHint");
 }
 
 function resolveProtocolPresetForEditor(
@@ -228,6 +263,17 @@ function createEditorValuesFromSavedModel(
     supportsTools: model.supportsTools === true,
     supportsImages: model.supportsImages === true,
     thinkingMode: model.thinkingMode ?? (model.supportsThinking === true ? "single" : "off"),
+    thinkingLevels: (() => {
+      const levels = (
+        gateway?.models?.find((entry) => entry.id === model.modelId)?.thinkingOptions ?? []
+      )
+        .map((option) => option.id)
+        .filter(
+          (id): id is CustomModelThinkingLevel =>
+            id === "low" || id === "medium" || id === "high" || id === "very-high" || id === "max",
+        );
+      return levels.length > 0 || model.supportsThinking !== true ? levels : ["medium"];
+    })(),
     protocolPreset: resolveProtocolPresetForEditor(model, flags),
     attachToAllAgents: model.attachToAllAgents === true || multiProtocol,
     customProtocol: multiProtocol,
@@ -250,15 +296,22 @@ function SavedModelRow({
   deleting,
   onEdit,
   onDelete,
+  onTest,
+  testing,
+  testResult,
 }: {
   model: CollectedSavedModel;
   deleting: boolean;
   onEdit: (model: CollectedSavedModel) => void;
   onDelete: (model: CollectedSavedModel) => void;
+  onTest: (model: CollectedSavedModel) => void;
+  testing: boolean;
+  testResult: { ok: boolean; durationMs: number; error: string | null } | null;
 }) {
   const { t } = useTranslation();
   const handleEdit = useCallback(() => onEdit(model), [model, onEdit]);
   const handleDelete = useCallback(() => onDelete(model), [model, onDelete]);
+  const handleTest = useCallback(() => onTest(model), [model, onTest]);
   const buttonStyle = useCallback(
     ({ hovered, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
       styles.iconButton,
@@ -276,6 +329,10 @@ function SavedModelRow({
   } else if (model.protocolPreset === "openai") {
     protocolLabel = t("customModelProviders.protocolOpenai");
   }
+  const supplyBadge =
+    model.supplyScope === "all" || model.protocolPreset === "all"
+      ? t("customModelProviders.allAgentsBadge")
+      : t("customModelProviders.matchedAgentsBadge");
 
   return (
     <View style={styles.modelRow} testID={`saved-model-row-${model.gatewayId}-${model.modelId}`}>
@@ -288,7 +345,7 @@ function SavedModelRow({
             {model.label}
           </Text>
           <Text style={styles.modelSubtitle} numberOfLines={1}>
-            {protocolLabel}
+            {protocolLabel} · {supplyBadge}
             {model.gatewayLabel && model.gatewayLabel !== model.label
               ? ` · ${model.gatewayLabel}`
               : ""}
@@ -313,6 +370,24 @@ function SavedModelRow({
         </View>
       </View>
       <View style={styles.rowActions}>
+        <Pressable
+          onPress={handleTest}
+          disabled={testing || deleting}
+          hitSlop={8}
+          style={buttonStyle}
+          accessibilityRole="button"
+          accessibilityLabel={t("customModelProviders.testModel", { model: model.label })}
+          testID={`test-saved-model-${model.gatewayId}-${model.modelId}`}
+        >
+          <ThemedZap size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
+        </Pressable>
+        {testResult ? (
+          <Text style={testResult.ok ? styles.testResultOk : styles.testResultError}>
+            {testResult.ok
+              ? t("customModelProviders.testLatency", { latency: testResult.durationMs })
+              : t("customModelProviders.testUnavailable")}
+          </Text>
+        ) : null}
         <Pressable
           onPress={handleEdit}
           hitSlop={8}
@@ -397,6 +472,113 @@ function ChoiceChip({
   );
 }
 
+function ThinkingLevelToggle({
+  option,
+  selected,
+  onToggle,
+}: {
+  option: { id: CustomModelThinkingLevel; label: string; english: string };
+  selected: boolean;
+  onToggle: (level: CustomModelThinkingLevel) => void;
+}) {
+  const handleChange = useCallback(() => onToggle(option.id), [onToggle, option.id]);
+  return (
+    <CapabilityToggle
+      label={`${option.label} (${option.english})`}
+      value={selected}
+      onChange={handleChange}
+      testID={`thinking-level-${option.id}`}
+    />
+  );
+}
+
+function ThinkingLevelsField({
+  selected,
+  onToggle,
+}: {
+  selected: CustomModelThinkingLevel[];
+  onToggle: (level: CustomModelThinkingLevel) => void;
+}) {
+  const { t } = useTranslation();
+  const options: Array<{ id: CustomModelThinkingLevel; label: string; english: string }> = [
+    { id: "low", label: t("customModelProviders.thinkingLow"), english: "Low" },
+    { id: "medium", label: t("customModelProviders.thinkingMedium"), english: "Medium" },
+    { id: "high", label: t("customModelProviders.thinkingHigh"), english: "High" },
+    { id: "very-high", label: t("customModelProviders.thinkingVeryHigh"), english: "Very High" },
+    { id: "max", label: t("customModelProviders.thinkingMax"), english: "Max" },
+  ];
+  const selectedSet = new Set(selected);
+  return (
+    <View style={styles.fieldGroup}>
+      <Text style={styles.formLabel}>{t("customModelProviders.thinkingMode")}</Text>
+      <Text style={styles.fieldHint}>{t("customModelProviders.thinkingModeHint")}</Text>
+      <View style={styles.thinkingLevelsGrid}>
+        {options.map((option) => (
+          <ThinkingLevelToggle
+            key={option.id}
+            option={option}
+            selected={selectedSet.has(option.id)}
+            onToggle={onToggle}
+          />
+        ))}
+      </View>
+    </View>
+  );
+}
+
+function SupplyScopeField({
+  attachToAllAgents,
+  onSelectAll,
+  onSelectMatched,
+  scopeSupported,
+  locked,
+}: {
+  attachToAllAgents: boolean;
+  onSelectAll: () => void;
+  onSelectMatched: () => void;
+  scopeSupported: boolean;
+  locked?: boolean;
+}) {
+  const { t } = useTranslation();
+  if (!scopeSupported || locked) {
+    return (
+      <View style={styles.fieldGroup}>
+        <Text style={styles.formLabel}>{t("customModelProviders.supplyScope")}</Text>
+        <Text style={styles.fieldHint}>{t("customModelProviders.legacySupplyScopeHint")}</Text>
+        <ChoiceChip
+          label={t("customModelProviders.supplyAll")}
+          selected
+          onPress={NOOP}
+          testID="supply-scope-legacy-all"
+        />
+      </View>
+    );
+  }
+  return (
+    <View style={styles.fieldGroup}>
+      <Text style={styles.formLabel}>{t("customModelProviders.supplyScope")}</Text>
+      <Text style={styles.fieldHint}>{t("customModelProviders.supplyScopeHint")}</Text>
+      <View style={styles.presetRow}>
+        <ChoiceChip
+          label={t("customModelProviders.supplyAll")}
+          selected={attachToAllAgents}
+          onPress={onSelectAll}
+          testID="supply-scope-all"
+        />
+        <ChoiceChip
+          label={t("customModelProviders.supplyMatched")}
+          selected={!attachToAllAgents}
+          onPress={onSelectMatched}
+          testID="supply-scope-matched"
+        />
+      </View>
+      {attachToAllAgents ? (
+        <Text style={styles.fieldHint}>{t("customModelProviders.attachToAllAgentsHint")}</Text>
+      ) : null}
+    </View>
+  );
+}
+
 function EndpointFields({
   title,
   enabled,
@@ -459,12 +641,14 @@ function ModelEditorSheet({
   onClose,
   onSave,
   errorLogger,
+  scopeSupported,
 }: {
   state: EditingModelState | null;
   config: MutableDaemonConfig | null;
   onClose: () => void;
   onSave: (values: ModelEditorValues, previous: CollectedSavedModel | null) => Promise<void>;
   errorLogger?: ErrorLogger;
+  scopeSupported: boolean;
 }) {
   const { t } = useTranslation();
   const [values, setValues] = useState<ModelEditorValues>(createEmptyEditorValues);
@@ -515,15 +699,6 @@ function ModelEditorSheet({
     (value: boolean) => setField("supportsImages", value),
     [setField],
   );
-  const handleThinkingModeOff = useCallback(() => setField("thinkingMode", "off"), [setField]);
-  const handleThinkingModeSingle = useCallback(
-    () => setField("thinkingMode", "single"),
-    [setField],
-  );
-  const handleThinkingModeLevels = useCallback(
-    () => setField("thinkingMode", "levels"),
-    [setField],
-  );
   const handleSelectProtocolOpenai = useCallback(() => {
     setValues((current) => ({
       ...current,
@@ -545,14 +720,27 @@ function ModelEditorSheet({
       customProtocol: false,
     }));
   }, []);
-  const handleAttachToAllAgentsChange = useCallback(
-    (value: boolean) => setField("attachToAllAgents", value),
+  const handleSelectSupplyAll = useCallback(() => setField("attachToAllAgents", true), [setField]);
+  const handleSelectSupplyMatched = useCallback(
+    () => setField("attachToAllAgents", false),
     [setField],
   );
   const handleCustomProtocolChange = useCallback(
     (value: boolean) => setField("customProtocol", value),
     [setField],
   );
+  const handleToggleThinkingLevel = useCallback(
+    (level: CustomModelThinkingLevel) => {
+      setField(
+        "thinkingLevels",
+        values.thinkingLevels.includes(level)
+          ? values.thinkingLevels.filter((current) => current !== level)
+          : [...values.thinkingLevels, level],
+      );
+    },
+    [setField, values.thinkingLevels],
+  );
+
   const handleAnthropicEnabledChange = useCallback(
     (value: boolean) => setField("anthropicEnabled", value),
     [setField],
@@ -609,12 +797,7 @@ function ModelEditorSheet({
       .finally(() => setSaving(false));
   }, [errorLogger, onSave, previous, saving, t, values]);
 
-  let protocolSubtitle = t("customModelProviders.protocolOpenaiHint");
-  if (values.protocolPreset === "claude") {
-    protocolSubtitle = t("customModelProviders.protocolClaudeHint");
-  } else if (values.protocolPreset === "codex") {
-    protocolSubtitle = t("customModelProviders.protocolCodexHint");
-  }
+  const protocolSubtitle = resolveProtocolSubtitle(values, t);
 
   const header = useMemo<SheetHeader>(
     () => ({
@@ -664,6 +847,24 @@ function ModelEditorSheet({
             />
           </View>
         </View>
+
+        {!values.customProtocol ? (
+          <SupplyScopeField
+            attachToAllAgents={values.attachToAllAgents}
+            onSelectAll={handleSelectSupplyAll}
+            onSelectMatched={handleSelectSupplyMatched}
+            scopeSupported={scopeSupported}
+            locked={false}
+          />
+        ) : (
+          <SupplyScopeField
+            attachToAllAgents
+            onSelectAll={NOOP}
+            onSelectMatched={NOOP}
+            scopeSupported={scopeSupported}
+            locked
+          />
+        )}
 
         {!values.customProtocol ? (
           <View style={styles.fieldRow}>
@@ -730,30 +931,10 @@ function ModelEditorSheet({
           </View>
         </View>
 
-        <View style={styles.fieldGroup}>
-          <Text style={styles.formLabel}>{t("customModelProviders.thinkingMode")}</Text>
-          <Text style={styles.fieldHint}>{t("customModelProviders.thinkingModeHint")}</Text>
-          <View style={styles.presetRow}>
-            <ChoiceChip
-              label={t("customModelProviders.thinkingModeOff")}
-              selected={values.thinkingMode === "off"}
-              onPress={handleThinkingModeOff}
-              testID="thinking-mode-off"
-            />
-            <ChoiceChip
-              label={t("customModelProviders.thinkingModeSingle")}
-              selected={values.thinkingMode === "single"}
-              onPress={handleThinkingModeSingle}
-              testID="thinking-mode-single"
-            />
-            <ChoiceChip
-              label={t("customModelProviders.thinkingModeLevels")}
-              selected={values.thinkingMode === "levels"}
-              onPress={handleThinkingModeLevels}
-              testID="thinking-mode-levels"
-            />
-          </View>
-        </View>
+        <ThinkingLevelsField
+          selected={values.thinkingLevels}
+          onToggle={handleToggleThinkingLevel}
+        />
 
         <View style={styles.fieldGroup}>
           <Text style={styles.formLabel}>{t("customModelProviders.advanced")}</Text>
@@ -769,12 +950,6 @@ function ModelEditorSheet({
               value={values.supportsImages}
               onChange={handleSupportsImagesChange}
               testID="capability-images"
-            />
-            <CapabilityToggle
-              label={t("customModelProviders.attachToAllAgents")}
-              value={values.attachToAllAgents}
-              onChange={handleAttachToAllAgentsChange}
-              testID="capability-attach-all"
             />
             <CapabilityToggle
               label={t("customModelProviders.customProtocol")}
@@ -856,9 +1031,17 @@ export function CustomModelProvidersSection({
   const reportError = useUserVisibleErrorReporter();
   const { config, patchConfig } = useDaemonConfig(serverId);
   const { refresh } = useProvidersSnapshot(serverId);
+  const client = useHostRuntimeClient(serverId);
+  const supplyScopeSupported = useSessionStore(
+    (state) => state.sessions[serverId]?.serverInfo?.features?.modelGatewaySupplyScope === true,
+  );
   const [editorState, setEditorState] = useState<EditingModelState | null>(null);
   const [deletingKey, setDeletingKey] = useState<string | null>(null);
   const [pendingDeleteModel, setPendingDeleteModel] = useState<CollectedSavedModel | null>(null);
+  const [testingKey, setTestingKey] = useState<string | null>(null);
+  const [testResults, setTestResults] = useState<
+    Record<string, { ok: boolean; durationMs: number; error: string | null }>
+  >({});
 
   const savedModels = useMemo(
     () => collectSavedModels(config?.modelGateways),
@@ -905,7 +1088,10 @@ export function CustomModelProvidersSection({
         supportsImages: values.supportsImages,
         supportsTools: values.supportsTools,
         thinkingMode: values.thinkingMode,
+        thinkingLevels: values.thinkingLevels,
         protocolPreset: values.protocolPreset,
+        supplyScope: values.attachToAllAgents ? "all" : "matched",
+        supplyScopeSupported,
         attachToAllAgents: values.attachToAllAgents,
         customProtocol: values.customProtocol,
         anthropic,
@@ -922,7 +1108,8 @@ export function CustomModelProvidersSection({
       const gatewayIds = Object.keys(patch.modelGateways ?? {});
       const providerIds = gatewayIds.flatMap((gatewayId) =>
         buildModelGatewayProviderIdList(gatewayId, {
-          protocolPreset: values.attachToAllAgents ? "all" : values.protocolPreset,
+          protocolPreset: values.protocolPreset,
+          supplyScope: values.attachToAllAgents ? "all" : "matched",
           attachToAllAgents: values.attachToAllAgents,
         }),
       );
@@ -932,7 +1119,55 @@ export function CustomModelProvidersSection({
         });
       }
     },
-    [config?.modelGateways, patchConfig, refresh, t],
+    [config?.modelGateways, patchConfig, refresh, supplyScopeSupported, t],
+  );
+
+  const handleTestModel = useCallback(
+    (model: CollectedSavedModel) => {
+      if (testingKey || !client) {
+        if (!client) {
+          setTestResults((current) => ({
+            ...current,
+            [model.key]: { ok: false, durationMs: 0, error: "Host is not connected" },
+          }));
+        }
+        return;
+      }
+      const updateResult = (response: Awaited<ReturnType<typeof client.runModelGatewayTest>>) => {
+        const result = response.result;
+        setTestResults((current) => ({
+          ...current,
+          [model.key]: result
+            ? {
+                ok: result.ok,
+                durationMs: result.durationMs,
+                error: result.error ?? response.error,
+              }
+            : { ok: false, durationMs: 0, error: response.error ?? "Model gateway test failed" },
+        }));
+      };
+      void client
+        .runModelGatewayTest({
+          gatewayId: model.gatewayId,
+          modelId: model.modelId,
+          targetFormat: resolveTestTargetFormat(model.protocolPreset),
+        })
+        .then(updateResult)
+        .catch((error) => {
+          setTestResults((current) => ({
+            ...current,
+            [model.key]: {
+              ok: false,
+              durationMs: 0,
+              error: error instanceof Error ? error.message : String(error),
+            },
+          }));
+        })
+        .finally(() => {
+          setTestingKey((current) => (current === model.key ? null : current));
+        });
+    },
+    [client, testingKey],
   );
 
   const handleRequestDelete = useCallback((model: CollectedSavedModel) => {
@@ -965,6 +1200,7 @@ export function CustomModelProvidersSection({
           currentGateways: config?.modelGateways,
           gatewayId: model.gatewayId,
           modelId: model.modelId,
+          supplyScopeSupported,
         });
         const updatedConfig = await patchConfig(patch);
         if (!updatedConfig) {
@@ -991,6 +1227,7 @@ export function CustomModelProvidersSection({
     pendingDeleteModel,
     refresh,
     reportError,
+    supplyScopeSupported,
     t,
   ]);
 
@@ -1034,6 +1271,9 @@ export function CustomModelProvidersSection({
                   deleting={deletingKey === model.key}
                   onEdit={openEdit}
                   onDelete={handleRequestDelete}
+                  onTest={handleTestModel}
+                  testing={testingKey === model.key}
+                  testResult={testResults[model.key] ?? null}
                 />
               </View>
             ))}
@@ -1052,6 +1292,7 @@ export function CustomModelProvidersSection({
         onClose={closeEditor}
         onSave={handleSave}
         errorLogger={errorLogger}
+        scopeSupported={supplyScopeSupported}
       />
 
       {pendingDeleteModel ? (
@@ -1240,6 +1481,16 @@ const styles = StyleSheet.create((theme) => ({
   disabled: {
     opacity: theme.opacity[50],
   },
+  testResultOk: {
+    color: theme.colors.success,
+    fontSize: 11,
+    lineHeight: 14,
+  },
+  testResultError: {
+    color: theme.colors.destructive,
+    fontSize: 11,
+    lineHeight: 14,
+  },
   formGroup: {
     gap: theme.spacing[4],
   },
@@ -1271,6 +1522,11 @@ const styles = StyleSheet.create((theme) => ({
     borderColor: theme.colors.border,
     fontSize: 13,
     lineHeight: 18,
+  },
+  thinkingLevelsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: theme.spacing[2],
   },
   capabilityGrid: {
     flexDirection: "row",

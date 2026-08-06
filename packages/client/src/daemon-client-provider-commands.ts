@@ -164,4 +164,23 @@ export class ProviderCommandClient {
       timeout: 120000,
     });
   }
+
+  runModelGatewayTest(input: {
+    gatewayId: string;
+    modelId: string;
+    targetFormat?: "anthropic" | "chatCompletions" | "responses";
+    requestId?: string;
+  }): Promise<DaemonCommandResponsePayload<"model_gateway.test.response">> {
+    return this.transport.request({
+      requestId: input.requestId,
+      message: {
+        type: "model_gateway.test.request",
+        gatewayId: input.gatewayId,
+        modelId: input.modelId,
+        ...(input.targetFormat ? { targetFormat: input.targetFormat } : {}),
+      },
+      responseType: "model_gateway.test.response",
+      timeout: 30000,
+    });
+  }
 }

@@ -1092,6 +1092,8 @@ export class VoiceAssistantWebSocketServer {
         generativeUi: true,
         // COMPAT(cindyModules): added in v0.1.102, remove no earlier than 2027-07-29 when client/daemon floor >= v0.1.102.
         cindyModules: true,
+        // COMPAT(modelGatewaySupplyScope): added in v0.1.103; remove the gate when daemon floor >= the version that persists supplyScope.
+        modelGatewaySupplyScope: true,
       },
     };
   }

@@ -937,9 +937,21 @@ function gatewayProviderOverride(params: {
 
 /**
  * Resolves which agent faces a gateway should materialize.
- * Legacy gateways without protocolPreset keep full attachment (all faces).
+ *
+ * Closed-set semantics for `supplyScope` (mirrored by the app read path in
+ * `custom-model-providers.ts`):
+ * - `supplyScope === "all"` → all 6 faces, regardless of preset/attachToAllAgents
+ * - `supplyScope === "matched"` → narrowed by protocolPreset
+ *   (claude → 1, codex → 1, openai → 4, all → 6); without a preset, falls back
+ *   to legacy upstream inference below
+ * - `supplyScope` omitted → legacy behavior: `attachToAllAgents === true` or
+ *   `protocolPreset === "all"` → all 6 faces; preset narrows; no preset infers
+ *   from enabled upstreams
+ * - When both `supplyScope` and `attachToAllAgents` are present, `supplyScope`
+ *   wins.
  */
 export function resolveGatewayAgentFaces(gateway: {
+  supplyScope?: "all" | "matched";
   protocolPreset?: "claude" | "codex" | "openai" | "all";
   attachToAllAgents?: boolean;
   upstreams?: {
@@ -955,15 +967,43 @@ export function resolveGatewayAgentFaces(gateway: {
   pi: boolean;
   kimi: boolean;
 } {
+  if (gateway.supplyScope === "all") {
+    return allFaces();
+  }
+  if (gateway.supplyScope === "matched") {
+    const preset = gateway.protocolPreset;
+    if (preset === "claude") {
+      return {
+        claude: true,
+        codex: false,
+        opencode: false,
+        mimocode: false,
+        pi: false,
+        kimi: false,
+      };
+    }
+    if (preset === "codex") {
+      return {
+        claude: false,
+        codex: true,
+        opencode: false,
+        mimocode: false,
+        pi: false,
+        kimi: false,
+      };
+    }
+    if (preset === "openai") {
+      return { claude: false, codex: false, opencode: true, mimocode: true, pi: true, kimi: true };
+    }
+    if (preset === "all") {
+      return allFaces();
+    }
+    // matched without a preset → legacy inference from enabled upstreams.
+    return inferFacesFromUpstreams(gateway);
+  }
+
   if (gateway.attachToAllAgents === true || gateway.protocolPreset === "all") {
-    return {
-      claude: true,
-      codex: true,
-      opencode: true,
-      mimocode: true,
-      pi: true,
-      kimi: true,
-    };
+    return allFaces();
   }
 
   const preset = gateway.protocolPreset;
@@ -998,7 +1038,41 @@ export function resolveGatewayAgentFaces(gateway: {
     };
   }
 
-  // Legacy: no preset → keep previous behavior (all faces).
+  return inferFacesFromUpstreams(gateway);
+}
+
+function allFaces(): {
+  claude: boolean;
+  codex: boolean;
+  opencode: boolean;
+  mimocode: boolean;
+  pi: boolean;
+  kimi: boolean;
+} {
+  return {
+    claude: true,
+    codex: true,
+    opencode: true,
+    mimocode: true,
+    pi: true,
+    kimi: true,
+  };
+}
+
+function inferFacesFromUpstreams(gateway: {
+  upstreams?: {
+    anthropic?: { enabled?: boolean };
+    chatCompletions?: { enabled?: boolean };
+    responses?: { enabled?: boolean };
+  };
+}): {
+  claude: boolean;
+  codex: boolean;
+  opencode: boolean;
+  mimocode: boolean;
+  pi: boolean;
+  kimi: boolean;
+} {
   // If only one upstream is enabled we can still infer a narrow set for cleaner pickers.
   const anthropic = gateway.upstreams?.anthropic?.enabled === true;
   const chat = gateway.upstreams?.chatCompletions?.enabled === true;
@@ -1037,14 +1111,7 @@ export function resolveGatewayAgentFaces(gateway: {
     }
   }
 
-  return {
-    claude: true,
-    codex: true,
-    opencode: true,
-    mimocode: true,
-    pi: true,
-    kimi: true,
-  };
+  return allFaces();
 }
 
 function registerGatewayFaceOverride(params: {
