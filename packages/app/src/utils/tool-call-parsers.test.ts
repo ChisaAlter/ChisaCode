@@ -32,4 +32,24 @@ describe("tool-call-parsers", () => {
     expect(tasks?.map((task) => task.text)).toEqual(["Task 1", "Task 2"]);
     expect(tasks?.map((task) => task.completed)).toEqual([false, true]);
   });
+
+  it("degrades to a prefix/suffix diff for oversized inputs instead of allocating an LCS table", () => {
+    const bigLine = "x".repeat(120);
+    const original = Array.from({ length: 3000 }, (_, i) => `line-${i}-${bigLine}`).join("\n");
+    const updated =
+      Array.from({ length: 3000 }, (_, i) => `line-${i}-${bigLine}`).join("\n") + "\ntail";
+    // 3000×3001 cells exceeds MAX_LINE_LCS_CELLS; must not hang or blow memory.
+    const diff = buildLineDiff(original, updated);
+    expect(diff.some((entry) => entry.type === "add")).toBe(true);
+    expect(diff[0]?.type).toBe("context");
+    // Context prefix preserved at the head, added tail line at the end.
+    expect(diff.at(-1)?.content).toBe("+tail");
+  });
+
+  it("keeps word-level diff bounded for huge single-line edits", () => {
+    const line = Array.from({ length: 2000 }, (_, i) => `word${i}`).join(" ");
+    const diff = buildLineDiff(line, `${line} extra`);
+    const changedPair = diff.find((entry) => entry.type === "remove" || entry.type === "add");
+    expect(changedPair).toBeDefined();
+  });
 });

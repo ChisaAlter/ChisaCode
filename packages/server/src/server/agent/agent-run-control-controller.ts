@@ -68,7 +68,17 @@ export class AgentRunControlController {
       return false;
     }
 
-    await this.options.interruptSession(agent.session, agentId);
+    // Never let an interrupt failure abort the cancellation: the turn must
+    // still be force-canceled (and pending permissions cleared) so the agent
+    // does not stay stuck "running".
+    try {
+      await this.options.interruptSession(agent.session, agentId);
+    } catch (error) {
+      this.options.logger.warn(
+        { agentId, err: error },
+        "cancelAgentRun: session interrupt failed, force-canceling",
+      );
+    }
     await this.waitForForegroundCancellation(agent, foregroundTurnId, pendingRun);
     await this.forceCancelStaleForegroundTurn(agent, foregroundTurnId);
     this.options.clearPendingPermissions(agent);
@@ -164,7 +174,10 @@ export class AgentRunControlController {
     });
     const staleRun = this.options.foregroundRuns.getPendingRun(agent.id);
     if (staleRun && !staleRun.settled) {
-      await staleRun.settledPromise;
+      // Bound the wait: if the settle chain breaks (a pipeline error after the
+      // injected turn_canceled), an unbounded await would hang cancel() — and
+      // with it replace() and the foreground watchdog — forever.
+      await Promise.race([staleRun.settledPromise, this.createPropagationTimeout()]);
     }
   }
 

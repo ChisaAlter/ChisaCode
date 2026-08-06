@@ -14,13 +14,16 @@ export function renderYaml<T>(result: AnyCommandResult<T>, _options: OutputOptio
   // Apply custom serializer if provided
   if (schema.serialize) {
     if (result.type === "list") {
-      // If all items serialize to the same object, return just one
-      // This handles the case where a list of key-value rows should serialize
-      // to a single structured object
+      // Collapse to a single object only when the schema explicitly opts in:
+      // key-value row lists (inspect/status) serialize each row to the same
+      // structured object. Unlisted schemas keep every row — silently dropping
+      // duplicates from machine-readable output loses data.
       const serialized = result.data.map((item) => schema.serialize!(item));
       if (serialized.length > 0) {
         const first = JSON.stringify(serialized[0]);
-        const allSame = serialized.every((s) => JSON.stringify(s) === first);
+        const allSame = schema.collapseIdenticalRows
+          ? serialized.every((s) => JSON.stringify(s) === first)
+          : false;
         if (allSame) {
           return YAML.stringify(serialized[0]);
         }

@@ -44,6 +44,14 @@ export interface OutputSchema<T> {
   renderHuman?: (result: AnyCommandResult<T>, options: OutputOptions) => string;
   /** Optional: transform data before JSON/YAML output */
   serialize?: (data: T) => unknown;
+  /**
+   * Optional: collapse a list whose rows all serialize identically into a
+   * single object for JSON/YAML output. Only set this when the schema
+   * intentionally renders a list of key-value rows as one structured object
+   * (e.g. inspect). Leave unset so machine-readable output never silently
+   * drops rows.
+   */
+  collapseIdenticalRows?: boolean;
 }
 
 /** Result type for commands returning a single item */

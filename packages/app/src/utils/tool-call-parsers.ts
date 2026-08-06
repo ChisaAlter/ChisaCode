@@ -64,6 +64,16 @@ function computeWordLevelDiff(
   const m = oldWords.length;
   const n = newWords.length;
 
+  // Guard against the LCS DP blowing up on huge single-line edits (a 10k-word
+  // rewrite would allocate a 100M-cell table ≈ 800MB). Degrade to "whole line
+  // changed" segments instead of freezing the main thread.
+  if (m * n > MAX_WORD_LCS_CELLS) {
+    return {
+      oldSegments: [{ text: oldLine, changed: true }],
+      newSegments: [{ text: newLine, changed: true }],
+    };
+  }
+
   // LCS to find common words
   const dp: number[][] = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
 
@@ -142,6 +152,49 @@ function computeWordLevelDiff(
  * @param updatedText The text after the change
  * @returns The diff lines, prefixed with -, +, or space
  */
+
+/** Upper bound on LCS DP cells for line-level diffs (~16MB table). */
+const MAX_LINE_LCS_CELLS = 2_000_000;
+
+/** Upper bound on LCS DP cells for word-level diffs (~2MB table). */
+const MAX_WORD_LCS_CELLS = 250_000;
+
+/**
+ * Degraded diff for oversized inputs: keep the unchanged common prefix and
+ * suffix as context lines and mark everything in between removed/added.
+ */
+function buildDegradedLineDiff(originalLines: string[], updatedLines: string[]): DiffLine[] {
+  const diff: DiffLine[] = [];
+  let prefix = 0;
+  const maxPrefix = Math.min(originalLines.length, updatedLines.length);
+  while (prefix < maxPrefix && originalLines[prefix] === updatedLines[prefix]) {
+    diff.push({ type: "context", content: ` ${originalLines[prefix]}` });
+    prefix += 1;
+  }
+  const originalTail = originalLines.length - prefix;
+  const updatedTail = updatedLines.length - prefix;
+  let suffix = 0;
+  const maxSuffix = Math.min(originalTail, updatedTail);
+  while (
+    suffix < maxSuffix &&
+    originalLines[originalLines.length - 1 - suffix] ===
+      updatedLines[updatedLines.length - 1 - suffix]
+  ) {
+    suffix += 1;
+  }
+  const originalMiddleEnd = originalLines.length - suffix;
+  for (let i = prefix; i < originalMiddleEnd; i += 1) {
+    diff.push({ type: "remove", content: `-${originalLines[i]}` });
+  }
+  const updatedMiddleEnd = updatedLines.length - suffix;
+  for (let j = prefix; j < updatedMiddleEnd; j += 1) {
+    diff.push({ type: "add", content: `+${updatedLines[j]}` });
+  }
+  for (let k = originalMiddleEnd; k < originalLines.length; k += 1) {
+    diff.push({ type: "context", content: ` ${originalLines[k]}` });
+  }
+  return diff;
+}
 export function buildLineDiff(originalText: string, updatedText: string): DiffLine[] {
   const originalLines = splitIntoLines(originalText);
   const updatedLines = splitIntoLines(updatedText);
@@ -153,6 +206,14 @@ export function buildLineDiff(originalText: string, updatedText: string): DiffLi
 
   const m = originalLines.length;
   const n = updatedLines.length;
+
+  // Guard: the LCS DP table is O(m×n) cells (~8 bytes/cell). A 10k×10k line
+  // edit (large generated files) would allocate ~800MB and freeze the app.
+  // Fall back to a linear common-prefix/suffix diff instead.
+  if (m * n > MAX_LINE_LCS_CELLS) {
+    return buildDegradedLineDiff(originalLines, updatedLines);
+  }
+
   const dp: number[][] = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
 
   for (let i = m - 1; i >= 0; i -= 1) {

@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { isWeb } from "@/constants/platform";
-import { AlertTriangle, CheckCircle2 } from "lucide-react-native";
+import { AlertTriangle, CheckCircle2, X } from "lucide-react-native";
 import { getOverlayRoot, OVERLAY_Z } from "@/lib/overlay-root";
 import {
   HEADER_INNER_HEIGHT,
@@ -56,6 +56,7 @@ const TOAST_VERTICAL_GAP = 8;
 
 const ThemedCheckCircle2 = withUnistyles(CheckCircle2);
 const ThemedAlertTriangle = withUnistyles(AlertTriangle);
+const ThemedX = withUnistyles(X);
 
 const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
 const primaryColorMapping = (theme: Theme) => ({ color: theme.colors.primary });
@@ -301,6 +302,18 @@ function ToastItem({ toast, onDismiss }: { toast: ToastState; onDismiss: () => v
         </View>
       )}
       {toast.action ? <ToastActionButton action={toast.action} onDismiss={onDismiss} /> : null}
+      {toast.variant === "error" ? (
+        <Pressable
+          testID="app-toast-close"
+          onPress={onDismiss}
+          hitSlop={6}
+          style={styles.closeButton}
+          accessibilityRole="button"
+          accessibilityLabel="关闭"
+        >
+          <ThemedX size={14} uniProps={destructiveColorMapping} />
+        </Pressable>
+      ) : null}
     </Animated.View>
   );
 }
@@ -404,6 +417,12 @@ const styles = StyleSheet.create((theme) => ({
     fontWeight: theme.fontWeight.normal,
   },
   messageError: {
-    color: theme.colors.foreground,
+    color: theme.colors.destructive,
+  },
+  closeButton: {
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: theme.spacing[1],
+    padding: 2,
   },
 }));

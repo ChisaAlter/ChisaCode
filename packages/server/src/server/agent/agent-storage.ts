@@ -201,14 +201,19 @@ export class AgentStorage {
   private queueRecordWrite(record: StoredAgentRecord): Promise<void> {
     const agentId = record.id;
     const prev = this.pendingWrites.get(agentId) ?? Promise.resolve();
-    const next = prev.then(async () => {
-      if (this.deleting.has(agentId)) {
-        return undefined;
-      }
+    // Isolate failures: a rejected previous write must not silently drop every
+    // queued snapshot that follows it (the old chain skipped this write and
+    // propagated the stale error).
+    const next = prev
+      .catch(() => undefined)
+      .then(async () => {
+        if (this.deleting.has(agentId)) {
+          return undefined;
+        }
 
-      await this.writeRecord(record);
-      return undefined;
-    });
+        await this.writeRecord(record);
+        return undefined;
+      });
 
     const tracked = next.finally(() => {
       if (this.pendingWrites.get(agentId) === tracked) {
@@ -364,9 +369,15 @@ export class AgentStorage {
         this.loaded = true;
         return [];
       }
+      // Data-integrity guard: a real I/O error (EACCES, disk failure) must not
+      // mark the store loaded with an empty cache — every agent would look
+      // deleted, and the next upsert would overwrite the on-disk records with
+      // only the new one. Keep the store unloaded so callers fail loudly and
+      // retry on the next access once the disk recovers.
       this.logger.error({ err: error }, "Failed to load agents");
-      this.loaded = true;
-      return [];
+      this.loaded = false;
+      this.loadPromise = null;
+      throw error;
     }
   }
 

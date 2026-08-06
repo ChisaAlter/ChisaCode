@@ -16,7 +16,6 @@ import {
   type WorkspaceSetupSnapshot,
   type WorkspaceDescriptorPayload,
 } from "./messages.js";
-import { detectMigrations } from "../utils/config-migration.js";
 import type { TerminalManager } from "../terminal/terminal-manager.js";
 import { TerminalSessionController } from "../terminal/terminal-session-controller.js";
 import { type TerminalStreamFrame } from "@chisacode/protocol/binary-frames/index";
@@ -593,28 +592,6 @@ export class Session {
     this.migrationHandler = new MigrationHandler({
       sessionLogger: this.sessionLogger,
       emit: (message) => this.emit(message as SessionOutboundMessage),
-    });
-    // Auto-detect config migrations when provider config changes
-    this.daemonConfigStore.onFieldChange("providers", () => {
-      try {
-        // COMPAT(cindyModules): added in v0.1.102, remove no earlier than 2027-07-29 when client/daemon floor >= v0.1.102.
-        // The migration/available notification is a closed-union discriminator; never push it to clients
-        // that did not negotiate cindy_modules — they would fail to parse the outbound message.
-        if (!this.supports(CLIENT_CAPS.cindyModules)) return;
-        const cwd = this.agentManager.listAgents().find((a) => a.lifecycle !== "closed")?.cwd;
-        if (!cwd) return;
-        for (const target of ["claude-code", "codex"] as const) {
-          const result = detectMigrations(cwd, target);
-          if (result.items.length > 0) {
-            this.emit({
-              type: "migration/available",
-              payload: { items: result.items, workDir: cwd, targetAgent: target },
-            });
-          }
-        }
-      } catch {
-        // Non-fatal — migration detection is best-effort
-      }
     });
     const learnManager = new LearnManager();
     this.learnHandler = new LearnHandler({
@@ -1409,7 +1386,7 @@ export class Session {
       payload: {
         requestId: request.requestId ?? "",
         requestType: request.type,
-        error: "Cindy modules not supported by this client",
+        error: "此客户端不支持该功能",
         code: "unsupported_feature",
       },
     });

@@ -112,12 +112,19 @@ export interface CancelComposerAgentInput {
   isAgentRunning: boolean;
   isCancellingAgent: boolean;
   isConnected: boolean;
+  /** Invoked when the cancel RPC rejects; lets the caller surface the error and reset busy state. */
+  onCancelFailed?: (error: unknown) => void;
 }
 
 export function cancelComposerAgent(input: CancelComposerAgentInput): boolean {
   if (!input.isAgentRunning || input.isCancellingAgent) return false;
   if (!input.isConnected || !input.client) return false;
-  void input.client.cancelAgent(input.agentId);
+  // cancelAgent may be typed as void-returning; normalize to a promise so
+  // failures are surfaced through onCancelFailed instead of an unhandled
+  // rejection.
+  void Promise.resolve(input.client.cancelAgent(input.agentId)).catch((error) => {
+    input.onCancelFailed?.(error);
+  });
   return true;
 }
 

@@ -1435,7 +1435,16 @@ export const AssistantMessage = memo(function AssistantMessage({
   );
   const blocks = useMemo(() => splitMarkdownBlocks(displayMessage), [displayMessage]);
   const keyedBlocks = useMemo(
-    () => blocks.map((block, index) => ({ key: `${index}:${block.slice(0, 32)}`, block })),
+    () =>
+      blocks.map((block, index) => {
+        // Streaming-safe key: keying on a full content prefix made the last
+        // block remount on every chunk (new prefix each token), re-highlighting
+        // large code blocks and losing scroll state. The first line (code
+        // fence, heading, first sentence) stabilizes after a few tokens, so
+        // the dominant cases stop churning while keys stay unique per block.
+        const firstLine = block.split("\n", 1)[0] ?? "";
+        return { key: `${index}:${firstLine.slice(0, 32)}`, block };
+      }),
     [blocks],
   );
 

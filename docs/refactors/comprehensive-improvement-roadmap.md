@@ -604,6 +604,26 @@
 
 以下为已归档的执行记录摘要，详细见 [archive/comprehensive-improvement-roadmap-2026-06-28.md](archive/comprehensive-improvement-roadmap-2026-06-28.md)。
 
+### 全仓生产级审查（2026-08-06 登记）：延迟修复项与决策项
+
+全仓遍历审查（13 域并行，覆盖约 35 万行非测试源码）后，P0 与多数 P1 已在本次会话修复并测试；以下系统性项需独立排期或产品决策，登记为跟踪项：
+
+- **流式 markdown 增量渲染**（app，P1 性能）：`types/stream.ts:splitMarkdownBlocks` + `markdown/renderer.tsx` 对活跃消息每 token 全量重解析（O(token×text)），长回答卡顿根因。方案：增量分割（仅尾部新增）、解析结果前缀缓存；需 careful 回归流式渲染与 useDeferredValue 语义
+- **E2EE 握手缺客户端密钥认证**（relay，P1 安全）：`encrypted-channel.ts` 初始 hello 无条件接受任意客户端公钥，恶意中继可密钥替换 MITM。需产品决策威胁模型（防被动中继 vs 防密钥替换）；若防替换，将配对码/QR 共享秘密纳入 hello 认证
+- **git 快照未跟踪目录塌缩**（server，P1 安全/数据）：`git-snapshot.ts` 默认 untracked 模式把整个未忽略目录递归入库，敏感文件（.env/credentials）与 node_modules 可进入快照对象。方案：`--untracked-files=all` 逐文件过 `detectSensitivePath`
+- **自动归档过期脏检查 + `--force` 删除**（server，P1 数据）：`auto-archive-on-merge/archive-if-safe.ts` 基于最多滞后 60s 的快照判定干净后 `git worktree remove --force`，可销毁用户未提交工作。方案：删除前紧邻二次 `git status --porcelain` 校验，force 仅作重试兜底
+- **WS 同连接消息 FIFO 串行化**（server，P1 并发）：`websocket-server.ts` 消息并发处理无顺序保证，dictation/voice start→chunk 链路存在竞态。方案：每连接 promise FIFO 链
+- **网关流式转发**（server，P1 性能）：`bootstrap.ts:775` 整响应缓冲后发送，架空 SSE 流式转换。方案：`response.body` 经 TransformStream 逐块转发
+- **client readFile 传输与 10s RPC 超时耦合**（client，P1）：64MB 传输必须在 10s 内完成，慢链路必失败。方案：按 FileBegin 大小动态放大超时或独立传输超时
+- **重连后终端订阅不重放**（client，P1 UX）：断线重连后已订阅终端输出静默断流。方案：TerminalClient 维护订阅集合，onConnected 重放
+- **侧栏/会话列表无虚拟化**（app，P2 性能）：`sidebar-session-list.tsx` ScrollView 全量渲染 + 行组件未 memo，数百会话移动端卡顿。方案：行 memo + 分组窗口化（SidebarV2 分页已登记为替代路径）
+- **会话级无界状态累积**（server，P2 内存，7 处同模式）：claude/acp/opencode/codex/pi 的 Map/Set 跨 turn 不清。方案：按 turn 上限或 LRU
+- **emitState 全量快照写放大**（server，P2 性能）：每个状态事件 JSON.stringify + fsync 原子写。方案：250ms 窗口去抖合并
+- **audio chunk 播放组缺块永久卡死**（app，P2）：`voice-runtime.ts` 丢块/缺 isLastChunk 时组永久等待。方案：组级超时跳块
+- **语音上行无背压**（app，P2）：每帧 fire-and-forget，弱网无界积压。方案：在途队列上限 + 降级提示
+- **desktop daemon 启动无互斥 / settings 并发 patch 丢更新**（desktop，P2）：方案：单飞 promise + 读-改-写整体入队
+- **registry/chat/schedule 持久化损坏文件静默覆盖**（server，P2 数据）：方案：损坏文件隔离备份 + 拒绝写入或只读模式
+
 ---
 
 ## 最终评分

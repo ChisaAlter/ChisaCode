@@ -80,6 +80,17 @@ export function startAgentRun(
         "agent.session.iterator.error",
       );
       logger.error({ err: error, agentId }, "Agent stream failed");
+      // Failsafe: if the generator threw after the turn started but before
+      // emitting a terminal event, the agent may still be "running". The
+      // forwardTurn watchdog (C1) will eventually inject a turn_failed via
+      // cancelWaiters, but log the stale state here for diagnostics.
+      const currentAgent = agentManager.getAgent(agentId);
+      if (currentAgent && currentAgent.lifecycle === "running") {
+        logger.warn(
+          { agentId, provider: currentAgent.provider, err: error },
+          "agent.stream.error_while_running",
+        );
+      }
     }
   })();
   return { outOfBand: false };
@@ -274,27 +285,40 @@ export function setupFinishNotification(params: SetupFinishNotificationParams): 
   const { agentManager, agentStorage, childAgentId, callerAgentId, logger } = params;
   let hasSeenRunning = false;
   let fired = false;
+  let inFlight = false;
   let unsubscribe: (() => void) | null = null;
 
   async function notify(reason: "finished" | "errored" | "needs permission"): Promise<void> {
-    if (fired) {
+    if (fired || inFlight) {
       return;
     }
-    fired = true;
-    unsubscribe?.();
+    inFlight = true;
+    try {
+      const record = await agentStorage.get(childAgentId);
+      const title = record?.title ?? childAgentId;
+      const body = `Agent ${childAgentId} (${title}) ${reason}.`;
 
-    const record = await agentStorage.get(childAgentId);
-    const title = record?.title ?? childAgentId;
-    const body = `Agent ${childAgentId} (${title}) ${reason}.`;
-
-    await sendPromptToAgent({
-      agentManager,
-      agentStorage,
-      agentId: callerAgentId,
-      prompt: formatSystemNotificationPrompt(body),
-      unarchive: false,
-      logger,
-    });
+      await sendPromptToAgent({
+        agentManager,
+        agentStorage,
+        agentId: callerAgentId,
+        prompt: formatSystemNotificationPrompt(body),
+        unarchive: false,
+        logger,
+      });
+      fired = true;
+      unsubscribe?.();
+    } catch (error) {
+      // Keep fired=false so a later state event retries; the caller agent
+      // must not silently miss completion. Without the guard the rejection
+      // escaped to `void notify(...)` callers as an unhandled rejection.
+      logger.warn(
+        { err: error, childAgentId, callerAgentId, reason },
+        "agent.finish_notification_failed",
+      );
+    } finally {
+      inFlight = false;
+    }
   }
 
   unsubscribe = agentManager.subscribe(

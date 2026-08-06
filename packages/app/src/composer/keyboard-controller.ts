@@ -115,10 +115,9 @@ function dispatchComposerKeyboardAction(input: DispatchComposerKeyboardActionInp
   const passthroughAction = resolveMessageInputPassthroughAction(action.id);
   if (!passthroughAction) return false;
   const result = messageInputRef.current?.runKeyboardAction(passthroughAction);
-  if (passthroughAction === "send" || passthroughAction === "dictation-confirm") {
-    return result ?? false;
-  }
-  return true;
+  // Respect the input's own guard: e.g. voice-mute-toggle is a no-op (and
+  // must NOT swallow Space for keyboard users) when voice mode is not active.
+  return result ?? false;
 }
 
 export function useComposerKeyboardController(

@@ -100,8 +100,7 @@ import { useLastDraftDirectory } from "@/stores/last-draft-directory-store";
 import { navigateToAgent } from "@/utils/navigate-to-agent";
 import { buildSidebarLiveAgents, mergeSidebarSessionSources } from "@/utils/sidebar-session-source";
 import { SidebarAgentListSkeleton } from "./sidebar-agent-list-skeleton";
-import { SidebarV2 } from "@/sidebar-v2/SidebarV2";
-import type { WorkspaceDescriptor } from "@/stores/session-store";
+import { SidebarSessionList } from "./sidebar-session-list";
 
 const DESKTOP_SIDEBAR_ANIMATION_CONFIG = {
   duration: 180,
@@ -124,14 +123,17 @@ interface SidebarSharedProps {
   agents: ReturnType<typeof useAgentHistory>["agents"];
   selectedAgentId?: string;
   isInitialLoad: boolean;
+  isRevalidating: boolean;
+  isLoadingMore: boolean;
+  isManualRefresh: boolean;
+  hasMore: boolean;
+  handleRefresh: () => void;
+  handleLoadMore: () => void;
   handleHostSelect: (nextServerId: string) => void;
   handleOpenProject: () => void;
   handleHome: () => void;
   handleSearch: () => void;
   handleSettings: () => void;
-  workspacesByServer: ReadonlyMap<string, WorkspaceDescriptor> | null;
-  onNewConversation: () => boolean;
-  onAddProject: () => void;
   renderHostOption: (input: {
     option: ComboboxOption;
     selected: boolean;
@@ -384,11 +386,6 @@ export const LeftSidebar = memo(function LeftSidebar({ selectedAgentId }: LeftSi
     handleHostSelect,
     renderHostOption,
     handleSearch,
-    workspacesByServer: activeServerId
-      ? (useSessionStore.getState().sessions[activeServerId]?.workspaces ?? null)
-      : null,
-    onNewConversation: openNewConversationStart,
-    onAddProject: isCompactLayout ? handleOpenProjectMobile : handleOpenProjectDesktop,
   };
 
   if (isCompactLayout) {
@@ -934,15 +931,18 @@ function MobileSidebar({
   agents,
   selectedAgentId,
   isInitialLoad,
+  isRevalidating,
+  isLoadingMore,
+  isManualRefresh,
+  hasMore,
+  handleRefresh,
+  handleLoadMore,
   handleHostSelect,
   renderHostOption,
   handleOpenProject,
   handleHome,
   handleSearch,
   handleSettings,
-  workspacesByServer,
-  onNewConversation,
-  onAddProject,
   insetsTop,
   insetsBottom,
   isOpen,
@@ -986,6 +986,9 @@ function MobileSidebar({
     mobileSidebarWidth,
   ]);
 
+  const handleAgentPress = useCallback(() => {
+    closeToAgent();
+  }, [closeToAgent]);
   const quickActionAgent = useMemo(() => {
     return selectMobileSidebarQuickActionAgent(agents, selectedAgentId, activeServerId);
   }, [activeServerId, agents, selectedAgentId]);
@@ -1222,13 +1225,17 @@ function MobileSidebar({
             {isInitialLoad ? (
               <SidebarAgentListSkeleton />
             ) : (
-              <SidebarV2
+              <SidebarSessionList
                 serverId={activeServerId}
                 agents={agents}
                 selectedAgentId={selectedAgentId}
-                workspaces={workspacesByServer}
-                onNewConversation={onNewConversation}
-                onAddProject={onAddProject}
+                isRefreshing={isManualRefresh && isRevalidating}
+                onRefresh={handleRefresh}
+                hasMore={hasMore}
+                isLoadingMore={isLoadingMore}
+                onLoadMore={handleLoadMore}
+                onAgentPress={handleAgentPress}
+                onAddProject={handleOpenProject}
               />
             )}
 
@@ -1264,15 +1271,18 @@ function DesktopSidebar({
   agents,
   selectedAgentId,
   isInitialLoad,
+  isRevalidating,
+  isLoadingMore,
+  isManualRefresh,
+  hasMore,
+  handleRefresh,
+  handleLoadMore,
   handleHostSelect,
   renderHostOption,
   handleOpenProject,
   handleHome,
   handleSearch,
   handleSettings,
-  workspacesByServer,
-  onNewConversation,
-  onAddProject,
   isOpen,
 }: DesktopSidebarProps) {
   const sidebarWidth = usePanelStore((state) => state.sidebarWidth);
@@ -1375,13 +1385,16 @@ function DesktopSidebar({
         {isInitialLoad ? (
           <SidebarAgentListSkeleton />
         ) : (
-          <SidebarV2
+          <SidebarSessionList
             serverId={activeServerId}
             agents={agents}
             selectedAgentId={selectedAgentId}
-            workspaces={workspacesByServer}
-            onNewConversation={onNewConversation}
-            onAddProject={onAddProject}
+            isRefreshing={isManualRefresh && isRevalidating}
+            onRefresh={handleRefresh}
+            hasMore={hasMore}
+            isLoadingMore={isLoadingMore}
+            onLoadMore={handleLoadMore}
+            onAddProject={handleOpenProject}
           />
         )}
 

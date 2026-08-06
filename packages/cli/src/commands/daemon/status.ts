@@ -114,6 +114,7 @@ function createStatusSchema(status: DaemonStatus): OutputSchema<StatusRow> {
       },
     ],
     serialize: () => status,
+    collapseIdenticalRows: true,
   };
 }
 

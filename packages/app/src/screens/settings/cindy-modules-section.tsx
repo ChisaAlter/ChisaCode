@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Pressable, Text, View, type PressableStateCallbackType } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
@@ -9,7 +9,7 @@ import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-moda
 import { AdaptiveTextInput } from "@/components/adaptive-modal-sheet";
 import { Button } from "@/components/ui/button";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Theme } from "@/styles/theme";
 import { ICON_SIZE } from "@/styles/theme";
 import { isWeb } from "@/constants/platform";
@@ -62,20 +62,7 @@ export function CindyModulesSection({ serverId }: CindyModulesSectionProps) {
   const { t } = useTranslation();
   const isConnected = useHostRuntimeIsConnected(serverId);
   const client = useHostRuntimeClient(serverId);
-  const toast = useToast();
   const [activeSheet, setActiveSheet] = useState<SheetKind | null>(null);
-
-  // Surface the daemon's migration/available push so it doesn't go unnoticed.
-  useEffect(() => {
-    if (!client || !isConnected) return;
-    const unsubscribe = client.on("migration/available", (message) => {
-      const count = message.payload.items.length;
-      toast.show(
-        t("cindy.migrationAvailable", "Config migration available ({{count}} items)", { count }),
-      );
-    });
-    return unsubscribe;
-  }, [client, isConnected, toast, t]);
 
   const goalsQuery = useQuery({
     queryKey: ["goals", serverId],
@@ -153,44 +140,44 @@ export function CindyModulesSection({ serverId }: CindyModulesSectionProps) {
 
   return (
     <>
-      <SettingsSection title={t("cindy.title", "Agent Intelligence")} testID="cindy-modules-card">
+      <SettingsSection title={t("cindy.title", "Agent 工具")} testID="cindy-modules-card">
         <View style={settingsStyles.card}>
           <ModuleRow
             icon={goalIcon}
-            title={t("cindy.goals", "Goals")}
+            title={t("cindy.goals", "目标")}
             subtitle={
               activeGoals.length > 0
-                ? t("cindy.goalsActive", "{{count}} active", { count: activeGoals.length })
-                : t("cindy.goalsNone", "No active goals")
+                ? t("cindy.goalsActive", "{{count}} 个进行中", { count: activeGoals.length })
+                : t("cindy.goalsNone", "没有进行中的目标")
             }
             isFirst
             onPress={openGoalSheet}
           />
           <ModuleRow
             icon={teamIcon}
-            title={t("cindy.team", "Team")}
+            title={t("cindy.team", "团队")}
             subtitle={
               team
-                ? t("cindy.teamActive", "{{count}} workers", { count: activeWorkers.length })
-                : t("cindy.teamNone", "No active team")
+                ? t("cindy.teamActive", "{{count}} 个工作线程", { count: activeWorkers.length })
+                : t("cindy.teamNone", "没有活跃的团队")
             }
             onPress={openTeamSheet}
           />
           <ModuleRow
             icon={snapshotIcon}
-            title={t("cindy.snapshots", "Snapshots")}
-            subtitle={t("cindy.snapshotsDesc", "Git snapshot & rewind")}
+            title={t("cindy.snapshots", "快照")}
+            subtitle={t("cindy.snapshotsDesc", "Git 快照与回退")}
             onPress={openSnapshotSheet}
           />
           <ModuleRow
             icon={learnIcon}
-            title={t("cindy.learn", "Learn")}
+            title={t("cindy.learn", "学习")}
             subtitle={
               pendingReviews.length > 0
-                ? t("cindy.learnPending", "{{count}} pending review", {
+                ? t("cindy.learnPending", "{{count}} 个待审核", {
                     count: pendingReviews.length,
                   })
-                : t("cindy.learnNone", "Skill extraction")
+                : t("cindy.learnNone", "技能提取")
             }
             isLast
             onPress={openLearnSheet}
@@ -272,18 +259,30 @@ function GoalSheet({
 }) {
   const { t } = useTranslation();
   const client = useHostRuntimeClient(serverId);
+  const queryClient = useQueryClient();
+  const toast = useToast();
   const [objective, setObjective] = useState("");
   const [agentId, setAgentId] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const header = useMemo<SheetHeader>(() => ({ title: t("cindy.goals", "Goals") }), [t]);
+  const header = useMemo<SheetHeader>(() => ({ title: t("cindy.goals", "目标") }), [t]);
 
   const handleSetGoal = useCallback(async () => {
-    if (!client || !objective.trim() || !agentId.trim()) return;
-    await client.cindy.goalSet({ agentId: agentId.trim(), objective: objective.trim() });
-    setObjective("");
-    setAgentId("");
-    onClose();
-  }, [client, objective, agentId, onClose]);
+    if (!client || !objective.trim() || !agentId.trim() || isSubmitting) return;
+    setIsSubmitting(true);
+    try {
+      await client.cindy.goalSet({ agentId: agentId.trim(), objective: objective.trim() });
+      setObjective("");
+      setAgentId("");
+      void queryClient.invalidateQueries({ queryKey: ["goals", serverId] });
+      onClose();
+    } catch (error) {
+      toast.error(t("cindy.actionFailed", "操作失败，请重试"));
+      console.error("[Cindy] goalSet failed", error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [client, objective, agentId, isSubmitting, queryClient, serverId, onClose, t, toast]);
 
   return (
     <AdaptiveModalSheet
@@ -309,7 +308,7 @@ function GoalSheet({
             ))}
           </View>
         ) : (
-          <Text style={styles.emptyText}>{t("cindy.noGoals", "No goals set")}</Text>
+          <Text style={styles.emptyText}>{t("cindy.noGoals", "尚未设置目标")}</Text>
         )}
         <View style={styles.formGroup}>
           <AdaptiveTextInput
@@ -327,7 +326,7 @@ function GoalSheet({
             initialValue={objective}
             resetKey="goal-objective"
             onChangeText={setObjective}
-            placeholder={t("cindy.objective", "Objective")}
+            placeholder={t("cindy.objective", "目标描述")}
             autoCapitalize="none"
             autoCorrect={false}
             testID="goal-objective-input"
@@ -338,9 +337,10 @@ function GoalSheet({
             variant="default"
             size="sm"
             onPress={handleSetGoal}
-            disabled={!objective.trim() || !agentId.trim()}
+            disabled={!objective.trim() || !agentId.trim() || isSubmitting}
+            loading={isSubmitting}
           >
-            {t("cindy.setGoal", "Set Goal")}
+            {t("cindy.setGoal", "设置目标")}
           </Button>
         </View>
       </View>
@@ -365,21 +365,42 @@ function TeamSheet({
 }) {
   const { t } = useTranslation();
   const client = useHostRuntimeClient(serverId);
+  const queryClient = useQueryClient();
+  const toast = useToast();
   const [label, setLabel] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const header = useMemo<SheetHeader>(() => ({ title: t("cindy.team", "Team") }), [t]);
+  const header = useMemo<SheetHeader>(() => ({ title: t("cindy.team", "团队") }), [t]);
 
   const handleStartTeam = useCallback(async () => {
-    if (!client) return;
-    await client.cindy.teamStart();
-    onClose();
-  }, [client, onClose]);
+    if (!client || isSubmitting) return;
+    setIsSubmitting(true);
+    try {
+      await client.cindy.teamStart();
+      void queryClient.invalidateQueries({ queryKey: ["team", serverId] });
+      onClose();
+    } catch (error) {
+      toast.error(t("cindy.actionFailed", "操作失败，请重试"));
+      console.error("[Cindy] teamStart failed", error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [client, isSubmitting, queryClient, serverId, onClose, t, toast]);
 
   const handleCreateWorker = useCallback(async () => {
-    if (!client || !label.trim()) return;
-    await client.cindy.teamCreateWorker({ label: label.trim() });
-    setLabel("");
-  }, [client, label]);
+    if (!client || !label.trim() || isSubmitting) return;
+    setIsSubmitting(true);
+    try {
+      await client.cindy.teamCreateWorker({ label: label.trim() });
+      setLabel("");
+      void queryClient.invalidateQueries({ queryKey: ["team", serverId] });
+    } catch (error) {
+      toast.error(t("cindy.actionFailed", "操作失败，请重试"));
+      console.error("[Cindy] teamCreateWorker failed", error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [client, label, isSubmitting, queryClient, serverId, t, toast]);
 
   return (
     <AdaptiveModalSheet
@@ -393,9 +414,15 @@ function TeamSheet({
       <View style={styles.sheetContent}>
         {!team ? (
           <View style={styles.formGroup}>
-            <Text style={styles.emptyText}>{t("cindy.noTeam", "No active team")}</Text>
-            <Button variant="default" size="sm" onPress={handleStartTeam}>
-              {t("cindy.startTeam", "Start Team")}
+            <Text style={styles.emptyText}>{t("cindy.noTeam", "没有活跃的团队")}</Text>
+            <Button
+              variant="default"
+              size="sm"
+              onPress={handleStartTeam}
+              disabled={isSubmitting}
+              loading={isSubmitting}
+            >
+              {t("cindy.startTeam", "启动团队")}
             </Button>
           </View>
         ) : (
@@ -420,7 +447,7 @@ function TeamSheet({
                 initialValue={label}
                 resetKey="worker-label"
                 onChangeText={setLabel}
-                placeholder={t("cindy.workerLabel", "Worker label (e.g. dev-1)")}
+                placeholder={t("cindy.workerLabel", "工作线程标签（如 dev-1）")}
                 autoCapitalize="none"
                 autoCorrect={false}
                 testID="worker-label-input"
@@ -431,9 +458,10 @@ function TeamSheet({
                 variant="default"
                 size="sm"
                 onPress={handleCreateWorker}
-                disabled={!label.trim()}
+                disabled={!label.trim() || isSubmitting}
+                loading={isSubmitting}
               >
-                {t("cindy.addWorker", "Add Worker")}
+                {t("cindy.addWorker", "添加工作线程")}
               </Button>
             </View>
           </>
@@ -458,23 +486,44 @@ function LearnSheet({
 }) {
   const { t } = useTranslation();
   const client = useHostRuntimeClient(serverId);
+  const queryClient = useQueryClient();
+  const toast = useToast();
+  const [pendingRunId, setPendingRunId] = useState<string | null>(null);
 
-  const header = useMemo<SheetHeader>(() => ({ title: t("cindy.learn", "Learn") }), [t]);
+  const header = useMemo<SheetHeader>(() => ({ title: t("cindy.learn", "学习") }), [t]);
 
   const handleApply = useCallback(
     async (runId: string) => {
-      if (!client) return;
-      await client.cindy.learnApply({ runId });
+      if (!client || pendingRunId) return;
+      setPendingRunId(runId);
+      try {
+        await client.cindy.learnApply({ runId });
+        void queryClient.invalidateQueries({ queryKey: ["learn-runs", serverId] });
+      } catch (error) {
+        toast.error(t("cindy.actionFailed", "操作失败，请重试"));
+        console.error("[Cindy] learnApply failed", error);
+      } finally {
+        setPendingRunId(null);
+      }
     },
-    [client],
+    [client, pendingRunId, queryClient, serverId, t, toast],
   );
 
   const handleDiscard = useCallback(
     async (runId: string) => {
-      if (!client) return;
-      await client.cindy.learnDiscard({ runId });
+      if (!client || pendingRunId) return;
+      setPendingRunId(runId);
+      try {
+        await client.cindy.learnDiscard({ runId });
+        void queryClient.invalidateQueries({ queryKey: ["learn-runs", serverId] });
+      } catch (error) {
+        toast.error(t("cindy.actionFailed", "操作失败，请重试"));
+        console.error("[Cindy] learnDiscard failed", error);
+      } finally {
+        setPendingRunId(null);
+      }
     },
-    [client],
+    [client, pendingRunId, queryClient, serverId, t, toast],
   );
 
   return (
@@ -490,11 +539,17 @@ function LearnSheet({
         {runs.length > 0 ? (
           <View style={styles.listSection}>
             {runs.map((run) => (
-              <LearnRunRow key={run.id} run={run} onApply={handleApply} onDiscard={handleDiscard} />
+              <LearnRunRow
+                key={run.id}
+                run={run}
+                disabled={pendingRunId !== null}
+                onApply={handleApply}
+                onDiscard={handleDiscard}
+              />
             ))}
           </View>
         ) : (
-          <Text style={styles.emptyText}>{t("cindy.noLearnRuns", "No learn runs")}</Text>
+          <Text style={styles.emptyText}>{t("cindy.noLearnRuns", "暂无学习记录")}</Text>
         )}
       </View>
     </AdaptiveModalSheet>
@@ -503,10 +558,12 @@ function LearnSheet({
 
 function LearnRunRow({
   run,
+  disabled,
   onApply,
   onDiscard,
 }: {
   run: LearnRun;
+  disabled: boolean;
   onApply: (id: string) => void;
   onDiscard: (id: string) => void;
 }) {
@@ -522,10 +579,10 @@ function LearnRunRow({
         </Text>
         {run.status === "awaiting-review" ? (
           <View style={styles.learnActions}>
-            <Pressable onPress={handleApply} hitSlop={8}>
+            <Pressable onPress={handleApply} hitSlop={8} disabled={disabled}>
               <Text style={styles.applyText}>{t("common.apply", "Apply")}</Text>
             </Pressable>
-            <Pressable onPress={handleDiscard} hitSlop={8}>
+            <Pressable onPress={handleDiscard} hitSlop={8} disabled={disabled}>
               <Text style={styles.discardText}>{t("common.discard", "Discard")}</Text>
             </Pressable>
           </View>

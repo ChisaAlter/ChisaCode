@@ -162,6 +162,11 @@ export interface AgentManagerOptions {
   usageStore?: UsageStore;
   agentStreamCoalesceWindowMs?: number;
   rescueTimeouts?: AgentSessionRescueTimeouts;
+  /**
+   * Stalls longer than this (no stream events) end the foreground turn via
+   * run-control cancellation. See AgentForegroundExecutionController.
+   */
+  foregroundTurnInactivityTimeoutMs?: number;
   logger: Logger;
 }
 
@@ -384,10 +389,12 @@ export class AgentManager {
     });
     this.foregroundExecution = new AgentForegroundExecutionController({
       attachPersistenceCwd,
+      cancelRun: (agentId) => this.runControl.cancel(agentId),
       emitState: (agent) => this.emitState(agent),
       foregroundRuns: this.foregroundRuns,
       getAgent: (agentId) => this.requireSessionAgent(agentId),
       handleStreamEvent: (agent, event) => this.sessionEvents.handle(agent, event),
+      inactivityTimeoutMs: options.foregroundTurnInactivityTimeoutMs,
       isTerminalEvent: isTurnTerminalEvent,
       logger: this.logger,
       onAgentTerminal: (agentId) => this.generativeUiActionQueue.onAgentTerminal(agentId),

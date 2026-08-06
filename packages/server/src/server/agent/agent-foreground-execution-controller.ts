@@ -30,6 +30,31 @@ interface AgentForegroundExecutionControllerOptions {
   onAgentTerminal(agentId: string): void;
   refreshRuntimeInfo(agent: ActiveManagedAgent): Promise<void>;
   touchUpdatedAt(agent: ManagedAgent): Date;
+  /**
+   * Cancels an in-flight foreground turn: interrupts the provider session so
+   * the underlying work actually stops, waits for the turn stream to settle,
+   * and force-dispatches a terminal event (with the real turnId) if the
+   * provider never responds. Wired to AgentRunControlController.cancel.
+   */
+  cancelRun(agentId: string): Promise<boolean>;
+  /**
+   * Stalls longer than this (no stream events) end the turn. Defaults to
+   * FOREGROUND_TURN_INACTIVITY_TIMEOUT_MS. Deliberately generous: long tool
+   * executions and slow providers legitimately go silent, and a false kill is
+   * user-visible damage, while a true hang only costs bounded waiting time.
+   */
+  inactivityTimeoutMs?: number;
+}
+
+/** Default stall window before an inactive foreground turn is cancelled. */
+const FOREGROUND_TURN_INACTIVITY_TIMEOUT_MS = 10 * 60 * 1000;
+
+/**
+ * Events that mean "the turn is waiting on the user", not stalled: the user's
+ * deliberation time is not provider inactivity, so the watchdog stands down.
+ */
+function isUserWaitEvent(event: AgentStreamEvent): boolean {
+  return event.type === "permission_requested" || event.type === "attention_required";
 }
 
 /** Owns one foreground turn from start request through terminal finalization. */
@@ -171,11 +196,81 @@ export class AgentForegroundExecutionController {
     turnStream = this.options.foregroundRuns.createTurnStream(turnId);
     this.options.foregroundRuns.addWaiter(agent, turnStream.waiter);
 
+    // Watchdog: if the provider stalls (no stream events for the inactivity
+    // window), cancel the turn so the agent doesn't stay "running" forever.
+    // Covers SDKs that silently hang (network timeout, unreachable upstream).
+    // Cancellation goes through cancelRun (runControl.cancel), which interrupts
+    // the provider session — no leaked subprocess/hung request — and dispatches
+    // the terminal event with the real turnId, so the pipeline finalizes the
+    // turn and clears activeForegroundTurnId. The old approach only unblocked
+    // the client-side stream, leaving the agent permanently "already has an
+    // active run".
+    const timeoutMs = this.options.inactivityTimeoutMs ?? FOREGROUND_TURN_INACTIVITY_TIMEOUT_MS;
+    const timeoutError = `Agent turn timed out: no activity for ${Math.round(timeoutMs / 1000)} seconds`;
+    let watchdogTimer: ReturnType<typeof setTimeout> | null = null;
+    let watchdogFired = false;
+    const clearWatchdog = () => {
+      if (watchdogTimer) {
+        clearTimeout(watchdogTimer);
+        watchdogTimer = null;
+      }
+    };
+    const armWatchdog = () => {
+      if (watchdogFired) {
+        return;
+      }
+      clearWatchdog();
+      watchdogTimer = setTimeout(() => {
+        watchdogFired = true;
+        this.options.logger.warn(
+          { agentId, turnId, provider: agent.provider, timeoutMs },
+          "agent.turn.inactivity_timeout",
+        );
+        void this.options.cancelRun(agentId).catch((error: unknown) => {
+          // Cancellation could not reach the provider; fall back to unblocking
+          // the turn stream and finalizing through the pipeline. The injected
+          // events carry the turnId so finalizeForeground still runs.
+          this.options.logger.error(
+            { agentId, turnId, err: error },
+            "agent.turn.inactivity_cancel_failed",
+          );
+          void this.options
+            .handleStreamEvent(agent, {
+              type: "turn_failed",
+              provider: agent.provider,
+              error: timeoutError,
+              turnId: agent.activeForegroundTurnId ?? turnId,
+            })
+            .catch((handleError: unknown) => {
+              this.options.logger.warn(
+                { agentId, turnId, err: handleError },
+                "agent.turn.inactivity_fallback_dispatch_failed",
+              );
+            });
+          this.options.foregroundRuns.cancelWaiters(agent, (id) => ({
+            type: "turn_failed",
+            provider: agent.provider,
+            error: timeoutError,
+            turnId: id,
+          }));
+        });
+      }, timeoutMs);
+    };
+
     try {
+      armWatchdog();
       for await (const event of turnStream.events(this.options.isTerminalEvent)) {
+        // Waiting on the user (permission / attention) is not inactivity:
+        // a long user deliberation must not kill a healthy turn.
+        if (isUserWaitEvent(event)) {
+          clearWatchdog();
+        } else {
+          armWatchdog();
+        }
         yield event;
       }
     } finally {
+      clearWatchdog();
       if (turnStream) {
         this.options.foregroundRuns.deleteWaiter(agent, turnStream.waiter);
       }

@@ -49,7 +49,17 @@ export async function runAllowCommand(
 ): Promise<PermitAllowResult> {
   const host = getDaemonHost({ host: options.host });
 
-  // No validation needed - if no reqId provided, allow all by default
+  // Require an explicit request ID or --all: silently allowing every pending
+  // permission (including shell/file writes) when the user omits req_id is a
+  // footgun and contradicts the help text ("optional if --all"). Mirrors deny.
+  if (!options.all && !reqId) {
+    const error: CommandError = {
+      code: "MISSING_ARGUMENT",
+      message: tCli("permit.error.requestRequired"),
+      details: tCli("permit.error.allowUsage"),
+    };
+    throw error;
+  }
 
   // Parse input JSON if provided
   let updatedInput: Record<string, unknown> | undefined;
@@ -108,13 +118,12 @@ export async function runAllowCommand(
 
     // Determine which permissions to allow
     let permissionsToAllow: AgentPermissionRequest[];
-    if (!reqId || options.all) {
-      // Default: allow all pending permissions if no req_id specified
-      // --all flag is kept as an explicit alias for clarity
+    if (options.all) {
+      // --all is the explicit opt-in for allowing every pending permission
       permissionsToAllow = pendingPermissions;
     } else {
       // Find permission by ID prefix
-      const permission = pendingPermissions.find((p) => p.id === reqId || p.id.startsWith(reqId));
+      const permission = pendingPermissions.find((p) => p.id === reqId || p.id.startsWith(reqId!));
       if (!permission) {
         await client.close();
         const error: CommandError = {

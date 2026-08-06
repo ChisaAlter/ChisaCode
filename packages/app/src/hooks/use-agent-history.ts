@@ -166,15 +166,28 @@ export function useAgentHistory(options: {
     if (!serverId || !client || !isConnected) {
       return;
     }
+    // Do not refetch while a loadMore is in flight: the refetch replaces pages
+    // mid-flight, and the in-flight next-page result (captured against the old
+    // last page cursor) would be appended to the new pages — duplicating or
+    // dropping sessions.
+    if (isFetchingNextPage) {
+      return;
+    }
     void refetch();
-  }, [client, isConnected, refetch, serverId]);
+  }, [client, isConnected, isFetchingNextPage, refetch, serverId]);
 
   const loadMore = useCallback(() => {
     if (!serverId || !client || !isConnected || !hasNextPage || isFetchingNextPage) {
       return;
     }
+    // Also skip while a background refetch is in flight: fetchNextPage captures
+    // the cursor from the current last page, and appending to pages that a
+    // concurrent refetch is about to replace corrupts the pagination chain.
+    if (isFetching) {
+      return;
+    }
     void fetchNextPage();
-  }, [client, fetchNextPage, hasNextPage, isConnected, isFetchingNextPage, serverId]);
+  }, [client, fetchNextPage, hasNextPage, isConnected, isFetching, isFetchingNextPage, serverId]);
 
   const agents = useMemo(
     () =>

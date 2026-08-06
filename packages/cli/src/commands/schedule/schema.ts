@@ -29,6 +29,7 @@ export function createScheduleInspectSchema(
       { header: "VALUE", field: "value", width: 80 },
     ],
     serialize: () => record,
+    collapseIdenticalRows: true,
   };
 }
 

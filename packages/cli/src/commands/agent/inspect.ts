@@ -72,8 +72,10 @@ function createInspectSchema(agent: AgentInspect): OutputSchema<InspectRow> {
         },
       },
     ],
-    // For JSON/YAML, return the structured agent object
+    // For JSON/YAML, return the structured agent object. All key-value rows
+    // serialize to the same object, so JSON/YAML output collapses to one.
     serialize: (_item) => agent,
+    collapseIdenticalRows: true,
   };
 }
 

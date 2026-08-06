@@ -23,6 +23,7 @@ function createInspectSchema(loop: LoopRecord): OutputSchema<InspectRow> {
       { header: "VALUE", field: "value", width: 80 },
     ],
     serialize: () => loop,
+    collapseIdenticalRows: true,
   };
 }
 

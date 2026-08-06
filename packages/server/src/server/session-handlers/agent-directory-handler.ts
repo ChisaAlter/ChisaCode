@@ -1,4 +1,5 @@
 import { CLIENT_CAPS } from "@chisacode/protocol/client-capabilities";
+import { getAgentStatusPriority } from "@chisacode/protocol/agent-state-bucket";
 import {
   type AgentSnapshotPayload,
   type ProjectPlacementPayload,
@@ -154,15 +155,13 @@ export class AgentDirectoryHandler implements DisposableHandler {
     getSortValue: (agent, key): number | string => {
       switch (key) {
         case "status_priority":
-          return (() => {
-            const { getAgentStatusPriority } = require("@chisacode/protocol/agent-state-bucket");
-            return getAgentStatusPriority({
-              status: agent.status,
-              pendingPermissionCount: agent.pendingPermissions?.length ?? 0,
-              requiresAttention: agent.requiresAttention,
-              attentionReason: agent.attentionReason ?? null,
-            });
-          })();
+          // Static import — a bare require() here threw ReferenceError in ESM.
+          return getAgentStatusPriority({
+            status: agent.status,
+            pendingPermissionCount: agent.pendingPermissions?.length ?? 0,
+            requiresAttention: agent.requiresAttention,
+            attentionReason: agent.attentionReason ?? null,
+          });
         case "created_at":
           return Date.parse(agent.createdAt);
         case "updated_at":
@@ -885,9 +884,9 @@ export class AgentDirectoryHandler implements DisposableHandler {
       if (existing) {
         return existing;
       }
-      const placementPromise = this.context.buildProjectPlacementForCwd(
-        cwd,
-      ) as Promise<ProjectPlacementPayload | null>;
+      const placementPromise = this.context.buildProjectPlacementForCwd(cwd, {
+        refreshGit: false,
+      }) as Promise<ProjectPlacementPayload | null>;
       placementByCwd.set(cwd, placementPromise);
       return placementPromise;
     };

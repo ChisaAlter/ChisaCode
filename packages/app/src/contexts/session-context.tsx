@@ -1191,8 +1191,22 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
       // authoritative revalidation on reconnect will repopulate the timeline
       // from the server snapshot.
       setCurrentAssistantMessage(serverId, "");
+      // Drop audio groups that never received their final chunk: buffered
+      // base64 audio (up to several MB per group) would otherwise persist
+      // forever, and setIsPlayingAudio would stay stuck at "playing".
+      if (audioOutputBuffersRef.current.size > 0 || activeAudioGroupsRef.current.size > 0) {
+        audioOutputBuffersRef.current.clear();
+        activeAudioGroupsRef.current.clear();
+        setIsPlayingAudio(serverId, false);
+      }
     }
-  }, [isConnected, scheduleAuthoritativeRevalidation, serverId, setCurrentAssistantMessage]);
+  }, [
+    isConnected,
+    scheduleAuthoritativeRevalidation,
+    serverId,
+    setCurrentAssistantMessage,
+    setIsPlayingAudio,
+  ]);
 
   useEffect(() => {
     return () => {

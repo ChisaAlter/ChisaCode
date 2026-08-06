@@ -508,11 +508,18 @@ export function Composer({
       isAgentRunning,
       isCancellingAgent,
       isConnected,
+      onCancelFailed: () => {
+        // Cancel RPC failed: reset the busy spinner and surface the failure,
+        // otherwise the interrupt button spins forever while the agent keeps
+        // running (previously this was a silent unhandled rejection).
+        setIsCancellingAgent(false);
+        toastErrorRef.current(t("composer.cancelFailed"));
+      },
     });
     if (!didCancel) return;
     setIsCancellingAgent(true);
     messageInputRef.current?.focus();
-  }, [agentId, client, isAgentRunning, isCancellingAgent, isConnected]);
+  }, [agentId, client, isAgentRunning, isCancellingAgent, isConnected, t]);
 
   const { handleFocusChange } = useComposerKeyboardController({
     serverId,

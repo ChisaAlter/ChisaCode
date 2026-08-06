@@ -206,6 +206,8 @@ const translations = {
     "permit.error.requestRequired": "除非指定 --all，否则必须提供请求 ID",
     "permit.error.denyUsage":
       "用法：chisacode permit deny <agent> <req_id> 或 chisacode permit deny <agent> --all",
+    "permit.error.allowUsage":
+      "用法：chisacode permit allow <agent> <req_id> 或 chisacode permit allow <agent> --all",
     "terminal.description": "管理 workspace 终端",
     "terminal.ls.description": "列出终端",
     "terminal.ls.all": "列出所有 workspace 中的终端",
@@ -607,6 +609,8 @@ const translations = {
     "permit.error.requestRequired": "Request ID is required unless --all is specified",
     "permit.error.denyUsage":
       "Usage: chisacode permit deny <agent> <req_id> or chisacode permit deny <agent> --all",
+    "permit.error.allowUsage":
+      "Usage: chisacode permit allow <agent> <req_id> or chisacode permit allow <agent> --all",
     "terminal.description": "Manage workspace terminals",
     "terminal.ls.description": "List terminals",
     "terminal.ls.all": "List terminals across all workspaces",

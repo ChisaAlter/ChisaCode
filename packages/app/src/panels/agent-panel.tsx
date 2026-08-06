@@ -73,6 +73,8 @@ import type { WorkspaceFileOpenRequest } from "@/workspace/file-open";
 import { navigateToAgent } from "@/utils/navigate-to-agent";
 import { deriveSidebarStateBucket } from "@/utils/sidebar-agent-state";
 import { buildDraftAgentSetup, type ClientSlashCommand } from "@/client-slash-commands";
+import { useQueryClient } from "@tanstack/react-query";
+import { agentHistoryQueryKeys } from "@/hooks/agent-history-query-key";
 
 interface ChatAgentStateShape {
   serverId: string | null;
@@ -324,6 +326,7 @@ function DraftPanel() {
   } = usePaneContext();
   const { isInteractive } = usePaneFocus();
   invariant(target.kind === "draft", "DraftPanel requires draft target");
+  const queryClient = useQueryClient();
 
   const handleCreated = useCallback(
     (agentSnapshot: Parameters<typeof normalizeAgentSnapshot>[0]) => {
@@ -333,9 +336,15 @@ function DraftPanel() {
         next.set(agentSnapshot.id, normalized);
         return next;
       });
+      // Invalidate agent history so the sidebar picks up the new conversation
+      // immediately, without waiting for the 30s staleTime or an agent_update push
+      // that the server may silently drop (subscription null / bootstrap buffer).
+      for (const queryKey of agentHistoryQueryKeys(serverId)) {
+        void queryClient.invalidateQueries({ queryKey });
+      }
       retargetCurrentTab({ kind: "agent", agentId: agentSnapshot.id });
     },
-    [retargetCurrentTab, serverId],
+    [queryClient, retargetCurrentTab, serverId],
   );
 
   return (
@@ -1256,14 +1265,6 @@ function ChatAgentReadyContent({
             />
           </ConversationAspectColumn>
         </FileDropZone>
-
-        {isArchivingCurrentAgent ? (
-          <View style={styles.archivingOverlay} testID="agent-archiving-overlay">
-            <ThemedActivityIndicator size="large" uniProps={foregroundColorMapping} />
-            <Text style={styles.archivingTitle}>{t("panels.agent.archivingTitle")}</Text>
-            <Text style={styles.archivingSubtitle}>{t("panels.agent.archivingSubtitle")}</Text>
-          </View>
-        ) : null}
       </View>
     </RewindComposerRestoreProvider>
   );
@@ -1659,9 +1660,6 @@ const ThemedActivityIndicator = withUnistyles(ActivityIndicator);
 const foregroundMutedColorMapping = (theme: Theme) => ({
   color: theme.colors.foregroundMuted,
 });
-const foregroundColorMapping = (theme: Theme) => ({
-  color: theme.colors.foreground,
-});
 
 const styles = StyleSheet.create((theme) => ({
   root: {
@@ -1769,34 +1767,6 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foregroundMuted,
     fontSize: 12.5,
     lineHeight: 18,
-  },
-  archivingOverlay: {
-    position: "absolute",
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-    backgroundColor: "rgba(8, 10, 14, 0.86)",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: theme.spacing[8],
-    gap: theme.spacing[3],
-    zIndex: 50,
-  },
-  // Soft overlay title: near sheet/topbar scale.
-  archivingTitle: {
-    fontSize: 14.5,
-    lineHeight: 20,
-    fontWeight: theme.fontWeight.medium,
-    color: theme.colors.foreground,
-    textAlign: "center",
-  },
-  archivingSubtitle: {
-    // Soft muted secondary copy: 12.5.
-    fontSize: 12.5,
-    lineHeight: 16,
-    color: theme.colors.foregroundMuted,
-    textAlign: "center",
   },
   loadingText: {
     fontSize: 14.5,

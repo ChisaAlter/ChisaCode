@@ -895,8 +895,14 @@ export function reduceStreamUpdate(
         (s) => s.kind === "generative_ui" && s.instanceId === event.instanceId,
       );
       if (idx === -1) return finalized;
-      const updated = { ...finalized[idx] } as GenerativeUiItem;
-      Object.assign(updated.props, event.props);
+      // Never mutate the previous snapshot's props in place: reducers must stay
+      // immutable or stale-snapshot readers see corrupted data and memoized
+      // components keyed on item.props reference stop re-rendering.
+      const previous = finalized[idx] as GenerativeUiItem;
+      const updated = {
+        ...previous,
+        props: { ...previous.props, ...event.props },
+      } as GenerativeUiItem;
       if (event.status) updated.status = event.status;
       return [...finalized.slice(0, idx), updated, ...finalized.slice(idx + 1)];
     }

@@ -1116,7 +1116,10 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
     id: "message-input-dictation-confirm-enter",
     action: "message-input.action",
     combo: "Enter",
-    when: { commandCenter: false, terminal: false },
+    // Restrict to the message input: with an unrestricted scope this binding
+    // hijacked Enter in every input (settings, search, rename) while
+    // dictation was active, blocking form submit / newline.
+    when: { commandCenter: false, terminal: false, focusScope: "message-input" },
     payload: { type: "message-input", kind: "dictation-confirm" },
   },
 

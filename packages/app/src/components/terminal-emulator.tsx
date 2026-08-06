@@ -566,10 +566,32 @@ export default function TerminalEmulator({
     viewportRef.current = viewportElement;
 
     const updateViewportMetrics = () => {
-      setViewportMetrics({
+      const next = {
         offset: Math.max(0, viewportElement.scrollTop),
         viewportSize: Math.max(0, viewportElement.clientHeight),
         contentSize: Math.max(0, viewportElement.scrollHeight),
+      };
+      // Bail out when nothing changed: MutationObserver fires on every DOM
+      // mutation during high-throughput terminal output (dozens per second),
+      // and an unconditional setState would re-render the whole tree per batch.
+      setViewportMetrics((current) =>
+        current.offset === next.offset &&
+        current.viewportSize === next.viewportSize &&
+        current.contentSize === next.contentSize
+          ? current
+          : next,
+      );
+    };
+
+    // Coalesce observer bursts into one measurement per frame.
+    let rafHandle: number | null = null;
+    const scheduleViewportMetricsUpdate = () => {
+      if (rafHandle !== null) {
+        return;
+      }
+      rafHandle = requestAnimationFrame(() => {
+        rafHandle = null;
+        updateViewportMetrics();
       });
     };
 
@@ -580,7 +602,7 @@ export default function TerminalEmulator({
     };
 
     const resizeObserver = new ResizeObserver(() => {
-      updateViewportMetrics();
+      scheduleViewportMetricsUpdate();
     });
     resizeObserver.observe(viewportElement);
     const scrollAreaElement = host.querySelector<HTMLElement>(".xterm-scroll-area");
@@ -589,7 +611,7 @@ export default function TerminalEmulator({
     }
 
     const mutationObserver = new MutationObserver(() => {
-      updateViewportMetrics();
+      scheduleViewportMetricsUpdate();
     });
     mutationObserver.observe(host, {
       childList: true,
@@ -601,6 +623,9 @@ export default function TerminalEmulator({
     viewportElement.addEventListener("scroll", handleViewportScroll, { passive: true });
 
     return () => {
+      if (rafHandle !== null) {
+        cancelAnimationFrame(rafHandle);
+      }
       viewportElement.removeEventListener("scroll", handleViewportScroll);
       resizeObserver.disconnect();
       mutationObserver.disconnect();
