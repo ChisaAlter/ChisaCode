@@ -1,20 +1,13 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useRef } from "react";
 import type { DaemonClient } from "@chisacode/client/internal/daemon-client";
 
-import type { PendingCreateAttempt } from "@/stores/create-flow-store";
-import { useCreateFlowStore } from "@/stores/create-flow-store";
 import { useWorkspaceLayoutStore } from "@/stores/workspace-layout-store";
-import type { WorkspaceTab, WorkspaceTabTarget } from "@/stores/workspace-tabs-store";
 import {
   shouldAutoOpenWorkspaceSetup,
   shouldShowWorkspaceSetup,
   useWorkspaceSetupStore,
 } from "@/stores/workspace-setup-store";
 import { shouldSeedEmptyWorkspaceDraft } from "@/screens/workspace/workspace-empty-draft-seed";
-import {
-  buildWorkspaceTabSnapshot,
-  type WorkspaceAgentVisibility,
-} from "@/workspace-tabs/agent-visibility";
 import { normalizeWorkspaceTabTarget } from "@/workspace-tabs/identity";
 
 interface UseWorkspacePersistenceHydrationInput {
@@ -28,102 +21,29 @@ interface UseWorkspacePersistenceHydrationInput {
   hasHydratedAgents: boolean;
   terminalsHydrated: boolean;
   terminalCount: number;
-  knownTerminalIds: Iterable<string>;
-  standaloneTerminalIds: Iterable<string>;
-  uiTabs: readonly WorkspaceTab[];
-  workspaceAgentVisibility: WorkspaceAgentVisibility;
-  openWorkspaceDraftTab: () => string | null;
-  openWorkspaceTabInBackground: (workspaceKey: string, target: WorkspaceTabTarget) => string | null;
+  activeAgentCount: number;
+  hasActiveTarget: boolean;
+  openWorkspaceDraftTab: () => void;
 }
 
 interface UseWorkspacePersistenceHydrationResult {
   showWorkspaceSetup: boolean;
 }
 
-function hasActivePendingDraftCreate(input: {
-  tabs: readonly WorkspaceTab[];
-  pendingByDraftId: Readonly<Record<string, PendingCreateAttempt>>;
-  serverId: string;
-}): boolean {
-  return input.tabs.some((tab) => {
-    if (tab.target.kind !== "draft") {
-      return false;
-    }
-    const pending = input.pendingByDraftId[tab.target.draftId];
-    return (
-      pending?.serverId === input.serverId &&
-      (pending.lifecycle === "active" || pending.lifecycle === "sent")
-    );
-  });
-}
-
-/** Owns workspace layout reconciliation, setup hydration, and automatic persisted tab recovery. */
+/** Owns workspace setup hydration, automatic setup recovery, and empty-workspace draft seeding. */
 export function useWorkspacePersistenceHydration(
   input: UseWorkspacePersistenceHydrationInput,
 ): UseWorkspacePersistenceHydrationResult {
   const openWorkspaceDraftTab = input.openWorkspaceDraftTab;
-  const openWorkspaceTabInBackground = input.openWorkspaceTabInBackground;
-  const pendingByDraftId = useCreateFlowStore((state) => state.pendingByDraftId);
-  const reconcileWorkspaceTabs = useWorkspaceLayoutStore((state) => state.reconcileTabs);
+  const openWorkspaceTarget = useWorkspaceLayoutStore((state) => state.openTarget);
   const workspaceSetupSnapshot = useWorkspaceSetupStore((state) =>
     input.persistenceKey ? (state.snapshots[input.persistenceKey] ?? null) : null,
   );
   const upsertWorkspaceSetupProgress = useWorkspaceSetupStore((state) => state.upsertProgress);
   const showWorkspaceSetup = shouldShowWorkspaceSetup(workspaceSetupSnapshot);
-  const hasSetupTab = useMemo(
-    () =>
-      input.uiTabs.some(
-        (tab) => tab.target.kind === "setup" && tab.target.workspaceId === input.workspaceId,
-      ),
-    [input.uiTabs, input.workspaceId],
-  );
   const emptyWorkspaceSeedKeysRef = useRef<Set<string>>(new Set());
-  const autoOpenedSetupTabWorkspaceRef = useRef<string | null>(null);
+  const autoOpenedSetupWorkspaceRef = useRef<string | null>(null);
   const requestedWorkspaceSetupStatusKeyRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    if (
-      !input.isRouteFocused ||
-      !input.serverId ||
-      !input.workspaceId ||
-      !input.persistenceKey ||
-      !input.hasHydratedWorkspaceLayoutStore
-    ) {
-      return;
-    }
-
-    reconcileWorkspaceTabs(
-      input.persistenceKey,
-      buildWorkspaceTabSnapshot({
-        agentVisibility: input.workspaceAgentVisibility,
-        agentsHydrated: input.hasHydratedAgents,
-        terminalsHydrated: input.terminalsHydrated,
-        knownTerminalIds: input.knownTerminalIds,
-        standaloneTerminalIds: input.standaloneTerminalIds,
-        hasActivePendingDraftCreate: hasActivePendingDraftCreate({
-          tabs: input.uiTabs,
-          pendingByDraftId,
-          serverId: input.serverId,
-        }),
-        activeSetupWorkspaceId: showWorkspaceSetup ? input.workspaceId : null,
-      }),
-    );
-  }, [
-    input.hasHydratedAgents,
-    input.hasHydratedWorkspaceLayoutStore,
-    input.isRouteFocused,
-    input.knownTerminalIds,
-    input.persistenceKey,
-    input.serverId,
-    input.standaloneTerminalIds,
-    input.terminalsHydrated,
-    input.uiTabs,
-    input.workspaceAgentVisibility,
-    input.workspaceId,
-    pendingByDraftId,
-    reconcileWorkspaceTabs,
-    showWorkspaceSetup,
-  ]);
 
   useEffect(() => {
     if (
@@ -197,9 +117,9 @@ export function useWorkspacePersistenceHydration(
       hasHydratedAgents: input.hasHydratedAgents,
       hasLoadedTerminals: input.terminalsHydrated,
       hasConsideredEmptyWorkspaceDraftSeed,
-      activeAgentCount: input.workspaceAgentVisibility.activeAgentIds.size,
+      activeAgentCount: input.activeAgentCount,
       terminalCount: input.terminalCount,
-      workspaceTabCount: input.uiTabs.length,
+      hasActiveTarget: input.hasActiveTarget,
     });
 
     if (hasConsideredEmptyWorkspaceDraftSeed) {
@@ -210,6 +130,8 @@ export function useWorkspacePersistenceHydration(
       openWorkspaceDraftTab();
     }
   }, [
+    input.activeAgentCount,
+    input.hasActiveTarget,
     input.hasHydratedAgents,
     input.hasHydratedWorkspaceLayoutStore,
     input.isRouteFocused,
@@ -217,8 +139,6 @@ export function useWorkspacePersistenceHydration(
     input.persistenceKey,
     input.terminalCount,
     input.terminalsHydrated,
-    input.uiTabs.length,
-    input.workspaceAgentVisibility.activeAgentIds.size,
     input.workspaceDirectory,
   ]);
 
@@ -227,19 +147,19 @@ export function useWorkspacePersistenceHydration(
       return;
     }
     if (!workspaceSetupSnapshot || !showWorkspaceSetup) {
-      if (autoOpenedSetupTabWorkspaceRef.current === input.persistenceKey) {
-        autoOpenedSetupTabWorkspaceRef.current = null;
+      if (autoOpenedSetupWorkspaceRef.current === input.persistenceKey) {
+        autoOpenedSetupWorkspaceRef.current = null;
       }
       return;
     }
     if (!shouldAutoOpenWorkspaceSetup(workspaceSetupSnapshot)) {
       return;
     }
-    if (hasSetupTab) {
-      autoOpenedSetupTabWorkspaceRef.current = input.persistenceKey;
+    if (input.hasActiveTarget) {
+      autoOpenedSetupWorkspaceRef.current = input.persistenceKey;
       return;
     }
-    if (autoOpenedSetupTabWorkspaceRef.current === input.persistenceKey) {
+    if (autoOpenedSetupWorkspaceRef.current === input.persistenceKey) {
       return;
     }
 
@@ -250,16 +170,14 @@ export function useWorkspacePersistenceHydration(
     if (!target) {
       return;
     }
-    const tabId = openWorkspaceTabInBackground(input.persistenceKey, target);
-    if (tabId) {
-      autoOpenedSetupTabWorkspaceRef.current = input.persistenceKey;
-    }
+    openWorkspaceTarget(input.persistenceKey, target);
+    autoOpenedSetupWorkspaceRef.current = input.persistenceKey;
   }, [
-    hasSetupTab,
+    input.hasActiveTarget,
     input.isRouteFocused,
-    openWorkspaceTabInBackground,
     input.persistenceKey,
     input.workspaceId,
+    openWorkspaceTarget,
     showWorkspaceSetup,
     workspaceSetupSnapshot,
   ]);

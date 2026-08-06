@@ -1,10 +1,6 @@
 import { test, expect } from "./fixtures";
 import { createTempGitRepo } from "./helpers/workspace";
-import {
-  waitForWorkspaceTabsVisible,
-  expectNoTerminalTabs,
-  clickFirstTerminalTab,
-} from "./helpers/workspace-tabs";
+import { waitForWorkspaceTabsVisible, expectNoTerminalTabs } from "./helpers/workspace-ui";
 import { clickNewChat } from "./helpers/launcher";
 import { expectComposerVisible } from "./helpers/composer";
 import { openFileExplorer, expectExplorerEntryVisible } from "./helpers/file-explorer";
@@ -253,14 +249,10 @@ test.describe("Workspace setup streaming", () => {
       await openWorkspaceScriptsMenu(page);
       await startWorkspaceScriptFromMenu(page, "web");
       await closeWorkspaceScriptsMenu(page);
-      await clickFirstTerminalTab(page);
       await expectTerminalSurfaceVisible(page, { timeout: 10_000 });
       await waitForTerminalAttached(page);
-      // The script terminal tab is titled "Terminal N" (not the script name);
+      // The script terminal surfaces in the center slot (not as a labeled tab);
       // availability is covered by the surface + attach assertions above.
-      await expect(page.locator('[data-testid^="workspace-tab-terminal_"]').first()).toBeVisible({
-        timeout: 10_000,
-      });
     } finally {
       await client.close();
       await repo.cleanup();

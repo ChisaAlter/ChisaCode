@@ -14,6 +14,60 @@ export async function waitForSidebarHydration(page: Page, timeout = 60_000): Pro
   await page.getByTestId("sidebar-v2-new-project").waitFor({ state: "visible", timeout });
 }
 
+/** Wait for the workspace deck to render its content slot (surface ready). */
+export async function waitForWorkspaceTabsVisible(page: Page, timeout = 30_000): Promise<void> {
+  await page
+    .locator('[data-testid^="workspace-deck-entry-"]')
+    .filter({ visible: true })
+    .first()
+    .waitFor({ state: "visible", timeout });
+}
+
+/** Assert the workspace center slot is not showing a terminal surface. */
+export async function expectNoTerminalTabs(page: Page): Promise<void> {
+  await expect(page.getByTestId("terminal-surface").filter({ visible: true })).toHaveCount(0);
+}
+
+/** Return the ids of all visible agent panels in the workspace center slot. */
+export async function getVisibleWorkspaceAgentSurfaceIds(page: Page): Promise<string[]> {
+  return page.locator('[data-testid^="agent-panel-"]').evaluateAll((nodes) =>
+    nodes.flatMap((node) => {
+      if (!(node instanceof HTMLElement)) {
+        return [];
+      }
+      const testId = node.getAttribute("data-testid") ?? "";
+      if (!testId.startsWith("agent-panel-")) {
+        return [];
+      }
+      if (node.offsetParent === null) {
+        return [];
+      }
+      return [testId.slice("agent-panel-".length)];
+    }),
+  );
+}
+
+/** Assert exactly the given agent panels are visible in the workspace center slot. */
+export async function expectOnlyWorkspaceAgentSurfacesVisible(
+  page: Page,
+  agentIds: string[],
+): Promise<void> {
+  await expect
+    .poll(() => getVisibleWorkspaceAgentSurfaceIds(page), { timeout: 30_000 })
+    .toEqual(agentIds);
+}
+
+/** Assert the workspace center slot shows no content panel at all. */
+export async function expectWorkspaceTabsAbsent(page: Page): Promise<void> {
+  await expect(
+    page
+      .locator(
+        '[data-testid^="agent-panel-"], [data-testid="terminal-surface"], [data-testid="workspace-file-pane"]',
+      )
+      .filter({ visible: true }),
+  ).toHaveCount(0);
+}
+
 /** The v2 sidebar row for an agent thread. */
 export function sidebarThreadRowLocator(page: Page, agentId: string) {
   return page.getByTestId(`sidebar-v2-thread-${agentId}`);

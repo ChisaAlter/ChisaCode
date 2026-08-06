@@ -1,6 +1,6 @@
 import type { DaemonClient } from "@chisacode/client/internal/daemon-client";
 import { normalizeWorkspaceDescriptor, type WorkspaceDescriptor } from "@/stores/session-store";
-import { buildWorkspaceTabPersistenceKey } from "@/stores/workspace-tabs-store";
+import { buildWorkspaceTabPersistenceKey } from "@/stores/workspace-layout-store";
 
 export interface OpenProjectDirectlyInput {
   serverId: string;
@@ -9,7 +9,7 @@ export interface OpenProjectDirectlyInput {
   client: Pick<DaemonClient, "openProject"> | null;
   mergeWorkspaces: (serverId: string, workspaces: Iterable<WorkspaceDescriptor>) => void;
   setHasHydratedWorkspaces: (serverId: string, hydrated: boolean) => void;
-  openDraftTab: (workspaceKey: string) => string | null;
+  openDraftTab: (workspaceKey: string) => void;
   navigateToWorkspace: (serverId: string, workspaceId: string) => void;
 }
 

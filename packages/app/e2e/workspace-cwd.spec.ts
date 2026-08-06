@@ -65,7 +65,7 @@ test.describe("Workspace cwd correctness", () => {
       timeout: 30_000,
     });
 
-    await expect(page.locator('[data-testid^="workspace-tab-agent_"]').first()).toBeVisible({
+    await expect(page.locator('[data-testid^="agent-panel-"]').first()).toBeVisible({
       timeout: 30_000,
     });
 

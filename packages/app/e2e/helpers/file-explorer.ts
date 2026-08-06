@@ -50,8 +50,10 @@ export async function expectExplorerEntryHidden(page: Page, name: string): Promi
   await expect(fileExplorerEntry(page, name)).toBeHidden({ timeout: 30_000 });
 }
 
-export async function expectFileTabOpen(page: Page, filePath: string): Promise<void> {
-  await expect(page.getByTestId(`workspace-tab-file_${filePath}`).first()).toBeVisible({
+export async function expectFileTabOpen(page: Page, _filePath: string): Promise<void> {
+  await expect(
+    page.getByTestId("workspace-file-pane").filter({ visible: true }).first(),
+  ).toBeVisible({
     timeout: 30_000,
   });
 }

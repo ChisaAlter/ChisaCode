@@ -1,16 +1,11 @@
 import React, { createContext, useContext, type ReactNode } from "react";
-import invariant from "tiny-invariant";
-import type { WorkspaceTabTarget } from "@/stores/workspace-tabs-store";
+import type { WorkspaceTabTarget } from "@/workspace-tabs/identity";
 import type { WorkspaceFileOpenRequest } from "@/workspace/file-open";
 
 export interface PaneContextValue {
   serverId: string;
   workspaceId: string;
-  tabId: string;
   target: WorkspaceTabTarget;
-  openTab: (target: WorkspaceTabTarget) => void;
-  closeCurrentTab: () => void;
-  retargetCurrentTab: (target: WorkspaceTabTarget) => void;
   openFileInWorkspace: (request: WorkspaceFileOpenRequest) => void;
   openImportSheet: () => void;
 }
@@ -60,13 +55,17 @@ export function PaneFocusProvider({
 }
 
 export function usePaneContext(): PaneContextValue {
-  const value = useContext(PaneContext);
-  invariant(value, "PaneContext is required");
-  return value;
+  const context = useContext(PaneContext);
+  if (!context) {
+    throw new Error("usePaneContext must be used within a PaneProvider");
+  }
+  return context;
 }
 
 export function usePaneFocus(): PaneFocusContextValue {
-  const value = useContext(PaneFocusContext);
-  invariant(value, "PaneFocusContext is required");
-  return value;
+  const context = useContext(PaneFocusContext);
+  if (!context) {
+    throw new Error("usePaneFocus must be used within a PaneFocusProvider");
+  }
+  return context;
 }

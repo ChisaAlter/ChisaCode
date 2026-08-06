@@ -32,13 +32,9 @@ describe("workbench fidelity style boundaries", () => {
     expect(source).not.toContain("environmentDockTabs");
   });
 
-  it("uses the reference glyphs for the desktop workbench tabs", () => {
-    const tabsSource = readSource("./workspace-desktop-tabs-row.tsx");
+  it("uses the reference glyphs for the desktop workbench title chrome", () => {
     const headerSource = readSource("./workspace-header.tsx");
 
-    expect(tabsSource).toContain('agent: "✦"');
-    expect(tabsSource).toContain('terminal: "▸"');
-    expect(tabsSource).toContain('browser: "◎"');
     // Desktop topbar follows T3 ChatHeader: project lead + session title breadcrumb.
     expect(headerSource).toContain("function DesktopWorkspaceHeaderTitle");
     expect(headerSource).toContain('testID="workspace-header-title"');
@@ -129,11 +125,12 @@ describe("workbench fidelity style boundaries", () => {
     expect(layoutSource).toContain("elevation: 3");
   });
 
-  it("hides the Soft compact tab wall until at least two tabs exist", () => {
+  it("renders a single content slot without any tab wall", () => {
     const source = readSource("./workspace-center-column.tsx");
 
-    expect(source).toContain("shouldShowMobileWorkspaceTabSwitcher");
-    expect(source).toContain("shouldShowMobileWorkspaceTabSwitcher(mobileTabSwitcher.tabs.length)");
+    expect(source).not.toContain("shouldShowMobileWorkspaceTabSwitcher");
+    expect(source).not.toContain("WorkspaceDesktopTabsRow");
+    expect(source).toContain("<WorkspacePaneContent");
   });
 
   it("uses Soft soft-pill branch ctx on the compact session header", () => {

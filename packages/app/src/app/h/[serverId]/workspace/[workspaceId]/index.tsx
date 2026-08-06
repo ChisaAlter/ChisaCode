@@ -13,7 +13,7 @@ import {
   type ActiveWorkspaceSelection,
   useActiveWorkspaceSelection,
 } from "@/stores/navigation-active-workspace-store";
-import type { WorkspaceTabTarget } from "@/stores/workspace-tabs-store";
+import type { WorkspaceTabTarget } from "@/workspace-tabs/identity";
 import { WorkspaceScreen } from "@/screens/workspace/workspace-screen";
 import { useWorkspaceLayoutStoreHydrated } from "@/stores/workspace-layout-store";
 import {

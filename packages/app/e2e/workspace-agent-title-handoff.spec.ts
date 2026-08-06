@@ -1,7 +1,8 @@
 import { test, expect, type Page } from "./fixtures";
 import { expectComposerVisible, submitMessage } from "./helpers/composer";
 import { seedWorkspace, type SeedDaemonClient } from "./helpers/seed-client";
-import { waitForWorkspaceTabsVisible } from "./helpers/workspace-tabs";
+import { waitForWorkspaceTabsVisible } from "./helpers/workspace-ui";
+import { clickNewChat } from "./helpers/launcher";
 import { captureWsSessionFrames } from "./helpers/rename";
 import { getServerId } from "./helpers/server-id";
 import { buildHostWorkspaceRoute } from "@/utils/host-routes";
@@ -47,7 +48,7 @@ async function installWorkspaceTabProbe(page: Page): Promise<void> {
     const snapshot = () => {
       records.push({
         at: performance.now(),
-        tabs: Array.from(document.querySelectorAll('[data-testid^="workspace-tab-"]'))
+        tabs: Array.from(document.querySelectorAll('[data-testid="workspace-header-title"]'))
           .filter(isVisible)
           .map((element) => ({
             testId: element.getAttribute("data-testid") ?? "",
@@ -142,25 +143,6 @@ async function fetchActiveAgentTitle(
   return result.entries.find((entry) => entry.agent.id === agentId)?.agent.title ?? null;
 }
 
-async function waitForPromptTabAgentActions(page: Page, promptTitle: string): Promise<void> {
-  const promptTab = page.getByRole("button", { name: promptTitle }).first();
-  await expect(promptTab).toBeVisible({ timeout: 15_000 });
-
-  const deadline = Date.now() + 15_000;
-  while (Date.now() < deadline) {
-    await promptTab.click({ button: "right" });
-    const renameAction = page.getByText("Rename", { exact: true }).first();
-    if (await renameAction.isVisible().catch(() => false)) {
-      await page.keyboard.press("Escape");
-      return;
-    }
-    await page.keyboard.press("Escape").catch(() => undefined);
-    await page.waitForTimeout(100);
-  }
-
-  throw new Error("Prompt tab did not expose agent tab actions after create handoff");
-}
-
 test.describe("Workspace agent title handoff", () => {
   test("keeps the prompt as the optimistic tab title until the generated title arrives", async ({
     page,
@@ -181,7 +163,7 @@ test.describe("Workspace agent title handoff", () => {
 
       await page.goto(buildHostWorkspaceRoute(getServerId(), workspace.workspaceId));
       await waitForWorkspaceTabsVisible(page);
-      await page.getByTestId("workspace-new-agent-tab").click();
+      await clickNewChat(page);
       await expectComposerVisible(page);
 
       const promptTitle = "Investigate optimistic tab title handoff";
@@ -199,8 +181,6 @@ test.describe("Workspace agent title handoff", () => {
         initialPrompt: `${promptTitle}\n\nMake the UI state deterministic.`,
         configTitle: null,
       });
-
-      await waitForPromptTabAgentActions(page, promptTitle);
 
       await workspace.client.updateAgent(agentId, { name: generatedTitle });
       await expect

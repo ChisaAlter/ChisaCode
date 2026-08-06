@@ -39,7 +39,7 @@ function navigateDeps(): NavigateToWorkspaceDeps {
     getSessionAgents: (serverId) =>
       useSessionStore.getState().sessions[serverId]?.agents.values() ?? [],
     openWorkspaceAgentTab: (workspaceKey, agentId) => {
-      useWorkspaceLayoutStore.getState().openTabFocused(workspaceKey, { kind: "agent", agentId });
+      useWorkspaceLayoutStore.getState().openTarget(workspaceKey, { kind: "agent", agentId });
     },
     rememberLastWorkspace: (selection) => lastWorkspaceSelectionStore.remember(selection),
     navigateToRoute: (route) => router.dismissTo(route as Href),

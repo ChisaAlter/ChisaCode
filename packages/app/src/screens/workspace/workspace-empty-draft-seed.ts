@@ -8,7 +8,7 @@ export function shouldSeedEmptyWorkspaceDraft(input: {
   hasConsideredEmptyWorkspaceDraftSeed: boolean;
   activeAgentCount: number;
   terminalCount: number;
-  workspaceTabCount: number;
+  hasActiveTarget: boolean;
 }): boolean {
   if (
     !input.isRouteFocused ||
@@ -22,5 +22,5 @@ export function shouldSeedEmptyWorkspaceDraft(input: {
     return false;
   }
 
-  return input.terminalCount === 0 && input.workspaceTabCount === 0;
+  return input.terminalCount === 0 && !input.hasActiveTarget;
 }

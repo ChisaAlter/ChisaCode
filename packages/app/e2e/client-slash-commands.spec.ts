@@ -81,23 +81,21 @@ async function waitForReplacementAgentId(page: Page, oldAgentId: string): Promis
   await expect
     .poll(
       async () => {
-        const ids = await page
-          .locator('[data-testid^="workspace-tab-agent_"]')
-          .evaluateAll((nodes) =>
-            nodes.flatMap((node) => {
-              if (!(node instanceof HTMLElement)) {
-                return [];
-              }
-              const testId = node.getAttribute("data-testid") ?? "";
-              if (!testId.startsWith("workspace-tab-agent_")) {
-                return [];
-              }
-              if (node.offsetParent === null) {
-                return [];
-              }
-              return [testId.slice("workspace-tab-agent_".length)];
-            }),
-          );
+        const ids = await page.locator('[data-testid^="agent-panel-"]').evaluateAll((nodes) =>
+          nodes.flatMap((node) => {
+            if (!(node instanceof HTMLElement)) {
+              return [];
+            }
+            const testId = node.getAttribute("data-testid") ?? "";
+            if (!testId.startsWith("agent-panel-")) {
+              return [];
+            }
+            if (node.offsetParent === null) {
+              return [];
+            }
+            return [testId.slice("agent-panel-".length)];
+          }),
+        );
         newAgentId = ids.find((id) => id !== oldAgentId) ?? null;
         return newAgentId;
       },

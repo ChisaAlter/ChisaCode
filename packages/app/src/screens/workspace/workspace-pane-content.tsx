@@ -8,7 +8,7 @@ import {
 } from "@/panels/pane-context";
 import { getPanelRegistration } from "@/panels/panel-registry";
 import { ensurePanelsRegistered } from "@/panels/register-panels";
-import type { WorkspaceTabDescriptor } from "@/screens/workspace/workspace-tabs-types";
+import type { WorkspaceTabTarget } from "@/workspace-tabs/identity";
 import type { WorkspaceFileOpenRequest } from "@/workspace/file-open";
 
 export interface WorkspacePaneContentModel {
@@ -18,44 +18,51 @@ export interface WorkspacePaneContentModel {
 }
 
 export interface BuildWorkspacePaneContentModelInput {
-  tab: WorkspaceTabDescriptor;
+  target: WorkspaceTabTarget;
   normalizedServerId: string;
   normalizedWorkspaceId: string;
-  onOpenTab: (target: WorkspaceTabDescriptor["target"]) => void;
-  onCloseCurrentTab: () => void;
-  onRetargetCurrentTab: (target: WorkspaceTabDescriptor["target"]) => void;
   onOpenWorkspaceFile: (request: WorkspaceFileOpenRequest) => void;
   onOpenImportSheet: () => void;
 }
 
 export function buildWorkspacePaneContentModel({
-  tab,
+  target,
   normalizedServerId,
   normalizedWorkspaceId,
-  onOpenTab,
-  onCloseCurrentTab,
-  onRetargetCurrentTab,
   onOpenWorkspaceFile,
   onOpenImportSheet,
 }: BuildWorkspacePaneContentModelInput): WorkspacePaneContentModel {
   ensurePanelsRegistered();
-  const registration = getPanelRegistration(tab.kind);
-  invariant(registration, `No panel registration for kind: ${tab.kind}`);
+  const registration = getPanelRegistration(target.kind);
+  invariant(registration, `No panel registration for kind: ${target.kind}`);
   return {
-    key: `${normalizedServerId}:${normalizedWorkspaceId}:${tab.tabId}`,
+    key: `${normalizedServerId}:${normalizedWorkspaceId}:${target.kind}:${describeTargetId(target)}`,
     Component: registration.component,
     paneContextValue: {
       serverId: normalizedServerId,
       workspaceId: normalizedWorkspaceId,
-      tabId: tab.tabId,
-      target: tab.target,
-      openTab: onOpenTab,
-      closeCurrentTab: onCloseCurrentTab,
-      retargetCurrentTab: onRetargetCurrentTab,
+      target,
       openFileInWorkspace: onOpenWorkspaceFile,
       openImportSheet: onOpenImportSheet,
     },
   };
+}
+
+function describeTargetId(target: WorkspaceTabTarget): string {
+  switch (target.kind) {
+    case "draft":
+      return target.draftId;
+    case "agent":
+      return target.agentId;
+    case "terminal":
+      return target.terminalId;
+    case "browser":
+      return target.browserId;
+    case "file":
+      return target.path;
+    case "setup":
+      return target.workspaceId;
+  }
 }
 
 export interface WorkspacePaneContentProps {

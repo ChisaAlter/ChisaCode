@@ -1,7 +1,26 @@
-import type { WorkspaceTabTarget } from "@/stores/workspace-tabs-store";
+import type { AgentProvider } from "@chisacode/protocol/agent-types";
+import type { WorkspaceFileTabTarget } from "@/workspace/file-open";
 import { normalizeWorkspaceFileLocation, workspaceFileLocationsEqual } from "@/workspace/file-open";
 
-type WorkspaceDraftTabSetup = NonNullable<Extract<WorkspaceTabTarget, { kind: "draft" }>["setup"]>;
+/** Provider/mode/model selection carried by a draft workspace target */
+export interface WorkspaceDraftTabSetup {
+  provider: AgentProvider;
+  runtimeProvider?: AgentProvider | null;
+  cwd: string;
+  modeId: string | null;
+  model: string | null;
+  thinkingOptionId: string | null;
+  featureValues: Record<string, unknown>;
+}
+
+/** Identifies the single content currently shown by a workspace center column */
+export type WorkspaceTabTarget =
+  | { kind: "draft"; draftId: string; setup?: WorkspaceDraftTabSetup }
+  | { kind: "agent"; agentId: string }
+  | { kind: "terminal"; terminalId: string }
+  | { kind: "browser"; browserId: string }
+  | WorkspaceFileTabTarget
+  | { kind: "setup"; workspaceId: string };
 
 export function normalizeWorkspaceTabTarget(
   value: WorkspaceTabTarget | null | undefined,

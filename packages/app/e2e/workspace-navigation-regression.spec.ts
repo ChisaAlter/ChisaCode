@@ -16,7 +16,7 @@ import {
   getVisibleWorkspaceAgentSurfaceIds,
   waitForWorkspaceTabsVisible,
   expectWorkspaceTabsAbsent,
-} from "./helpers/workspace-tabs";
+} from "./helpers/workspace-ui";
 import {
   expectSidebarThreadActive,
   expectWorkspaceHeader,

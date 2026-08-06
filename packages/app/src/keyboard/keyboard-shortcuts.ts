@@ -32,7 +32,7 @@ export interface KeyboardShortcutHelpRow {
   note?: string;
 }
 
-export type ShortcutSectionId = "navigation" | "tabs-panes" | "projects" | "panels" | "agent-input";
+export type ShortcutSectionId = "navigation" | "projects" | "panels" | "agent-input";
 
 export interface KeyboardShortcutHelpSection {
   id: ShortcutSectionId;
@@ -108,7 +108,6 @@ export interface ChordState {
 const DEFAULT_SHORTCUT_HELP_COPY: KeyboardShortcutHelpCopy = {
   sectionTitles: {
     navigation: "导航",
-    "tabs-panes": "标签页与面板",
     projects: "项目",
     panels: "面板",
     "agent-input": "智能体输入",
@@ -118,25 +117,9 @@ const DEFAULT_SHORTCUT_HELP_COPY: KeyboardShortcutHelpCopy = {
     "new-workspace": "新建工作区",
     "new-worktree": "新建 worktree",
     "archive-worktree": "归档 worktree",
-    "workspace-tab-new": "新建标签页",
-    "workspace-tab-close-current": "关闭当前标签页",
     "workspace-jump-index": "跳转到工作区",
-    "workspace-tab-jump-index": "跳转到标签页",
     "workspace-prev": "上一个工作区",
     "workspace-next": "下一个工作区",
-    "workspace-tab-prev": "上一个标签页",
-    "workspace-tab-next": "下一个标签页",
-    "workspace-pane-split-right": "向右拆分面板",
-    "workspace-pane-split-down": "向下拆分面板",
-    "workspace-pane-focus-left": "聚焦左侧面板",
-    "workspace-pane-focus-right": "聚焦右侧面板",
-    "workspace-pane-focus-up": "聚焦上方面板",
-    "workspace-pane-focus-down": "聚焦下方面板",
-    "workspace-pane-move-tab-left": "向左移动标签页",
-    "workspace-pane-move-tab-right": "向右移动标签页",
-    "workspace-pane-move-tab-up": "向上移动标签页",
-    "workspace-pane-move-tab-down": "向下移动标签页",
-    "workspace-pane-close": "关闭面板",
     "workspace-terminal-new": "新建终端",
     "workspace-dock-git-open": "打开 Git 工作台",
     "workspace-dock-browser-open": "打开浏览器上下文",
@@ -269,68 +252,6 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
     },
   },
 
-  // --- Tab management ---
-  {
-    id: "workspace-tab-new-cmd-t-mac",
-    action: "workspace.tab.new",
-    combo: "Cmd+T",
-    when: { mac: true, commandCenter: false },
-    help: {
-      id: "workspace-tab-new",
-      section: "tabs-panes",
-      label: "New tab",
-      keys: ["mod", "T"],
-    },
-  },
-  {
-    id: "workspace-tab-new-ctrl-t-non-mac",
-    action: "workspace.tab.new",
-    combo: "Ctrl+T",
-    when: { mac: false, commandCenter: false, terminal: false },
-    help: {
-      id: "workspace-tab-new",
-      section: "tabs-panes",
-      label: "New tab",
-      keys: ["mod", "T"],
-    },
-  },
-  {
-    id: "workspace-tab-close-current-cmd-w-mac",
-    action: "workspace.tab.close.current",
-    combo: "Cmd+W",
-    when: { mac: true, desktop: true, commandCenter: false },
-    help: {
-      id: "workspace-tab-close-current",
-      section: "tabs-panes",
-      label: "Close current tab",
-      keys: ["meta", "W"],
-    },
-  },
-  {
-    id: "workspace-tab-close-current-ctrl-w-non-mac",
-    action: "workspace.tab.close.current",
-    combo: "Ctrl+W",
-    when: { mac: false, desktop: true, commandCenter: false, terminal: false },
-    help: {
-      id: "workspace-tab-close-current",
-      section: "tabs-panes",
-      label: "Close current tab",
-      keys: ["ctrl", "W"],
-    },
-  },
-  {
-    id: "workspace-tab-close-current-alt-shift-w-web",
-    action: "workspace.tab.close.current",
-    combo: "Alt+Shift+W",
-    when: { desktop: false, commandCenter: false },
-    help: {
-      id: "workspace-tab-close-current",
-      section: "tabs-panes",
-      label: "Close current tab",
-      keys: ["alt", "shift", "W"],
-    },
-  },
-
   // --- Workspace index jump ---
   {
     id: "workspace-navigate-index-cmd-digit-mac",
@@ -369,47 +290,6 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
       section: "navigation",
       label: "Jump to workspace",
       keys: ["alt", "1-9"],
-    },
-  },
-
-  // --- Tab index jump ---
-  {
-    id: "workspace-tab-navigate-index-cmd-alt-digit-mac-desktop",
-    action: "workspace.tab.navigate.index",
-    combo: "Cmd+Alt+Digit",
-    when: { mac: true, desktop: true, commandCenter: false },
-    payload: { type: "index" },
-    help: {
-      id: "workspace-tab-jump-index",
-      section: "navigation",
-      label: "Jump to tab",
-      keys: ["mod", "alt", "1-9"],
-    },
-  },
-  {
-    id: "workspace-tab-navigate-index-alt-digit-desktop",
-    action: "workspace.tab.navigate.index",
-    combo: "Alt+Digit",
-    when: { mac: false, desktop: true, commandCenter: false },
-    payload: { type: "index" },
-    help: {
-      id: "workspace-tab-jump-index",
-      section: "navigation",
-      label: "Jump to tab",
-      keys: ["alt", "1-9"],
-    },
-  },
-  {
-    id: "workspace-tab-navigate-index-alt-shift-digit-web",
-    action: "workspace.tab.navigate.index",
-    combo: "Alt+Shift+Digit",
-    when: { desktop: false, commandCenter: false },
-    payload: { type: "index" },
-    help: {
-      id: "workspace-tab-jump-index",
-      section: "navigation",
-      label: "Jump to tab",
-      keys: ["alt", "shift", "1-9"],
     },
   },
 
@@ -490,192 +370,6 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
       section: "navigation",
       label: "Next workspace",
       keys: ["alt", "]"],
-    },
-  },
-
-  // --- Tab relative navigation ---
-  {
-    id: "workspace-tab-navigate-relative-alt-shift-left",
-    action: "workspace.tab.navigate.relative",
-    combo: "Alt+Shift+[",
-    when: { commandCenter: false },
-    payload: { type: "delta", delta: -1 },
-    help: {
-      id: "workspace-tab-prev",
-      section: "navigation",
-      label: "Previous tab",
-      keys: ["alt", "shift", "["],
-    },
-  },
-  {
-    id: "workspace-tab-navigate-relative-alt-shift-right",
-    action: "workspace.tab.navigate.relative",
-    combo: "Alt+Shift+]",
-    when: { commandCenter: false },
-    payload: { type: "delta", delta: 1 },
-    help: {
-      id: "workspace-tab-next",
-      section: "navigation",
-      label: "Next tab",
-      keys: ["alt", "shift", "]"],
-    },
-  },
-
-  // --- Pane management ---
-  {
-    id: "workspace-pane-split-right-cmd-backslash",
-    action: "workspace.pane.split.right",
-    combo: "Cmd+\\",
-    when: { mac: true, commandCenter: false },
-    help: {
-      id: "workspace-pane-split-right",
-      section: "tabs-panes",
-      label: "Split pane right",
-      keys: ["mod", "\\"],
-    },
-  },
-  {
-    id: "workspace-pane-split-right-ctrl-backslash-non-mac",
-    action: "workspace.pane.split.right",
-    combo: "Ctrl+\\",
-    when: { mac: false, commandCenter: false, terminal: false },
-    help: {
-      id: "workspace-pane-split-right",
-      section: "tabs-panes",
-      label: "Split pane right",
-      keys: ["mod", "\\"],
-    },
-  },
-  {
-    id: "workspace-pane-split-down-cmd-shift-backslash",
-    action: "workspace.pane.split.down",
-    combo: "Cmd+Shift+\\",
-    when: { mac: true, commandCenter: false },
-    help: {
-      id: "workspace-pane-split-down",
-      section: "tabs-panes",
-      label: "Split pane down",
-      keys: ["mod", "shift", "\\"],
-    },
-  },
-  {
-    id: "workspace-pane-split-down-ctrl-shift-backslash-non-mac",
-    action: "workspace.pane.split.down",
-    combo: "Ctrl+Shift+\\",
-    when: { mac: false, commandCenter: false, terminal: false },
-    help: {
-      id: "workspace-pane-split-down",
-      section: "tabs-panes",
-      label: "Split pane down",
-      keys: ["mod", "shift", "\\"],
-    },
-  },
-  {
-    id: "workspace-pane-focus-left-cmd-shift-left",
-    action: "workspace.pane.focus.left",
-    combo: "Cmd+Shift+ArrowLeft",
-    when: { mac: true, commandCenter: false, editable: false },
-    help: {
-      id: "workspace-pane-focus-left",
-      section: "tabs-panes",
-      label: "Focus left pane",
-      keys: ["mod", "shift", "Left"],
-    },
-  },
-  {
-    id: "workspace-pane-focus-right-cmd-shift-right",
-    action: "workspace.pane.focus.right",
-    combo: "Cmd+Shift+ArrowRight",
-    when: { mac: true, commandCenter: false, editable: false },
-    help: {
-      id: "workspace-pane-focus-right",
-      section: "tabs-panes",
-      label: "Focus right pane",
-      keys: ["mod", "shift", "Right"],
-    },
-  },
-  {
-    id: "workspace-pane-focus-up-cmd-shift-up",
-    action: "workspace.pane.focus.up",
-    combo: "Cmd+Shift+ArrowUp",
-    when: { mac: true, commandCenter: false, editable: false },
-    help: {
-      id: "workspace-pane-focus-up",
-      section: "tabs-panes",
-      label: "Focus pane above",
-      keys: ["mod", "shift", "Up"],
-    },
-  },
-  {
-    id: "workspace-pane-focus-down-cmd-shift-down",
-    action: "workspace.pane.focus.down",
-    combo: "Cmd+Shift+ArrowDown",
-    when: { mac: true, commandCenter: false, editable: false },
-    help: {
-      id: "workspace-pane-focus-down",
-      section: "tabs-panes",
-      label: "Focus pane below",
-      keys: ["mod", "shift", "Down"],
-    },
-  },
-  {
-    id: "workspace-pane-move-tab-left-cmd-shift-alt-left",
-    action: "workspace.pane.move-tab.left",
-    combo: "Cmd+Alt+Shift+ArrowLeft",
-    when: { mac: true, commandCenter: false },
-    help: {
-      id: "workspace-pane-move-tab-left",
-      section: "tabs-panes",
-      label: "Move tab left",
-      keys: ["mod", "shift", "alt", "Left"],
-    },
-  },
-  {
-    id: "workspace-pane-move-tab-right-cmd-shift-alt-right",
-    action: "workspace.pane.move-tab.right",
-    combo: "Cmd+Alt+Shift+ArrowRight",
-    when: { mac: true, commandCenter: false },
-    help: {
-      id: "workspace-pane-move-tab-right",
-      section: "tabs-panes",
-      label: "Move tab right",
-      keys: ["mod", "shift", "alt", "Right"],
-    },
-  },
-  {
-    id: "workspace-pane-move-tab-up-cmd-shift-alt-up",
-    action: "workspace.pane.move-tab.up",
-    combo: "Cmd+Alt+Shift+ArrowUp",
-    when: { mac: true, commandCenter: false },
-    help: {
-      id: "workspace-pane-move-tab-up",
-      section: "tabs-panes",
-      label: "Move tab up",
-      keys: ["mod", "shift", "alt", "Up"],
-    },
-  },
-  {
-    id: "workspace-pane-move-tab-down-cmd-shift-alt-down",
-    action: "workspace.pane.move-tab.down",
-    combo: "Cmd+Alt+Shift+ArrowDown",
-    when: { mac: true, commandCenter: false },
-    help: {
-      id: "workspace-pane-move-tab-down",
-      section: "tabs-panes",
-      label: "Move tab down",
-      keys: ["mod", "shift", "alt", "Down"],
-    },
-  },
-  {
-    id: "workspace-pane-close-cmd-shift-w",
-    action: "workspace.pane.close",
-    combo: "Cmd+Shift+W",
-    when: { mac: true, commandCenter: false },
-    help: {
-      id: "workspace-pane-close",
-      section: "tabs-panes",
-      label: "Close pane",
-      keys: ["mod", "shift", "W"],
     },
   },
 
@@ -1489,7 +1183,6 @@ export function buildKeyboardShortcutHelpSections(
   const seenRows = new Set<string>();
   const rowsBySection = new Map<ShortcutSectionId, KeyboardShortcutHelpRow[]>([
     ["navigation", []],
-    ["tabs-panes", []],
     ["projects", []],
     ["panels", []],
     ["agent-input", []],
@@ -1521,13 +1214,7 @@ export function buildKeyboardShortcutHelpSections(
     });
   }
 
-  const sectionOrder: ShortcutSectionId[] = [
-    "navigation",
-    "tabs-panes",
-    "projects",
-    "panels",
-    "agent-input",
-  ];
+  const sectionOrder: ShortcutSectionId[] = ["navigation", "projects", "panels", "agent-input"];
 
   return sectionOrder.flatMap((sectionId) => {
     const rows = rowsBySection.get(sectionId) ?? [];

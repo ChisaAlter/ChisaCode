@@ -1,11 +1,9 @@
 import { generateDraftId } from "@/stores/draft-keys";
-import {
-  buildWorkspaceTabPersistenceKey,
-  type WorkspaceTabTarget,
-} from "@/stores/workspace-tabs-store";
+import { buildWorkspaceTabPersistenceKey } from "@/stores/workspace-layout-store";
+import type { WorkspaceTabTarget } from "@/workspace-tabs/identity";
 import { buildHostWorkspaceRoute } from "@/utils/host-routes";
 
-/** Identifies the workspace tab to open or focus, with an optional pin request */
+/** Identifies the workspace content to show, with an optional pin request */
 export interface PrepareWorkspaceTabInput {
   serverId: string;
   workspaceId: string;
@@ -18,9 +16,9 @@ export interface NavigateToPreparedWorkspaceTabInput extends PrepareWorkspaceTab
   currentPathname?: string | null;
 }
 
-/** Store callbacks needed to open or pin a workspace tab */
+/** Store callbacks needed to open or pin a workspace target */
 export interface PrepareWorkspaceTabDeps {
-  openTabFocused: (workspaceKey: string, target: WorkspaceTabTarget) => string | null;
+  openTarget: (workspaceKey: string, target: WorkspaceTabTarget) => void;
   pinAgent: (workspaceKey: string, agentId: string) => void;
 }
 
@@ -41,10 +39,10 @@ function getPreparedTarget(target: WorkspaceTabTarget): WorkspaceTabTarget {
 }
 
 /**
- * Opens (or focuses) the target workspace tab, materializing "new" draft ids and pinning agents on request
- * @param input The workspace, tab target, and pin option to prepare
- * @param deps The store callbacks used to open and pin tabs
- * @returns The host workspace route for the prepared tab
+ * Shows the target workspace content, materializing "new" draft ids and pinning agents on request
+ * @param input The workspace, content target, and pin option to prepare
+ * @param deps The store callbacks used to open and pin targets
+ * @returns The host workspace route for the prepared content
  */
 export function prepareWorkspaceTab(
   input: PrepareWorkspaceTabInput,
@@ -57,7 +55,7 @@ export function prepareWorkspaceTab(
       workspaceId: input.workspaceId,
     }) ?? "";
 
-  deps.openTabFocused(key, target);
+  deps.openTarget(key, target);
 
   if (input.pin && target.kind === "agent") {
     deps.pinAgent(key, target.agentId);
@@ -67,9 +65,9 @@ export function prepareWorkspaceTab(
 }
 
 /**
- * Prepares the target workspace tab and then navigates to its workspace route
- * @param input The workspace, tab target, and current route used for navigation
- * @param deps The store and navigation callbacks used to open the tab and change route
+ * Shows the target workspace content and then navigates to its workspace route
+ * @param input The workspace, content target, and current route used for navigation
+ * @param deps The store and navigation callbacks used to open the target and change route
  * @returns The host workspace route that was navigated to
  */
 export function navigateToPreparedWorkspaceTab(

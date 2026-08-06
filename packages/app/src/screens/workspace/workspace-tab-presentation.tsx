@@ -1,21 +1,19 @@
-import { useCallback, useMemo, type ReactElement, type ReactNode } from "react";
-import { Pressable, Text, View, type PressableStateCallbackType } from "react-native";
-import { Check } from "lucide-react-native";
-import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import { useMemo, type ReactElement, type ReactNode } from "react";
+import { View } from "react-native";
+import { StyleSheet } from "react-native-unistyles";
 import invariant from "tiny-invariant";
 import { SyncedLoader } from "@/components/synced-loader";
 import { ensurePanelsRegistered } from "@/panels/register-panels";
 import { getPanelRegistration } from "@/panels/panel-registry";
-import type { WorkspaceTabDescriptor } from "@/screens/workspace/workspace-tabs-types";
+import { buildDeterministicWorkspaceTabId } from "@/workspace-tabs/identity";
+import type { WorkspaceTabTarget } from "@/workspace-tabs/identity";
 import type { SidebarStateBucket } from "@/utils/sidebar-agent-state";
 import { isEmphasizedStatusDotBucket } from "@/utils/status-dot-color";
 import { shouldRenderSyncedStatusLoader } from "@/utils/status-loader";
-import type { Theme } from "@/styles/theme";
-import { useTranslation } from "react-i18next";
 
 export interface WorkspaceTabPresentation {
   key: string;
-  kind: WorkspaceTabDescriptor["kind"];
+  kind: WorkspaceTabTarget["kind"];
   label: string;
   subtitle: string;
   titleState: "ready" | "loading";
@@ -29,7 +27,7 @@ const DEFAULT_STATUS_DOT_OFFSET = -2;
 const EMPHASIZED_STATUS_DOT_OFFSET = -3;
 
 interface WorkspaceTabPresentationResolverProps {
-  tab: WorkspaceTabDescriptor;
+  target: WorkspaceTabTarget;
   serverId: string;
   workspaceId: string;
   children: (presentation: WorkspaceTabPresentation) => ReactNode;
@@ -39,21 +37,22 @@ type WorkspaceTabPresentationResolverInnerProps = WorkspaceTabPresentationResolv
   registration: NonNullable<ReturnType<typeof getPanelRegistration>>;
 };
 
+/** Resolves the presentation (label, icon, status) of a workspace content target. */
 export function WorkspaceTabPresentationResolver({
-  tab,
+  target,
   serverId,
   workspaceId,
   children,
 }: WorkspaceTabPresentationResolverProps): ReactElement {
   ensurePanelsRegistered();
-  const registration = getPanelRegistration(tab.kind);
-  invariant(registration, `No panel registration for kind: ${tab.kind}`);
+  const registration = getPanelRegistration(target.kind);
+  invariant(registration, `No panel registration for kind: ${target.kind}`);
 
   return (
     <WorkspaceTabPresentationResolverInner
-      key={`${tab.key}:${tab.kind}`}
+      key={buildDeterministicWorkspaceTabId(target)}
       registration={registration}
-      tab={tab}
+      target={target}
       serverId={serverId}
       workspaceId={workspaceId}
     >
@@ -64,20 +63,20 @@ export function WorkspaceTabPresentationResolver({
 
 function WorkspaceTabPresentationResolverInner({
   registration,
-  tab,
+  target,
   serverId,
   workspaceId,
   children,
 }: WorkspaceTabPresentationResolverInnerProps): ReactElement {
-  const descriptor = registration.useDescriptor(tab.target as never, {
+  const descriptor = registration.useDescriptor(target as never, {
     serverId,
     workspaceId,
   });
 
   const presentation = useMemo(
     () => ({
-      key: tab.key,
-      kind: tab.kind,
+      key: buildDeterministicWorkspaceTabId(target),
+      kind: target.kind,
       label: descriptor.label,
       subtitle: descriptor.subtitle,
       titleState: descriptor.titleState,
@@ -90,8 +89,7 @@ function WorkspaceTabPresentationResolverInner({
       descriptor.statusBucket,
       descriptor.subtitle,
       descriptor.titleState,
-      tab.key,
-      tab.kind,
+      target,
     ],
   );
 
@@ -104,9 +102,6 @@ interface WorkspaceTabIconProps {
   size?: number;
   statusDotBorderColor?: string;
 }
-
-const ThemedCheckIcon = withUnistyles(Check);
-const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 
 export function WorkspaceTabIcon({
   presentation,
@@ -167,57 +162,6 @@ export function WorkspaceTabIcon({
   );
 }
 
-interface WorkspaceTabOptionRowProps {
-  presentation: WorkspaceTabPresentation;
-  selected: boolean;
-  active: boolean;
-  onPress: () => void;
-  trailingAccessory?: ReactNode;
-}
-
-export function WorkspaceTabOptionRow({
-  presentation,
-  selected,
-  active,
-  onPress,
-  trailingAccessory,
-}: WorkspaceTabOptionRowProps): ReactElement {
-  const { t } = useTranslation();
-  const pressableStyle = useCallback(
-    ({ hovered, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
-      styles.optionMainPressable,
-      (Boolean(hovered) || pressed || active) && styles.optionRowActive,
-    ],
-    [active],
-  );
-  const optionRowStyle = useMemo(
-    () => [styles.optionRow, active && styles.optionRowActive],
-    [active],
-  );
-  return (
-    <View style={optionRowStyle}>
-      <Pressable onPress={onPress} style={pressableStyle}>
-        <View style={styles.optionLeadingSlot}>
-          <WorkspaceTabIcon presentation={presentation} active={selected || active} />
-        </View>
-        <View style={styles.optionContent}>
-          <Text numberOfLines={1} style={styles.optionLabel}>
-            {presentation.titleState === "loading" ? t("common.loading") : presentation.label}
-          </Text>
-        </View>
-      </Pressable>
-      {selected ? (
-        <View style={styles.optionTrailingSlot}>
-          <ThemedCheckIcon size={16} uniProps={mutedColorMapping} />
-        </View>
-      ) : null}
-      {trailingAccessory ? (
-        <View style={styles.optionTrailingAccessorySlot}>{trailingAccessory}</View>
-      ) : null}
-    </View>
-  );
-}
-
 const styles = StyleSheet.create((theme) => ({
   agentIconWrapper: {
     position: "relative",
@@ -259,55 +203,5 @@ const styles = StyleSheet.create((theme) => ({
       theme.colorScheme === "light"
         ? theme.colors.palette.amber[700]
         : theme.colors.palette.amber[500],
-  },
-  optionRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    minHeight: 34,
-    gap: theme.spacing[2],
-    paddingHorizontal: theme.spacing[1],
-    paddingVertical: theme.spacing[1],
-    borderRadius: 8,
-    borderWidth: theme.borderWidth[1],
-    borderColor: "transparent",
-    marginHorizontal: theme.spacing[1],
-    marginBottom: theme.spacing[1],
-  },
-  optionMainPressable: {
-    flex: 1,
-    minWidth: 0,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing[2],
-    paddingHorizontal: theme.spacing[2],
-    paddingVertical: theme.spacing[2],
-  },
-  optionRowActive: {
-    borderColor: theme.colors.border,
-    // Soft selected wash: surface3, not hover surface1.
-    backgroundColor: theme.colors.surface3,
-  },
-  optionLeadingSlot: {
-    width: 16,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  optionContent: {
-    flex: 1,
-    flexShrink: 1,
-  },
-  optionLabel: {
-    fontSize: 12.5,
-    lineHeight: 16,
-    color: theme.colors.foreground,
-  },
-  optionTrailingSlot: {
-    width: 16,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  optionTrailingAccessorySlot: {
-    alignItems: "center",
-    justifyContent: "center",
   },
 }));

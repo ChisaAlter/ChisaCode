@@ -16,7 +16,7 @@ import { findLatestTurnChanges } from "@/screens/workspace/workspace-environment
 
 interface UseWorkspaceEnvironmentDataInput {
   normalizedServerId: string;
-  focusedPaneAgentId: string | null;
+  activeTargetAgentId: string | null;
   workspaceDescriptor: WorkspaceDescriptor | null | undefined;
   currentBranchName: string | null;
 }
@@ -108,27 +108,30 @@ function useEnvironmentPanelTurnChanges(
 }
 
 /**
- * Aggregates the focused pane's agent, activity, and workspace environment models.
- * @param input Current server, focused agent, workspace, and branch inputs
+ * Aggregates the active target's agent, activity, and workspace environment models.
+ * @param input Current server, active agent, workspace, and branch inputs
  * @returns Reactive environment panel data and derived presentation models
  */
 export function useWorkspaceEnvironmentData(
   input: UseWorkspaceEnvironmentDataInput,
 ): UseWorkspaceEnvironmentDataResult {
-  const { normalizedServerId, focusedPaneAgentId, workspaceDescriptor, currentBranchName } = input;
-  const environmentPanelAgent = useEnvironmentPanelAgent(normalizedServerId, focusedPaneAgentId);
+  const { normalizedServerId, activeTargetAgentId, workspaceDescriptor, currentBranchName } = input;
+  const environmentPanelAgent = useEnvironmentPanelAgent(normalizedServerId, activeTargetAgentId);
   const environmentSubagents = useSubagentsForParent({
     serverId: normalizedServerId,
-    parentAgentId: focusedPaneAgentId ?? "",
+    parentAgentId: activeTargetAgentId ?? "",
   });
-  const environmentTodoItems = useEnvironmentPanelTodoItems(normalizedServerId, focusedPaneAgentId);
+  const environmentTodoItems = useEnvironmentPanelTodoItems(
+    normalizedServerId,
+    activeTargetAgentId,
+  );
   const environmentStreamHead = useEnvironmentPanelStreamHead(
     normalizedServerId,
-    focusedPaneAgentId,
+    activeTargetAgentId,
   );
   const environmentStreamTail = useEnvironmentPanelStreamTail(
     normalizedServerId,
-    focusedPaneAgentId,
+    activeTargetAgentId,
   );
   const environmentProgress = useMemo(
     () =>
@@ -140,7 +143,7 @@ export function useWorkspaceEnvironmentData(
   );
   const environmentTurnChanges = useEnvironmentPanelTurnChanges(
     normalizedServerId,
-    focusedPaneAgentId,
+    activeTargetAgentId,
   );
   const workspaceStatusStripModel = useMemo(
     () =>

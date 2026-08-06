@@ -160,27 +160,6 @@ describe("keyboard-shortcuts", () => {
       payload: { index: 2 },
     },
     {
-      name: "matches tab index jump on mac desktop via Cmd+Alt+digit",
-      event: { key: "@", code: "Digit2", metaKey: true, altKey: true },
-      context: { isMac: true, isDesktop: true },
-      action: "workspace.tab.navigate.index",
-      payload: { index: 2 },
-    },
-    {
-      name: "matches tab index jump on non-mac desktop via Alt+digit",
-      event: { key: "2", code: "Digit2", altKey: true },
-      context: { isMac: false, isDesktop: true },
-      action: "workspace.tab.navigate.index",
-      payload: { index: 2 },
-    },
-    {
-      name: "matches tab index jump on web via Alt+Shift+digit",
-      event: { key: "@", code: "Digit2", altKey: true, shiftKey: true },
-      context: { isDesktop: false },
-      action: "workspace.tab.navigate.index",
-      payload: { index: 2 },
-    },
-    {
       name: "matches workspace relative navigation on web via Alt+[",
       event: { key: "[", code: "BracketLeft", altKey: true },
       context: { isDesktop: false },
@@ -193,36 +172,6 @@ describe("keyboard-shortcuts", () => {
       context: { isDesktop: true },
       action: "workspace.navigate.relative",
       payload: { delta: 1 },
-    },
-    {
-      name: "matches tab relative navigation via Alt+Shift+]",
-      event: { key: "}", code: "BracketRight", altKey: true, shiftKey: true },
-      action: "workspace.tab.navigate.relative",
-      payload: { delta: 1 },
-    },
-    {
-      name: "matches Mod+T to open new tab",
-      event: { key: "t", code: "KeyT", metaKey: true },
-      context: { isMac: true },
-      action: "workspace.tab.new",
-    },
-    {
-      name: "matches Alt+Shift+W to close current tab on web",
-      event: { key: "W", code: "KeyW", altKey: true, shiftKey: true },
-      context: { isDesktop: false },
-      action: "workspace.tab.close.current",
-    },
-    {
-      name: "matches Cmd+W to close current tab on mac desktop",
-      event: { key: "w", code: "KeyW", metaKey: true },
-      context: { isMac: true, isDesktop: true },
-      action: "workspace.tab.close.current",
-    },
-    {
-      name: "matches Ctrl+W to close current tab on non-mac desktop",
-      event: { key: "w", code: "KeyW", ctrlKey: true },
-      context: { isMac: false, isDesktop: true },
-      action: "workspace.tab.close.current",
     },
     {
       name: "matches Ctrl+Shift+O to create new agent on non-mac",
@@ -247,54 +196,6 @@ describe("keyboard-shortcuts", () => {
       event: { key: "B", code: "KeyB", ctrlKey: true, shiftKey: true },
       context: { isMac: false, isDesktop: true },
       action: "workspace.dock.browser.open",
-    },
-    {
-      name: "matches Cmd+Backslash to split pane right on macOS",
-      event: { key: "\\", code: "Backslash", metaKey: true },
-      context: { isMac: true },
-      action: "workspace.pane.split.right",
-    },
-    {
-      name: "matches Cmd+Shift+Backslash to split pane down on macOS",
-      event: { key: "|", code: "Backslash", metaKey: true, shiftKey: true },
-      context: { isMac: true },
-      action: "workspace.pane.split.down",
-    },
-    {
-      name: "matches Ctrl+Backslash to split pane right on non-mac desktop",
-      event: { key: "\\", code: "Backslash", ctrlKey: true },
-      context: { isMac: false, isDesktop: true },
-      action: "workspace.pane.split.right",
-    },
-    {
-      name: "matches Ctrl+Shift+Backslash to split pane down on non-mac desktop",
-      event: { key: "|", code: "Backslash", ctrlKey: true, shiftKey: true },
-      context: { isMac: false, isDesktop: true },
-      action: "workspace.pane.split.down",
-    },
-    {
-      name: "matches Cmd+Shift+ArrowRight to focus pane right on macOS",
-      event: { key: "ArrowRight", code: "ArrowRight", metaKey: true, shiftKey: true },
-      context: { isMac: true },
-      action: "workspace.pane.focus.right",
-    },
-    {
-      name: "matches Cmd+Shift+Alt+ArrowDown to move tab down on macOS",
-      event: {
-        key: "ArrowDown",
-        code: "ArrowDown",
-        metaKey: true,
-        shiftKey: true,
-        altKey: true,
-      },
-      context: { isMac: true },
-      action: "workspace.pane.move-tab.down",
-    },
-    {
-      name: "matches Cmd+Shift+W to close pane on macOS",
-      event: { key: "W", code: "KeyW", metaKey: true, shiftKey: true },
-      context: { isMac: true },
-      action: "workspace.pane.close",
     },
     {
       name: "matches Cmd+B sidebar toggle on macOS",
@@ -353,20 +254,6 @@ describe("keyboard-shortcuts", () => {
       action: "theme.cycle",
     },
     {
-      name: "matches Alt+Shift+[ to previous tab on macOS when Option substitutes event.key",
-      event: { key: "\u201D", code: "BracketLeft", altKey: true, shiftKey: true },
-      context: { isMac: true },
-      action: "workspace.tab.navigate.relative",
-      payload: { delta: -1 },
-    },
-    {
-      name: "matches Alt+Shift+] to next tab on macOS when Option substitutes event.key",
-      event: { key: "\u2019", code: "BracketRight", altKey: true, shiftKey: true },
-      context: { isMac: true },
-      action: "workspace.tab.navigate.relative",
-      payload: { delta: 1 },
-    },
-    {
       name: "matches Alt+[ to previous workspace on macOS web when Option substitutes event.key",
       event: { key: "\u201C", code: "BracketLeft", altKey: true },
       context: { isMac: true, isDesktop: false },
@@ -379,12 +266,6 @@ describe("keyboard-shortcuts", () => {
       context: { isMac: true, isDesktop: false },
       action: "workspace.navigate.relative",
       payload: { delta: 1 },
-    },
-    {
-      name: "matches Alt+Shift+W to close current tab on macOS web when Option substitutes event.key",
-      event: { key: "\u201E", code: "KeyW", altKey: true, shiftKey: true },
-      context: { isMac: true, isDesktop: false },
-      action: "workspace.tab.close.current",
     },
   ];
 
@@ -585,41 +466,28 @@ describe("keyboard-shortcut help sections", () => {
 
   const helpCases: HelpSectionCase[] = [
     {
-      name: "uses web defaults for workspace and tab jump",
+      name: "uses web defaults for workspace jump",
       context: { isMac: true, isDesktop: false },
       expectedKeys: {
         "new-agent": ["mod", "shift", "O"],
-        "workspace-tab-new": ["mod", "T"],
         "workspace-jump-index": ["alt", "1-9"],
-        "workspace-tab-jump-index": ["alt", "shift", "1-9"],
-        "workspace-tab-close-current": ["alt", "shift", "W"],
-        "workspace-pane-split-right": ["mod", "\\"],
-        "workspace-pane-close": ["mod", "shift", "W"],
         "cycle-agent-mode": ["shift", "Tab"],
       },
     },
     {
-      name: "uses desktop defaults for workspace and tab jump",
+      name: "uses desktop defaults for workspace jump",
       context: { isMac: true, isDesktop: true },
       expectedKeys: {
         "new-agent": ["mod", "shift", "O"],
         "new-workspace": ["mod", "N"],
-        "workspace-tab-new": ["mod", "T"],
         "workspace-jump-index": ["mod", "1-9"],
-        "workspace-tab-jump-index": ["mod", "alt", "1-9"],
-        "workspace-tab-close-current": ["meta", "W"],
-        "workspace-pane-split-right": ["mod", "\\"],
-        "workspace-pane-close": ["mod", "shift", "W"],
       },
     },
     {
-      name: "uses non-mac desktop defaults for tab jump and close tab",
+      name: "uses non-mac desktop defaults for new terminal",
       context: { isMac: false, isDesktop: true },
       expectedKeys: {
-        "workspace-tab-jump-index": ["alt", "1-9"],
-        "workspace-tab-close-current": ["ctrl", "W"],
-        "workspace-pane-split-right": ["mod", "\\"],
-        "workspace-pane-split-down": ["mod", "shift", "\\"],
+        "workspace-terminal-new": ["mod", "shift", "T"],
       },
     },
     {

@@ -33,7 +33,7 @@ import { WorkspaceGitActions } from "@/git/workspace-actions";
 import { WorkspaceOpenInEditorButton } from "@/screens/workspace/workspace-open-in-editor-button";
 import { WorkspaceScriptsButton } from "@/screens/workspace/workspace-scripts-button";
 import { WorkspaceTabPresentationResolver } from "@/screens/workspace/workspace-tab-presentation";
-import type { WorkspaceTabDescriptor } from "@/screens/workspace/workspace-tabs-types";
+import type { WorkspaceTabTarget } from "@/workspace-tabs/identity";
 import type { WorkspaceDescriptor } from "@/stores/session-store";
 import type { Theme } from "@/styles/theme";
 import type { ShortcutKey } from "@/utils/format-shortcut";
@@ -238,7 +238,7 @@ interface WorkspaceHeaderTitleBarProps {
   title: string;
   subtitle: string;
   showSubtitle: boolean;
-  activeTab: WorkspaceTabDescriptor | null;
+  activeTarget: WorkspaceTabTarget | null;
   currentBranchName: string | null;
   isGitCheckout: boolean;
   normalizedServerId: string;
@@ -273,7 +273,7 @@ export function WorkspaceHeaderTitleBar({
   title,
   subtitle,
   showSubtitle,
-  activeTab,
+  activeTarget,
   currentBranchName,
   isGitCheckout,
   normalizedServerId,
@@ -335,7 +335,7 @@ export function WorkspaceHeaderTitleBar({
             </>
           ) : (
             <DesktopWorkspaceHeaderTitle
-              activeTab={activeTab}
+              activeTarget={activeTarget}
               fallbackTitle={title}
               serverId={normalizedServerId}
               workspaceId={normalizedWorkspaceId}
@@ -380,19 +380,19 @@ export function WorkspaceHeaderTitleBar({
 }
 
 function DesktopWorkspaceHeaderTitle({
-  activeTab,
+  activeTarget,
   fallbackTitle,
   serverId,
   workspaceId,
 }: {
-  activeTab: WorkspaceTabDescriptor | null;
+  activeTarget: WorkspaceTabTarget | null;
   fallbackTitle: string;
   serverId: string;
   workspaceId: string;
 }) {
   const { t } = useTranslation();
 
-  if (!activeTab) {
+  if (!activeTarget) {
     return (
       <View style={styles.desktopHeaderTitleRow}>
         <Text testID="workspace-header-title" style={styles.headerTitle} numberOfLines={1}>
@@ -403,7 +403,11 @@ function DesktopWorkspaceHeaderTitle({
   }
 
   return (
-    <WorkspaceTabPresentationResolver tab={activeTab} serverId={serverId} workspaceId={workspaceId}>
+    <WorkspaceTabPresentationResolver
+      target={activeTarget}
+      serverId={serverId}
+      workspaceId={workspaceId}
+    >
       {(presentation) => (
         <View style={styles.desktopHeaderTitleRow}>
           <Text testID="workspace-header-title" style={styles.headerTitle} numberOfLines={1}>
@@ -454,7 +458,7 @@ export function WorkspaceDesktopSoftTopbar({
   title,
   subtitle,
   showSubtitle: _showSubtitle,
-  activeTab,
+  activeTarget,
   currentBranchName,
   isGitCheckout,
   normalizedServerId,
@@ -492,7 +496,7 @@ export function WorkspaceDesktopSoftTopbar({
   title: string;
   subtitle: string;
   showSubtitle: boolean;
-  activeTab: WorkspaceTabDescriptor | null;
+  activeTarget: WorkspaceTabTarget | null;
   currentBranchName: string | null;
   isGitCheckout: boolean;
   normalizedServerId: string;
@@ -554,7 +558,7 @@ export function WorkspaceDesktopSoftTopbar({
       {/* Soft topbar owns window drag when the desktop tab strip is hidden. */}
       <TitlebarDragRegion />
       <View style={styles.softTopbarTitleCluster}>
-        {isLoading && !activeTab && titleFallback.length === 0 ? (
+        {isLoading && !activeTarget && titleFallback.length === 0 ? (
           <View style={styles.headerTitleSkeleton} />
         ) : (
           <View style={styles.softBreadcrumbRow} testID="workspace-header-breadcrumb">
@@ -578,7 +582,7 @@ export function WorkspaceDesktopSoftTopbar({
               </>
             ) : null}
             <DesktopWorkspaceHeaderTitle
-              activeTab={activeTab}
+              activeTarget={activeTarget}
               fallbackTitle={titleFallback}
               serverId={normalizedServerId}
               workspaceId={normalizedWorkspaceId}

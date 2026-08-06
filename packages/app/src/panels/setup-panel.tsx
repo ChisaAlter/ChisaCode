@@ -14,7 +14,7 @@ import { useTranslation } from "react-i18next";
 import { Fonts } from "@/constants/theme";
 import { usePaneContext } from "@/panels/pane-context";
 import type { PanelDescriptor, PanelRegistration } from "@/panels/panel-registry";
-import { buildWorkspaceTabPersistenceKey } from "@/stores/workspace-tabs-store";
+import { buildWorkspaceTabPersistenceKey } from "@/stores/workspace-layout-store";
 import type { Theme } from "@/styles/theme";
 import {
   useWorkspaceSetupStore,

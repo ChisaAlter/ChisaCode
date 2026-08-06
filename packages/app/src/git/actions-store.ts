@@ -8,7 +8,6 @@ import {
 } from "@/stores/workspace-layout-store";
 import { useSessionStore } from "@/stores/session-store";
 import type { WorkspaceDescriptor } from "@/stores/session-store";
-import { useWorkspaceTabsStore } from "@/stores/workspace-tabs-store";
 import {
   clearWorkspaceArchivePending,
   markWorkspaceArchivePending,
@@ -205,7 +204,6 @@ function purgeArchivedWorkspaceState(input: { serverId: string; worktreePath: st
   if (workspaceKey) {
     useWorkspaceLayoutStore.getState().purgeWorkspace(workspaceKey);
   }
-  useWorkspaceTabsStore.getState().purgeWorkspace({ serverId, workspaceId });
 }
 
 const successTimers = new Map<string, ReturnType<typeof setTimeout>>();

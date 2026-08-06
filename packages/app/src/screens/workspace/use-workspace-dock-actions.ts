@@ -9,19 +9,17 @@ import {
   type WorkspacePaneCommand,
 } from "@/screens/workspace/workspace-environment-dock-model";
 import { createWorkspaceBrowser } from "@/stores/browser-store";
-import type { SplitPane } from "@/stores/workspace-layout-store";
-import type { WorkspaceTabTarget } from "@/stores/workspace-tabs-store";
+import type { WorkspaceTabTarget } from "@/workspace-tabs/identity";
 
 type ForcedEnvironmentPanelMode = "forced-open" | "forced-closed";
 
-type OpenWorkspaceTab = (workspaceKey: string, target: WorkspaceTabTarget) => string | null;
+type OpenWorkspaceTarget = (workspaceKey: string, target: WorkspaceTabTarget) => void;
 
 interface UseWorkspaceDockActionsInput {
   isMobile: boolean;
   hasEnvironmentBrowserContext: boolean;
   hasEnvironmentPullRequest: boolean;
   persistenceKey: string | null;
-  focusedPane: SplitPane | null;
   setEnvironmentDockState: Dispatch<SetStateAction<WorkspaceEnvironmentDockState>>;
   setEnvironmentPanelMode: (mode: ForcedEnvironmentPanelMode) => void;
   closeDesktopFileExplorer: () => void;
@@ -29,13 +27,7 @@ interface UseWorkspaceDockActionsInput {
   /** Production desktop fallback when explorer checkout is not ready yet. */
   openRightPanelDiff?: () => void;
   handleCreateTerminal: (input?: { paneId?: string }) => void;
-  focusWorkspacePane: (workspaceKey: string, paneId: string) => void;
-  splitWorkspacePaneEmpty: (
-    workspaceKey: string,
-    input: { targetPaneId: string; position: "left" | "right" | "top" | "bottom" },
-  ) => string | null;
-  openWorkspaceTabFocused: OpenWorkspaceTab;
-  openWorkspaceTabInBackground: OpenWorkspaceTab;
+  openWorkspaceTarget: OpenWorkspaceTarget;
 }
 
 interface UseWorkspaceDockActionsResult {
@@ -45,7 +37,7 @@ interface UseWorkspaceDockActionsResult {
   handleOpenPullRequestDock: () => void;
 }
 
-/** Owns workspace dock state transitions and pane-placement command routing. */
+/** Owns workspace dock state transitions and content-command routing. */
 export function useWorkspaceDockActions(
   input: UseWorkspaceDockActionsInput,
 ): UseWorkspaceDockActionsResult {
@@ -54,17 +46,13 @@ export function useWorkspaceDockActions(
     hasEnvironmentBrowserContext,
     hasEnvironmentPullRequest,
     persistenceKey,
-    focusedPane,
     setEnvironmentDockState,
     setEnvironmentPanelMode,
     closeDesktopFileExplorer,
     handleOpenEnvironmentChanges,
     openRightPanelDiff,
     handleCreateTerminal,
-    focusWorkspacePane,
-    splitWorkspacePaneEmpty,
-    openWorkspaceTabFocused,
-    openWorkspaceTabInBackground,
+    openWorkspaceTarget,
   } = input;
 
   const handleOpenWorkspaceDockPane = useCallback(
@@ -112,11 +100,8 @@ export function useWorkspaceDockActions(
     ],
   );
 
-  const handleOpenTargetInPanePlacement = useCallback(
-    (
-      targetKind: Extract<WorkspacePaneCommand, { type: "openTarget" }>["targetKind"],
-      placement: "current" | "new-tab" | "right" | "down",
-    ) => {
+  const handleOpenTarget = useCallback(
+    (targetKind: Extract<WorkspacePaneCommand, { type: "openTarget" }>["targetKind"]) => {
       if (targetKind === "diff") {
         handleOpenEnvironmentChanges();
         return;
@@ -132,23 +117,8 @@ export function useWorkspaceDockActions(
         return;
       }
 
-      let targetPaneId: string | undefined;
-      if (placement === "right" || placement === "down") {
-        if (!focusedPane) {
-          return;
-        }
-        const paneId = splitWorkspacePaneEmpty(persistenceKey, {
-          targetPaneId: focusedPane.id,
-          position: placement === "right" ? "right" : "bottom",
-        });
-        if (!paneId) {
-          return;
-        }
-        targetPaneId = paneId;
-      }
-
       if (targetKind === "terminal") {
-        handleCreateTerminal(targetPaneId ? { paneId: targetPaneId } : undefined);
+        handleCreateTerminal();
         return;
       }
       if (!getIsElectron()) {
@@ -156,26 +126,14 @@ export function useWorkspaceDockActions(
       }
 
       const { browserId } = createWorkspaceBrowser();
-      const target = { kind: "browser" as const, browserId };
-      if (targetPaneId) {
-        focusWorkspacePane(persistenceKey, targetPaneId);
-      }
-      if (placement === "new-tab") {
-        openWorkspaceTabInBackground(persistenceKey, target);
-        return;
-      }
-      openWorkspaceTabFocused(persistenceKey, target);
+      openWorkspaceTarget(persistenceKey, { kind: "browser", browserId });
     },
     [
-      focusedPane,
-      focusWorkspacePane,
       handleCreateTerminal,
       handleOpenEnvironmentChanges,
       handleOpenWorkspaceDockPane,
-      openWorkspaceTabFocused,
-      openWorkspaceTabInBackground,
+      openWorkspaceTarget,
       persistenceKey,
-      splitWorkspacePaneEmpty,
     ],
   );
 
@@ -197,9 +155,9 @@ export function useWorkspaceDockActions(
         handleOpenWorkspaceDockPane(resolution.dockPane);
         return;
       }
-      handleOpenTargetInPanePlacement(resolution.targetKind, resolution.placement);
+      handleOpenTarget(resolution.targetKind);
     },
-    [handleApplyWorkspaceDockCommand, handleOpenTargetInPanePlacement, handleOpenWorkspaceDockPane],
+    [handleApplyWorkspaceDockCommand, handleOpenTarget, handleOpenWorkspaceDockPane],
   );
 
   const handleOpenGitDock = useCallback(() => {

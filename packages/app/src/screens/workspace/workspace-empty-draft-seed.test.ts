@@ -11,7 +11,7 @@ const readyEmptyWorkspace = {
   hasConsideredEmptyWorkspaceDraftSeed: false,
   activeAgentCount: 0,
   terminalCount: 0,
-  workspaceTabCount: 0,
+  hasActiveTarget: false,
 };
 
 describe("shouldSeedEmptyWorkspaceDraft", () => {
@@ -36,7 +36,7 @@ describe("shouldSeedEmptyWorkspaceDraft", () => {
     ).toBe(false);
   });
 
-  it("seeds when historical agents exist but no workspace tab can render", () => {
+  it("seeds when historical agents exist but the workspace shows no content", () => {
     expect(
       shouldSeedEmptyWorkspaceDraft({
         ...readyEmptyWorkspace,
@@ -45,7 +45,7 @@ describe("shouldSeedEmptyWorkspaceDraft", () => {
     ).toBe(true);
   });
 
-  it("does not seed when existing workspace tabs are known", () => {
+  it("does not seed when terminals or active content are known", () => {
     expect(
       shouldSeedEmptyWorkspaceDraft({
         ...readyEmptyWorkspace,
@@ -55,16 +55,7 @@ describe("shouldSeedEmptyWorkspaceDraft", () => {
     expect(
       shouldSeedEmptyWorkspaceDraft({
         ...readyEmptyWorkspace,
-        workspaceTabCount: 1,
-      }),
-    ).toBe(false);
-  });
-
-  it("does not seed when another pane still has a workspace tab", () => {
-    expect(
-      shouldSeedEmptyWorkspaceDraft({
-        ...readyEmptyWorkspace,
-        workspaceTabCount: 1,
+        hasActiveTarget: true,
       }),
     ).toBe(false);
   });

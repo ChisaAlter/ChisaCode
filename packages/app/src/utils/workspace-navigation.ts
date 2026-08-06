@@ -15,7 +15,7 @@ export type {
 function layoutStoreDeps() {
   const store = useWorkspaceLayoutStore.getState();
   return {
-    openTabFocused: store.openTabFocused,
+    openTarget: store.openTarget,
     pinAgent: store.pinAgent,
   };
 }

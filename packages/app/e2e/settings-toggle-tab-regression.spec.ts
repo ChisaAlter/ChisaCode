@@ -1,7 +1,8 @@
 import { buildHostAgentDetailRoute, buildHostWorkspaceRoute } from "@/utils/host-routes";
 import { expect, test } from "./fixtures";
 import { createIdleAgent, openWorkspaceWithAgents } from "./helpers/archive-tab";
-import { waitForTabBar, expectAgentTabActive } from "./helpers/launcher";
+import { expectWorkspaceTabVisible } from "./helpers/archive-tab";
+import { waitForWorkspaceTabsVisible } from "./helpers/workspace-ui";
 import { seedWorkspace } from "./helpers/seed-client";
 import { getServerId } from "./helpers/server-id";
 
@@ -38,8 +39,8 @@ async function openAgentRouteAndExpectFocused(input: {
     (url) => url.pathname.includes("/workspace/") && !url.searchParams.has("open"),
     { timeout: 60_000 },
   );
-  await waitForTabBar(input.page);
-  await expectAgentTabActive(input.page, input.agentId);
+  await waitForWorkspaceTabsVisible(input.page);
+  await expectWorkspaceTabVisible(input.page, input.agentId);
 }
 
 test.describe("Settings toggle tab regression", () => {
@@ -62,8 +63,8 @@ test.describe("Settings toggle tab regression", () => {
       });
 
       await openWorkspaceWithAgents(page, [firstAgent, secondAgent]);
-      await waitForTabBar(page);
-      await expectAgentTabActive(page, secondAgent.id);
+      await waitForWorkspaceTabsVisible(page);
+      await expectWorkspaceTabVisible(page, secondAgent.id);
 
       await pressSettingsToggleShortcut(page);
       await expect(page).toHaveURL(/\/settings\/general$/);
@@ -75,12 +76,12 @@ test.describe("Settings toggle tab regression", () => {
 
       await pressSettingsToggleShortcut(page);
       await expect(page).toHaveURL(buildHostWorkspaceRoute(serverId, workspace.repoPath));
-      await waitForTabBar(page);
-      await expectAgentTabActive(page, secondAgent.id);
+      await waitForWorkspaceTabsVisible(page);
+      await expectWorkspaceTabVisible(page, secondAgent.id);
 
       await page.reload();
-      await waitForTabBar(page);
-      await expectAgentTabActive(page, secondAgent.id);
+      await waitForWorkspaceTabsVisible(page);
+      await expectWorkspaceTabVisible(page, secondAgent.id);
     } finally {
       await workspace.cleanup();
     }
@@ -117,8 +118,8 @@ test.describe("Settings toggle tab regression", () => {
 
       for (let attempt = 0; attempt < 5; attempt += 1) {
         await page.reload();
-        await waitForTabBar(page);
-        await expectAgentTabActive(page, secondAgent.id);
+        await waitForWorkspaceTabsVisible(page);
+        await expectWorkspaceTabVisible(page, secondAgent.id);
       }
     } finally {
       await workspace.cleanup();

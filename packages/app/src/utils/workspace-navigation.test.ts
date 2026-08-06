@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { WorkspaceTabTarget } from "@/stores/workspace-tabs-store";
+import type { WorkspaceTabTarget } from "@/workspace-tabs/identity";
 import { navigateToPreparedWorkspaceTab, prepareWorkspaceTab } from "@/utils/prepare-workspace-tab";
 
 const SERVER_ID = "server-1";
@@ -28,9 +28,8 @@ function createFakeLayout() {
   return {
     openedTabs,
     pinnedAgents,
-    openTabFocused: (key: string, target: WorkspaceTabTarget) => {
+    openTarget: (key: string, target: WorkspaceTabTarget) => {
       openedTabs.push({ key, target });
-      return target.kind === "agent" ? target.agentId : null;
     },
     pinAgent: (key: string, agentId: string) => {
       pinnedAgents.push({ key, agentId });
@@ -53,7 +52,7 @@ function createFakeNavigator() {
 }
 
 describe("prepareWorkspaceTab", () => {
-  it("opens and focuses an agent tab", () => {
+  it("shows an agent target", () => {
     const layout = createFakeLayout();
 
     const route = prepareWorkspaceTab(
@@ -72,7 +71,7 @@ describe("prepareWorkspaceTab", () => {
     expect(layout.pinnedAgents).toEqual([]);
   });
 
-  it("prepares a tab and navigates through the workspace navigation helper", () => {
+  it("prepares a target and navigates through the workspace navigation helper", () => {
     const layout = createFakeLayout();
     const navigator = createFakeNavigator();
 

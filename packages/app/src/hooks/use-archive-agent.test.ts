@@ -98,14 +98,8 @@ describe("useArchiveAgent", () => {
   beforeEach(() => {
     useSessionStore.setState((state) => ({ ...state, sessions: {} }));
     useWorkspaceLayoutStore.setState({
-      layoutByWorkspace: {},
-      splitSizesByWorkspace: {},
+      activeTargetByWorkspace: {},
       pinnedAgentIdsByWorkspace: {},
-      hiddenAgentIdsByWorkspace: {},
-      suppressedAutoOpenAgentIdsByWorkspace: {},
-      suppressedAutoOpenTerminalIdsByWorkspace: {},
-      workspaceAutoOpenSuppressedByWorkspace: {},
-      focusRestorationByWorkspace: {},
     });
   });
 

@@ -54,7 +54,7 @@ function AppWithSidebar({ children }: { children: ReactNode }) {
       return undefined;
     }
     const agentId = resolveSelectedSidebarAgentIdFromWorkspaceLayout(
-      state.layoutByWorkspace[workspaceKey],
+      state.activeTargetByWorkspace[workspaceKey],
     );
     return agentId ? `${workspaceRoute.serverId}:${agentId}` : undefined;
   });

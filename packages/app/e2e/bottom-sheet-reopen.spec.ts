@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "./fixtures";
 import { expectComposerVisible } from "./helpers/composer";
 import { openAgentRoute, seedMockAgentWorkspace } from "./helpers/mock-agent";
+import { waitForWorkspaceTabsVisible } from "./helpers/workspace-ui";
 
 const MOBILE_VIEWPORT = { width: 390, height: 844 };
 
@@ -12,9 +13,7 @@ async function openMockAgentAtMobileBreakpoint(page: Page) {
     initialPrompt: "Prepare a bottom sheet reopen test agent.",
   });
   await openAgentRoute(page, session);
-  await expect(page.getByTestId("workspace-tab-switcher-trigger")).toBeVisible({
-    timeout: 30_000,
-  });
+  await waitForWorkspaceTabsVisible(page);
   await expectComposerVisible(page);
   await expect(page.getByRole("button", { name: /Select model/ })).toBeVisible({
     timeout: 30_000,

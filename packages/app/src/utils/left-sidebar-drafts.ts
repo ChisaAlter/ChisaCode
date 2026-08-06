@@ -1,5 +1,4 @@
 import type { Href } from "expo-router";
-import type { WorkspaceLayout } from "@/stores/workspace-layout-store";
 import { buildHostNewWorkspaceRoute } from "@/utils/host-routes";
 
 /** Draft session row currently shown under a workspace in the left sidebar */
@@ -18,14 +17,9 @@ export interface SidebarDraftWorkspaceMetadata {
 
 /**
  * Collects draft sessions that should appear under left-sidebar workspaces
- * @param _input Active server, layouts, and workspace metadata used for draft collection
  * @returns Draft session rows; currently always empty pending draft storage wiring
  */
-export function collectSidebarDraftSessions(_input: {
-  activeServerId: string | null;
-  layoutByWorkspace: Record<string, WorkspaceLayout>;
-  workspacesById: Record<string, SidebarDraftWorkspaceMetadata | undefined>;
-}): SidebarSessionDraft[] {
+export function collectSidebarDraftSessions(): SidebarSessionDraft[] {
   return [];
 }
 

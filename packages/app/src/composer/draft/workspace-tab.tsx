@@ -51,7 +51,7 @@ import {
 } from "@/attachments/workspace-attachments-store";
 import type { UserMessageImageAttachment } from "@/types/stream";
 import { useIsCompactFormFactor } from "@/constants/layout";
-import type { WorkspaceDraftTabSetup } from "@/stores/workspace-tabs-store";
+import type { WorkspaceDraftTabSetup } from "@/workspace-tabs/identity";
 
 const EMPTY_PENDING_PERMISSIONS = new Map();
 const EMPTY_ONLINE_SERVER_IDS: string[] = [];
@@ -231,7 +231,7 @@ async function submitDraftCreateRequest(input: {
 function buildDraftAgentSnapshot(input: {
   attempt: { timestamp: Date };
   serverId: string;
-  tabId: string;
+  draftId: string;
   workspaceDirectory: string | null;
   autoSubmitConfig: AutoSubmitConfig | null;
   composerState: {
@@ -244,7 +244,7 @@ function buildDraftAgentSnapshot(input: {
     agentControls: { features?: Agent["features"] };
   };
 }): Agent {
-  const { attempt, serverId, tabId, workspaceDirectory, autoSubmitConfig, composerState } = input;
+  const { attempt, serverId, draftId, workspaceDirectory, autoSubmitConfig, composerState } = input;
   invariant(workspaceDirectory, "Workspace directory is required");
   const now = attempt.timestamp;
   const model = autoSubmitConfig?.model ?? (composerState.effectiveModelId || null);
@@ -263,7 +263,7 @@ function buildDraftAgentSnapshot(input: {
     autoSubmitConfig?.runtimeProvider ?? composerState.selectedRuntimeProvider ?? provider;
   return {
     serverId,
-    id: tabId,
+    id: draftId,
     provider,
     status: "running",
     createdAt: now,
@@ -326,7 +326,6 @@ function resolveOnlineServerIds(input: { isConnected: boolean; serverId: string 
 interface WorkspaceDraftAgentTabProps {
   serverId: string;
   workspaceId: string;
-  tabId: string;
   draftId: string;
   initialSetup?: WorkspaceDraftTabSetup;
   isPaneFocused: boolean;
@@ -350,7 +349,6 @@ function resolveImportPillPress(
 export function WorkspaceDraftAgentTab({
   serverId,
   workspaceId,
-  tabId,
   draftId,
   initialSetup = undefined,
   isPaneFocused,
@@ -407,10 +405,10 @@ export function WorkspaceDraftAgentTab({
     () =>
       buildDraftStoreKey({
         serverId,
-        agentId: tabId,
+        agentId: draftId,
         draftId,
       }),
-    [draftId, serverId, tabId],
+    [draftId, serverId],
   );
   const draftInput = useAgentInputDraft({
     draftKey: draftStoreKey,
@@ -534,7 +532,7 @@ export function WorkspaceDraftAgentTab({
       buildDraftAgentSnapshot({
         attempt,
         serverId,
-        tabId,
+        draftId,
         workspaceDirectory: draftWorkingDirectory,
         autoSubmitConfig,
         composerState,
@@ -761,7 +759,7 @@ export function WorkspaceDraftAgentTab({
           compact={isCompact}
         >
           <Composer
-            agentId={tabId}
+            agentId={draftId}
             serverId={serverId}
             externalKeyboardShift
             isPaneFocused={isPaneFocused}
@@ -802,7 +800,7 @@ export function WorkspaceDraftAgentTab({
           <View style={styles.contentContainer}>
             <View style={styles.streamContainer}>
               <AgentStreamView
-                agentId={tabId}
+                agentId={draftId}
                 serverId={serverId}
                 agent={draftAgent}
                 streamItems={optimisticStreamItems}
@@ -814,7 +812,7 @@ export function WorkspaceDraftAgentTab({
           <ReanimatedAnimated.View style={inputAreaWrapperStyle}>
             <View style={styles.inputAreaWrapper}>
               <Composer
-                agentId={tabId}
+                agentId={draftId}
                 serverId={serverId}
                 externalKeyboardShift
                 isPaneFocused={isPaneFocused}

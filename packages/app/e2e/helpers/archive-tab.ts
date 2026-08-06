@@ -3,7 +3,7 @@ import { expect, type Page } from "@playwright/test";
 import { buildCreateAgentPreferences, buildSeededHost } from "./daemon-registry";
 import { getE2EDaemonPort } from "./daemon-port";
 import { getServerId } from "./server-id";
-import { waitForWorkspaceTabsVisible } from "./workspace-tabs";
+import { waitForWorkspaceTabsVisible } from "./workspace-ui";
 import {
   buildHostAgentDetailRoute,
   buildHostSessionsRoute,
@@ -170,15 +170,11 @@ export async function openWorkspaceWithAgents(
 }
 
 export async function expectWorkspaceTabVisible(page: Page, agentId: string): Promise<void> {
-  const tab = page.getByTestId(`workspace-tab-agent_${agentId}`).filter({ visible: true });
   const panel = page.getByTestId(`agent-panel-${agentId}`).filter({ visible: true });
-  await expect(tab.or(panel).first()).toBeVisible({ timeout: 30_000 });
+  await expect(panel.first()).toBeVisible({ timeout: 30_000 });
 }
 
 export async function expectWorkspaceTabHidden(page: Page, agentId: string): Promise<void> {
-  await expect(
-    page.getByTestId(`workspace-tab-agent_${agentId}`).filter({ visible: true }),
-  ).toHaveCount(0, { timeout: 30_000 });
   await expect(page.getByTestId(`agent-panel-${agentId}`).filter({ visible: true })).toHaveCount(
     0,
     {

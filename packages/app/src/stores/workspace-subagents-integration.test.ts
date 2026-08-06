@@ -1,31 +1,9 @@
 import type { DaemonClient } from "@chisacode/client/internal/daemon-client";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  buildWorkspaceTabSnapshot,
-  deriveWorkspaceAgentVisibility,
-  type WorkspaceAgentVisibility,
-} from "@/workspace-tabs/agent-visibility";
+import { afterEach, describe, expect, it } from "vitest";
 import { selectSubagentsForParent } from "@/subagents";
-import { buildWorkspaceTabPersistenceKey, useWorkspaceLayoutStore } from "./workspace-layout-store";
 import { useSessionStore, type Agent } from "./session-store";
 
-vi.mock("@react-native-async-storage/async-storage", () => {
-  const storage = new Map<string, string>();
-  return {
-    default: {
-      getItem: vi.fn(async (key: string) => storage.get(key) ?? null),
-      setItem: vi.fn(async (key: string, value: string) => {
-        storage.set(key, value);
-      }),
-      removeItem: vi.fn(async (key: string) => {
-        storage.delete(key);
-      }),
-    },
-  };
-});
-
 const SERVER_ID = "server-1";
-const WORKSPACE_ID = "ws-main";
 const WORKSPACE_DIRECTORY = "/repo/worktree";
 
 const AGENT_TIMESTAMP = new Date("2026-04-21T10:00:00.000Z");
@@ -87,53 +65,12 @@ function appendAgent(agent: Agent): void {
   });
 }
 
-function deriveVisibilityFromSession(): WorkspaceAgentVisibility {
-  const sessionAgents = useSessionStore.getState().sessions[SERVER_ID]?.agents ?? new Map();
-  return deriveWorkspaceAgentVisibility({
-    sessionAgents,
-    workspaceDirectory: WORKSPACE_DIRECTORY,
-  });
-}
-
-function reconcileWorkspaceTabs(workspaceKey: string, visibility: WorkspaceAgentVisibility): void {
-  useWorkspaceLayoutStore.getState().reconcileTabs(
-    workspaceKey,
-    buildWorkspaceTabSnapshot({
-      agentVisibility: visibility,
-      agentsHydrated: true,
-      terminalsHydrated: true,
-      knownTerminalIds: [],
-      standaloneTerminalIds: [],
-      hasActivePendingDraftCreate: false,
-    }),
-  );
-}
-
-function getWorkspaceTabIds(workspaceKey: string): string[] {
-  return useWorkspaceLayoutStore
-    .getState()
-    .getWorkspaceTabs(workspaceKey)
-    .map((tab) => tab.tabId);
-}
-
 afterEach(() => {
   useSessionStore.getState().clearSession(SERVER_ID);
-  useWorkspaceLayoutStore.setState({
-    layoutByWorkspace: {},
-    splitSizesByWorkspace: {},
-    pinnedAgentIdsByWorkspace: {},
-    hiddenAgentIdsByWorkspace: {},
-  });
 });
 
 describe("workspace subagents integration", () => {
-  it("keeps a child ingested before its parent out of auto-tabs, then exposes it in the parent section", () => {
-    const workspaceKey = buildWorkspaceTabPersistenceKey({
-      serverId: SERVER_ID,
-      workspaceId: WORKSPACE_ID,
-    });
-    expect(workspaceKey).toBeTruthy();
-
+  it("exposes a child ingested before its parent in the parent section", () => {
     const child = makeAgent({
       id: "child-agent",
       parentAgentId: "parent-agent",
@@ -145,16 +82,8 @@ describe("workspace subagents integration", () => {
     });
 
     initializeAgents([child]);
-
-    reconcileWorkspaceTabs(workspaceKey!, deriveVisibilityFromSession());
-
-    expect(getWorkspaceTabIds(workspaceKey!)).toEqual([]);
-
     appendAgent(parent);
 
-    reconcileWorkspaceTabs(workspaceKey!, deriveVisibilityFromSession());
-
-    expect(getWorkspaceTabIds(workspaceKey!)).toEqual(["agent_parent-agent"]);
     expect(
       selectSubagentsForParent(
         useSessionStore.getState(),

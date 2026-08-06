@@ -2,7 +2,7 @@ import { execSync } from "node:child_process";
 import path from "node:path";
 import type { Page } from "@playwright/test";
 import { buildHostWorkspaceRoute } from "../../src/utils/host-routes";
-import { waitForWorkspaceTabsVisible } from "./workspace-tabs";
+import { waitForWorkspaceTabsVisible } from "./workspace-ui";
 import { getServerId } from "./server-id";
 import { createTempGitRepo, resolveTempRoot } from "./workspace";
 import { connectWorkspaceSetupClient, type WorkspaceSetupDaemonClient } from "./workspace-setup";

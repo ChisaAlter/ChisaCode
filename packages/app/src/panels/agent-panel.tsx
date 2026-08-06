@@ -59,7 +59,7 @@ import { buildDraftStoreKey, generateDraftId } from "@/stores/draft-keys";
 import { usePanelStore } from "@/stores/panel-store";
 import { type Agent, useSessionStore } from "@/stores/session-store";
 import { useWorkspaceLayoutStore } from "@/stores/workspace-layout-store";
-import { buildWorkspaceTabPersistenceKey } from "@/stores/workspace-tabs-store";
+import { buildWorkspaceTabPersistenceKey } from "@/stores/workspace-layout-store";
 import type { Theme } from "@/styles/theme";
 import { resolveThemeWorkbenchSurfaceRoles } from "@/styles/workbench-surface-roles";
 import { useArchiveSubagent, useSubagentsForParent } from "@/subagents";
@@ -315,15 +315,7 @@ function AgentPanel() {
 }
 
 function DraftPanel() {
-  const {
-    serverId,
-    workspaceId,
-    tabId,
-    target,
-    openFileInWorkspace,
-    openImportSheet,
-    retargetCurrentTab,
-  } = usePaneContext();
+  const { serverId, workspaceId, target, openFileInWorkspace, openImportSheet } = usePaneContext();
   const { isInteractive } = usePaneFocus();
   invariant(target.kind === "draft", "DraftPanel requires draft target");
   const queryClient = useQueryClient();
@@ -342,16 +334,18 @@ function DraftPanel() {
       for (const queryKey of agentHistoryQueryKeys(serverId)) {
         void queryClient.invalidateQueries({ queryKey });
       }
-      retargetCurrentTab({ kind: "agent", agentId: agentSnapshot.id });
+      const workspaceKey = buildWorkspaceTabPersistenceKey({ serverId, workspaceId });
+      if (workspaceKey) {
+        useWorkspaceLayoutStore.getState().convertDraftToAgent(workspaceKey, agentSnapshot.id);
+      }
     },
-    [queryClient, retargetCurrentTab, serverId],
+    [queryClient, serverId, workspaceId],
   );
 
   return (
     <WorkspaceDraftAgentTab
       serverId={serverId}
       workspaceId={workspaceId}
-      tabId={tabId}
       draftId={target.draftId}
       initialSetup={target.setup}
       isPaneFocused={isInteractive}
@@ -1457,10 +1451,8 @@ function ActiveAgentComposer({
   const insets = useSafeAreaInsets();
   const isCompact = useIsCompactFormFactor();
   const paneContext = usePaneContext();
-  const { workspaceId, tabId, retargetCurrentTab } = paneContext;
+  const { workspaceId } = paneContext;
   const { archiveAgent } = useArchiveAgent();
-  const closeWorkspaceTab = useWorkspaceLayoutStore((state) => state.closeTab);
-  const hideWorkspaceAgent = useWorkspaceLayoutStore((state) => state.hideAgent);
   const unpinWorkspaceAgent = useWorkspaceLayoutStore((state) => state.unpinAgent);
   const subagentRows = useSubagentsForParent({
     serverId,
@@ -1513,32 +1505,19 @@ function ActiveAgentComposer({
       const workspaceKey = buildWorkspaceTabPersistenceKey({ serverId, workspaceId });
       if (workspaceKey) {
         unpinWorkspaceAgent(workspaceKey, agentId);
-        hideWorkspaceAgent(workspaceKey, agentId);
       }
 
-      if (command.kind === "replace-agent-with-draft") {
-        retargetCurrentTab({
+      if (command.kind === "replace-agent-with-draft" && workspaceKey) {
+        useWorkspaceLayoutStore.getState().openTarget(workspaceKey, {
           kind: "draft",
           draftId: generateDraftId(),
           setup: buildDraftAgentSetup(agent),
         });
-      } else if (workspaceKey) {
-        closeWorkspaceTab(workspaceKey, tabId);
       }
 
       await archiveAgent({ serverId, agentId });
     },
-    [
-      agentId,
-      archiveAgent,
-      closeWorkspaceTab,
-      hideWorkspaceAgent,
-      retargetCurrentTab,
-      serverId,
-      tabId,
-      unpinWorkspaceAgent,
-      workspaceId,
-    ],
+    [agentId, archiveAgent, serverId, unpinWorkspaceAgent, workspaceId],
   );
 
   const { style: composerKeyboardStyle } = useKeyboardShiftStyle({

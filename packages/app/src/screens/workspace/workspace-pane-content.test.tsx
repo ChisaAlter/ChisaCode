@@ -9,7 +9,7 @@ import {
   buildWorkspacePaneContentModel,
   WorkspacePaneContent,
 } from "@/screens/workspace/workspace-pane-content";
-import type { WorkspaceTabDescriptor } from "@/screens/workspace/workspace-tabs-types";
+import type { WorkspaceTabTarget } from "@/workspace-tabs/identity";
 import { usePaneContext, usePaneFocus, type PaneContextValue } from "@/panels/pane-context";
 
 vi.mock("@/panels/register-panels", () => ({
@@ -48,21 +48,13 @@ function ProbePanel() {
   return null;
 }
 
-const agentTab: WorkspaceTabDescriptor = {
-  key: "agent_agent-a",
-  tabId: "agent_agent-a",
-  kind: "agent",
-  target: { kind: "agent", agentId: "agent-a" },
-};
+const agentTarget: WorkspaceTabTarget = { kind: "agent", agentId: "agent-a" };
 
-function buildContent(tab: WorkspaceTabDescriptor = agentTab) {
+function buildContent(target: WorkspaceTabTarget = agentTarget) {
   return buildWorkspacePaneContentModel({
-    tab,
+    target,
     normalizedServerId: "server-a",
     normalizedWorkspaceId: "workspace-a",
-    onOpenTab: vi.fn(),
-    onCloseCurrentTab: vi.fn(),
-    onRetargetCurrentTab: vi.fn(),
     onOpenWorkspaceFile: vi.fn(),
     onOpenImportSheet: vi.fn(),
   });
@@ -121,23 +113,13 @@ describe("WorkspacePaneContent", () => {
     });
   });
 
-  it("keeps pane content mounted when a draft tab is retargeted in place", () => {
+  it("remounts panel content when the active target changes", () => {
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
 
-    const draftContent = buildContent({
-      key: "draft-a",
-      tabId: "draft-a",
-      kind: "draft",
-      target: { kind: "draft", draftId: "draft-a" },
-    });
-    const agentContent = buildContent({
-      key: "draft-a",
-      tabId: "draft-a",
-      kind: "agent",
-      target: { kind: "agent", agentId: "agent-a" },
-    });
+    const draftContent = buildContent({ kind: "draft", draftId: "draft-a" });
+    const agentContent = buildContent({ kind: "agent", agentId: "agent-b" });
 
     act(() => {
       root?.render(
@@ -150,13 +132,12 @@ describe("WorkspacePaneContent", () => {
       );
     });
 
-    expect(mountCount).toHaveBeenCalledTimes(1);
-    expect(unmountCount).not.toHaveBeenCalled();
+    expect(mountCount).toHaveBeenCalledTimes(2);
+    expect(unmountCount).toHaveBeenCalledTimes(1);
     expect(snapshots).toHaveLength(2);
-    expect(snapshots[1]?.paneContextValue.tabId).toBe("draft-a");
     expect(snapshots[1]?.paneContextValue.target).toEqual({
       kind: "agent",
-      agentId: "agent-a",
+      agentId: "agent-b",
     });
   });
 });

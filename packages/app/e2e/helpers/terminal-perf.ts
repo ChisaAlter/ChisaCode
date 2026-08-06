@@ -84,15 +84,10 @@ export async function navigateToTerminal(
     .first()
     .waitFor({ state: "visible", timeout: 30_000 });
 
-  // The open intent should have prepared and focused the exact pre-created terminal tab.
-  // The tab reconciliation effect also auto-creates terminal tabs once hydration completes,
-  // so we give it enough time for the full workspace hydration + tab creation cycle.
-  const terminalTab = page.locator(`[data-testid="workspace-tab-terminal_${input.terminalId}"]`);
-  await terminalTab.waitFor({ state: "visible", timeout: 30_000 });
-  await terminalTab.click();
-
+  // The open intent should have prepared and focused the exact pre-created terminal.
+  // The workspace center slot shows the terminal surface once hydration completes.
   const terminalSurface = page.locator('[data-testid="terminal-surface"]');
-  await terminalSurface.waitFor({ state: "visible", timeout: 15_000 });
+  await terminalSurface.waitFor({ state: "visible", timeout: 30_000 });
 
   // Wait for loading overlay to disappear (terminal attached)
   await page

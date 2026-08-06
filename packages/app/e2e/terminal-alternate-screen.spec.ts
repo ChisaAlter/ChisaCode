@@ -1,7 +1,6 @@
 import type { Page } from "@playwright/test";
 import { test, expect } from "./fixtures";
 import { TerminalE2EHarness, withTerminalInApp } from "./helpers/terminal-dsl";
-import { getTabTestIds } from "./helpers/launcher";
 import {
   installTerminalRenderProbe,
   readTerminalRenderProbe,
@@ -18,12 +17,10 @@ interface TerminalLayoutMetrics {
   rows: number | null;
   cols: number | null;
   renderedRowsHeight: number;
-  tabIds: string[];
 }
 
 async function readTerminalLayoutMetrics(page: Page): Promise<TerminalLayoutMetrics> {
-  const tabIds = await getTabTestIds(page);
-  return page.evaluate((currentTabIds) => {
+  return page.evaluate(() => {
     const visibleSurfaces = Array.from(
       document.querySelectorAll<HTMLElement>('[data-testid="terminal-surface"]'),
     ).filter((candidate) => {
@@ -53,9 +50,8 @@ async function readTerminalLayoutMetrics(page: Page): Promise<TerminalLayoutMetr
       rows: typeof term?.rows === "number" ? term.rows : null,
       cols: typeof term?.cols === "number" ? term.cols : null,
       renderedRowsHeight: xtermScreenRect?.height ?? 0,
-      tabIds: currentTabIds,
     };
-  }, tabIds);
+  });
 }
 
 async function waitForAlternateScreenExit(page: Page, afterAlt: string, timeout: number) {
