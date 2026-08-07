@@ -374,7 +374,7 @@ The [Agent Client Protocol (ACP)](https://agentclientprotocol.com) is an open st
 
 ACP agents communicate over JSON-RPC 2.0 on stdio. ChisaCode spawns the agent process and talks to it through stdin/stdout.
 
-ChisaCode has built-in ACP-backed support for Kimi Code. Other ACP-speaking commands can be configured manually with `extends: "acp"` as shown below.
+ChisaCode has built-in ACP-backed support for Kimi Code and Grok Build. Other ACP-speaking commands can be configured manually with `extends: "acp"` as shown below.
 
 ### Adding a generic ACP provider
 

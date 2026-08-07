@@ -83,9 +83,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **Agent delegation P0/P1 foundations**: Scoped companion MCP tools for agent delegation, status tracking, cancellation, and result collection.
-- **Synthetic model gateway**: Configuration and lifecycle support for model-of-agents gateways (Claude, Codex, OpenCode, Pi, Kimi Code).
+- **Synthetic model gateway**: Configuration and lifecycle support for model-of-agents gateways (Claude, Codex, OpenCode, MiMoCode, Pi, Kimi Code).
 - **Liquid neon theme** and glass-morphism UI surfaces across desktop and app.
-- Built-in provider metadata in the shared protocol manifest covering Claude, Codex, OpenCode, Pi, Kimi Code, and Grok Build.
+- Built-in provider metadata in the shared protocol manifest covering Claude, Codex, OpenCode, MiMoCode, Pi, and Kimi Code.
 - Settings surfaces for skills management, MCP server management, and custom model providers.
 - CLI and skills documentation in both English and Chinese.
 
