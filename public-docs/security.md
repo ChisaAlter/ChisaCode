@@ -114,9 +114,9 @@ ChisaCode wraps agent CLIs but does not manage their authentication. Each agent 
 - **Claude**, authenticates via Anthropic's OAuth flow or local Claude configuration
 - **Codex**, uses your OpenAI API key or OAuth session
 - **OpenCode**, configured via provider-specific API keys
-- **MiMoCode**, uses the MiMoCode runtime's own authentication and configuration
 - **Pi**, uses the Pi runtime's own authentication and configuration
 - **Kimi Code**, uses the Kimi CLI's own authentication and configuration
+- **Grok Build**, uses the Grok runtime's own authentication and configuration
 
 ChisaCode never stores or transmits provider API keys. Agents run in your user context with your existing credentials.
 

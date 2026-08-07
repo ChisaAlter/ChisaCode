@@ -24,11 +24,11 @@ Your code never leaves your machine. ChisaCode is local-first.
                    │
       ┌────────────┼────────────┬────────────┬────────────┬────────────┐
       │            │            │            │            │            │
-┌─────▼─────┐ ┌───▼────┐ ┌──────▼────┐ ┌─────▼────┐ ┌─────▼────┐ ┌────▼────┐
-│  Claude   │ │ Codex  │ │ OpenCode  │ │ MiMoCode │ │    Pi    │ │  Kimi   │
-│  Agent    │ │ Agent  │ │  Agent    │ │  Agent   │ │  Agent   │ │  ACP    │
-│  SDK      │ │ Server │ │           │ │          │ │   RPC    │ │         │
-└───────────┘ └────────┘ └───────────┘ └──────────┘ └──────────┘ └────────┘
+┌─────▼─────┐ ┌─────▼─────┐ ┌─────▼─────┐ ┌─────▼─────┐ ┌─────▼─────┐ ┌─────▼─────┐
+│  Claude   │ │   Codex   │ │ OpenCode  │ │    Pi     │ │ Kimi Code │ │ Grok Build│
+│  Agent    │ │   Agent   │ │   Agent   │ │   Agent   │ │    ACP    │ │    ACP    │
+│  SDK      │ │  Server   │ │           │ │    RPC    │ │           │ │           │
+└───────────┘ └───────────┘ └───────────┘ └───────────┘ └───────────┘ └───────────┘
 ```
 
 ## Components at a glance
@@ -245,14 +245,13 @@ read the capped final assistant text. The companion token is not persisted.
 
 Each provider implements the `AgentClient` interface in `agent/agent-sdk-types.ts`. Provider implementations live in `agent/providers/`.
 
-The built-in, user-facing providers are Claude, Codex, OpenCode, MiMoCode, Pi, Kimi Code, and Grok Build. Additional adapters exist in the same directory for generic ACP-compatible agents and internal use:
+The built-in, user-facing providers are Claude, Codex, OpenCode, Pi, Kimi Code, and Grok Build. Additional adapters exist in the same directory for generic ACP-compatible agents and internal use:
 
 | Provider           | Wraps                                | Session format                                     |
 | ------------------ | ------------------------------------ | -------------------------------------------------- |
 | Claude (`claude/`) | Anthropic Agent SDK                  | `~/.claude/projects/{cwd}/{session-id}.jsonl`      |
 | Codex              | Codex AppServer (`codex-app-server`) | `~/.codex/sessions/{date}/rollout-{ts}-{id}.jsonl` |
 | OpenCode           | OpenCode server / CLI                | Provider-managed                                   |
-| MiMoCode           | MiMoCode server / CLI                | Provider-managed                                   |
 | Pi                 | Local Pi RPC process                 | Provider-managed                                   |
 | Kimi Code          | Kimi ACP command                     | Provider-managed                                   |
 | Grok Build         | Grok Build ACP command               | Provider-managed                                   |

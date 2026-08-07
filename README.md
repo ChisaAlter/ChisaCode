@@ -6,7 +6,7 @@
 
 ## Features
 
-- **Multi-provider** — Built-in support for Claude, Codex, OpenCode, MiMoCode, Pi, and Kimi Code. Custom providers extend built-in ones or use the ACP (Agent Client Protocol) command interface. Pick the right model for each job, switch freely.
+- **Multi-provider** — Built-in support for Claude, Codex, OpenCode, Pi, Kimi Code, and Grok Build. Custom providers extend built-in ones or use the ACP (Agent Client Protocol) command interface. Pick the right model for each job, switch freely.
 - **Cross-platform** — Desktop (macOS, Linux, Windows via Electron), mobile (iOS, Android via Expo), web, and CLI. Start work at your desk, check progress from your phone, script from the terminal.
 - **Local-first** — The daemon runs on your machine. Your code, your keys, your environment. No cloud dependency, no telemetry.
 - **E2E encrypted relay** — Remote access via an untrusted relay with Curve25519 + XSalsa20-Poly1305 encryption. The relay routes bytes, cannot read content.
@@ -90,9 +90,9 @@ Package imports resolve through compiled `dist/` output. Rebuild producer packag
               │
  ┌────────────┼────────────┬────────────┬────────────┬────────────┐
  │            │            │            │            │            │
-Claude      Codex     OpenCode     MiMoCode       Pi       Kimi Code
-Agent       Agent      Agent        Agent        RPC         ACP
- SDK       Server
+Claude      Codex      OpenCode       Pi       Kimi Code   Grok Build
+ Agent       Agent       Agent        RPC         ACP         ACP
+  SDK       Server
 ```
 
 **Data flow:** Client sends agent creation request → daemon spawns provider process → events stream over WebSocket to all connected clients → tool calls normalized to `ToolCallDetail` → permissions flow through user approval.

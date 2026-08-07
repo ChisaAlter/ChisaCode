@@ -22,7 +22,6 @@ The built-in provider manifest currently declares:
 - Claude
 - Codex
 - OpenCode
-- MiMoCode
 - Pi
 - Kimi Code
 - Grok Build

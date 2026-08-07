@@ -769,7 +769,8 @@
         <div class="add-link" onclick="openEditor('new')">＋ 添加模型</div>
       </div>
       <p class="section-hint">
-        配置 Claude Messages、Codex Responses 或 OpenAI 兼容接口的自定义模型。保存后可在各 Agent 的模型列表中选择。
+        配置 Claude Messages、Codex Responses 或 OpenAI 兼容接口的自定义模型。保存后可在各 Agent
+        的模型列表中选择。
       </p>
 
       <div class="list-heading">已保存模型</div>
@@ -836,22 +837,28 @@
         <strong>原型说明（对应实现方案）：</strong>
         <ul>
           <li>
-            供给范围升级为 <strong>supplyScope</strong> 语义（全部 Agent / 仅匹配协议），替换旧 attachToAllAgents 开关；对旧 daemon 自动回退。
+            供给范围升级为 <strong>supplyScope</strong> 语义（全部 Agent / 仅匹配协议），替换旧
+            attachToAllAgents 开关；对旧 daemon 自动回退。
           </li>
           <li>
-            <strong>多协议高级模式（customProtocol）</strong>开启时：供给范围锁定为「全部 Agent」并显示可见说明（消除旧版静默全挂），下方展开三个上游接口卡片。
+            <strong>多协议高级模式（customProtocol）</strong>开启时：供给范围锁定为「全部
+            Agent」并显示可见说明（消除旧版静默全挂），下方展开三个上游接口卡片。
           </li>
           <li>
-            协议为 <strong>Claude</strong> 时，无论供给范围都显示 WebSearch 提示条（网关场景部分服务端工具不可用）。
+            协议为 <strong>Claude</strong> 时，无论供给范围都显示 WebSearch
+            提示条（网关场景部分服务端工具不可用）。
           </li>
           <li>
-            编辑副标题（subtitle）按供给范围变化：全部 → 挂载全部 6 个 Agent；仅匹配 → 对应协议说明。
+            编辑副标题（subtitle）按供给范围变化：全部 → 挂载全部 5 个 Agent；仅匹配 →
+            对应协议说明。
           </li>
           <li>
-            已保存模型徽章口径：supplyScope「全部」或协议为 all → 「全部 Agent」；否则「仅匹配」（修存量 all 网关误标）。
+            已保存模型徽章口径：supplyScope「全部」或协议为 all → 「全部
+            Agent」；否则「仅匹配」（修存量 all 网关误标）。
           </li>
           <li>
-            旧网关回填态（无 supplyScope 的存量配置）：编辑时供给范围锁定「全部 Agent」+ 说明，保存后写入显式 supplyScope 归一化。
+            旧网关回填态（无 supplyScope 的存量配置）：编辑时供给范围锁定「全部 Agent」+
+            说明，保存后写入显式 supplyScope 归一化。
           </li>
         </ul>
       </div>
@@ -874,7 +881,11 @@
             <div class="form-label">上游协议</div>
             <div class="field-hint">选择主模型对接的上游 API 协议。</div>
             <div class="chip-row">
-              <button class="chip selected" data-protocol="openai" onclick="selectProtocol('openai')">
+              <button
+                class="chip selected"
+                data-protocol="openai"
+                onclick="selectProtocol('openai')"
+              >
                 OpenAI 兼容（Chat）
               </button>
               <button class="chip" data-protocol="codex" onclick="selectProtocol('codex')">
@@ -901,7 +912,7 @@
               </div>
             </div>
             <div class="field-hint" id="scope-hint">
-              经网关协议转换，供给 Claude / Codex / OpenCode / MiMoCode / Pi / Kimi 全部 Agent。
+              经网关协议转换，供给 Claude / Codex / OpenCode / Pi / Kimi Code 全部 Agent。
             </div>
           </div>
 
@@ -930,7 +941,11 @@
           <div class="two-col">
             <div class="field-group">
               <div class="form-label">模型名称</div>
-              <input class="text-input" value="gpt-4o" placeholder="输入模型参数值，例如 gpt-4o 或 openai/gpt-4o" />
+              <input
+                class="text-input"
+                value="gpt-4o"
+                placeholder="输入模型参数值，例如 gpt-4o 或 openai/gpt-4o"
+              />
             </div>
             <div class="field-group">
               <div class="form-label">输入上下文</div>
@@ -1029,9 +1044,9 @@
 
     <script>
       const SUBTITLES = {
-        all: "经网关协议转换，供给 Claude / Codex / OpenCode / MiMoCode / Pi / Kimi 全部 Agent",
+        all: "经网关协议转换，供给 Claude / Codex / OpenCode / Pi / Kimi Code 全部 Agent",
         matched: {
-          openai: "Chat Completions 协议 · 仅供给 OpenAI 兼容系 Agent（OpenCode / MiMoCode / Pi / Kimi）",
+          openai: "Chat Completions 协议 · 仅供给 OpenAI 兼容系 Agent（OpenCode / Pi / Kimi Code）",
           codex: "OpenAI Responses 协议 · 仅供给 Codex Agent",
           claude: "Anthropic Messages 协议 · 仅供给 Claude Agent",
         },
@@ -1043,9 +1058,9 @@
         claude: "Anthropic Messages 协议",
       };
       const SCOPE_HINTS = {
-        all: "经网关协议转换，供给 Claude / Codex / OpenCode / MiMoCode / Pi / Kimi 全部 Agent",
+        all: "经网关协议转换，供给 Claude / Codex / OpenCode / Pi / Kimi Code 全部 Agent",
         matched: {
-          openai: "仅供给与 Chat Completions 匹配的 Agent（OpenCode / MiMoCode / Pi / Kimi）。",
+          openai: "仅供给与 Chat Completions 匹配的 Agent（OpenCode / Pi / Kimi Code）。",
           codex: "仅供给与 OpenAI Responses 匹配的 Codex Agent。",
           claude: "仅供给与 Anthropic Messages 匹配的 Claude Agent。",
         },
@@ -1099,7 +1114,9 @@
 
       function toggleSwitch(el) {
         el.classList.toggle("on");
-        el.parentElement.querySelector(".endpoint-fields").classList.toggle("hidden", !el.classList.contains("on"));
+        el.parentElement
+          .querySelector(".endpoint-fields")
+          .classList.toggle("hidden", !el.classList.contains("on"));
       }
 
       function runTest(btn, modelName) {
@@ -1116,9 +1133,9 @@
         // Simulate a connectivity + latency probe.
         setTimeout(() => {
           btn.classList.remove("testing");
-          const ok = (btn.dataset.fail !== "1") && Math.random() > 0.15;
+          const ok = btn.dataset.fail !== "1" && Math.random() > 0.15;
           if (ok) {
-            const latency = (40 + Math.floor(Math.random() * 300)) + " ms";
+            const latency = 40 + Math.floor(Math.random() * 300) + " ms";
             btn.textContent = "✓ 测试";
             btn.classList.add("ok");
             pop.classList.remove("fail");
@@ -1138,7 +1155,9 @@
       }
 
       function setSelected(selector, predicate) {
-        document.querySelectorAll(selector).forEach((el) => el.classList.toggle("selected", predicate(el)));
+        document
+          .querySelectorAll(selector)
+          .forEach((el) => el.classList.toggle("selected", predicate(el)));
       }
 
       function render() {
@@ -1163,9 +1182,7 @@
         } else {
           scopeGroup.style.display = "flex";
           scopeLocked.style.display = "none";
-          document
-            .getElementById("scope-all")
-            .classList.toggle("selected", scope === "all");
+          document.getElementById("scope-all").classList.toggle("selected", scope === "all");
           document
             .getElementById("scope-matched")
             .classList.toggle("selected", scope === "matched");

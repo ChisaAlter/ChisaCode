@@ -1,6 +1,6 @@
 ---
 title: Open Source Conductor Alternative With Linux, Windows, and Mobile
-description: ChisaCode is open source, runs on macOS, Linux, and Windows, ships native iOS and Android apps, and supports Claude, Codex, OpenCode, MiMoCode, Pi, Kimi Code, and custom ACP providers. Conductor is macOS only and Claude Code or Codex only.
+description: ChisaCode is open source, runs on macOS, Linux, and Windows, ships native iOS and Android apps, and supports Claude, Codex, OpenCode, Pi, Kimi Code, Grok Build, and custom ACP providers. Conductor is macOS only and Claude Code or Codex only.
 nav: Conductor
 order: 100
 ---
@@ -32,7 +32,7 @@ Conductor's desktop app is the host. Agents run inside it.
 
 ## Providers
 
-ChisaCode runs Claude, Codex, OpenCode, MiMoCode, Pi, and Kimi Code as built-in providers. Custom providers can extend a built-in provider or run an Agent Client Protocol command. See [Supported providers](/docs/supported-providers).
+ChisaCode runs Claude, Codex, OpenCode, Pi, Kimi Code, and Grok Build as built-in providers. Custom providers can extend a built-in provider or run an Agent Client Protocol command. See [Supported providers](/docs/supported-providers).
 
 Conductor runs Claude Code and Codex.
 
@@ -78,20 +78,20 @@ ChisaCode's speech-to-text and text-to-speech run locally on your device. Nothin
 
 ## Comparison
 
-|                              | ChisaCode                                                     | Conductor          |
-| ---------------------------- | ------------------------------------------------------------- | ------------------ |
-| License                      | Open source (AGPL-3.0)                                        | Closed source      |
-| Platforms                    | macOS, Linux, Windows                                         | macOS only         |
-| Native mobile                | iOS, Android                                                  | —                  |
-| Providers                    | Claude, Codex, OpenCode, MiMoCode, Pi, Kimi Code + custom ACP | Claude Code, Codex |
-| Git worktrees                | Yes                                                           | Yes                |
-| Per-worktree dev server URLs | Yes                                                           | —                  |
-| Split panes and tabs         | Yes                                                           | —                  |
-| In-app terminal              | Yes                                                           | Yes                |
-| In-app browser               | Yes                                                           | —                  |
-| GitHub workflow in app       | Commit, push, PR, checks, reviews, merge                      | Yes                |
-| CLI                          | Run, `--host`, ls, send, schedule, loop                       | —                  |
-| Local voice (on-device)      | Yes                                                           | —                  |
-| Self-hosted daemon           | Yes                                                           | —                  |
+|                              | ChisaCode                                                       | Conductor          |
+| ---------------------------- | --------------------------------------------------------------- | ------------------ |
+| License                      | Open source (AGPL-3.0)                                          | Closed source      |
+| Platforms                    | macOS, Linux, Windows                                           | macOS only         |
+| Native mobile                | iOS, Android                                                    | —                  |
+| Providers                    | Claude, Codex, OpenCode, Pi, Kimi Code, Grok Build + custom ACP | Claude Code, Codex |
+| Git worktrees                | Yes                                                             | Yes                |
+| Per-worktree dev server URLs | Yes                                                             | —                  |
+| Split panes and tabs         | Yes                                                             | —                  |
+| In-app terminal              | Yes                                                             | Yes                |
+| In-app browser               | Yes                                                             | —                  |
+| GitHub workflow in app       | Commit, push, PR, checks, reviews, merge                        | Yes                |
+| CLI                          | Run, `--host`, ls, send, schedule, loop                         | —                  |
+| Local voice (on-device)      | Yes                                                             | —                  |
+| Self-hosted daemon           | Yes                                                             | —                  |
 
 See also: [ChisaCode vs Superset](/docs/alternatives/superset), [ChisaCode vs OpenChamber](/docs/alternatives/openchamber), [ChisaCode vs Happy Coder](/docs/alternatives/happy-coder).

@@ -120,7 +120,7 @@ buildNpmPackage rec {
   '';
 
   meta = {
-    description = "Self-hosted daemon for Claude Code, Codex, OpenCode, and MiMoCode";
+    description = "Self-hosted daemon for Claude, Codex, OpenCode, Pi, Kimi Code, and Grok Build";
     homepage = "https://github.com/getchisacode/chisacode";
     license = lib.licenses.agpl3Plus;
     mainProgram = "chisacode";
