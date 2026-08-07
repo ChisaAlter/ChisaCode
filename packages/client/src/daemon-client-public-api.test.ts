@@ -8,6 +8,19 @@ import { afterEach, describe, expect, expectTypeOf, test, vi } from "vitest";
 import { createChisaCodeClient } from "./index.js";
 import type { ChisaCodeClient } from "./index.js";
 
+const RPC_PROVIDER_METHODS = new Set([
+  "listModels",
+  "listModes",
+  "listFeatures",
+  "listAvailable",
+  "snapshot",
+  "refresh",
+  "diagnostic",
+  "toolingAction",
+  "listPresets",
+  "subscribe",
+]);
+
 // ---------------------------------------------------------------------------
 // FakeWebSocket for connected-client tests
 // ---------------------------------------------------------------------------
@@ -103,14 +116,14 @@ describe("ChisaCodeClient type-level API shape", () => {
 
   test("providers namespace has expected methods", () => {
     const client = createChisaCodeClient({ url: "ws://test" });
-    // Provider config builder methods
-    expect(typeof client.providers.codex).toBe("function");
-    expect(typeof client.providers.claude).toBe("function");
-    expect(typeof client.providers.opencode).toBe("function");
-    expect(typeof client.providers.mimocode).toBe("function");
-    expect(typeof client.providers.pi).toBe("function");
-    expect(typeof client.providers.kimi).toBe("function");
-    expect(typeof client.providers.config).toBe("function");
+    expect(Object.keys(client.providers).filter((key) => !RPC_PROVIDER_METHODS.has(key))).toEqual([
+      "codex",
+      "claude",
+      "opencode",
+      "pi",
+      "kimi",
+      "config",
+    ]);
     // Provider RPC methods
     expect(typeof client.providers.listModels).toBe("function");
     expect(typeof client.providers.listModes).toBe("function");
@@ -119,6 +132,8 @@ describe("ChisaCodeClient type-level API shape", () => {
     expect(typeof client.providers.snapshot).toBe("function");
     expect(typeof client.providers.refresh).toBe("function");
     expect(typeof client.providers.diagnostic).toBe("function");
+    expect(typeof client.providers.toolingAction).toBe("function");
+    expect(typeof client.providers.listPresets).toBe("function");
     expect(typeof client.providers.subscribe).toBe("function");
   });
 

@@ -116,23 +116,6 @@ const OPENCODE_MODES: AgentProviderModeDefinition[] = [
   },
 ];
 
-const MIMOCODE_MODES: AgentProviderModeDefinition[] = [
-  {
-    id: "build",
-    label: "Build",
-    description: "Allows edits and tool execution for implementation work",
-    icon: "Bot",
-    colorTier: "moderate",
-  },
-  {
-    id: "plan",
-    label: "Plan",
-    description: "Read-only planning mode that avoids file edits",
-    icon: "Bot",
-    colorTier: "planning",
-  },
-];
-
 const MOCK_LOAD_TEST_MODES: AgentProviderModeDefinition[] = [
   {
     id: "load-test",
@@ -198,13 +181,6 @@ export const AGENT_PROVIDER_DEFINITIONS: AgentProviderDefinition[] = [
       enabled: true,
       defaultModeId: "build",
     },
-  },
-  {
-    id: "mimocode",
-    label: "MiMoCode",
-    description: "Xiaomi's OpenCode-compatible coding agent",
-    defaultModeId: "build",
-    modes: MIMOCODE_MODES,
   },
   {
     id: "pi",
