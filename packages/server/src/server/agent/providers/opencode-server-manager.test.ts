@@ -9,8 +9,10 @@ import {
 } from "./opencode/server-manager.js";
 
 type FakeServerProcess = EventEmitter & {
+  exitCode: number | null;
   killed: boolean;
   kill: ReturnType<typeof vi.fn>;
+  signalCode: NodeJS.Signals | null;
 };
 
 type FakeGeneration = OpenCodeServerGeneration & { process: FakeServerProcess };
@@ -27,17 +29,17 @@ describe("OpenCodeServerManager generations", () => {
       ignoreSystemEnvForDedicatedServer: false,
       installUrl: "https://github.com/opencode-ai/opencode",
     });
-    const mimoCodeManager = OpenCodeServerManager.getInstance(logger, undefined, {
-      providerId: "mimocode",
-      label: "MiMoCode",
-      binary: "mimo",
+    const alternateManager = OpenCodeServerManager.getInstance(logger, undefined, {
+      providerId: "opencode-alt",
+      label: "OpenCode Alt",
+      binary: "opencode-alt",
       serveArgs: (port) => ["serve", "--port", port],
       rotateServerOnForceRefresh: false,
       ignoreSystemEnvForDedicatedServer: true,
-      installUrl: "https://github.com/XiaomiMiMo/MiMo-Code",
+      installUrl: "https://opencode.ai",
     });
 
-    expect(mimoCodeManager).not.toBe(opencodeManager);
+    expect(alternateManager).not.toBe(opencodeManager);
   });
 
   test("rotation creates a new current server without killing a referenced old server", async () => {
@@ -104,13 +106,13 @@ describe("OpenCodeServerManager generations", () => {
 
   test("forced acquisitions reuse current server when rotation is disabled", async () => {
     const manager = createTestManager({
-      providerId: "mimocode",
-      label: "MiMoCode",
-      binary: "mimo",
+      providerId: "opencode-alt",
+      label: "OpenCode Alt",
+      binary: "opencode-alt",
       serveArgs: (port) => ["serve", "--port", port],
       rotateServerOnForceRefresh: false,
       ignoreSystemEnvForDedicatedServer: true,
-      installUrl: "https://github.com/XiaomiMiMo/MiMo-Code",
+      installUrl: "https://opencode.ai",
     });
     const first = createGeneration(4261);
     const second = createGeneration(4262);
@@ -167,13 +169,13 @@ describe("OpenCodeServerManager generations", () => {
 
   test("system-only launch env reuses current server when configured", async () => {
     const manager = createTestManager({
-      providerId: "mimocode",
-      label: "MiMoCode",
-      binary: "mimo",
+      providerId: "opencode-alt",
+      label: "OpenCode Alt",
+      binary: "opencode-alt",
       serveArgs: (port) => ["serve", "--port", port],
       rotateServerOnForceRefresh: false,
       ignoreSystemEnvForDedicatedServer: true,
-      installUrl: "https://github.com/XiaomiMiMo/MiMo-Code",
+      installUrl: "https://opencode.ai",
     });
     const first = createGeneration(4291);
     const second = createGeneration(4292);
@@ -290,10 +292,13 @@ function stubGenerations(
 
 function createGeneration(port: number): FakeGeneration {
   const process = new EventEmitter() as FakeServerProcess;
+  process.exitCode = null;
   process.killed = false;
+  process.signalCode = null;
   process.kill = vi.fn((signal?: NodeJS.Signals) => {
     process.killed = true;
-    process.emit("exit", signal ?? "SIGTERM");
+    process.signalCode = signal ?? "SIGTERM";
+    process.emit("exit", null, process.signalCode);
     return true;
   });
   return {

@@ -498,7 +498,6 @@ async function writeE2eDaemonConfig(targetHome: string): Promise<void> {
         claude: { enabled: false },
         codex: { enabled: false },
         kimi: { enabled: false },
-        mimocode: { enabled: false },
         pi: { enabled: false },
         "mock-slow": { enabled: false },
       },

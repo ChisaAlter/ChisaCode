@@ -80,16 +80,6 @@ export const OPENCODE_PROVIDER_CONFIG: OpenCodeLikeProviderConfig = {
   installUrl: "https://github.com/opencode-ai/opencode",
 };
 
-export const MIMOCODE_PROVIDER_CONFIG: OpenCodeLikeProviderConfig = {
-  providerId: "mimocode",
-  label: "MiMoCode",
-  binary: "mimo",
-  serveArgs: (port) => ["serve", "--port", port],
-  rotateServerOnForceRefresh: false,
-  ignoreSystemEnvForDedicatedServer: true,
-  installUrl: "https://github.com/XiaomiMiMo/MiMo-Code",
-};
-
 /** Inputs required to construct an OpenCode session without coupling the client to its class. */
 export interface OpenCodeSessionFactoryInput {
   config: OpenCodeAgentConfig;
