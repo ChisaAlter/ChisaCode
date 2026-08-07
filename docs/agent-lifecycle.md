@@ -55,6 +55,15 @@ Closing a workspace tab on an **agent** is layout-only. The agent stays unarchiv
 
 Archiving is explicit. The user must choose an archive/delete action from the sidebar, subagents track, or another lifecycle surface before the daemon marks the agent archived.
 
+### Client archive UX (sidebar)
+
+The soft sidebar does **not** optimistically hide a row on click. While the archive
+RPC is in flight the row stays put and only the archive control shows a spinner /
+pending menu state. The row leaves the list after the daemon confirms (or a client
+timeout is accepted as still-in-progress). Success is silent; real failures use a
+merged human-language toast with retry. Full presentation contract:
+`docs/modules/app/sidebar-archive-ux.md`.
+
 Draft tabs are not agent records. A new conversation draft remains local to the workspace until the first message is successfully sent; only then does it become an agent/session record for the workspace directory.
 
 ## The subagents track

@@ -51,7 +51,11 @@ import {
   rejectInitDeferred,
 } from "@/utils/agent-initialization";
 import { encodeImages } from "@/utils/encode-images";
-import { derivePendingPermissionKey, normalizeAgentSnapshot } from "@/utils/agent-snapshots";
+import {
+  derivePendingPermissionKey,
+  normalizeAgentSnapshot,
+  resolveAuthoritativeAgentSnapshot,
+} from "@/utils/agent-snapshots";
 import { resolveProjectPlacement } from "@/utils/project-placement";
 import { buildDraftStoreKey } from "@/stores/draft-keys";
 import type { AttachmentMetadata } from "@/attachments/types";
@@ -557,7 +561,11 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
     (agent: Agent) => {
       setAgents(serverId, (prev) => {
         const current = prev.get(agent.id);
-        if (current && agent.updatedAt.getTime() < current.updatedAt.getTime()) {
+        const resolved = resolveAuthoritativeAgentSnapshot(current, agent);
+        if (resolved.status === "reject") {
+          if (!current) {
+            return prev;
+          }
           const hasUsageUpdate = hasAgentUsageChanged(agent.lastUsage, current.lastUsage);
           if (hasUsageUpdate) {
             const next = new Map(prev);
@@ -570,7 +578,7 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
           return prev;
         }
         const next = new Map(prev);
-        next.set(agent.id, agent);
+        next.set(agent.id, resolved.agent);
         return next;
       });
 

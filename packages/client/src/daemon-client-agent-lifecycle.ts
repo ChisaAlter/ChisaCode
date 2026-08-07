@@ -167,7 +167,12 @@ export class AgentLifecycleClient {
     const result: ArchiveAgentPayload = await this.transport.request({
       message: { type: "archive_agent_request", agentId },
       responseType: "agent_archived",
-      timeout: 10_000,
+      // Archiving closes a live agent (cancels in-flight runs, persists the
+      // snapshot, cascades to subagents); under load the daemon can take
+      // 10–12s per archive. 10s caused spurious client timeouts that rolled
+      // back the optimistic removal and made already-archived sessions
+      // reappear. 30s keeps the UI honest without masking genuine failures.
+      timeout: 30_000,
     });
     return { archivedAt: result.archivedAt };
   }

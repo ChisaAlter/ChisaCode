@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tansta
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
 import { useSessionStore } from "@/stores/session-store";
 import { useWorkspaceLayoutStore } from "@/stores/workspace-layout-store";
-import { agentHistoryQueryKey, agentHistoryQueryKeys } from "./agent-history-query-key";
+import { agentHistoryQueryKeys } from "./agent-history-query-key";
 
 export const ARCHIVE_AGENT_PENDING_QUERY_KEY = ["archive-agent-pending"] as const;
 export const ARCHIVE_AGENT_SUPPRESSED_QUERY_KEY = ["archive-agent-suppressed"] as const;
@@ -130,6 +130,18 @@ export function isArchiveAgentNotFoundError(error: unknown): boolean {
   return isNotFound && /archive_agent_request/i.test(message);
 }
 
+/**
+ * Detects client-side request timeouts, which are ambiguous: the daemon may
+ * still be processing the archive (it routinely takes 10–12s per agent under
+ * load, longer than the request timeout). Rolling the optimistic removal back
+ * on timeout makes already-archived sessions flicker back into the list, so
+ * timeout errors are treated as "in flight" instead of "failed".
+ */
+export function isArchiveTimeoutError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /Timeout waiting for message|Timed out waiting for connection/i.test(message);
+}
+
 function groupArchiveInputsByServer(inputs: ArchiveAgentInput[]): Map<string, string[]> {
   const byServer = new Map<string, string[]>();
   for (const input of inputs) {
@@ -148,12 +160,56 @@ function groupArchiveInputsByServer(inputs: ArchiveAgentInput[]): Map<string, st
   return byServer;
 }
 
+/**
+ * Aggregated outcome of a multi-session archive run. Callers use it to drive
+ * the sidebar progress capsule and the merged failure toast instead of
+ * surfacing raw RPC errors.
+ */
+export interface ArchiveAgentsOutcome {
+  /** Sessions confirmed archived by the daemon (or optimistically kept). */
+  archivedCount: number;
+  /** Sessions that genuinely failed; their optimistic removal is rolled back. */
+  failedCount: number;
+  /** Sessions whose request timed out; the daemon is still processing them. */
+  backgroundCount: number;
+  /** Inputs of the failed sessions, used by the toast retry action. */
+  retryInputs: ArchiveAgentInput[];
+}
+
+export const EMPTY_ARCHIVE_AGENTS_OUTCOME: ArchiveAgentsOutcome = {
+  archivedCount: 0,
+  failedCount: 0,
+  backgroundCount: 0,
+  retryInputs: [],
+};
+
+function addArchiveOutcomes(
+  left: ArchiveAgentsOutcome,
+  right: ArchiveAgentsOutcome,
+): ArchiveAgentsOutcome {
+  return {
+    archivedCount: left.archivedCount + right.archivedCount,
+    failedCount: left.failedCount + right.failedCount,
+    backgroundCount: left.backgroundCount + right.backgroundCount,
+    retryInputs: [...left.retryInputs, ...right.retryInputs],
+  };
+}
+
+function buildFailedOutcome(agentIds: string[], serverId: string): ArchiveAgentsOutcome {
+  return {
+    archivedCount: 0,
+    failedCount: agentIds.length,
+    backgroundCount: 0,
+    retryInputs: agentIds.map((agentId) => ({ serverId, agentId })),
+  };
+}
+
 async function archiveAgentsOnServer(input: {
   serverId: string;
   agentIds: string[];
   queryClient: QueryClient;
   archiveMutateAsync: (value: ArchiveAgentInput) => Promise<{ archivedAt: string }>;
-}): Promise<string | null> {
+}): Promise<ArchiveAgentsOutcome> {
   const { serverId, queryClient, archiveMutateAsync } = input;
   const uniqueAgentIds = [...new Set(input.agentIds)];
   const client = resolveArchiveAgentClient({
@@ -162,17 +218,12 @@ async function archiveAgentsOnServer(input: {
     runtimeClient: getHostRuntimeStore().getClient(serverId),
   });
   if (!client) {
-    return `${serverId}: Daemon client not available`;
+    return buildFailedOutcome(uniqueAgentIds, serverId);
   }
 
   await cancelArchivedAgentListQueries(queryClient, serverId);
-  const archivedAt = new Date().toISOString();
-  applyArchivedAgentCloseResults({
-    queryClient,
-    serverId,
-    results: uniqueAgentIds.map((agentId) => ({ agentId, archivedAt })),
-    invalidateQueries: false,
-  });
+  // Keep rows visible with a button spinner while the RPC is in flight. Only
+  // hide after the daemon confirms (or a timeout is accepted as still-in-progress).
   for (const agentId of uniqueAgentIds) {
     setAgentArchiving({
       queryClient,
@@ -185,12 +236,25 @@ async function archiveAgentsOnServer(input: {
   try {
     // Prefer the batch close_items RPC (one round-trip) when available.
     // Fall back to sequential single archives if the client surface is
-    // missing closeItems (older runtime / tests).
+    // missing closeItems (older runtime / tests). Each fallback failure is
+    // handled by its own mutation; keep archiving the rest.
     if (typeof client.closeItems !== "function") {
+      let archivedCount = 0;
+      const failedAgentIds: string[] = [];
       for (const agentId of uniqueAgentIds) {
-        await archiveMutateAsync({ serverId, agentId });
+        try {
+          await archiveMutateAsync({ serverId, agentId });
+          archivedCount += 1;
+        } catch {
+          failedAgentIds.push(agentId);
+        }
       }
-      return null;
+      return {
+        archivedCount,
+        failedCount: failedAgentIds.length,
+        backgroundCount: 0,
+        retryInputs: failedAgentIds.map((agentId) => ({ serverId, agentId })),
+      };
     }
 
     const result = await client.closeItems({ agentIds: uniqueAgentIds });
@@ -201,16 +265,30 @@ async function archiveAgentsOnServer(input: {
       invalidateQueries: false,
     });
     if (result.agents.length >= uniqueAgentIds.length) {
-      return null;
+      return { ...EMPTY_ARCHIVE_AGENTS_OUTCOME, archivedCount: uniqueAgentIds.length };
     }
     const archivedIds = new Set(result.agents.map((entry) => entry.agentId));
-    const missingCount = uniqueAgentIds.filter((agentId) => !archivedIds.has(agentId)).length;
-    return missingCount > 0 ? `${serverId}: failed to archive ${missingCount} session(s)` : null;
+    const missing = uniqueAgentIds.filter((agentId) => !archivedIds.has(agentId));
+    return {
+      archivedCount: result.agents.length,
+      failedCount: missing.length,
+      backgroundCount: 0,
+      retryInputs: missing.map((agentId) => ({ serverId, agentId })),
+    };
   } catch (error) {
-    // On batch failure, revalidate from the server so the UI converges
-    // to the real archived/unarchived state instead of a half-applied
-    // optimistic cache.
-    return error instanceof Error ? error.message : String(error);
+    if (isArchiveTimeoutError(error)) {
+      // Daemon is still processing. Hide the rows now and let refetch converge,
+      // matching the single-agent timeout acceptance path.
+      const archivedAt = new Date().toISOString();
+      applyArchivedAgentCloseResults({
+        queryClient,
+        serverId,
+        results: uniqueAgentIds.map((agentId) => ({ agentId, archivedAt })),
+        invalidateQueries: false,
+      });
+      return { ...EMPTY_ARCHIVE_AGENTS_OUTCOME, backgroundCount: uniqueAgentIds.length };
+    }
+    return buildFailedOutcome(uniqueAgentIds, serverId);
   } finally {
     for (const agentId of uniqueAgentIds) {
       clearArchiveAgentPending({ queryClient, serverId, agentId });
@@ -220,6 +298,45 @@ async function archiveAgentsOnServer(input: {
     for (const queryKey of agentHistoryQueryKeys(serverId)) {
       void queryClient.invalidateQueries({ queryKey });
     }
+  }
+}
+
+/**
+ * Reverts the optimistic archived state for agents whose archive failed:
+ * clears `archivedAt` in the session store and removes them from the
+ * suppressed set so they reappear in the sidebar.
+ */
+export function unmarkAgentArchivedInStore(input: {
+  queryClient: QueryClient;
+  serverId: string;
+  agentIds: string[];
+}): void {
+  const { queryClient, serverId } = input;
+  const uniqueAgentIds = [...new Set(input.agentIds)];
+  if (uniqueAgentIds.length === 0) {
+    return;
+  }
+  const setAgents = useSessionStore.getState().setAgents;
+  setAgents(serverId, (prev) => {
+    let changed = false;
+    const next = new Map(prev);
+    for (const agentId of uniqueAgentIds) {
+      const existing = next.get(agentId);
+      if (!existing?.archivedAt) {
+        continue;
+      }
+      next.set(agentId, { ...existing, archivedAt: null });
+      changed = true;
+    }
+    return changed ? next : prev;
+  });
+  for (const agentId of uniqueAgentIds) {
+    setAgentArchiveSuppressed({
+      queryClient,
+      serverId,
+      agentId,
+      isArchiving: false,
+    });
   }
 }
 
@@ -387,96 +504,12 @@ export interface ArchivedAgentCloseResult {
   archivedAt: string;
 }
 
-interface ArchivedAgentListCacheSnapshot {
-  sidebarAgentsList: AgentsListQueryData | undefined;
-  allAgents: AgentsListQueryData | undefined;
-  agentHistory: AgentHistoryQueryData | undefined;
-}
-
-interface ArchiveAgentMutationContext {
-  agent: ReturnType<typeof getStoredAgentSnapshot>;
-  lists: ArchivedAgentListCacheSnapshot;
-  wasSuppressed: boolean;
-}
-
-function getStoredAgentSnapshot(input: ArchiveAgentInput) {
-  return useSessionStore.getState().sessions[input.serverId]?.agents.get(input.agentId);
-}
-
-function restoreAgentSnapshot(
-  input: ArchiveAgentInput & { agent: ReturnType<typeof getStoredAgentSnapshot> },
-): void {
-  const setAgents = useSessionStore.getState().setAgents;
-  setAgents(input.serverId, (prev) => {
-    const hasAgent = prev.has(input.agentId);
-    if (!input.agent) {
-      if (!hasAgent) {
-        return prev;
-      }
-      const next = new Map(prev);
-      next.delete(input.agentId);
-      return next;
-    }
-
-    const current = prev.get(input.agentId);
-    if (current === input.agent) {
-      return prev;
-    }
-
-    const next = new Map(prev);
-    next.set(input.agentId, input.agent);
-    return next;
-  });
-}
-
-function getArchivedAgentListCacheSnapshot(
-  queryClient: QueryClient,
-  serverId: string,
-): ArchivedAgentListCacheSnapshot {
-  return {
-    sidebarAgentsList: queryClient.getQueryData<AgentsListQueryData | undefined>([
-      "sidebarAgentsList",
-      serverId,
-    ]),
-    allAgents: queryClient.getQueryData<AgentsListQueryData | undefined>(["allAgents", serverId]),
-    agentHistory: queryClient.getQueryData<AgentHistoryQueryData | undefined>(
-      agentHistoryQueryKey(serverId),
-    ),
-  };
-}
-
 async function cancelArchivedAgentListQueries(queryClient: QueryClient, serverId: string) {
   await Promise.all([
     queryClient.cancelQueries({ queryKey: ["sidebarAgentsList", serverId] }),
     queryClient.cancelQueries({ queryKey: ["allAgents", serverId] }),
     ...agentHistoryQueryKeys(serverId).map((queryKey) => queryClient.cancelQueries({ queryKey })),
   ]);
-}
-
-function restoreCachedQuerySnapshot(
-  queryClient: QueryClient,
-  queryKey: readonly unknown[],
-  snapshot: unknown,
-): void {
-  if (snapshot === undefined) {
-    queryClient.removeQueries({ queryKey, exact: true });
-    return;
-  }
-  queryClient.setQueryData(queryKey, snapshot);
-}
-
-function restoreArchivedAgentListCacheSnapshot(
-  queryClient: QueryClient,
-  serverId: string,
-  snapshot: ArchivedAgentListCacheSnapshot,
-): void {
-  restoreCachedQuerySnapshot(
-    queryClient,
-    ["sidebarAgentsList", serverId],
-    snapshot.sidebarAgentsList,
-  );
-  restoreCachedQuerySnapshot(queryClient, ["allAgents", serverId], snapshot.allAgents);
-  restoreCachedQuerySnapshot(queryClient, agentHistoryQueryKey(serverId), snapshot.agentHistory);
 }
 
 function markAgentArchivedInStore(input: ArchiveAgentInput & { archivedAt: string }): void {
@@ -494,10 +527,16 @@ function markAgentArchivedInStore(input: ArchiveAgentInput & { archivedAt: strin
     if (existing.archivedAt && existing.archivedAt.getTime() === archivedAt.getTime()) {
       return prev;
     }
+    // Bump updatedAt to the archive time: authoritative snapshots (agent
+    // updates, history/fetch responses) that were computed before the archive
+    // carry an older updatedAt and are rejected by the store's staleness
+    // guard instead of clobbering the optimistic archivedAt — which would
+    // make an already-archived session flicker back into the list.
     const next = new Map(prev);
     next.set(input.agentId, {
       ...existing,
       archivedAt,
+      updatedAt: archivedAt,
     });
     return next;
   });
@@ -580,20 +619,18 @@ export function usePendingArchiveAgentIds(serverId: string): ReadonlySet<string>
   );
 }
 
+/**
+ * Agent ids that should stay hidden from active session lists after a confirmed
+ * (or timeout-accepted) archive. Pending in-flight archives are intentionally
+ * excluded so the row can remain visible with a button-level spinner instead of
+ * vanishing and flashing the rest of the list.
+ */
 export function useSuppressedArchiveAgentIds(serverId: string): ReadonlySet<string> {
-  const pendingQuery = useArchiveAgentPendingQuery();
   const suppressedQuery = useArchiveAgentSuppressedQuery();
-  return useMemo(() => {
-    const pendingIds = selectPendingArchiveAgentIds(pendingQuery.data ?? {}, serverId);
-    const suppressedIds = selectSuppressedArchiveAgentIds(suppressedQuery.data ?? {}, serverId);
-    if (pendingIds.size === 0) {
-      return suppressedIds;
-    }
-    if (suppressedIds.size === 0) {
-      return pendingIds;
-    }
-    return new Set([...pendingIds, ...suppressedIds]);
-  }, [pendingQuery.data, serverId, suppressedQuery.data]);
+  return useMemo(
+    () => selectSuppressedArchiveAgentIds(suppressedQuery.data ?? {}, serverId),
+    [serverId, suppressedQuery.data],
+  );
 }
 
 export function useArchiveAgent() {
@@ -617,31 +654,27 @@ export function useArchiveAgent() {
         if (isArchiveAgentNotFoundError(error)) {
           return { archivedAt: new Date().toISOString() };
         }
+        if (isArchiveTimeoutError(error)) {
+          // The daemon is still processing the archive; the authoritative
+          // agent_update / revalidation will converge the store. Treating the
+          // timeout as success keeps the optimistic removal in place instead
+          // of rolling back and making the session reappear.
+          return { archivedAt: new Date().toISOString() };
+        }
         throw error;
       }
     },
     onMutate: async (input) => {
       await cancelArchivedAgentListQueries(queryClient, input.serverId);
-      const context: ArchiveAgentMutationContext = {
-        agent: getStoredAgentSnapshot(input),
-        lists: getArchivedAgentListCacheSnapshot(queryClient, input.serverId),
-        wasSuppressed: isAgentArchiveSuppressed({ queryClient, ...input }),
-      };
-      const archivedAt = new Date().toISOString();
-
-      applyArchivedAgentCloseResults({
-        queryClient,
-        serverId: input.serverId,
-        results: [{ agentId: input.agentId, archivedAt }],
-        invalidateQueries: false,
-      });
+      // Do not hide the row yet — leave it in place so the archive control can
+      // show an in-button spinner. Confirmed archives apply in onSuccess.
       setAgentArchiving({
         queryClient,
         serverId: input.serverId,
         agentId: input.agentId,
         isArchiving: true,
       });
-      return context;
+      return undefined;
     },
     onSuccess: (result, input) => {
       applyArchivedAgentCloseResults({
@@ -650,25 +683,6 @@ export function useArchiveAgent() {
         results: [{ agentId: input.agentId, archivedAt: result.archivedAt }],
         invalidateQueries: false,
       });
-    },
-    onError: (_error, input, context) => {
-      if (!context) {
-        return;
-      }
-      restoreAgentSnapshot({
-        serverId: input.serverId,
-        agentId: input.agentId,
-        agent: context.agent,
-      });
-      restoreArchivedAgentListCacheSnapshot(queryClient, input.serverId, context.lists);
-      if (!context.wasSuppressed) {
-        setAgentArchiveSuppressed({
-          queryClient,
-          serverId: input.serverId,
-          agentId: input.agentId,
-          isArchiving: false,
-        });
-      }
     },
     onSettled: (_result, _error, input) => {
       clearArchiveAgentPending({
@@ -698,13 +712,17 @@ export function useArchiveAgent() {
   );
 
   const archiveAgents = useCallback(
-    async (inputs: ArchiveAgentInput[]): Promise<void> => {
+    async (inputs: ArchiveAgentInput[]): Promise<ArchiveAgentsOutcome> => {
       if (inputs.length === 0) {
-        return;
+        return EMPTY_ARCHIVE_AGENTS_OUTCOME;
       }
       if (inputs.length === 1) {
-        await archiveMutateAsync(inputs[0]!);
-        return;
+        try {
+          await archiveMutateAsync(inputs[0]!);
+          return { ...EMPTY_ARCHIVE_AGENTS_OUTCOME, archivedCount: 1 };
+        } catch {
+          return buildFailedOutcome([inputs[0]!.agentId], inputs[0]!.serverId);
+        }
       }
 
       // Group by server so we can issue one close_items_request per host.
@@ -713,22 +731,17 @@ export function useArchiveAgent() {
       // with peakInflightRequests ~15), causing optimistic removals to roll
       // back and already-archived sessions to reappear.
       const byServer = groupArchiveInputsByServer(inputs);
-      const failures: string[] = [];
+      let outcome: ArchiveAgentsOutcome = EMPTY_ARCHIVE_AGENTS_OUTCOME;
       for (const [serverId, agentIds] of byServer) {
-        const failure = await archiveAgentsOnServer({
+        const serverOutcome = await archiveAgentsOnServer({
           serverId,
           agentIds,
           queryClient,
           archiveMutateAsync,
         });
-        if (failure) {
-          failures.push(failure);
-        }
+        outcome = addArchiveOutcomes(outcome, serverOutcome);
       }
-
-      if (failures.length > 0) {
-        throw new Error(failures[0] ?? "Failed to archive sessions");
-      }
+      return outcome;
     },
     [archiveMutateAsync, queryClient],
   );

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
+  ActivityIndicator,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -58,7 +59,11 @@ import {
 import { AdaptiveRenameModal } from "@/components/rename-modal";
 import { useToast } from "@/contexts/toast-context";
 import { getDesktopHost } from "@/desktop/host";
-import { useArchiveAgent, useSuppressedArchiveAgentIds } from "@/hooks/use-archive-agent";
+import {
+  useArchiveAgent,
+  useSuppressedArchiveAgentIds,
+  type ArchiveAgentInput,
+} from "@/hooks/use-archive-agent";
 import { agentHistoryQueryKey, agentHistoryQueryKeys } from "@/hooks/agent-history-query-key";
 import { useSessionStore } from "@/stores/session-store";
 import { useSidebarOrderStore } from "@/stores/sidebar-order-store";
@@ -600,6 +605,15 @@ function SidebarSessionRow({
     },
     [handleArchive],
   );
+  const quickArchiveIcon = isArchiving ? (
+    <ActivityIndicator size="small" style={styles.quickArchiveSpinner} />
+  ) : (
+    <ThemedIconHost Icon={Archive} size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
+  );
+  const quickArchiveAccessibilityState = useMemo(
+    () => ({ busy: isArchiving, disabled: isArchiving || Boolean(agent.archivedAt) }),
+    [agent.archivedAt, isArchiving],
+  );
 
   const menuButtonStyle = useCallback(
     ({ hovered = false, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
@@ -749,12 +763,13 @@ function SidebarSessionRow({
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={t("sidebar.archiveSessionLabel", { title: sessionTitle })}
+        accessibilityState={quickArchiveAccessibilityState}
         testID={`sidebar-session-quick-archive-${agent.serverId}-${agent.id}`}
         style={quickButtonStyle}
         onPress={handleQuickArchive}
         disabled={isArchiving || Boolean(agent.archivedAt)}
       >
-        <ThemedIconHost Icon={Archive} size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
+        {quickArchiveIcon}
       </Pressable>
     </View>
   );
@@ -988,11 +1003,11 @@ function SidebarSessionGroupHeader({
   );
   const actionsStyle = useMemo(
     () => [
-      styles.groupActions,
+      presentation.variant === "workbench" ? styles.desktopGroupActions : styles.groupActions,
       !actionsVisible && styles.groupActionsHidden,
       groupActionsPointerEventsStyle,
     ],
-    [actionsVisible, groupActionsPointerEventsStyle],
+    [actionsVisible, groupActionsPointerEventsStyle, presentation.variant],
   );
   const headerStyle =
     presentation.variant === "workbench" ? styles.desktopGroupHeader : styles.groupHeader;
@@ -1354,7 +1369,7 @@ export function SidebarSessionList({
   const isCompact = useIsCompactFormFactor();
   const queryClient = useQueryClient();
   const toast = useToast();
-  const { archiveAgent, archiveAgents, isArchivingAgent } = useArchiveAgent();
+  const { archiveAgents, isArchivingAgent } = useArchiveAgent();
   const suppressedArchiveAgentIds = useSuppressedArchiveAgentIds(serverId ?? "");
   const [renamingAgent, setRenamingAgent] = useState<AggregatedAgent | null>(null);
   const [renamingProjectGroup, setRenamingProjectGroup] =
@@ -1617,6 +1632,38 @@ export function SidebarSessionList({
     [queryClient, serverId, t, toast],
   );
 
+  const runArchive = useCallback(
+    async (inputs: ArchiveAgentInput[]) => {
+      const outcome = await archiveAgents(inputs);
+      if (!outcome) {
+        return;
+      }
+      if (outcome.failedCount > 0) {
+        toast.show(
+          <View style={styles.archiveFailureToast}>
+            <Text style={styles.archiveFailureTitle}>
+              {t("sidebar.archiveFailedSessions", { count: outcome.failedCount })}
+            </Text>
+            <Text style={styles.archiveFailureSub}>{t("sidebar.archiveFailedRestored")}</Text>
+          </View>,
+          {
+            variant: "error",
+            durationMs: 6000,
+            action: {
+              label: t("sidebar.retry"),
+              onPress: () => {
+                void runArchive(outcome.retryInputs);
+              },
+            },
+          },
+        );
+      }
+      // Success / background-timeout: silent. The archive control shows a spinner
+      // while pending; once confirmed the row leaves the list.
+    },
+    [archiveAgents, t, toast],
+  );
+
   const handleArchiveProject = useCallback(
     (group: SidebarSessionRenderGroup) => {
       void (async () => {
@@ -1634,23 +1681,21 @@ export function SidebarSessionList({
           // Skip agents that are already archived — the server's close_items
           // silently drops any archive that fails (including idempotent
           // re-archives whose storage record is gone), which makes the client's
-          // count check throw "failed to archive N session(s)" and pop a toast.
-          // Pre-filtering avoids sending already-archived ids in the batch.
+          // count check report a failure. Pre-filtering avoids sending
+          // already-archived ids in the batch.
           const toArchive = group.agents
             .filter((agent) => !agent.archivedAt)
             .map((agent) => ({ serverId: agent.serverId, agentId: agent.id }));
           if (toArchive.length === 0) {
             return;
           }
-          await archiveAgents(toArchive);
-        } catch {
-          toast.error(t("sidebar.archiveProjectSessionsFailed"));
+          await runArchive(toArchive);
         } finally {
           setArchivingProjectGroupKey(null);
         }
       })();
     },
-    [archiveAgents, t, toast],
+    [runArchive, t],
   );
 
   const handleRemoveProject = useCallback(
@@ -1725,11 +1770,9 @@ export function SidebarSessionList({
       if (agent.archivedAt) {
         return;
       }
-      void archiveAgent({ serverId: agent.serverId, agentId: agent.id }).catch((error) => {
-        toast.error(error instanceof Error ? error.message : t("sidebar.archiveSessionFailed"));
-      });
+      void runArchive([{ serverId: agent.serverId, agentId: agent.id }]);
     },
-    [archiveAgent, t, toast],
+    [runArchive],
   );
 
   const handleDelete = useCallback(
@@ -2013,6 +2056,22 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
     minHeight: 0,
   },
+  quickArchiveSpinner: {
+    width: ICON_SIZE.sm,
+    height: ICON_SIZE.sm,
+  },
+  archiveFailureToast: {
+    gap: 2,
+  },
+  archiveFailureTitle: {
+    fontSize: 13,
+    fontWeight: theme.fontWeight.semibold,
+    color: theme.colors.foreground,
+  },
+  archiveFailureSub: {
+    fontSize: 12,
+    color: theme.colors.foregroundMuted,
+  },
   scrollContent: {
     paddingTop: theme.spacing[1],
     paddingRight: theme.spacing[2],
@@ -2124,10 +2183,28 @@ const styles = StyleSheet.create((theme) => ({
     // Soft open/active chrome: surface3 (surface1 remains hover).
     backgroundColor: theme.colors.surface3,
   },
+  // Compact/native: stretch the full header and center the 28px action buttons.
   groupActions: {
     position: "absolute",
-    top: 1,
+    top: 0,
     right: 0,
+    bottom: 0,
+    width: 58,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+    flexShrink: 0,
+    backgroundColor: theme.colors.surfaceSidebar,
+    zIndex: 1,
+  },
+  // Desktop group header uses asymmetric soft .sec padding (10/4). Pin the
+  // action strip to that content box so ⋯ / new sit on the folder label row
+  // instead of floating near the top padding edge (top: 1 used to misalign).
+  desktopGroupActions: {
+    position: "absolute",
+    top: 10,
+    right: 10,
+    bottom: 4,
     width: 58,
     flexDirection: "row",
     alignItems: "center",

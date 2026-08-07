@@ -37,6 +37,10 @@
 - Prefer `.web.ts(x)`, `.native.ts(x)`, and `.electron.ts(x)` for platform-specific implementations.
 - Hover-revealed controls need always-visible native or compact alternatives.
 
+## Module Docs
+
+- `docs/modules/app/sidebar-archive-ux.md` — soft-sidebar archive presentation (pending spinner on control, silent success, merged failure toast).
+
 ## Cross-Cutting Docs
 
 - `docs/cross-cutting/app-platform-boundaries.md`

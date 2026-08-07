@@ -18,11 +18,13 @@ import {
   ARCHIVE_AGENT_SUPPRESSED_QUERY_KEY,
   isAgentArchiving,
   isArchiveAgentNotFoundError,
+  isArchiveTimeoutError,
   removeAgentFromListPayload,
   resolveArchiveAgentClient,
   selectSuppressedArchiveAgentIds,
   selectPendingArchiveAgentIds,
   setAgentArchiving,
+  unmarkAgentArchivedInStore,
   useArchiveAgent,
 } from "./use-archive-agent";
 
@@ -486,5 +488,248 @@ describe("useArchiveAgent", () => {
     expect(isArchiveAgentNotFoundError(new Error("server-a: failed to archive 2 session(s)"))).toBe(
       false,
     );
+  });
+
+  it("detects client-side request timeouts", () => {
+    expect(isArchiveTimeoutError(new Error("Timeout waiting for message (10000ms)"))).toBe(true);
+    expect(isArchiveTimeoutError(new Error("Timeout waiting for message (30000ms)"))).toBe(true);
+    expect(
+      isArchiveTimeoutError(new Error("Timed out waiting for connection to send message")),
+    ).toBe(true);
+    expect(isArchiveTimeoutError(new Error("Request failed: Agent not found: agent-1"))).toBe(
+      false,
+    );
+    expect(isArchiveTimeoutError(new Error("Daemon client not available"))).toBe(false);
+  });
+
+  it("hides the session after a timeout is accepted as still-in-progress", async () => {
+    // The daemon keeps processing an archive after the client timeout fires;
+    // we accept the timeout and hide the row only then so in-flight UI can
+    // keep showing a button spinner instead of flashing the list early.
+    const queryClient = createQueryClient();
+    const archiveAgent = vi
+      .fn()
+      .mockRejectedValue(new Error("Timeout waiting for message (10000ms)"));
+    useSessionStore.getState().initializeSession("server-a", {
+      archiveAgent,
+    } as unknown as DaemonClient);
+    useSessionStore.getState().setAgents("server-a", new Map([["agent-1", makeAgent()]]));
+    queryClient.setQueryData(["sidebarAgentsList", "server-a"], {
+      entries: [{ agent: { id: "agent-1" } }, { agent: { id: "agent-2" } }],
+    });
+    const { result } = renderHook(() => useArchiveAgent(), {
+      wrapper: createQueryClientWrapper(queryClient),
+    });
+
+    await act(async () => {
+      await expect(
+        result.current.archiveAgent({
+          serverId: "server-a",
+          agentId: "agent-1",
+        }),
+      ).resolves.toBeUndefined();
+    });
+
+    // Timeout is treated as success: hide + suppress after the request settles.
+    expect(
+      useSessionStore.getState().sessions["server-a"]?.agents.get("agent-1")?.archivedAt,
+    ).toBeInstanceOf(Date);
+    expect(queryClient.getQueryData(["sidebarAgentsList", "server-a"])).toEqual({
+      entries: [{ agent: { id: "agent-2" } }],
+    });
+    expect(
+      selectSuppressedArchiveAgentIds(
+        queryClient.getQueryData(ARCHIVE_AGENT_SUPPRESSED_QUERY_KEY) ?? {},
+        "server-a",
+      ),
+    ).toEqual(new Set(["agent-1"]));
+    await waitFor(() => {
+      expect(
+        isAgentArchiving({
+          queryClient,
+          serverId: "server-a",
+          agentId: "agent-1",
+        }),
+      ).toBe(false);
+    });
+  });
+
+  it("marks the agent as archiving without hiding it until success", async () => {
+    const queryClient = createQueryClient();
+    let resolveArchive: ((value: { archivedAt: string }) => void) | null = null;
+    const archiveAgent = vi.fn(
+      () =>
+        new Promise<{ archivedAt: string }>((resolve) => {
+          resolveArchive = resolve;
+        }),
+    );
+    useSessionStore.getState().initializeSession("server-a", {
+      archiveAgent,
+    } as unknown as DaemonClient);
+    useSessionStore.getState().setAgents("server-a", new Map([["agent-1", makeAgent()]]));
+    queryClient.setQueryData(["sidebarAgentsList", "server-a"], {
+      entries: [{ agent: { id: "agent-1" } }, { agent: { id: "agent-2" } }],
+    });
+    const { result } = renderHook(() => useArchiveAgent(), {
+      wrapper: createQueryClientWrapper(queryClient),
+    });
+
+    let archivePromise: Promise<void> | undefined;
+    act(() => {
+      archivePromise = result.current.archiveAgent({
+        serverId: "server-a",
+        agentId: "agent-1",
+      });
+    });
+
+    await waitFor(() => {
+      expect(
+        isAgentArchiving({
+          queryClient,
+          serverId: "server-a",
+          agentId: "agent-1",
+        }),
+      ).toBe(true);
+    });
+    // Still visible while pending — no optimistic hide.
+    expect(
+      useSessionStore.getState().sessions["server-a"]?.agents.get("agent-1")?.archivedAt,
+    ).toBeNull();
+    expect(queryClient.getQueryData(["sidebarAgentsList", "server-a"])).toEqual({
+      entries: [{ agent: { id: "agent-1" } }, { agent: { id: "agent-2" } }],
+    });
+
+    await act(async () => {
+      resolveArchive?.({ archivedAt: "2026-04-01T05:00:00.000Z" });
+      await archivePromise;
+    });
+
+    expect(
+      useSessionStore.getState().sessions["server-a"]?.agents.get("agent-1")?.archivedAt,
+    ).toBeInstanceOf(Date);
+    expect(queryClient.getQueryData(["sidebarAgentsList", "server-a"])).toEqual({
+      entries: [{ agent: { id: "agent-2" } }],
+    });
+  });
+
+  it("bumps the stored agent updatedAt when archiving optimistically", () => {
+    // Bumping updatedAt lets the session-store staleness guard reject
+    // pre-archive snapshots instead of clobbering the optimistic archivedAt.
+    const queryClient = new QueryClient();
+    useSessionStore.getState().initializeSession("server-a", {} as DaemonClient);
+    useSessionStore.getState().setAgents("server-a", new Map([["agent-1", makeAgent()]]));
+
+    applyArchivedAgentCloseResults({
+      queryClient,
+      serverId: "server-a",
+      results: [{ agentId: "agent-1", archivedAt: "2026-04-01T04:00:00.000Z" }],
+      invalidateQueries: false,
+    });
+
+    const stored = useSessionStore.getState().sessions["server-a"]?.agents.get("agent-1");
+    expect(stored?.archivedAt?.toISOString()).toBe("2026-04-01T04:00:00.000Z");
+    expect(stored?.updatedAt.toISOString()).toBe("2026-04-01T04:00:00.000Z");
+  });
+
+  it("reports a single-agent failure as an outcome with retry inputs", async () => {
+    const queryClient = createQueryClient();
+    const archiveAgent = vi.fn().mockRejectedValue(new Error("Daemon rejected the archive"));
+    useSessionStore.getState().initializeSession("server-a", {
+      archiveAgent,
+    } as unknown as DaemonClient);
+    useSessionStore.getState().setAgents("server-a", new Map([["agent-1", makeAgent()]]));
+    const { result } = renderHook(() => useArchiveAgent(), {
+      wrapper: createQueryClientWrapper(queryClient),
+    });
+
+    let outcome: Awaited<ReturnType<ReturnType<typeof useArchiveAgent>["archiveAgents"]>>;
+    await act(async () => {
+      outcome = await result.current.archiveAgents([{ serverId: "server-a", agentId: "agent-1" }]);
+    });
+
+    expect(outcome!).toEqual({
+      archivedCount: 0,
+      failedCount: 1,
+      backgroundCount: 0,
+      retryInputs: [{ serverId: "server-a", agentId: "agent-1" }],
+    });
+  });
+
+  it("keeps successful batch archives and rolls back the missing ones", async () => {
+    const queryClient = createQueryClient();
+    const closeItems = vi.fn().mockResolvedValue({
+      agents: [{ agentId: "agent-1", archivedAt: "2026-04-01T05:00:00.000Z" }],
+      terminals: [],
+    });
+    useSessionStore.getState().initializeSession("server-a", {
+      closeItems,
+    } as unknown as DaemonClient);
+    useSessionStore.getState().setAgents(
+      "server-a",
+      new Map([
+        ["agent-1", makeAgent()],
+        ["agent-2", makeAgent({ id: "agent-2" })],
+      ]),
+    );
+    const { result } = renderHook(() => useArchiveAgent(), {
+      wrapper: createQueryClientWrapper(queryClient),
+    });
+
+    let outcome: Awaited<ReturnType<ReturnType<typeof useArchiveAgent>["archiveAgents"]>>;
+    await act(async () => {
+      outcome = await result.current.archiveAgents([
+        { serverId: "server-a", agentId: "agent-1" },
+        { serverId: "server-a", agentId: "agent-2" },
+      ]);
+    });
+
+    expect(closeItems).toHaveBeenCalledWith({ agentIds: ["agent-1", "agent-2"] });
+    expect(outcome!).toEqual({
+      archivedCount: 1,
+      failedCount: 1,
+      backgroundCount: 0,
+      retryInputs: [{ serverId: "server-a", agentId: "agent-2" }],
+    });
+    // agent-1 stays archived; agent-2 was rolled back so it reappears.
+    const store = useSessionStore.getState().sessions["server-a"]!;
+    expect(store.agents.get("agent-1")?.archivedAt).toBeInstanceOf(Date);
+    expect(store.agents.get("agent-2")?.archivedAt).toBeNull();
+    expect(
+      selectSuppressedArchiveAgentIds(
+        queryClient.getQueryData(ARCHIVE_AGENT_SUPPRESSED_QUERY_KEY) ?? {},
+        "server-a",
+      ),
+    ).toEqual(new Set(["agent-1"]));
+  });
+
+  it("unmarks the optimistic archived state for failed agents", () => {
+    const queryClient = new QueryClient();
+    useSessionStore.getState().initializeSession("server-a", {} as DaemonClient);
+    useSessionStore.getState().setAgents("server-a", new Map([["agent-1", makeAgent()]]));
+    applyArchivedAgentCloseResults({
+      queryClient,
+      serverId: "server-a",
+      results: [{ agentId: "agent-1", archivedAt: "2026-04-01T04:00:00.000Z" }],
+      invalidateQueries: false,
+    });
+    expect(
+      useSessionStore.getState().sessions["server-a"]?.agents.get("agent-1")?.archivedAt,
+    ).toBeInstanceOf(Date);
+
+    unmarkAgentArchivedInStore({
+      queryClient,
+      serverId: "server-a",
+      agentIds: ["agent-1"],
+    });
+
+    expect(
+      useSessionStore.getState().sessions["server-a"]?.agents.get("agent-1")?.archivedAt,
+    ).toBeNull();
+    expect(
+      selectSuppressedArchiveAgentIds(
+        queryClient.getQueryData(ARCHIVE_AGENT_SUPPRESSED_QUERY_KEY) ?? {},
+        "server-a",
+      ),
+    ).toEqual(new Set());
   });
 });

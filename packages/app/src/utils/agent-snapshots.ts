@@ -1,6 +1,40 @@
 import type { AgentSnapshotPayload } from "@chisacode/protocol/messages";
 import type { AgentPermissionRequest } from "@chisacode/protocol/agent-types";
 import { readAgentRelation } from "@chisacode/protocol/agent-labels";
+import type { Agent } from "@/stores/session-store";
+
+/**
+ * Decides how an incoming authoritative agent snapshot should replace the
+ * current store entry.
+ *
+ * Stale snapshots (older updatedAt) are rejected so in-flight pre-archive
+ * views cannot clobber a newer state. Archive state is monotonic: a snapshot
+ * with the SAME updatedAt that lacks archivedAt is a stale pre-archive view
+ * racing the optimistic archive (equal timestamps bypass strict `<` checks),
+ * so the archived state is preserved while the rest of the snapshot applies.
+ * Explicit unarchive always resumes the agent with a newer updatedAt, so it
+ * is unaffected.
+ * @param current The current store entry, or undefined when absent
+ * @param incoming The normalized incoming authoritative snapshot
+ * @returns `{ status: "reject" }` when the snapshot is stale, or
+ * `{ status: "apply", agent }` with the entry to store
+ */
+export function resolveAuthoritativeAgentSnapshot(
+  current: Agent | undefined,
+  incoming: Agent,
+): { status: "reject" } | { status: "apply"; agent: Agent } {
+  if (current && incoming.updatedAt.getTime() < current.updatedAt.getTime()) {
+    return { status: "reject" };
+  }
+  if (
+    current?.archivedAt &&
+    !incoming.archivedAt &&
+    incoming.updatedAt.getTime() === current.updatedAt.getTime()
+  ) {
+    return { status: "apply", agent: { ...incoming, archivedAt: current.archivedAt } };
+  }
+  return { status: "apply", agent: incoming };
+}
 
 /**
  * Derives a stable cache key for a pending permission request scoped to an agent.
