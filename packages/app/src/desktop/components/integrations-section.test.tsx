@@ -358,13 +358,6 @@ describe("IntegrationsSection agent tools", () => {
         versionStatus: "not-installed",
       }),
       providerEntry({
-        provider: "mimocode",
-        status: "unavailable",
-        installedVersion: null,
-        latestVersion: "0.1.0",
-        versionStatus: "not-installed",
-      }),
-      providerEntry({
         provider: "pi",
         installedVersion: "0.78.1",
         latestVersion: null,

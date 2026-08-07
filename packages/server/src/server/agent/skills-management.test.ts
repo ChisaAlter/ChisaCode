@@ -36,16 +36,16 @@ describe("listManagedSkills", () => {
   test("lists built-in provider scopes in stable product-label order", async () => {
     const result = await listManagedSkills([], testConfig(), await emptyRoots());
 
-    expect(result.scopes).toEqual([
-      { type: "global", label: "Global" },
-      { type: "provider", provider: "claude", label: "Claude Code" },
+    const expectedProviders = [
+      { type: "provider", provider: "claude", label: "Claude" },
       { type: "provider", provider: "codex", label: "Codex" },
       { type: "provider", provider: "opencode", label: "OpenCode" },
-      { type: "provider", provider: "mimocode", label: "MiMoCode" },
-      { type: "provider", provider: "kimi", label: "Kimi Code" },
       { type: "provider", provider: "pi", label: "Pi" },
+      { type: "provider", provider: "kimi", label: "Kimi Code" },
       { type: "provider", provider: "grokbuild", label: "Grok Build" },
-    ]);
+    ];
+
+    expect(result.scopes).toEqual([{ type: "global", label: "Global" }, ...expectedProviders]);
   });
 
   test("includes dev providers only when current daemon state exposes them", async () => {

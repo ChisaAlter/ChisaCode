@@ -17,15 +17,7 @@ import type { AgentProvider, AgentSessionConfig, McpServerConfig } from "./agent
 export const BUILTIN_CHISACODE_MCP_SERVER_NAME = "chisacode";
 export const BUILTIN_COMPANION_MCP_SERVER_NAME = "chisacode-companion";
 
-const MCP_PROVIDER_SCOPE_ORDER = [
-  "claude",
-  "codex",
-  "opencode",
-  "mimocode",
-  "kimi",
-  "pi",
-  "grokbuild",
-];
+const MCP_PROVIDER_SCOPE_ORDER = ["claude", "codex", "opencode", "pi", "kimi", "grokbuild"];
 const RESERVED_SERVER_NAMES = new Set([
   BUILTIN_CHISACODE_MCP_SERVER_NAME,
   BUILTIN_COMPANION_MCP_SERVER_NAME,
@@ -68,17 +60,15 @@ function trimName(name: string): string {
 function providerScopeBaseLabel(provider: string | null | undefined): string | null {
   switch (provider) {
     case "claude":
-      return "Claude Code";
+      return "Claude";
     case "codex":
       return "Codex";
     case "opencode":
       return "OpenCode";
-    case "mimocode":
-      return "MiMoCode";
-    case "kimi":
-      return "Kimi Code";
     case "pi":
       return "Pi";
+    case "kimi":
+      return "Kimi Code";
     case "grokbuild":
       return "Grok Build";
     case "mock":
