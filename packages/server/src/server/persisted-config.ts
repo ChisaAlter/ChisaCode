@@ -69,7 +69,6 @@ const ProvidersSchema = z
     openai: ProviderCredentialsSchema.optional(),
     local: LocalSpeechProviderSchema.optional(),
     mimo: ProviderCredentialsSchema.optional(),
-    mimocode: ProviderCredentialsSchema.optional(),
   })
   .strict();
 

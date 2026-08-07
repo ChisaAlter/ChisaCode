@@ -58,26 +58,20 @@ export function resolveMimoSpeechConfig(params: {
   const parsed = MimoSpeechResolutionSchema.parse({
     apiKey: firstDefined<string>([
       params.env.MIMO_API_KEY,
-      params.env.MIMOCODE_API_KEY,
       params.persisted.providers?.mimo?.apiKey,
-      params.persisted.providers?.mimocode?.apiKey,
     ]),
     baseUrl: firstDefined<string>([
       params.env.MIMO_BASE_URL,
-      params.env.MIMOCODE_BASE_URL,
       params.persisted.providers?.mimo?.baseUrl,
-      params.persisted.providers?.mimocode?.baseUrl,
       DEFAULT_MIMO_BASE_URL,
     ]),
     ttsModel: firstDefined<string>([
       params.env.MIMO_TTS_MODEL,
-      params.env.MIMOCODE_TTS_MODEL,
       pickIfMimo(params.providers.voiceTts, params.persisted.features?.voiceMode?.tts?.model),
       DEFAULT_MIMO_TTS_MODEL,
     ]),
     ttsVoice: firstDefined<string>([
       params.env.MIMO_TTS_VOICE,
-      params.env.MIMOCODE_TTS_VOICE,
       pickIfMimo(params.providers.voiceTts, params.persisted.features?.voiceMode?.tts?.voice),
       DEFAULT_MIMO_TTS_VOICE,
     ]),

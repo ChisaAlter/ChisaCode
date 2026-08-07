@@ -628,10 +628,6 @@ describe("PersistedConfigSchema voice mode config", () => {
           apiKey: "mimo-key",
           baseUrl: "https://api.example/v1",
         },
-        mimocode: {
-          apiKey: "mimocode-key",
-          baseUrl: "https://mimocode.example/v1",
-        },
       },
       features: {
         voiceMode: {
@@ -645,9 +641,20 @@ describe("PersistedConfigSchema voice mode config", () => {
     });
 
     expect(parsed.providers?.mimo?.baseUrl).toBe("https://api.example/v1");
-    expect(parsed.providers?.mimocode?.apiKey).toBe("mimocode-key");
     expect(parsed.features?.voiceMode?.tts?.provider).toBe("mimo");
     expect(parsed.features?.voiceMode?.tts?.voice).toBe("mimo_default");
+  });
+
+  test("rejects removed MiMo credential config", () => {
+    const removedProviderKey = ["mimo", "code"].join("");
+
+    expect(() =>
+      PersistedConfigSchema.parse({
+        providers: {
+          [removedProviderKey]: { apiKey: "removed-key" },
+        },
+      }),
+    ).toThrow();
   });
 });
 
