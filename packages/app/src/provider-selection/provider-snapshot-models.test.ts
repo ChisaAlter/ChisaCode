@@ -2,14 +2,14 @@ import { describe, expect, test } from "vitest";
 import type { ProviderSnapshotEntry } from "@chisacode/protocol/agent-types";
 import { resolveProviderSnapshotModels } from "./provider-snapshot-models";
 
-const directMimoEntry: ProviderSnapshotEntry = {
-  provider: "mimocode",
+const directOpenCodeEntry: ProviderSnapshotEntry = {
+  provider: "opencode",
   status: "ready",
   enabled: true,
-  label: "MiMo Code",
+  label: "OpenCode",
   models: [
     {
-      provider: "mimocode",
+      provider: "opencode",
       id: "xiaomi/mimo-v2.5",
       label: "mimo-v2.5",
       isDefault: true,
@@ -17,14 +17,14 @@ const directMimoEntry: ProviderSnapshotEntry = {
   ],
 };
 
-const staleGatewayEntry: ProviderSnapshotEntry = {
-  provider: "opencode-mimocode",
+const gatewayOpenCodeEntry: ProviderSnapshotEntry = {
+  provider: "opencode-opencode",
   status: "ready",
   enabled: true,
-  label: "OpenCode MiMo",
+  label: "OpenCode gateway",
   models: [
     {
-      provider: "opencode-mimocode",
+      provider: "opencode-opencode",
       id: "xiaomi/mimo-v2.5",
       label: "mimo-v2.5",
       isDefault: true,
@@ -69,8 +69,8 @@ describe("resolveProviderSnapshotModels", () => {
     expect(
       resolveProviderSnapshotModels({
         runtimeProvider: null,
-        selectedEntry: directMimoEntry,
-        runtimeEntry: staleGatewayEntry,
+        selectedEntry: directOpenCodeEntry,
+        runtimeEntry: gatewayOpenCodeEntry,
       })?.map((model) => model.id),
     ).toEqual(["xiaomi/mimo-v2.5"]);
   });
@@ -88,9 +88,9 @@ describe("resolveProviderSnapshotModels", () => {
   test("falls back to runtime provider models when the selected provider has no entry", () => {
     expect(
       resolveProviderSnapshotModels({
-        runtimeProvider: "opencode-mimocode",
+        runtimeProvider: "opencode-opencode",
         selectedEntry: null,
-        runtimeEntry: staleGatewayEntry,
+        runtimeEntry: gatewayOpenCodeEntry,
       })?.map((model) => model.id),
     ).toEqual(["xiaomi/mimo-v2.5"]);
   });

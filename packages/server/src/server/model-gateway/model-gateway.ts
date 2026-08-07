@@ -307,7 +307,7 @@ function findSyntheticModel(
 
 /**
  * Builds an OpenAI-compatible `/v1/models` listing for a gateway face.
- * OpenCode/MiMoCode discover models via this endpoint when `OPENAI_BASE_URL`
+ * OpenCode discovers models via this endpoint when `OPENAI_BASE_URL`
  * points at the gateway; without it they never see `openai/grok-4.5`.
  * @param gateway The gateway configuration whose models should be listed
  * @returns OpenAI models list JSON (`{ object: "list", data: [...] }`)
@@ -337,7 +337,7 @@ export function listModelGatewayModels(gateway: ModelGatewayConfig): JsonRecord 
   for (const model of gateway.syntheticModels ?? []) {
     addModel(model.id);
   }
-  // Face providers (opencode/mimocode/pi) request models as `openai/<id>`.
+  // Face providers (opencode/pi) request models as `openai/<id>`.
   for (const model of gateway.models ?? []) {
     if (!model.id.includes("/")) {
       addModel(`openai/${model.id}`);

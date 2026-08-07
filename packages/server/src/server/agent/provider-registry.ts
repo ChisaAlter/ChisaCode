@@ -805,36 +805,6 @@ function buildAllGatewayProviderModels(
   );
 }
 
-function isXiaomiChatCompletionsGateway(gateway: ModelGatewayConfig): boolean {
-  if (gateway.upstreams.chatCompletions.enabled !== true) {
-    return false;
-  }
-  try {
-    return new URL(gateway.upstreams.chatCompletions.baseUrl).hostname === "api.xiaomimimo.com";
-  } catch {
-    return false;
-  }
-}
-
-function resolveNativeXiaomiGatewayEnv(
-  gateway: ModelGatewayConfig,
-): { env: Record<string, string>; modelPrefix: string } | null {
-  if (!isXiaomiChatCompletionsGateway(gateway)) {
-    return null;
-  }
-  const apiKey = gateway.upstreams.chatCompletions.apiKey.trim();
-  if (!apiKey) {
-    return null;
-  }
-  return {
-    env: {
-      CHISACODE_MODEL_PREFIX: "xiaomi",
-      XIAOMI_API_KEY: apiKey,
-    },
-    modelPrefix: "xiaomi",
-  };
-}
-
 function gatewayProviderOverride(params: {
   gateway: ModelGatewayConfig;
   extendsProvider: "claude" | "codex" | "opencode" | "pi" | "kimi";
@@ -882,18 +852,6 @@ function gatewayProviderOverride(params: {
         OPENAI_BASE_URL: `${routeBase}/v1`,
       },
       models,
-      enabled: gateway.enabled !== false,
-    };
-  }
-  const nativeXiaomi = ["opencode", "pi"].includes(extendsProvider)
-    ? resolveNativeXiaomiGatewayEnv(gateway)
-    : null;
-  if (nativeXiaomi) {
-    return {
-      extends: extendsProvider,
-      label: params.label,
-      env: nativeXiaomi.env,
-      models: buildGatewayProviderModels(models, { modelPrefix: nativeXiaomi.modelPrefix }),
       enabled: gateway.enabled !== false,
     };
   }
@@ -1127,8 +1085,6 @@ function materializeGatewayProviderOverrides(
 ): void {
   const faces = resolveGatewayAgentFaces(gateway);
   const models = buildAllGatewayProviderModels(gateway);
-  const nativeXiaomi = resolveNativeXiaomiGatewayEnv(gateway);
-  const openaiPrefix = nativeXiaomi?.modelPrefix ?? "openai";
   const shared = {
     gatewayOverrides,
     modelGatewayIds,
@@ -1162,7 +1118,7 @@ function materializeGatewayProviderOverrides(
       extendsProvider: "opencode",
       labelSuffix: "OpenCode",
       models: buildAllGatewayProviderModels(gateway, {
-        modelPrefix: openaiPrefix,
+        modelPrefix: "openai",
         models: gateway.generatedModels?.opencode,
       }),
     });
@@ -1174,7 +1130,7 @@ function materializeGatewayProviderOverrides(
       extendsProvider: "pi",
       labelSuffix: "Pi",
       models: buildAllGatewayProviderModels(gateway, {
-        modelPrefix: openaiPrefix,
+        modelPrefix: "openai",
         models: gateway.generatedModels?.pi,
       }),
     });
@@ -1187,7 +1143,6 @@ function materializeGatewayProviderOverrides(
       labelSuffix: "Kimi Code",
       models: buildAllGatewayProviderModels(gateway, {
         models: gateway.generatedModels?.kimi,
-        supportsTools: nativeXiaomi ? false : undefined,
       }),
     });
   }

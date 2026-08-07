@@ -159,7 +159,7 @@ export const SyntheticModelConfigSchema = z
  * Primary protocol face for a model gateway.
  * - claude: Anthropic Messages → only `{id}-claude`
  * - codex: OpenAI Responses → only `{id}-codex`
- * - openai: Chat Completions → OpenAI-family agents (opencode/pi/kimi/mimocode)
+ * - openai: Chat Completions → OpenAI-family agents (opencode/pi/kimi)
  * - all: materialize every agent face (legacy / multi-upstream)
  */
 export const ModelGatewayProtocolPresetSchema = z.enum(["claude", "codex", "openai", "all"]);
@@ -171,12 +171,12 @@ export const ModelGatewayProtocolPresetSchema = z.enum(["claude", "codex", "open
  *
  * Closed-set semantics (single source of truth lives in
  * `resolveGatewayAgentFaces` on the server):
- * - `supplyScope === "all"` → all 6 faces, regardless of preset/attachToAllAgents
+ * - `supplyScope === "all"` → all 5 faces, regardless of preset/attachToAllAgents
  * - `supplyScope === "matched"` → narrowed by protocolPreset
- *   (claude → 1, codex → 1, openai → 4, all → 6); without a preset, falls back
+ *   (claude → 1, codex → 1, openai → 3, all → 5); without a preset, falls back
  *   to legacy upstream inference
  * - `supplyScope` omitted → legacy behavior: `attachToAllAgents === true` or
- *   `protocolPreset === "all"` → all 6 faces; preset narrows; no preset infers
+ *   `protocolPreset === "all"` → all 5 faces; preset narrows; no preset infers
  *   from enabled upstreams
  * - When both `supplyScope` and `attachToAllAgents` are present, `supplyScope`
  *   wins.
@@ -221,7 +221,6 @@ export const ModelGatewayConfigSchema = z
         claude: z.string().min(1),
         codex: z.string().min(1),
         opencode: z.string().min(1),
-        mimocode: z.string().min(1).optional(),
         pi: z.string().min(1).optional(),
         kimi: z.string().min(1).optional(),
       })
@@ -230,7 +229,6 @@ export const ModelGatewayConfigSchema = z
     generatedModels: z
       .object({
         opencode: z.array(ProviderProfileModelSchema).optional(),
-        mimocode: z.array(ProviderProfileModelSchema).optional(),
         pi: z.array(ProviderProfileModelSchema).optional(),
         kimi: z.array(ProviderProfileModelSchema).optional(),
       })

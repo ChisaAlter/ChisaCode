@@ -166,8 +166,8 @@ describe("combined model selector data", () => {
     });
   });
 
-  it("groups MiMo gateway models under every generated agent provider", () => {
-    const agentIds = ["claude", "codex", "opencode", "mimocode", "pi", "kimi", "grokbuild"];
+  it("groups gateway models under every generated agent provider", () => {
+    const agentIds = ["claude", "codex", "opencode", "pi", "kimi", "grokbuild"];
     const entries = [
       ...agentIds.map((provider) =>
         snapshotEntry({
@@ -185,10 +185,7 @@ describe("combined model selector data", () => {
           models: [
             {
               provider: `opencode-${provider}`,
-              id:
-                provider === "opencode" || provider === "mimocode" || provider === "pi"
-                  ? "xiaomi/mimo-v2.5"
-                  : "mimo-v2.5",
+              id: provider === "opencode" || provider === "pi" ? "xiaomi/mimo-v2.5" : "mimo-v2.5",
               label: "mimo-v2.5",
             },
           ],
