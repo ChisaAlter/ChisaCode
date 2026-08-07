@@ -133,3 +133,6 @@ NUL
 
 # Local agent test harness output (fixtures/workspaces/results)
 /tmp/
+
+# Local implementation worktrees
+/.worktrees/
