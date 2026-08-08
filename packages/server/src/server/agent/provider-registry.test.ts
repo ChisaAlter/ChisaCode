@@ -13,7 +13,6 @@ const mockState = vi.hoisted(() => {
       claude: [] as ConstructorEntry[],
       codex: [] as ConstructorEntry[],
       opencode: [] as ConstructorEntry[],
-      mimocode: [] as ConstructorEntry[],
       copilot: [] as ConstructorEntry[],
       cursor: [] as Array<{
         command: string[];
@@ -44,7 +43,6 @@ const mockState = vi.hoisted(() => {
       this.constructorArgs.claude = [];
       this.constructorArgs.codex = [];
       this.constructorArgs.opencode = [];
-      this.constructorArgs.mimocode = [];
       this.constructorArgs.pi = [];
       this.constructorArgs.kimi = [];
       this.constructorArgs.grokbuild = [];
@@ -216,43 +214,6 @@ vi.mock("./providers/opencode-agent.js", () => ({
     constructor(_logger: unknown, runtimeSettings?: unknown) {
       this.runtimeSettings = runtimeSettings;
       mockState.constructorArgs.opencode.push({ runtimeSettings });
-    }
-
-    async createSession(): Promise<never> {
-      throw new Error("not implemented");
-    }
-
-    async resumeSession(): Promise<never> {
-      throw new Error("not implemented");
-    }
-
-    async listModels(): Promise<AgentModelDefinition[]> {
-      return mockState.runtimeModels.get(this.provider) ?? [];
-    }
-
-    async listModes(): Promise<[]> {
-      return [];
-    }
-
-    async isAvailable(): Promise<boolean> {
-      return true;
-    }
-  },
-  MimoCodeAgentClient: class MimoCodeAgentClient {
-    readonly capabilities = {
-      supportsStreaming: true,
-      supportsSessionPersistence: true,
-      supportsDynamicModes: true,
-      supportsMcpServers: true,
-      supportsReasoningStream: true,
-      supportsToolInvocations: true,
-    };
-    readonly provider = "mimocode";
-    readonly runtimeSettings?: unknown;
-
-    constructor(_logger: unknown, runtimeSettings?: unknown) {
-      this.runtimeSettings = runtimeSettings;
-      mockState.constructorArgs.mimocode.push({ runtimeSettings });
     }
 
     async createSession(): Promise<never> {
@@ -487,17 +448,17 @@ beforeEach(() => {
   mockState.reset();
 });
 
-test("builds registry with no overrides — same as built-in count", () => {
+test("builds registry with no overrides in built-in manifest order", () => {
   const registry = buildProviderRegistry(logger);
 
-  expect(Object.keys(registry)).toHaveLength(AGENT_PROVIDER_DEFINITIONS.length);
-});
-
-test("mimocode client is exposed under the mimocode provider id", () => {
-  const registry = buildProviderRegistry(logger);
-  const client = registry.mimocode.createClient(logger);
-
-  expect(client.provider).toBe("mimocode");
+  expect(Object.keys(registry).filter((id) => !id.startsWith("mock"))).toEqual([
+    "claude",
+    "codex",
+    "opencode",
+    "pi",
+    "kimi",
+    "grokbuild",
+  ]);
 });
 
 test("grokbuild client uses the Grok Build ACP launcher", () => {
@@ -699,13 +660,6 @@ test("model gateway materializes provider entries for all built-in agents", asyn
     modelGatewayId: "zai",
     enabled: true,
   });
-  expect(registry["zai-mimocode"]).toMatchObject({
-    id: "zai-mimocode",
-    label: "ZAI MiMoCode",
-    derivedFromProviderId: "mimocode",
-    modelGatewayId: "zai",
-    enabled: true,
-  });
   expect(registry["zai-pi"]).toMatchObject({
     id: "zai-pi",
     label: "ZAI Pi",
@@ -792,11 +746,6 @@ test("model gateway materializes provider entries for all built-in agents", asyn
     },
   ]);
   await expect(
-    registry["zai-mimocode"].fetchModels({ cwd: "/tmp/registry-models", force: false }),
-  ).resolves.toEqual(
-    opencodeProviderModels.map((model) => Object.assign({}, model, { provider: "zai-mimocode" })),
-  );
-  await expect(
     registry["zai-pi"].fetchModels({ cwd: "/tmp/registry-models", force: false }),
   ).resolves.toEqual(
     opencodeProviderModels.map((model) => Object.assign({}, model, { provider: "zai-pi" })),
@@ -828,7 +777,6 @@ test("model gateway materializes provider entries for all built-in agents", asyn
   registry["zai-claude"].createClient(logger);
   registry["zai-codex"].createClient(logger);
   registry["zai-opencode"].createClient(logger);
-  registry["zai-mimocode"].createClient(logger);
   registry["zai-pi"].createClient(logger);
   registry["zai-kimi"].createClient(logger);
 
@@ -891,26 +839,6 @@ test("model gateway materializes provider entries for all built-in agents", asyn
         OPENAI_BASE_URL: "http://127.0.0.1:6767/api/model-gateways/zai/v1",
         OPENCODE_CONFIG: expect.stringMatching(
           /[\\/]\.chisacode[\\/]opencode-model-gateways[\\/]zai[\\/]opencode\.json$/u,
-        ),
-      },
-    },
-  });
-
-  const mimocodeGatewayArgs = mockState.constructorArgs.mimocode.find((entry) => {
-    const env =
-      typeof entry.runtimeSettings === "object" && entry.runtimeSettings !== null
-        ? Reflect.get(entry.runtimeSettings, "env")
-        : undefined;
-    return env?.OPENAI_BASE_URL === "http://127.0.0.1:6767/api/model-gateways/zai/v1";
-  });
-  expect(mimocodeGatewayArgs).toEqual({
-    runtimeSettings: {
-      command: undefined,
-      env: {
-        OPENAI_API_KEY: "internal-token",
-        OPENAI_BASE_URL: "http://127.0.0.1:6767/api/model-gateways/zai/v1",
-        MIMOCODE_CONFIG: expect.stringMatching(
-          /[\\/]\.chisacode[\\/]mimocode-model-gateways[\\/]zai[\\/]mimocode\.jsonc$/u,
         ),
       },
     },
@@ -980,7 +908,6 @@ test("resolveGatewayAgentFaces narrows faces by protocolPreset", () => {
     claude: false,
     codex: true,
     opencode: false,
-    mimocode: false,
     pi: false,
     kimi: false,
   });
@@ -994,7 +921,6 @@ test("resolveGatewayAgentFaces narrows faces by protocolPreset", () => {
     claude: true,
     codex: true,
     opencode: true,
-    mimocode: true,
     pi: true,
     kimi: true,
   });
@@ -1009,7 +935,6 @@ test("resolveGatewayAgentFaces narrows faces by protocolPreset", () => {
     claude: false,
     codex: false,
     opencode: true,
-    mimocode: true,
     pi: true,
     kimi: true,
   });
@@ -1019,7 +944,6 @@ const ALL_GATEWAY_FACES = {
   claude: true,
   codex: true,
   opencode: true,
-  mimocode: true,
   pi: true,
   kimi: true,
 } as const;
@@ -1042,7 +966,6 @@ test("resolveGatewayAgentFaces supplyScope matched narrows by protocolPreset", (
     claude: true,
     codex: false,
     opencode: false,
-    mimocode: false,
     pi: false,
     kimi: false,
   });
@@ -1051,22 +974,20 @@ test("resolveGatewayAgentFaces supplyScope matched narrows by protocolPreset", (
     claude: false,
     codex: true,
     opencode: false,
-    mimocode: false,
     pi: false,
     kimi: false,
   });
 
-  // openai + matched → the 4 OpenAI-family faces only
+  // openai + matched → the 3 OpenAI-family faces only
   expect(resolveGatewayAgentFaces({ supplyScope: "matched", protocolPreset: "openai" })).toEqual({
     claude: false,
     codex: false,
     opencode: true,
-    mimocode: true,
     pi: true,
     kimi: true,
   });
 
-  // matched + preset "all" covers every protocol → all six faces
+  // matched + preset "all" covers every protocol → all five faces
   expect(resolveGatewayAgentFaces({ supplyScope: "matched", protocolPreset: "all" })).toEqual(
     ALL_GATEWAY_FACES,
   );
@@ -1082,7 +1003,6 @@ test("resolveGatewayAgentFaces supplyScope matched without preset falls back to 
     claude: false,
     codex: false,
     opencode: true,
-    mimocode: true,
     pi: true,
     kimi: true,
   });
@@ -1110,7 +1030,6 @@ test("resolveGatewayAgentFaces supplyScope wins over conflicting attachToAllAgen
     claude: true,
     codex: false,
     opencode: false,
-    mimocode: false,
     pi: false,
     kimi: false,
   });
@@ -1127,12 +1046,12 @@ test("resolveGatewayAgentFaces supplyScope wins over conflicting attachToAllAgen
 
 test("matched openai supply scope materializes only the OpenAI-family candidate faces", () => {
   // Vision fallback and model pickers rely on the materialized face set; the
-  // matched+openai scope must expose exactly the four OpenAI-family faces.
+  // matched+openai scope must expose exactly the three OpenAI-family faces.
   const faces = resolveGatewayAgentFaces({ supplyScope: "matched", protocolPreset: "openai" });
   const providerIds = Object.entries(faces)
     .filter(([, enabled]) => enabled)
     .map(([face]) => `vision-${face}`);
-  expect(providerIds).toEqual(["vision-opencode", "vision-mimocode", "vision-pi", "vision-kimi"]);
+  expect(providerIds).toEqual(["vision-opencode", "vision-pi", "vision-kimi"]);
   expect(providerIds).not.toContain("vision-claude");
   expect(providerIds).not.toContain("vision-codex");
 });
@@ -1174,119 +1093,8 @@ test("model gateway with codex protocolPreset only materializes codex face", asy
   expect(registry["grok-codex"]).toBeDefined();
   expect(registry["grok-claude"]).toBeUndefined();
   expect(registry["grok-opencode"]).toBeUndefined();
-  expect(registry["grok-mimocode"]).toBeUndefined();
   expect(registry["grok-pi"]).toBeUndefined();
   expect(registry["grok-kimi"]).toBeUndefined();
-});
-
-test("xiaomi chat gateway uses native Xiaomi provider settings for OpenCode-like agents", async () => {
-  const registry = buildProviderRegistry(logger, {
-    modelGateways: {
-      opencode: {
-        id: "opencode",
-        label: "Xiaomi MiMo",
-        enabled: true,
-        models: [{ id: "mimo-v2.5", label: "MiMo v2.5", isDefault: true }],
-        upstreams: {
-          anthropic: {
-            enabled: false,
-            baseUrl: "",
-            apiKey: "",
-          },
-          chatCompletions: {
-            enabled: true,
-            baseUrl: "https://api.xiaomimimo.com/v1",
-            apiKey: "sk-xiaomi",
-          },
-          responses: {
-            enabled: false,
-            baseUrl: "",
-            apiKey: "",
-          },
-        },
-      },
-    },
-    modelGatewayBaseUrl: "http://127.0.0.1:6767",
-    modelGatewayToken: "internal-token",
-  });
-
-  await expect(
-    registry["opencode-opencode"].fetchModels({ cwd: "/tmp/registry-models", force: false }),
-  ).resolves.toEqual([
-    {
-      provider: "opencode-opencode",
-      id: "xiaomi/mimo-v2.5",
-      label: "MiMo v2.5",
-      isDefault: true,
-    },
-  ]);
-  await expect(
-    registry["opencode-mimocode"].fetchModels({ cwd: "/tmp/registry-models", force: false }),
-  ).resolves.toEqual([
-    {
-      provider: "opencode-mimocode",
-      id: "xiaomi/mimo-v2.5",
-      label: "MiMo v2.5",
-      isDefault: true,
-    },
-  ]);
-  await expect(
-    registry["opencode-pi"].fetchModels({ cwd: "/tmp/registry-models", force: false }),
-  ).resolves.toEqual([
-    {
-      provider: "opencode-pi",
-      id: "xiaomi/mimo-v2.5",
-      label: "MiMo v2.5",
-      isDefault: true,
-    },
-  ]);
-  await expect(
-    registry["opencode-kimi"].fetchModels({ cwd: "/tmp/registry-models", force: false }),
-  ).resolves.toEqual([
-    {
-      provider: "opencode-kimi",
-      id: "mimo-v2.5",
-      label: "MiMo v2.5",
-      isDefault: true,
-      supportsTools: false,
-    },
-  ]);
-
-  registry["opencode-opencode"].createClient(logger);
-  registry["opencode-mimocode"].createClient(logger);
-  registry["opencode-pi"].createClient(logger);
-  registry["opencode-kimi"].createClient(logger);
-
-  for (const provider of ["opencode", "mimocode", "pi"] as const) {
-    expect(mockState.constructorArgs[provider].at(-1)).toEqual({
-      runtimeSettings: {
-        command: undefined,
-        env: {
-          CHISACODE_MODEL_PREFIX: "xiaomi",
-          XIAOMI_API_KEY: "sk-xiaomi",
-        },
-      },
-    });
-  }
-  expect(mockState.constructorArgs.kimi.at(-1)).toEqual({
-    runtimeSettings: {
-      command: undefined,
-      env: {
-        OPENAI_API_KEY: "internal-token",
-        OPENAI_BASE_URL: "http://127.0.0.1:6767/api/model-gateways/opencode/v1",
-      },
-    },
-    providerId: "opencode-kimi",
-    label: "Xiaomi MiMo Kimi Code",
-    models: [
-      {
-        id: "mimo-v2.5",
-        label: "MiMo v2.5",
-        isDefault: true,
-        supportsTools: false,
-      },
-    ],
-  });
 });
 
 test("new provider extending acp uses GenericACPAgentClient", () => {

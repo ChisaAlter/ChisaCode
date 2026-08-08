@@ -108,7 +108,6 @@ export function resolveGatewayForProviderId(
       `${gateway.id}-claude`,
       `${gateway.id}-codex`,
       `${gateway.id}-opencode`,
-      `${gateway.id}-mimocode`,
       `${gateway.id}-pi`,
       `${gateway.id}-kimi`,
     ];
@@ -321,7 +320,7 @@ function buildGatewayRequester(
 function resolveGatewayIdFromProvider(
   providerId: string,
 ): { gatewayId: string; face: string | null } | null {
-  const suffixes = ["-claude", "-codex", "-opencode", "-mimocode", "-pi", "-kimi"] as const;
+  const suffixes = ["-claude", "-codex", "-opencode", "-pi", "-kimi"] as const;
   for (const suffix of suffixes) {
     if (providerId.endsWith(suffix)) {
       return {

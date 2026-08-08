@@ -212,12 +212,12 @@ const mcpPayload: AgentMcpServersListResponse["payload"] = {
   requestId: "mcp",
   scopes: [
     { type: "global", label: "Global" },
-    { type: "provider", provider: "claude", label: "Claude Code" },
+    { type: "provider", provider: "claude", label: "Claude" },
     { type: "provider", provider: "codex", label: "Codex" },
     { type: "provider", provider: "opencode", label: "OpenCode" },
-    { type: "provider", provider: "mimocode", label: "MiMoCode" },
-    { type: "provider", provider: "kimi", label: "Kimi Code" },
     { type: "provider", provider: "pi", label: "Pi" },
+    { type: "provider", provider: "kimi", label: "Kimi Code" },
+    { type: "provider", provider: "grokbuild", label: "Grok Build" },
   ],
   servers: [
     {
@@ -282,12 +282,14 @@ describe("McpServersSection", () => {
     await renderSection();
 
     expect(host.textContent).toContain("全部");
-    expect(host.textContent).toContain("Claude Code");
+    expect(
+      [...host.querySelectorAll("button")].some((button) => button.textContent === "Claude"),
+    ).toBe(true);
     expect(host.textContent).toContain("Codex");
     expect(host.textContent).toContain("OpenCode");
-    expect(host.textContent).toContain("MiMoCode");
-    expect(host.textContent).toContain("Kimi Code");
     expect(host.textContent).toContain("Pi");
+    expect(host.textContent).toContain("Kimi Code");
+    expect(host.textContent).toContain("Grok Build");
 
     const searchInput = host.querySelector('input[placeholder="搜索 MCP 服务器"]');
     expect(searchInput).not.toBeNull();

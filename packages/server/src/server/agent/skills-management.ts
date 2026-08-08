@@ -61,15 +61,7 @@ export interface NormalizedGitHubSkillSource {
   archiveUrl: string;
 }
 
-const SKILL_PROVIDER_SCOPE_ORDER = [
-  "claude",
-  "codex",
-  "opencode",
-  "mimocode",
-  "kimi",
-  "pi",
-  "grokbuild",
-];
+const SKILL_PROVIDER_SCOPE_ORDER = ["claude", "codex", "opencode", "pi", "kimi", "grokbuild"];
 
 function defaultRoots(): UserSkillRoots {
   const home = homedir();
@@ -211,17 +203,15 @@ function statusForAgent(
 function providerScopeBaseLabel(provider: string | null | undefined): string | null {
   switch (provider) {
     case "claude":
-      return "Claude Code";
+      return "Claude";
     case "codex":
       return "Codex";
     case "opencode":
       return "OpenCode";
-    case "mimocode":
-      return "MiMoCode";
-    case "kimi":
-      return "Kimi Code";
     case "pi":
       return "Pi";
+    case "kimi":
+      return "Kimi Code";
     case "grokbuild":
       return "Grok Build";
     case "mock":

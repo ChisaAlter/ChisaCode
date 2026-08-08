@@ -38,7 +38,7 @@ import { ClaudeAgentClient } from "./providers/claude/agent.js";
 import { CodexAppServerAgentClient } from "./providers/codex-app-server-agent.js";
 import { KimiCodeAgentClient } from "./providers/kimi-code-agent.js";
 import { GrokBuildAgentClient } from "./providers/grok-build-agent.js";
-import { MimoCodeAgentClient, OpenCodeAgentClient } from "./providers/opencode-agent.js";
+import { OpenCodeAgentClient } from "./providers/opencode-agent.js";
 import { PiRpcAgentClient } from "./providers/pi/agent.js";
 import { GenericACPAgentClient } from "./providers/generic-acp-agent.js";
 import { createSSHSpawner } from "../ssh-transport.js";
@@ -134,7 +134,6 @@ const PROVIDER_CLIENT_FACTORIES: Record<string, ProviderClientFactory> = {
       customProvider: options?.customProvider,
     }),
   opencode: (logger, runtimeSettings) => new OpenCodeAgentClient(logger, runtimeSettings),
-  mimocode: (logger, runtimeSettings) => new MimoCodeAgentClient(logger, runtimeSettings),
   pi: (logger, runtimeSettings) =>
     new PiRpcAgentClient({
       logger,
@@ -716,11 +715,10 @@ function buildClaudeGatewayConfigDir(gatewayId: string): string {
 }
 
 /**
- * Writes a managed OpenCode/MiMoCode config that registers gateway models under
- * the openai provider. OpenCode/MiMoCode do not fully discover arbitrary models
- * from OPENAI_BASE_URL alone; they need an explicit provider.models entry.
+ * Writes a managed OpenCode config that registers gateway models under the openai provider.
+ * OpenCode does not fully discover arbitrary models from OPENAI_BASE_URL alone; it needs an
+ * explicit provider.models entry.
  * @param gatewayId Gateway id used for the managed config directory
- * @param face OpenCode-compatible face (`opencode` or `mimocode`)
  * @param baseUrl Gateway base URL (without `/v1`)
  * @param token Gateway auth token written into the managed config
  * @param models Gateway models to expose as `openai/<id>`
@@ -728,15 +726,13 @@ function buildClaudeGatewayConfigDir(gatewayId: string): string {
  */
 function writeOpenCodeCompatibleGatewayConfig(params: {
   gatewayId: string;
-  face: "opencode" | "mimocode";
   baseUrl: string;
   token: string;
   models: ProviderProfileModel[];
 }): string {
-  const dir = join(homedir(), ".chisacode", `${params.face}-model-gateways`, params.gatewayId);
+  const dir = join(homedir(), ".chisacode", "opencode-model-gateways", params.gatewayId);
   mkdirSync(dir, { recursive: true, mode: 0o700 });
-  const fileName = params.face === "mimocode" ? "mimocode.jsonc" : "opencode.json";
-  const configPath = join(dir, fileName);
+  const configPath = join(dir, "opencode.json");
   const models: Record<string, { name: string }> = {};
   for (const model of params.models) {
     const bareId = model.id.includes("/") ? model.id.slice(model.id.indexOf("/") + 1) : model.id;
@@ -809,39 +805,9 @@ function buildAllGatewayProviderModels(
   );
 }
 
-function isXiaomiChatCompletionsGateway(gateway: ModelGatewayConfig): boolean {
-  if (gateway.upstreams.chatCompletions.enabled !== true) {
-    return false;
-  }
-  try {
-    return new URL(gateway.upstreams.chatCompletions.baseUrl).hostname === "api.xiaomimimo.com";
-  } catch {
-    return false;
-  }
-}
-
-function resolveNativeXiaomiGatewayEnv(
-  gateway: ModelGatewayConfig,
-): { env: Record<string, string>; modelPrefix: string } | null {
-  if (!isXiaomiChatCompletionsGateway(gateway)) {
-    return null;
-  }
-  const apiKey = gateway.upstreams.chatCompletions.apiKey.trim();
-  if (!apiKey) {
-    return null;
-  }
-  return {
-    env: {
-      CHISACODE_MODEL_PREFIX: "xiaomi",
-      XIAOMI_API_KEY: apiKey,
-    },
-    modelPrefix: "xiaomi",
-  };
-}
-
 function gatewayProviderOverride(params: {
   gateway: ModelGatewayConfig;
-  extendsProvider: "claude" | "codex" | "opencode" | "mimocode" | "pi" | "kimi";
+  extendsProvider: "claude" | "codex" | "opencode" | "pi" | "kimi";
   label: string;
   baseUrl: string;
   token: string;
@@ -889,22 +855,9 @@ function gatewayProviderOverride(params: {
       enabled: gateway.enabled !== false,
     };
   }
-  const nativeXiaomi = ["opencode", "mimocode", "pi"].includes(extendsProvider)
-    ? resolveNativeXiaomiGatewayEnv(gateway)
-    : null;
-  if (nativeXiaomi) {
-    return {
-      extends: extendsProvider,
-      label: params.label,
-      env: nativeXiaomi.env,
-      models: buildGatewayProviderModels(models, { modelPrefix: nativeXiaomi.modelPrefix }),
-      enabled: gateway.enabled !== false,
-    };
-  }
-  if (extendsProvider === "opencode" || extendsProvider === "mimocode") {
+  if (extendsProvider === "opencode") {
     const configPath = writeOpenCodeCompatibleGatewayConfig({
       gatewayId: gateway.id,
-      face: extendsProvider,
       baseUrl: routeBase,
       token,
       models,
@@ -915,9 +868,7 @@ function gatewayProviderOverride(params: {
       env: {
         OPENAI_API_KEY: token,
         OPENAI_BASE_URL: `${routeBase}/v1`,
-        ...(extendsProvider === "opencode"
-          ? { OPENCODE_CONFIG: configPath }
-          : { MIMOCODE_CONFIG: configPath }),
+        OPENCODE_CONFIG: configPath,
       },
       models,
       enabled: gateway.enabled !== false,
@@ -940,12 +891,12 @@ function gatewayProviderOverride(params: {
  *
  * Closed-set semantics for `supplyScope` (mirrored by the app read path in
  * `custom-model-providers.ts`):
- * - `supplyScope === "all"` → all 6 faces, regardless of preset/attachToAllAgents
+ * - `supplyScope === "all"` → all 5 faces, regardless of preset/attachToAllAgents
  * - `supplyScope === "matched"` → narrowed by protocolPreset
- *   (claude → 1, codex → 1, openai → 4, all → 6); without a preset, falls back
+ *   (claude → 1, codex → 1, openai → 3, all → 5); without a preset, falls back
  *   to legacy upstream inference below
  * - `supplyScope` omitted → legacy behavior: `attachToAllAgents === true` or
- *   `protocolPreset === "all"` → all 6 faces; preset narrows; no preset infers
+ *   `protocolPreset === "all"` → all 5 faces; preset narrows; no preset infers
  *   from enabled upstreams
  * - When both `supplyScope` and `attachToAllAgents` are present, `supplyScope`
  *   wins.
@@ -963,7 +914,6 @@ export function resolveGatewayAgentFaces(gateway: {
   claude: boolean;
   codex: boolean;
   opencode: boolean;
-  mimocode: boolean;
   pi: boolean;
   kimi: boolean;
 } {
@@ -977,7 +927,6 @@ export function resolveGatewayAgentFaces(gateway: {
         claude: true,
         codex: false,
         opencode: false,
-        mimocode: false,
         pi: false,
         kimi: false,
       };
@@ -987,13 +936,12 @@ export function resolveGatewayAgentFaces(gateway: {
         claude: false,
         codex: true,
         opencode: false,
-        mimocode: false,
         pi: false,
         kimi: false,
       };
     }
     if (preset === "openai") {
-      return { claude: false, codex: false, opencode: true, mimocode: true, pi: true, kimi: true };
+      return { claude: false, codex: false, opencode: true, pi: true, kimi: true };
     }
     if (preset === "all") {
       return allFaces();
@@ -1012,7 +960,6 @@ export function resolveGatewayAgentFaces(gateway: {
       claude: true,
       codex: false,
       opencode: false,
-      mimocode: false,
       pi: false,
       kimi: false,
     };
@@ -1022,7 +969,6 @@ export function resolveGatewayAgentFaces(gateway: {
       claude: false,
       codex: true,
       opencode: false,
-      mimocode: false,
       pi: false,
       kimi: false,
     };
@@ -1032,7 +978,6 @@ export function resolveGatewayAgentFaces(gateway: {
       claude: false,
       codex: false,
       opencode: true,
-      mimocode: true,
       pi: true,
       kimi: true,
     };
@@ -1045,7 +990,6 @@ function allFaces(): {
   claude: boolean;
   codex: boolean;
   opencode: boolean;
-  mimocode: boolean;
   pi: boolean;
   kimi: boolean;
 } {
@@ -1053,7 +997,6 @@ function allFaces(): {
     claude: true,
     codex: true,
     opencode: true,
-    mimocode: true,
     pi: true,
     kimi: true,
   };
@@ -1069,7 +1012,6 @@ function inferFacesFromUpstreams(gateway: {
   claude: boolean;
   codex: boolean;
   opencode: boolean;
-  mimocode: boolean;
   pi: boolean;
   kimi: boolean;
 } {
@@ -1084,7 +1026,6 @@ function inferFacesFromUpstreams(gateway: {
         claude: true,
         codex: false,
         opencode: false,
-        mimocode: false,
         pi: false,
         kimi: false,
       };
@@ -1094,7 +1035,6 @@ function inferFacesFromUpstreams(gateway: {
         claude: false,
         codex: true,
         opencode: false,
-        mimocode: false,
         pi: false,
         kimi: false,
       };
@@ -1104,7 +1044,6 @@ function inferFacesFromUpstreams(gateway: {
         claude: false,
         codex: false,
         opencode: true,
-        mimocode: true,
         pi: true,
         kimi: true,
       };
@@ -1118,8 +1057,8 @@ function registerGatewayFaceOverride(params: {
   gatewayOverrides: Record<string, ProviderOverride>;
   modelGatewayIds: Map<string, string>;
   gateway: ModelGatewayConfig;
-  face: "claude" | "codex" | "opencode" | "mimocode" | "pi" | "kimi";
-  extendsProvider: "claude" | "codex" | "opencode" | "mimocode" | "pi" | "kimi";
+  face: "claude" | "codex" | "opencode" | "pi" | "kimi";
+  extendsProvider: "claude" | "codex" | "opencode" | "pi" | "kimi";
   labelSuffix: string;
   baseUrl: string;
   token: string;
@@ -1146,8 +1085,6 @@ function materializeGatewayProviderOverrides(
 ): void {
   const faces = resolveGatewayAgentFaces(gateway);
   const models = buildAllGatewayProviderModels(gateway);
-  const nativeXiaomi = resolveNativeXiaomiGatewayEnv(gateway);
-  const openaiPrefix = nativeXiaomi?.modelPrefix ?? "openai";
   const shared = {
     gatewayOverrides,
     modelGatewayIds,
@@ -1181,20 +1118,8 @@ function materializeGatewayProviderOverrides(
       extendsProvider: "opencode",
       labelSuffix: "OpenCode",
       models: buildAllGatewayProviderModels(gateway, {
-        modelPrefix: openaiPrefix,
+        modelPrefix: "openai",
         models: gateway.generatedModels?.opencode,
-      }),
-    });
-  }
-  if (faces.mimocode) {
-    registerGatewayFaceOverride({
-      ...shared,
-      face: "mimocode",
-      extendsProvider: "mimocode",
-      labelSuffix: "MiMoCode",
-      models: buildAllGatewayProviderModels(gateway, {
-        modelPrefix: openaiPrefix,
-        models: gateway.generatedModels?.mimocode,
       }),
     });
   }
@@ -1205,7 +1130,7 @@ function materializeGatewayProviderOverrides(
       extendsProvider: "pi",
       labelSuffix: "Pi",
       models: buildAllGatewayProviderModels(gateway, {
-        modelPrefix: openaiPrefix,
+        modelPrefix: "openai",
         models: gateway.generatedModels?.pi,
       }),
     });
@@ -1218,7 +1143,6 @@ function materializeGatewayProviderOverrides(
       labelSuffix: "Kimi Code",
       models: buildAllGatewayProviderModels(gateway, {
         models: gateway.generatedModels?.kimi,
-        supportsTools: nativeXiaomi ? false : undefined,
       }),
     });
   }

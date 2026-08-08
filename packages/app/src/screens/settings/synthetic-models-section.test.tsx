@@ -556,7 +556,6 @@ describe("SyntheticModelsSection", () => {
       "zai-claude",
       "zai-codex",
       "zai-opencode",
-      "zai-mimocode",
       "zai-pi",
       "zai-kimi",
     ]);

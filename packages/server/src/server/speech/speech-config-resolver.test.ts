@@ -6,6 +6,18 @@ import { PersistedConfigSchema } from "../persisted-config.js";
 import { resolveSpeechConfig } from "./speech-config-resolver.js";
 
 describe("resolveSpeechConfig", () => {
+  test("does not resolve MiMo config from a removed environment alias", () => {
+    const removedApiKeyName = ["MIMO", "CODE_API_KEY"].join("");
+    const env = { [removedApiKeyName]: "removed-key" } as NodeJS.ProcessEnv;
+    const result = resolveSpeechConfig({
+      chisacodeHome: "/tmp/chisacode-home",
+      env,
+      persisted: PersistedConfigSchema.parse({}),
+    });
+
+    expect(result.mimo).toBeUndefined();
+  });
+
   test("resolves local-first defaults without env overrides", () => {
     const chisacodeHome = "/tmp/chisacode-home";
     const persisted = PersistedConfigSchema.parse({});

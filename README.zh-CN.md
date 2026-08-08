@@ -31,14 +31,14 @@ ChisaCode 负责启动、托管、展示和编排。
 
 当前内置 provider ID 以 `packages/protocol/src/provider-manifest.ts` 为准：
 
-| Provider ID | 显示名称  | ChisaCode 期望的运行时                  |
-| ----------- | --------- | --------------------------------------- |
-| `claude`    | Claude    | `claude` CLI                            |
-| `codex`     | Codex     | `codex` CLI                             |
-| `opencode`  | OpenCode  | `opencode` CLI / server                 |
-| `mimocode`  | MiMoCode  | `mimo` CLI / OpenCode-compatible server |
-| `pi`        | Pi        | `pi` CLI                                |
-| `kimi`      | Kimi Code | `kimi acp` CLI                          |
+| Provider ID | 显示名称   | ChisaCode 期望的运行时  |
+| ----------- | ---------- | ----------------------- |
+| `claude`    | Claude     | `claude` CLI            |
+| `codex`     | Codex      | `codex` CLI             |
+| `opencode`  | OpenCode   | `opencode` CLI / server |
+| `pi`        | Pi         | `pi` CLI                |
+| `kimi`      | Kimi Code  | `kimi acp` CLI          |
+| `grokbuild` | Grok Build | `grok agent stdio`      |
 
 自定义 provider 通过 `agents.providers` 配置。自定义 provider 必须继承上面的某个内置
 provider ID，或者继承 `acp` 来运行通用 Agent Client Protocol 命令。见

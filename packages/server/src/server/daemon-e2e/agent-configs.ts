@@ -48,13 +48,6 @@ export const agentConfigs = {
       ask: "default",
     },
   },
-  mimocode: {
-    provider: "mimocode",
-    modes: {
-      full: "build",
-      ask: "build",
-    },
-  },
   pi: {
     provider: "pi",
     thinkingOptionId: "medium",
@@ -122,8 +115,6 @@ export function isProviderAvailable(provider: AgentProvider): Promise<boolean> {
         return await isCommandAvailable("copilot");
       case "opencode":
         return await isCommandAvailable("opencode");
-      case "mimocode":
-        return await isCommandAvailable("mimo");
       case "pi":
         return (
           (await isCommandAvailable(
@@ -146,11 +137,4 @@ export function isProviderAvailable(provider: AgentProvider): Promise<boolean> {
 /**
  * Helper to run a test for each provider.
  */
-export const allProviders: AgentProvider[] = [
-  "claude",
-  "codex",
-  "copilot",
-  "opencode",
-  "mimocode",
-  "pi",
-];
+export const allProviders: AgentProvider[] = ["claude", "codex", "copilot", "opencode", "pi"];

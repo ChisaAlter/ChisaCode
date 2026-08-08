@@ -77,8 +77,8 @@ function makeLiveAgent(input: Partial<Agent> & { id: string }): Agent {
 describe("mergeSidebarSessionSources", () => {
   it("preserves project placement for live sidebar agents", () => {
     const projectPlacement: ProjectPlacementPayload = {
-      projectKey: "C:\\Ai\\mimocode-desktop",
-      projectName: "mimocode-desktop",
+      projectKey: "C:\\Ai\\sample-desktop",
+      projectName: "sample-desktop",
       checkout: {
         cwd: "C:\\Users\\48818\\.chisacode\\worktrees\\hash\\gallant-owl",
         isGit: true,
@@ -86,7 +86,7 @@ describe("mergeSidebarSessionSources", () => {
         remoteUrl: null,
         worktreeRoot: "C:\\Users\\48818\\.chisacode\\worktrees\\hash\\gallant-owl",
         isChisaCodeOwnedWorktree: true,
-        mainRepoRoot: "C:\\Ai\\mimocode-desktop",
+        mainRepoRoot: "C:\\Ai\\sample-desktop",
       },
     };
 

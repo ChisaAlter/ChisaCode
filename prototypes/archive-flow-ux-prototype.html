@@ -410,7 +410,8 @@
     <div class="page">
       <h1>归档交互重做原型</h1>
       <p class="subtitle">
-        多会话归档的用户体验：进行中反馈（顶部胶囊）+ 失败合并提示（人性化 toast，可重试）+ 超时后台处理（不打扰）
+        多会话归档的用户体验：进行中反馈（顶部胶囊）+ 失败合并提示（人性化 toast，可重试）+
+        超时后台处理（不打扰）
       </p>
 
       <div class="stage">
@@ -459,15 +460,28 @@
           </div>
 
           <h2>设计要点（探索稿）</h2>
-          <p class="hint" style="margin:0 0 10px;color:var(--muted);font-size:12.5px;line-height:1.5">
+          <p
+            class="hint"
+            style="margin: 0 0 10px; color: var(--muted); font-size: 12.5px; line-height: 1.5"
+          >
             本 HTML 是早期交互探索。落地实现已偏离：不乐观隐藏、无成功绿胶囊、加载只在归档按钮上。
             以 <code>docs/modules/app/sidebar-archive-ux.md</code> 为准。
           </p>
           <ul class="steps">
-            <li>归档动作发出后，会话<b>立即消失</b>（乐观），顶部出现胶囊「正在归档 N 个会话…」 — <b>未采用</b></li>
+            <li>
+              归档动作发出后，会话<b>立即消失</b>（乐观），顶部出现胶囊「正在归档 N 个会话…」 —
+              <b>未采用</b>
+            </li>
             <li>全部成功：胶囊短暂转绿「已归档 N 个会话」后消失 — <b>未采用（成功静默）</b></li>
-            <li>真实失败：失败的会话<b>恢复显示</b>，多条失败<b>合并为一条</b>人性化 toast，附重试按钮 — <b>已采用</b></li>
-            <li>超时（daemon 仍在处理）：胶囊转中性「正在后台归档，稍后自动同步」，<b>不弹错误</b>，状态由服务器推送收敛 — 落地为静默 suppress + 收敛</li>
+            <li>
+              真实失败：失败的会话<b>恢复显示</b>，多条失败<b>合并为一条</b>人性化 toast，附重试按钮
+              — <b>已采用</b>
+            </li>
+            <li>
+              超时（daemon
+              仍在处理）：胶囊转中性「正在后台归档，稍后自动同步」，<b>不弹错误</b>，状态由服务器推送收敛
+              — 落地为静默 suppress + 收敛
+            </li>
             <li>所有提示使用人类语言，<b>不再展示原始技术错误文本</b> — <b>已采用</b></li>
           </ul>
         </div>
@@ -487,8 +501,8 @@
     <script>
       const ACTIVE = [
         { id: "a", title: "Use the read tool on sample.ts" },
-        { id: "b", title: "MiMo终验4-xiaomi-claude-192848" },
-        { id: "c", title: "MiMo验收-probe-xiaomi-mimocode-single" },
+        { id: "b", title: "Archive validation preparation" },
+        { id: "c", title: "Archive validation probe" },
         { id: "d", title: "思考折叠验收 opencode deepseek" },
         { id: "e", title: "Reply Exactly OK" },
       ];
@@ -596,9 +610,15 @@
         busy = false;
       }
 
-      document.getElementById("btn-success").addEventListener("click", () => runScenario("success"));
-      document.getElementById("btn-partial").addEventListener("click", () => runScenario("partial"));
-      document.getElementById("btn-timeout").addEventListener("click", () => runScenario("timeout"));
+      document
+        .getElementById("btn-success")
+        .addEventListener("click", () => runScenario("success"));
+      document
+        .getElementById("btn-partial")
+        .addEventListener("click", () => runScenario("partial"));
+      document
+        .getElementById("btn-timeout")
+        .addEventListener("click", () => runScenario("timeout"));
       document.getElementById("btn-reset").addEventListener("click", () => {
         archivedIds = new Set();
         hideToast();

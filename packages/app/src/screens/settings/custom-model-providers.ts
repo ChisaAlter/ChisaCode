@@ -201,10 +201,6 @@ function opencodeProviderId(id: string): string {
   return `${id}-opencode`;
 }
 
-function mimocodeProviderId(id: string): string {
-  return `${id}-mimocode`;
-}
-
 function piProviderId(id: string): string {
   return `${id}-pi`;
 }
@@ -225,7 +221,6 @@ export function buildModelGatewayProviderIds(id: string): {
   claudeProviderId: string;
   codexProviderId: string;
   opencodeProviderId: string;
-  mimocodeProviderId: string;
   piProviderId: string;
   kimiProviderId: string;
 } {
@@ -234,7 +229,6 @@ export function buildModelGatewayProviderIds(id: string): {
     claudeProviderId: claudeProviderId(normalizedId),
     codexProviderId: codexProviderId(normalizedId),
     opencodeProviderId: opencodeProviderId(normalizedId),
-    mimocodeProviderId: mimocodeProviderId(normalizedId),
     piProviderId: piProviderId(normalizedId),
     kimiProviderId: kimiProviderId(normalizedId),
   };
@@ -251,7 +245,7 @@ function resolveProviderIdsForPreset(
     return [ids.codexProviderId];
   }
   if (protocolPreset === "openai") {
-    return [ids.opencodeProviderId, ids.mimocodeProviderId, ids.piProviderId, ids.kimiProviderId];
+    return [ids.opencodeProviderId, ids.piProviderId, ids.kimiProviderId];
   }
   return null;
 }
@@ -269,7 +263,6 @@ export function buildModelGatewayProviderIdList(
     ids.claudeProviderId,
     ids.codexProviderId,
     ids.opencodeProviderId,
-    ids.mimocodeProviderId,
     ids.piProviderId,
     ids.kimiProviderId,
   ];
@@ -1053,13 +1046,11 @@ export function buildSaveCustomModelProviderPatch(
       claude: ids.claudeProviderId,
       codex: ids.codexProviderId,
       opencode: ids.opencodeProviderId,
-      mimocode: ids.mimocodeProviderId,
       pi: ids.piProviderId,
       kimi: ids.kimiProviderId,
     },
     generatedModels: {
       opencode: normalizeOpenCodeModels(models),
-      mimocode: normalizeOpenCodeModels(models),
       pi: normalizeOpenCodeModels(models),
       kimi: models,
     },

@@ -2,7 +2,6 @@ import type { Logger } from "pino";
 
 import type { ProviderRuntimeSettings } from "../provider-launch-config.js";
 import {
-  MIMOCODE_PROVIDER_CONFIG,
   OPENCODE_PROVIDER_CONFIG,
   OpenCodeAgentClientRuntime,
   type OpenCodeAgentClientDeps,
@@ -42,23 +41,6 @@ export class OpenCodeAgentClient extends OpenCodeAgentClientRuntime {
       createOpenCodeSession,
       collectOpenCodePersistedAgentsFromSdk,
       OPENCODE_PROVIDER_CONFIG,
-    );
-  }
-}
-
-export class MimoCodeAgentClient extends OpenCodeAgentClientRuntime {
-  constructor(
-    logger: Logger,
-    runtimeSettings?: ProviderRuntimeSettings,
-    deps: OpenCodeAgentClientDeps = {},
-  ) {
-    super(
-      logger,
-      runtimeSettings,
-      deps,
-      createOpenCodeSession,
-      collectOpenCodePersistedAgentsFromSdk,
-      MIMOCODE_PROVIDER_CONFIG,
     );
   }
 }

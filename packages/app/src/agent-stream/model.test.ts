@@ -126,7 +126,6 @@ const THOUGHT_COLLAPSE_PROVIDER_COVERAGE = [
   "claude",
   "codex",
   "opencode",
-  "mimocode",
   "pi",
   "kimi",
   "grokbuild",
@@ -461,7 +460,6 @@ describe("collapseCompletedTurnThoughtsForDisplay", () => {
 
   it.each([
     { provider: "opencode" as const, label: "OpenCode" },
-    { provider: "mimocode" as const, label: "MiMoCode" },
     { provider: "pi" as const, label: "Pi" },
   ])("keeps $label assistant deltas without message ids as one formal answer", ({ provider }) => {
     const items = [
@@ -530,7 +528,6 @@ describe("collapseCompletedTurnThoughtsForDisplay", () => {
       "claude",
       "codex",
       "opencode",
-      "mimocode",
       "pi",
       "kimi",
       "grokbuild",

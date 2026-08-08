@@ -2,16 +2,6 @@ import { describe, expect, it } from "vitest";
 import { ACP_PROVIDER_CATALOG } from "@/data/acp-provider-catalog";
 import { buildAcpProviderConfigPatch, getAcpProviderCatalog } from "./use-acp-provider-catalog";
 
-const SUPPORTED_PROVIDER_IDS = [
-  "claude",
-  "codex",
-  "opencode",
-  "mimocode",
-  "pi",
-  "kimi",
-  "grokbuild",
-] as const;
-
 function findProvider(id: string) {
   const entry = getAcpProviderCatalog().find((provider) => provider.id === id);
   if (!entry) {
@@ -22,7 +12,14 @@ function findProvider(id: string) {
 
 describe("provider catalog", () => {
   it("keeps only the supported built-in agent providers", () => {
-    expect(getAcpProviderCatalog().map((entry) => entry.id)).toEqual(SUPPORTED_PROVIDER_IDS);
+    expect(getAcpProviderCatalog().map((entry) => entry.id)).toEqual([
+      "claude",
+      "codex",
+      "opencode",
+      "pi",
+      "kimi",
+      "grokbuild",
+    ]);
   });
 
   it("vendors provider entries with unique ids and concrete commands", () => {
@@ -40,18 +37,6 @@ describe("provider catalog", () => {
   });
 
   it("maps a catalog entry to a supported daemon provider config patch", () => {
-    expect(buildAcpProviderConfigPatch(findProvider("mimocode"))).toEqual({
-      providers: {
-        mimocode: {
-          enabled: true,
-          label: "MiMoCode",
-          description: "Xiaomi's OpenCode-compatible coding agent",
-          command: ["mimo"],
-          env: {},
-        },
-      },
-    });
-
     expect(buildAcpProviderConfigPatch(findProvider("kimi"))).toEqual({
       providers: {
         kimi: {

@@ -75,7 +75,7 @@ ChisaCode validates the complete `Host` authority on every HTTP request and ever
 
 ## Agent authentication
 
-ChisaCode wraps agent CLIs (Claude Code, Codex, OpenCode, MiMoCode) but does not manage their authentication. Each agent provider handles its own credentials. ChisaCode never stores or transmits provider API keys. Agents run in your user context with your existing credentials.
+ChisaCode wraps agent CLIs (Claude, Codex, OpenCode, Pi, Kimi Code, and Grok Build) but does not manage their authentication. Each agent provider handles its own credentials. ChisaCode never stores or transmits provider API keys. Agents run in your user context with your existing credentials.
 
 ## Reporting vulnerabilities
 

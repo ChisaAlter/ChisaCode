@@ -35,7 +35,7 @@ Provider IDs must be lowercase alphanumeric with hyphens (`/^[a-z][a-z0-9-]*$/`)
 
 ## Extending a built-in provider
 
-Use `extends` to create a new provider entry that inherits from a built-in provider (`claude`, `codex`, `opencode`, `mimocode`, `pi`, `kimi`, or `grokbuild`). The new provider gets its own entry in the provider list, with its own label, environment, and model definitions.
+Use `extends` to create a new provider entry that inherits from a built-in provider (`claude`, `codex`, `opencode`, `pi`, `kimi`, or `grokbuild`). The new provider gets its own entry in the provider list, with its own label, environment, and model definitions.
 
 ```json
 {
@@ -374,7 +374,7 @@ The [Agent Client Protocol (ACP)](https://agentclientprotocol.com) is an open st
 
 ACP agents communicate over JSON-RPC 2.0 on stdio. ChisaCode spawns the agent process and talks to it through stdin/stdout.
 
-ChisaCode has built-in ACP-backed support for Kimi Code. Other ACP-speaking commands can be configured manually with `extends: "acp"` as shown below.
+ChisaCode has built-in ACP-backed support for Kimi Code and Grok Build. Other ACP-speaking commands can be configured manually with `extends: "acp"` as shown below.
 
 ### Adding a generic ACP provider
 
@@ -606,7 +606,7 @@ Use `disallowedTools` to disable unsupported tools:
 
 ### Valid `extends` values
 
-Built-in providers: `claude`, `codex`, `opencode`, `mimocode`, `pi`, `kimi`, `grokbuild`
+Built-in providers: `claude`, `codex`, `opencode`, `pi`, `kimi`, `grokbuild`
 
 Special value: `acp` — creates a generic ACP provider (requires `command`)
 

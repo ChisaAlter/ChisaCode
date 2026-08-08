@@ -265,8 +265,8 @@ describe("fetchAgentHistoryPage", () => {
 
   it("preserves project placement for sidebar workspace grouping", async () => {
     const project: ProjectPlacementPayload = {
-      projectKey: "C:\\Ai\\mimocode-desktop",
-      projectName: "mimocode-desktop",
+      projectKey: "C:\\Ai\\sample-desktop",
+      projectName: "sample-desktop",
       checkout: {
         cwd: "C:\\Users\\48818\\.chisacode\\worktrees\\hash\\gallant-owl",
         isGit: true,
@@ -274,7 +274,7 @@ describe("fetchAgentHistoryPage", () => {
         remoteUrl: null,
         worktreeRoot: "C:\\Users\\48818\\.chisacode\\worktrees\\hash\\gallant-owl",
         isChisaCodeOwnedWorktree: true,
-        mainRepoRoot: "C:\\Ai\\mimocode-desktop",
+        mainRepoRoot: "C:\\Ai\\sample-desktop",
       },
     };
     const client = createClient([

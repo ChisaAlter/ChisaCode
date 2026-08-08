@@ -50,11 +50,6 @@ const PROVIDER_TOOLING: Record<string, ProviderToolingDefinition> = {
     packageName: "opencode-ai",
     installArgs: ["install", "-g", "opencode-ai@latest"],
   },
-  mimocode: {
-    binary: "mimo",
-    packageName: "@mimo-ai/cli",
-    installArgs: ["install", "-g", "@mimo-ai/cli@latest"],
-  },
   pi: {
     binary: "pi",
     packageName: "@earendil-works/pi-coding-agent",

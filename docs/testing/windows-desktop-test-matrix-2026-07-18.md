@@ -86,7 +86,7 @@ daemon、工作区和设置功能。每条用例都需要覆盖以下路径：
 | WIN-050 | 工作区               | 工作区重命名、复制路径/分支、置顶、归档、恢复                               | 持久化正确，导航不跳错                       | 未执行 |
 | WIN-051 | 工作区               | 项目/工作区列表加载中、空态、错误、刷新                                     | 不重叠、不闪烁，重试有效                     | 未执行 |
 | WIN-052 | 会话                 | 新建会话：空 prompt、普通 prompt、超长、多行、Emoji、命令注入文本           | 输入限制和提交行为正确                       | 未执行 |
-| WIN-053 | 会话                 | provider 选择：Claude/Codex/OpenCode/MiMoCode/Pi/Kimi/ACP/Mock              | 可用性、图标、默认模型和错误提示正确         | 未执行 |
+| WIN-053 | 会话                 | provider 选择：Claude/Codex/OpenCode/Pi/Kimi Code/Grok Build/ACP/Mock       | 可用性、图标、默认模型和错误提示正确         | 未执行 |
 | WIN-054 | 会话                 | provider 不可用、模型缺失、mode 缺失、配置过期                              | 非致命警告，不错误启动                       | 未执行 |
 | WIN-055 | 会话                 | model selector：搜索、空搜索、大小写、版本后缀、无结果、收藏                | 选择和收藏持久化正确                         | 未执行 |
 | WIN-056 | 会话                 | mode/thinking selector：每个模式、非法值、切换前后草稿                      | 选择正确，草稿字段不丢                       | 未执行 |

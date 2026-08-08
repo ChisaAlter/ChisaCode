@@ -13,7 +13,6 @@ The shared provider manifest currently exposes these user-facing built-ins:
 | `claude`    | Claude     | direct provider backed by Claude tooling   |
 | `codex`     | Codex      | direct provider backed by Codex app-server |
 | `opencode`  | OpenCode   | direct provider backed by OpenCode         |
-| `mimocode`  | MiMoCode   | OpenCode-compatible provider               |
 | `pi`        | Pi         | direct provider backed by Pi RPC           |
 | `kimi`      | Kimi Code  | ACP-backed provider                        |
 | `grokbuild` | Grok Build | ACP-backed provider                        |
@@ -56,7 +55,7 @@ Create a provider class that wraps the ACP base client or a specialized ACP clie
 
 Use a direct provider when the runtime does not speak ACP or when ChisaCode must drive provider-specific APIs. The provider implements the `AgentClient` and `AgentSession` contracts directly.
 
-Current direct providers include Claude, Codex, OpenCode, MiMoCode, and Pi.
+Current direct providers include Claude, Codex, OpenCode, and Pi.
 
 ## Built-in Provider Checklist
 

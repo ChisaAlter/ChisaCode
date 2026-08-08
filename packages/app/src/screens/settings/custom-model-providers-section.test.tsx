@@ -196,7 +196,7 @@ vi.mock("react-i18next", () => ({
         "customModelProviders.supplyMatched": "Matched protocol only",
         "customModelProviders.attachToAllAgents": "Attach to all agents",
         "customModelProviders.attachToAllAgentsSubtitle":
-          "Supplies Claude / Codex / OpenCode / MiMoCode / Pi / Kimi via gateway protocol conversion",
+          "Supplies Claude / Codex / OpenCode / Pi / Kimi Code via gateway protocol conversion",
         "customModelProviders.attachToAllAgentsHint":
           "Exposes this model to all agents via gateway conversion.",
         "customModelProviders.allAgentsBadge": "All agents",
@@ -474,7 +474,7 @@ describe("CustomModelProvidersSection", () => {
     expect(container.querySelector('[data-testid="custom-model-editor-sheet"]')).not.toBeNull();
     expect(container.textContent).toContain("Add model");
     expect(container.textContent).toContain(
-      "Supplies Claude / Codex / OpenCode / MiMoCode / Pi / Kimi via gateway protocol conversion",
+      "Supplies Claude / Codex / OpenCode / Pi / Kimi Code via gateway protocol conversion",
     );
     expect(container.querySelector('[data-testid="custom-model-base-url-input"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="custom-model-api-key-input"]')).not.toBeNull();
@@ -599,7 +599,7 @@ describe("CustomModelProvidersSection", () => {
     expect(refreshMock).toHaveBeenCalledTimes(1);
     const refreshProviderIds = refreshMock.mock.calls[0]?.[0] as string[] | undefined;
     expect(Array.isArray(refreshProviderIds)).toBe(true);
-    expect(refreshProviderIds?.length).toBe(6);
+    expect(refreshProviderIds?.length).toBe(5);
   });
 
   it("saves an edited model and closes without waiting for provider refresh", async () => {

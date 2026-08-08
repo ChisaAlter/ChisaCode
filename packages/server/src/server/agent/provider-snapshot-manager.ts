@@ -1023,7 +1023,6 @@ const PROVIDER_ENV_KEYS: Record<string, string[]> = {
   ],
   codex: ["OPENAI_API_KEY", "OPENAI_BASE_URL", "OPENAI_WIRE_API"],
   opencode: ["OPENAI_API_KEY", "OPENAI_BASE_URL"],
-  mimocode: ["OPENAI_API_KEY", "OPENAI_BASE_URL"],
   pi: ["OPENAI_API_KEY", "OPENAI_BASE_URL"],
   kimi: ["OPENAI_API_KEY", "OPENAI_BASE_URL"],
 };

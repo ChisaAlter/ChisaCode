@@ -37,16 +37,16 @@ describe("listManagedMcpServers", () => {
       mcpBaseUrl: "http://127.0.0.1:6767/mcp/agents",
     });
 
-    expect(result.scopes).toEqual([
-      { type: "global", label: "Global" },
-      { type: "provider", provider: "claude", label: "Claude Code" },
+    const expectedProviders = [
+      { type: "provider", provider: "claude", label: "Claude" },
       { type: "provider", provider: "codex", label: "Codex" },
       { type: "provider", provider: "opencode", label: "OpenCode" },
-      { type: "provider", provider: "mimocode", label: "MiMoCode" },
-      { type: "provider", provider: "kimi", label: "Kimi Code" },
       { type: "provider", provider: "pi", label: "Pi" },
+      { type: "provider", provider: "kimi", label: "Kimi Code" },
       { type: "provider", provider: "grokbuild", label: "Grok Build" },
-    ]);
+    ];
+
+    expect(result.scopes).toEqual([{ type: "global", label: "Global" }, ...expectedProviders]);
   });
 
   test("includes system ChisaCode server and user servers", () => {

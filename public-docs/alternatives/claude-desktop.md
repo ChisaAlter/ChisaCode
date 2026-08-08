@@ -1,6 +1,6 @@
 ---
 title: Open Source Claude Desktop Alternative With Linux, Mobile, and Multi-Provider Support
-description: ChisaCode is an open source Claude Desktop alternative for developers who want Linux, self-hosting, native mobile apps, and Claude alongside Codex, OpenCode, MiMoCode, Pi, and Kimi Code.
+description: ChisaCode is an open source Claude Desktop alternative for developers who want Linux, self-hosting, native mobile apps, and Claude, Codex, OpenCode, Pi, Kimi Code, and Grok Build.
 nav: Claude Desktop
 order: 106
 ---
@@ -21,7 +21,7 @@ Pick ChisaCode if you want:
 
 - Linux alongside macOS and Windows
 - A native iOS and Android app for the same agent workflow
-- Claude, Codex, OpenCode, MiMoCode, Pi, and Kimi Code in one interface
+- Claude, Codex, OpenCode, Pi, Kimi Code, and Grok Build in one interface
 - A self-hosted daemon you can run on a laptop, VM, or dev server
 - A CLI and MCP server for scripting and multi-agent workflows
 - Open source you can audit and fork
@@ -36,7 +36,7 @@ Claude Desktop is the host app. The Code tab can run Claude Code locally, connec
 
 Claude Desktop runs Claude Code.
 
-ChisaCode runs Claude too, plus Codex, OpenCode, MiMoCode, Pi, and Kimi Code as built-in providers. Custom providers can extend a built-in provider or run an Agent Client Protocol command. See [Supported providers](/docs/supported-providers).
+ChisaCode runs Claude, Codex, OpenCode, Pi, Kimi Code, and Grok Build as built-in providers. Custom providers can extend a built-in provider or run an Agent Client Protocol command. See [Supported providers](/docs/supported-providers).
 
 ## Desktop platforms
 
@@ -95,24 +95,24 @@ Claude supports voice in Claude's own mobile and app surfaces. Claude Code itsel
 
 ## Comparison
 
-|                              | ChisaCode                                                     | Claude Desktop                    |
-| ---------------------------- | ------------------------------------------------------------- | --------------------------------- |
-| License                      | Open source (AGPL-3.0)                                        | Not published as open source      |
-| Desktop platforms            | macOS, Linux, Windows                                         | macOS, Windows                    |
-| Native mobile                | iOS, Android                                                  | iOS, Android Claude apps          |
-| Coding agents                | Claude, Codex, OpenCode, MiMoCode, Pi, Kimi Code + custom ACP | Claude Code                       |
-| General chat                 | No                                                            | Claude Chat                       |
-| Cloud agent                  | Cloud waitlist                                                | Claude Cowork and remote sessions |
-| Local execution              | Yes                                                           | Yes                               |
-| SSH remote execution         | Via daemon on the remote host                                 | Yes                               |
-| Git worktrees                | Yes                                                           | Yes                               |
-| Per-worktree dev server URLs | Yes                                                           | No                                |
-| Split panes and tabs         | Yes                                                           | Yes                               |
-| In-app terminal              | Yes                                                           | Yes                               |
-| In-app browser / preview     | Yes                                                           | Yes                               |
-| GitHub workflow in app       | Commit, push, PR, checks, reviews, merge                      | PR monitoring and merge workflows |
-| CLI                          | Run, `--host`, ls, send, schedule, loop                       | Claude Code CLI                   |
-| MCP server for orchestration | Yes                                                           | MCP support inside Claude Code    |
-| Self-hosted daemon           | Yes                                                           | No                                |
+|                              | ChisaCode                                                       | Claude Desktop                    |
+| ---------------------------- | --------------------------------------------------------------- | --------------------------------- |
+| License                      | Open source (AGPL-3.0)                                          | Not published as open source      |
+| Desktop platforms            | macOS, Linux, Windows                                           | macOS, Windows                    |
+| Native mobile                | iOS, Android                                                    | iOS, Android Claude apps          |
+| Coding agents                | Claude, Codex, OpenCode, Pi, Kimi Code, Grok Build + custom ACP | Claude Code                       |
+| General chat                 | No                                                              | Claude Chat                       |
+| Cloud agent                  | Cloud waitlist                                                  | Claude Cowork and remote sessions |
+| Local execution              | Yes                                                             | Yes                               |
+| SSH remote execution         | Via daemon on the remote host                                   | Yes                               |
+| Git worktrees                | Yes                                                             | Yes                               |
+| Per-worktree dev server URLs | Yes                                                             | No                                |
+| Split panes and tabs         | Yes                                                             | Yes                               |
+| In-app terminal              | Yes                                                             | Yes                               |
+| In-app browser / preview     | Yes                                                             | Yes                               |
+| GitHub workflow in app       | Commit, push, PR, checks, reviews, merge                        | PR monitoring and merge workflows |
+| CLI                          | Run, `--host`, ls, send, schedule, loop                         | Claude Code CLI                   |
+| MCP server for orchestration | Yes                                                             | MCP support inside Claude Code    |
+| Self-hosted daemon           | Yes                                                             | No                                |
 
 See also: [ChisaCode vs Codex App](/docs/alternatives/codex-app), [ChisaCode vs OpenCode Desktop](/docs/alternatives/opencode-desktop), [ChisaCode vs Conductor](/docs/alternatives/conductor).

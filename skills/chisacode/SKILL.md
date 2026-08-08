@@ -50,7 +50,7 @@ Only set feature IDs returned by `inspect_provider`. For Codex fast mode, look f
 
 ## Models
 
-Use provider IDs such as `claude`, `codex`, `opencode`, `mimocode`, `pi`, or `kimi`, and pass a separate `model` only when you need a specific model.
+Use provider IDs such as `claude`, `codex`, `opencode`, `pi`, `kimi`, or `grokbuild`, and pass a separate `model` only when you need a specific model.
 
 ## Orchestration preferences
 

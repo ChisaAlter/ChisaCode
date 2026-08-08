@@ -1,6 +1,6 @@
 ---
 title: Open Source Codex App Alternative With Linux, Mobile, and Multi-Provider Support
-description: ChisaCode is an open source alternative to Codex App for developers who want Linux, native mobile apps, a self-hosted daemon, and Codex alongside Claude, OpenCode, MiMoCode, Pi, and Kimi Code.
+description: ChisaCode is an open source alternative to Codex App for developers who want Linux, native mobile apps, a self-hosted daemon, and Claude, Codex, OpenCode, Pi, Kimi Code, and Grok Build.
 nav: Codex App
 order: 105
 ---
@@ -21,7 +21,7 @@ Pick ChisaCode if you want:
 
 - Linux alongside macOS and Windows
 - A native iOS and Android app
-- Codex, Claude, OpenCode, MiMoCode, Pi, and Kimi Code in one interface
+- Claude, Codex, OpenCode, Pi, Kimi Code, and Grok Build in one interface
 - A self-hosted daemon you can run on a laptop, VM, or dev server
 - A CLI and MCP server for scripting and multi-agent workflows
 - Open source you can audit and fork
@@ -36,7 +36,7 @@ Codex App is a desktop app for Codex. It can run local and worktree threads on y
 
 Codex App runs Codex.
 
-ChisaCode runs Codex too, plus Claude, OpenCode, MiMoCode, Pi, and Kimi Code as built-in providers. Custom providers can extend a built-in provider or run an Agent Client Protocol command. See [Supported providers](/docs/supported-providers).
+ChisaCode runs Claude, Codex, OpenCode, Pi, Kimi Code, and Grok Build as built-in providers. Custom providers can extend a built-in provider or run an Agent Client Protocol command. See [Supported providers](/docs/supported-providers).
 
 ## Desktop platforms
 
@@ -89,22 +89,22 @@ ChisaCode supports dictation and realtime voice mode. Speech-to-text and text-to
 
 ## Comparison
 
-|                              | ChisaCode                                                     | Codex App                    |
-| ---------------------------- | ------------------------------------------------------------- | ---------------------------- |
-| License                      | Open source (AGPL-3.0)                                        | Not published as open source |
-| Desktop platforms            | macOS, Linux, Windows                                         | macOS, Windows               |
-| Native mobile                | iOS, Android                                                  | No                           |
-| Providers                    | Codex, Claude, OpenCode, MiMoCode, Pi, Kimi Code + custom ACP | Codex                        |
-| Local execution              | Yes                                                           | Yes                          |
-| Cloud execution              | Cloud waitlist                                                | Yes                          |
-| Git worktrees                | Yes                                                           | Yes                          |
-| Per-worktree dev server URLs | Yes                                                           | No                           |
-| In-app terminal              | Yes                                                           | Yes                          |
-| In-app browser               | Yes                                                           | Yes                          |
-| GitHub workflow in app       | Commit, push, PR, checks, reviews, merge                      | Commit, push, PR             |
-| CLI                          | Run, `--host`, ls, send, schedule, loop                       | Codex CLI                    |
-| MCP server for orchestration | Yes                                                           | MCP support inside Codex     |
-| Voice                        | Dictation and realtime voice                                  | Dictation                    |
-| Self-hosted daemon           | Yes                                                           | No                           |
+|                              | ChisaCode                                                       | Codex App                    |
+| ---------------------------- | --------------------------------------------------------------- | ---------------------------- |
+| License                      | Open source (AGPL-3.0)                                          | Not published as open source |
+| Desktop platforms            | macOS, Linux, Windows                                           | macOS, Windows               |
+| Native mobile                | iOS, Android                                                    | No                           |
+| Providers                    | Claude, Codex, OpenCode, Pi, Kimi Code, Grok Build + custom ACP | Codex                        |
+| Local execution              | Yes                                                             | Yes                          |
+| Cloud execution              | Cloud waitlist                                                  | Yes                          |
+| Git worktrees                | Yes                                                             | Yes                          |
+| Per-worktree dev server URLs | Yes                                                             | No                           |
+| In-app terminal              | Yes                                                             | Yes                          |
+| In-app browser               | Yes                                                             | Yes                          |
+| GitHub workflow in app       | Commit, push, PR, checks, reviews, merge                        | Commit, push, PR             |
+| CLI                          | Run, `--host`, ls, send, schedule, loop                         | Codex CLI                    |
+| MCP server for orchestration | Yes                                                             | MCP support inside Codex     |
+| Voice                        | Dictation and realtime voice                                    | Dictation                    |
+| Self-hosted daemon           | Yes                                                             | No                           |
 
 See also: [ChisaCode vs Claude Desktop](/docs/alternatives/claude-desktop), [ChisaCode vs OpenCode Desktop](/docs/alternatives/opencode-desktop), [Supported providers](/docs/supported-providers).
