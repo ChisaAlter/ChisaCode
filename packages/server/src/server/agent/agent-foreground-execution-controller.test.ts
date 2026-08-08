@@ -97,6 +97,66 @@ function buildHarness(timeoutMs: number): Harness {
   };
 }
 
+function buildHarnessWithToolStall(timeoutMs: number, toolStallMs: number): Harness {
+  const agent = buildFakeAgent();
+  const foregroundRuns = new ForegroundRunState();
+  const cancelRun = vi.fn(async () => true);
+  const handledEvents: AgentStreamEvent[] = [];
+  const terminalEvents: AgentStreamEvent[] = [];
+  const agentTerminals: string[] = [];
+
+  const controller = new AgentForegroundExecutionController({
+    attachPersistenceCwd: (handle) => handle,
+    cancelRun,
+    emitState: () => {},
+    foregroundRuns,
+    getAgent: () => agent,
+    handleStreamEvent: async (_agent, event) => {
+      handledEvents.push(event);
+      if (event.type === "turn_failed" || event.type === "turn_canceled") {
+        agent.activeForegroundTurnId = null;
+        agent.lifecycle = "error";
+      }
+    },
+    inactivityTimeoutMs: timeoutMs,
+    toolCallStallTimeoutMs: toolStallMs,
+    isTerminalEvent: (event) =>
+      event.type === "turn_completed" ||
+      event.type === "turn_failed" ||
+      event.type === "turn_canceled",
+    logger: pino({ level: "silent" }),
+    onAgentTerminal: (agentId) => agentTerminals.push(agentId),
+    refreshRuntimeInfo: async () => {},
+    touchUpdatedAt: () => new Date(),
+  });
+  return {
+    controller,
+    agent,
+    foregroundRuns,
+    cancelRun,
+    handledEvents,
+    terminalEvents,
+    agentTerminals,
+  };
+}
+
+/** Builds a tool_call timeline event with the given status. */
+function toolCallEvent(status: "running" | "completed" | "failed" | "canceled"): AgentStreamEvent {
+  return {
+    type: "timeline",
+    provider: PROVIDER,
+    turnId: "turn-1",
+    item: {
+      type: "tool_call",
+      callId: "call-1",
+      name: "execute",
+      status,
+      detail: { type: "shell", command: "echo test" },
+      error: null,
+    },
+  };
+}
+
 /** Pushes an event into the turn stream the way the pipeline's notifyWaiters would. */
 function pushTurnEvent(harness: Harness, event: AgentStreamEvent): void {
   const waiter = harness.agent.foregroundTurnWaiters.values().next().value;
@@ -213,5 +273,115 @@ describe("AgentForegroundExecutionController inactivity watchdog", () => {
     const events = await consuming;
     expect(events.some((event) => event.type === "text")).toBe(true);
     expect(harness.cancelRun).not.toHaveBeenCalled();
+  });
+});
+
+describe("AgentForegroundExecutionController tool-call stall watchdog", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("cancels the run when a tool_call(running) stalls beyond the tool stall window", async () => {
+    // inactivity = 1000ms, tool stall = 30ms — a running tool that goes silent
+    // should be killed at 30ms, well before the 1000ms inactivity window.
+    const harness = buildHarnessWithToolStall(1000, 30);
+
+    const consuming = collect(harness);
+    // Let the generator reach the for-await loop before pushing events.
+    await vi.advanceTimersByTimeAsync(10);
+    pushTurnEvent(harness, toolCallEvent("running"));
+    // Flush microtasks so the generator consumes the event and re-arms the
+    // watchdog with the 30ms tool stall window.
+    await vi.advanceTimersByTimeAsync(0);
+
+    // Within the tool stall window — no cancel yet.
+    await vi.advanceTimersByTimeAsync(20);
+    expect(harness.cancelRun).not.toHaveBeenCalled();
+
+    // Run all pending timers — the 30ms stall timer should fire before the
+    // 1000ms inactivity timer (it was set later but with a shorter duration).
+    await vi.runAllTimersAsync();
+    expect(harness.cancelRun).toHaveBeenCalledWith("agent-1");
+
+    pushTurnEvent(harness, {
+      type: "turn_canceled",
+      provider: PROVIDER,
+      reason: "tool stall",
+      turnId: "turn-1",
+    });
+    const events = await consuming;
+    expect(events.map((event) => event.type)).toContain("turn_canceled");
+  });
+
+  it("does not fire when a running tool completes before the stall window", async () => {
+    const harness = buildHarnessWithToolStall(1000, 50);
+
+    const consuming = collect(harness);
+    await vi.advanceTimersByTimeAsync(10);
+    pushTurnEvent(harness, toolCallEvent("running"));
+
+    // Tool completes — the watchdog re-arms with the 1000ms inactivity window.
+    await vi.advanceTimersByTimeAsync(20);
+    pushTurnEvent(harness, toolCallEvent("completed"));
+
+    // Well past the stall window but the completed event restored the
+    // inactivity window (1000ms), so no cancel.
+    await vi.advanceTimersByTimeAsync(200);
+    expect(harness.cancelRun).not.toHaveBeenCalled();
+
+    pushTurnEvent(harness, { type: "turn_completed", provider: PROVIDER, turnId: "turn-1" });
+    const events = await consuming;
+    expect(events.some((event) => event.type === "turn_completed")).toBe(true);
+    expect(harness.cancelRun).not.toHaveBeenCalled();
+  });
+
+  it("keeps the generous inactivity window for non-tool events", async () => {
+    // inactivity = 100, tool stall = 10 — text events should use 100ms, not 10ms.
+    const harness = buildHarnessWithToolStall(100, 10);
+
+    const consuming = collect(harness);
+    for (let i = 0; i < 5; i += 1) {
+      await vi.advanceTimersByTimeAsync(40);
+      pushTurnEvent(harness, { type: "text", text: `chunk-${i}` });
+    }
+    // 5 * 40ms = 200ms total; each gap (40ms) is under the 100ms inactivity
+    // window but well over the 10ms tool stall window. Text events must NOT
+    // use the tool stall window, or this would have been killed at 10ms.
+    expect(harness.cancelRun).not.toHaveBeenCalled();
+
+    pushTurnEvent(harness, { type: "turn_completed", provider: PROVIDER, turnId: "turn-1" });
+    const events = await consuming;
+    expect(events.some((event) => event.type === "text")).toBe(true);
+    expect(harness.cancelRun).not.toHaveBeenCalled();
+  });
+
+  it("falls back to inactivity window when tool stall is not configured", async () => {
+    // No toolCallStallTimeoutMs — defaults to 3 min. With inactivity = 50ms,
+    // a running tool that goes silent should be killed by the inactivity
+    // window (50ms), since the default tool stall (3 min) is much longer.
+    const harness = buildHarness(50);
+
+    const consuming = collect(harness);
+    await vi.advanceTimersByTimeAsync(10);
+    pushTurnEvent(harness, toolCallEvent("running"));
+
+    // 50ms inactivity window fires (the tool stall default is 3 min, so the
+    // running tool event uses the shorter inactivity window).
+    await vi.advanceTimersByTimeAsync(60);
+    expect(harness.cancelRun).toHaveBeenCalledWith("agent-1");
+
+    // Drain the generator so `consuming` is consumed (no unused variable).
+    pushTurnEvent(harness, {
+      type: "turn_canceled",
+      provider: PROVIDER,
+      reason: "inactivity",
+      turnId: "turn-1",
+    });
+    const events = await consuming;
+    expect(events.map((event) => event.type)).toContain("turn_canceled");
   });
 });

@@ -44,10 +44,28 @@ interface AgentForegroundExecutionControllerOptions {
    * user-visible damage, while a true hang only costs bounded waiting time.
    */
   inactivityTimeoutMs?: number;
+  /**
+   * Maximum time a single tool call may stay `running` without any further
+   * stream event before the turn is cancelled. Defaults to
+   * FOREGROUND_TOOL_CALL_STALL_TIMEOUT_MS. Tighter than the inactivity window
+   * so an ACP provider that emits a `tool_call(running)` and then never sends
+   * a final `PromptResponse` (observed with Kimi/grok-via-Kimi) fails fast
+   * instead of hanging for the full inactivity window.
+   */
+  toolCallStallTimeoutMs?: number;
 }
 
 /** Default stall window before an inactive foreground turn is cancelled. */
 const FOREGROUND_TURN_INACTIVITY_TIMEOUT_MS = 10 * 60 * 1000;
+
+/**
+ * Default maximum time a single tool call may stay `running` without further
+ * stream events before the turn is cancelled. Tighter than the inactivity
+ * window so an ACP provider that emits `tool_call(running)` and then never
+ * sends a final `PromptResponse` (observed with Kimi/grok-via-Kimi) fails
+ * fast instead of hanging for the full inactivity window.
+ */
+const FOREGROUND_TOOL_CALL_STALL_TIMEOUT_MS = 3 * 60 * 1000;
 
 /**
  * Events that mean "the turn is waiting on the user", not stalled: the user's
@@ -55,6 +73,34 @@ const FOREGROUND_TURN_INACTIVITY_TIMEOUT_MS = 10 * 60 * 1000;
  */
 function isUserWaitEvent(event: AgentStreamEvent): boolean {
   return event.type === "permission_requested" || event.type === "attention_required";
+}
+
+/**
+ * Returns the timeout window to use after observing `event`.
+ *
+ * - A `tool_call` / `tool_call_update` with status `running` tightens the
+ *   watchdog to `toolCallStallTimeoutMs`: an ACP provider that starts a tool
+ *   and then never sends a terminal `PromptResponse` (observed with
+ *   Kimi/grok-via-Kimi) should fail fast, not hang for the full inactivity
+ *   window.
+ * - Any other event (assistant text, thinking, usage, a tool reaching
+ *   `completed`/`failed`/`canceled`, etc.) restores the generous
+ *   `inactivityTimeoutMs` window so legitimate long tool executions and slow
+ *   providers are not falsely killed.
+ */
+function resolveWatchdogTimeoutMs(
+  event: AgentStreamEvent,
+  inactivityTimeoutMs: number,
+  toolCallStallTimeoutMs: number,
+): number {
+  if (
+    event.type === "timeline" &&
+    event.item.type === "tool_call" &&
+    event.item.status === "running"
+  ) {
+    return toolCallStallTimeoutMs;
+  }
+  return inactivityTimeoutMs;
 }
 
 /** Owns one foreground turn from start request through terminal finalization. */
@@ -206,24 +252,39 @@ export class AgentForegroundExecutionController {
     // the client-side stream, leaving the agent permanently "already has an
     // active run".
     const timeoutMs = this.options.inactivityTimeoutMs ?? FOREGROUND_TURN_INACTIVITY_TIMEOUT_MS;
+    const toolCallStallTimeoutMs =
+      this.options.toolCallStallTimeoutMs ?? FOREGROUND_TOOL_CALL_STALL_TIMEOUT_MS;
     const timeoutError = `Agent turn timed out: no activity for ${Math.round(timeoutMs / 1000)} seconds`;
     let watchdogTimer: ReturnType<typeof setTimeout> | null = null;
     let watchdogFired = false;
+    let currentWatchdogTimeoutMs = timeoutMs;
     const clearWatchdog = () => {
       if (watchdogTimer) {
         clearTimeout(watchdogTimer);
         watchdogTimer = null;
       }
     };
-    const armWatchdog = () => {
+    const armWatchdog = (nextTimeoutMs = currentWatchdogTimeoutMs) => {
       if (watchdogFired) {
         return;
       }
       clearWatchdog();
+      currentWatchdogTimeoutMs = nextTimeoutMs;
       watchdogTimer = setTimeout(() => {
         watchdogFired = true;
+        const reason =
+          currentWatchdogTimeoutMs === toolCallStallTimeoutMs &&
+          currentWatchdogTimeoutMs < timeoutMs
+            ? "tool_call_stall"
+            : "inactivity";
         this.options.logger.warn(
-          { agentId, turnId, provider: agent.provider, timeoutMs },
+          {
+            agentId,
+            turnId,
+            provider: agent.provider,
+            timeoutMs: currentWatchdogTimeoutMs,
+            reason,
+          },
           "agent.turn.inactivity_timeout",
         );
         void this.options.cancelRun(agentId).catch((error: unknown) => {
@@ -265,7 +326,7 @@ export class AgentForegroundExecutionController {
         if (isUserWaitEvent(event)) {
           clearWatchdog();
         } else {
-          armWatchdog();
+          armWatchdog(resolveWatchdogTimeoutMs(event, timeoutMs, toolCallStallTimeoutMs));
         }
         yield event;
       }

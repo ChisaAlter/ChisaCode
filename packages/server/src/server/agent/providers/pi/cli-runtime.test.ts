@@ -5,6 +5,7 @@ import pino from "pino";
 import { describe, expect, test, vi } from "vitest";
 
 import { PiCliRuntime } from "./cli-runtime.js";
+import { resolveDefaultPiSpawnOptions } from "./cli-runtime.js";
 import type { PiRuntimeLaunch } from "./runtime.js";
 
 type PiChild = ChildProcessWithoutNullStreams & {
@@ -260,3 +261,73 @@ describe("PiCliRuntime", () => {
     await expect(session.getState()).rejects.toThrow("stdin write failed");
   });
 });
+
+describe("resolveDefaultPiSpawnOptions", () => {
+  const originalExecPath = process.execPath;
+  const originalEnv = { ...process.env };
+
+  function makeLaunch(argv: string[], env?: Record<string, string>): PiRuntimeLaunch {
+    return {
+      cwd: "/workspace/project",
+      argv,
+      env,
+    };
+  }
+
+  test("re-adds ELECTRON_RUN_AS_NODE and uses envMode internal when command is process.execPath", () => {
+    const fakeElectronPath = "C:\\fake\\ChisaCode.exe";
+    vi.stubEnv("ELECTRON_RUN_AS_NODE", "1");
+    try {
+      Object.defineProperty(process, "execPath", { value: fakeElectronPath, configurable: true });
+      const launch = makeLaunch([fakeElectronPath, "C:\\pi\\cli.js", "--mode", "rpc"]);
+      const result = resolveDefaultPiSpawnOptions(launch);
+      expect(result.command).toBe(fakeElectronPath);
+      expect(result.args).toEqual(["C:\\pi\\cli.js", "--mode", "rpc"]);
+      expect(result.options.envMode).toBe("internal");
+      // buildSelfNodeCommand re-adds ELECTRON_RUN_AS_NODE after the external-env strip
+      expect(result.options.env?.ELECTRON_RUN_AS_NODE).toBe("1");
+    } finally {
+      Object.defineProperty(process, "execPath", { value: originalExecPath, configurable: true });
+      restoreEnv(originalEnv);
+    }
+  });
+
+  test("preserves user env overlay in self-node path", () => {
+    const fakeElectronPath = "C:\\fake\\ChisaCode.exe";
+    vi.stubEnv("ELECTRON_RUN_AS_NODE", "1");
+    try {
+      Object.defineProperty(process, "execPath", { value: fakeElectronPath, configurable: true });
+      const launch = makeLaunch([fakeElectronPath, "cli.js"], {
+        OPENAI_API_KEY: "sk-test",
+        OPENAI_BASE_URL: "http://gw/v1",
+      });
+      const result = resolveDefaultPiSpawnOptions(launch);
+      expect(result.options.env?.ELECTRON_RUN_AS_NODE).toBe("1");
+      expect(result.options.env?.OPENAI_API_KEY).toBe("sk-test");
+      expect(result.options.env?.OPENAI_BASE_URL).toBe("http://gw/v1");
+    } finally {
+      Object.defineProperty(process, "execPath", { value: originalExecPath, configurable: true });
+      restoreEnv(originalEnv);
+    }
+  });
+
+  test("uses envOverlay (not envMode internal) for custom node command", () => {
+    const launch = makeLaunch(["node", "cli.js", "--mode", "rpc"], {
+      OPENAI_API_KEY: "sk-custom",
+    });
+    const result = resolveDefaultPiSpawnOptions(launch);
+    expect(result.command).toBe("node");
+    expect(result.args).toEqual(["cli.js", "--mode", "rpc"]);
+    expect(result.options.envMode).toBeUndefined();
+    expect(result.options.envOverlay).toEqual({ OPENAI_API_KEY: "sk-custom" });
+  });
+});
+
+function restoreEnv(original: Record<string, string | undefined>): void {
+  for (const key of Object.keys(process.env)) {
+    if (!(key in original)) {
+      delete process.env[key];
+    }
+  }
+  Object.assign(process.env, original);
+}

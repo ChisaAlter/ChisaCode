@@ -4,9 +4,10 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, extname, join } from "node:path";
 import type { Logger } from "pino";
 
-import { spawnProcess } from "../../../../utils/spawn.js";
+import { spawnProcess, type SpawnProcessOptions } from "../../../../utils/spawn.js";
 import { terminateProcessTreeWithFallback } from "../../../../utils/tree-kill.js";
 import { withTimeout } from "../../../../utils/promise-timeout.js";
+import { buildSelfNodeCommand } from "../../../chisacode-env.js";
 import type { ProviderRuntimeSettings } from "../../provider-launch-config.js";
 import {
   buildPiLaunch,
@@ -111,6 +112,56 @@ function assertChildWithPipes(
   }
 }
 
+export interface PiDefaultSpawnOptions {
+  command: string;
+  args: string[];
+  options: SpawnProcessOptions;
+}
+
+/**
+ * Resolves spawn parameters for the default (non-injected) Pi spawn path.
+ *
+ * When `resolvePiCommand` rewrites the bare `pi` command to
+ * `[process.execPath, cliJsPath]` on Windows, `process.execPath` is the
+ * Electron binary (the daemon itself runs under `ELECTRON_RUN_AS_NODE=1`).
+ * The default external-env path strips `ELECTRON_RUN_AS_NODE`, so the child
+ * Electron launches in GUI mode and rejects node flags like `--mode`
+ * ("bad option: --mode"). Re-add the flag via `buildSelfNodeCommand` and use
+ * `envMode: "internal"` so `spawnProcess` preserves it — mirroring the Claude
+ * provider's query.ts pattern.
+ *
+ * For a custom command (e.g. user-configured `["node", "cli.js"]` or a real
+ * `node.exe` path that is not `process.execPath`), the original `envOverlay`
+ * path is kept so user env overlays are not stripped.
+ * @param launch The Pi runtime launch descriptor
+ * @returns Spawn command, args, and options for spawnProcess
+ */
+export function resolveDefaultPiSpawnOptions(launch: PiRuntimeLaunch): PiDefaultSpawnOptions {
+  const [command, ...args] = launch.argv;
+  if (command === process.execPath) {
+    const selfNode = buildSelfNodeCommand(args, launch.env);
+    return {
+      command: selfNode.command,
+      args: selfNode.args,
+      options: {
+        cwd: launch.cwd,
+        env: selfNode.env,
+        envMode: "internal",
+        stdio: ["pipe", "pipe", "pipe"],
+      },
+    };
+  }
+  return {
+    command,
+    args,
+    options: {
+      cwd: launch.cwd,
+      envOverlay: launch.env,
+      stdio: ["pipe", "pipe", "pipe"],
+    },
+  };
+}
+
 interface PendingRequest {
   resolve: (value: unknown) => void;
   reject: (error: Error) => void;
@@ -136,12 +187,8 @@ export class PiCliRuntime implements PiRuntime {
     this.spawnProcess =
       options.spawnProcess ??
       ((launch) => {
-        const [command, ...args] = launch.argv;
-        const child = spawnProcess(command, args, {
-          cwd: launch.cwd,
-          envOverlay: launch.env,
-          stdio: ["pipe", "pipe", "pipe"],
-        });
+        const spawnOptions = resolveDefaultPiSpawnOptions(launch);
+        const child = spawnProcess(spawnOptions.command, spawnOptions.args, spawnOptions.options);
         assertChildWithPipes(child);
         return child;
       });

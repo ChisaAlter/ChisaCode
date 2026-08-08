@@ -167,6 +167,12 @@ export interface AgentManagerOptions {
    * run-control cancellation. See AgentForegroundExecutionController.
    */
   foregroundTurnInactivityTimeoutMs?: number;
+  /**
+   * Maximum time a single tool call may stay `running` without further stream
+   * events before the foreground turn is cancelled. See
+   * AgentForegroundExecutionController.
+   */
+  foregroundToolCallStallTimeoutMs?: number;
   logger: Logger;
 }
 
@@ -395,6 +401,7 @@ export class AgentManager {
       getAgent: (agentId) => this.requireSessionAgent(agentId),
       handleStreamEvent: (agent, event) => this.sessionEvents.handle(agent, event),
       inactivityTimeoutMs: options.foregroundTurnInactivityTimeoutMs,
+      toolCallStallTimeoutMs: options.foregroundToolCallStallTimeoutMs,
       isTerminalEvent: isTurnTerminalEvent,
       logger: this.logger,
       onAgentTerminal: (agentId) => this.generativeUiActionQueue.onAgentTerminal(agentId),
