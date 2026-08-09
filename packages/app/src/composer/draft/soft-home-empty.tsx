@@ -228,7 +228,8 @@ const styles = StyleSheet.create((theme) => ({
     width: "100%",
     minWidth: 0,
     minHeight: 0,
-    overflow: "hidden",
+    // Visible so the pen-bar soft shadow is not clipped into hard corners.
+    overflow: "visible",
     backgroundColor: theme.colors.surfaceWorkspace,
     // Match session host inset so Soft Home pen-bar width tracks the chat dock.
     paddingHorizontal: 20,

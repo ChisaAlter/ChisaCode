@@ -6,6 +6,7 @@ import {
   EllipsisVertical,
   Folder,
   Globe,
+  Layers,
   PanelRight,
   Settings,
   SquarePen,
@@ -29,6 +30,7 @@ import {
   TitlebarDragRegion,
   TITLEBAR_NO_DRAG_VIEW_STYLE,
 } from "@/components/desktop/titlebar-drag-region";
+import { useDesktopSidebarControlContentPad } from "@/components/desktop/desktop-sidebar-control";
 import { WorkspaceGitActions } from "@/git/workspace-actions";
 import { WorkspaceOpenInEditorButton } from "@/screens/workspace/workspace-open-in-editor-button";
 import { WorkspaceScriptsButton } from "@/screens/workspace/workspace-scripts-button";
@@ -539,12 +541,18 @@ export function WorkspaceDesktopSoftTopbar({
   const showScripts = workspaceScripts.length > 0;
   // Reserve Git geometry whenever we have a cwd and either know it's git or are still loading.
   const showGitSlot = openInCwd.length > 0 && (isGitCheckout || isLoading);
+  // Shell DesktopSidebarControl is fixed; clear breadcrumb when the rail is collapsed.
+  const sidebarControlContentPad = useDesktopSidebarControlContentPad();
   // Native caption buttons overlay the right of this 48px row (no separate white titlebar).
-  const softTopbarStyle = useMemo(
-    () =>
-      getIsElectron() ? [styles.softTopbar, SOFT_TOPBAR_ELECTRON_RIGHT_PAD] : styles.softTopbar,
-    [],
-  );
+  const softTopbarStyle = useMemo(() => {
+    const base = getIsElectron()
+      ? [styles.softTopbar, SOFT_TOPBAR_ELECTRON_RIGHT_PAD]
+      : [styles.softTopbar];
+    if (sidebarControlContentPad <= 0) {
+      return base;
+    }
+    return [...base, { paddingLeft: sidebarControlContentPad }];
+  }, [sidebarControlContentPad]);
   const projectLeadStyle = useCallback(
     ({ hovered = false, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
       styles.softBreadcrumbProject,
@@ -670,14 +678,14 @@ export function WorkspaceHeaderRightControls({
   isGitCheckout,
   isExplorerOpen,
   canToggleExplorer,
-  isEnvironmentPanelVisible: _isEnvironmentPanelVisible,
-  canShowEnvironmentPanel: _canShowEnvironmentPanel,
+  isEnvironmentPanelVisible,
+  canShowEnvironmentPanel,
   createTerminalDisabled = false,
   isTerminalDrawerOpen = false,
   isRightPanelOpen = false,
   explorerToggleAccessibilityState,
   onToggleExplorer,
-  onToggleEnvironmentPanel: _onToggleEnvironmentPanel,
+  onToggleEnvironmentPanel,
   onToggleTerminalDrawer,
   onToggleRightPanel,
   onCreateTerminal,
@@ -720,6 +728,10 @@ export function WorkspaceHeaderRightControls({
   const terminalToggleAccessibilityState = useMemo(
     () => ({ expanded: isTerminalDrawerOpen }),
     [isTerminalDrawerOpen],
+  );
+  const environmentToggleAccessibilityState = useMemo(
+    () => ({ expanded: isEnvironmentPanelVisible }),
+    [isEnvironmentPanelVisible],
   );
   const rightPanelToggleAccessibilityState = useMemo(
     () => ({ expanded: rightPanelOpen }),
@@ -798,7 +810,7 @@ export function WorkspaceHeaderRightControls({
     return <View style={styles.headerRight}>{mobileExplorerButton}</View>;
   }
 
-  // T3-style layout cluster: terminal drawer + right panel (left of window controls).
+  // T3-style layout cluster: terminal drawer + floating inspector + right panel.
   return (
     <View style={styles.headerRight} testID="workspace-layout-controls">
       <HeaderToggleButton
@@ -824,6 +836,33 @@ export function WorkspaceHeaderRightControls({
           return <ThemedIconHost Icon={SquareTerminal} size={16} uniProps={colorMapping} />;
         }}
       </HeaderToggleButton>
+      {canShowEnvironmentPanel ? (
+        <HeaderToggleButton
+          testID="workspace-environment-panel-toggle"
+          onPress={onToggleEnvironmentPanel}
+          tooltipLabel={
+            isEnvironmentPanelVisible
+              ? t("workspace.environment.hideFloatingPanel")
+              : t("workspace.environment.showFloatingPanel")
+          }
+          tooltipSide="left"
+          style={styles.headerActionButton}
+          accessible
+          accessibilityRole="button"
+          accessibilityLabel={
+            isEnvironmentPanelVisible
+              ? t("workspace.environment.hideFloatingPanel")
+              : t("workspace.environment.showFloatingPanel")
+          }
+          accessibilityState={environmentToggleAccessibilityState}
+        >
+          {({ hovered }) => {
+            const colorMapping =
+              isEnvironmentPanelVisible || hovered ? foregroundColorMapping : mutedColorMapping;
+            return <ThemedIconHost Icon={Layers} size={16} uniProps={colorMapping} />;
+          }}
+        </HeaderToggleButton>
+      ) : null}
       {rightPanelButton}
     </View>
   );

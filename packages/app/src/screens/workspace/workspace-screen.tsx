@@ -85,6 +85,7 @@ import type { WorkspaceFileLocation } from "@/workspace/file-open";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { getIsElectron, isNative, isWeb } from "@/constants/platform";
 import { buildHostRootRoute, buildSettingsHostRoute } from "@/utils/host-routes";
+import { navigateToAgent } from "@/utils/navigate-to-agent";
 import { canCreateWorkspaceTerminal } from "@/screens/workspace/terminals/state";
 import { useWorkspaceTerminals } from "@/screens/workspace/terminals/use-workspace-terminals";
 import { shouldEnableWorkspaceReviewArchiveAction } from "@/screens/workspace/workspace-environment-panel-model";
@@ -844,13 +845,31 @@ function WorkspaceScreenContent({
     };
   }, [isRouteFocused, normalizedServerId, setFocusedAgentId]);
 
-  const { environmentPanelAgentId, environmentProgress, environmentSourceLabel } =
-    useWorkspaceEnvironmentData({
-      normalizedServerId,
-      activeTargetAgentId,
-      workspaceDescriptor,
-      currentBranchName,
-    });
+  const {
+    environmentPanelAgentId,
+    environmentProgress,
+    environmentGoal,
+    environmentSubagents,
+    cancelEnvironmentGoal,
+    hasFloatingInspectorContent,
+  } = useWorkspaceEnvironmentData({
+    normalizedServerId,
+    activeTargetAgentId,
+    workspaceDescriptor,
+    currentBranchName,
+  });
+  const handleOpenEnvironmentSubagent = useCallback(
+    (subagentId: string) => {
+      navigateToAgent({ serverId: normalizedServerId, agentId: subagentId });
+    },
+    [normalizedServerId],
+  );
+  const handleCancelEnvironmentGoal = useCallback(() => {
+    if (!cancelEnvironmentGoal) {
+      return;
+    }
+    void cancelEnvironmentGoal();
+  }, [cancelEnvironmentGoal]);
   const { handleCopyEnvironmentResumeCommand, handleCopyWorkspacePath, handleCopyBranchName } =
     useWorkspaceUtilityActions({
       client,
@@ -1098,7 +1117,7 @@ function WorkspaceScreenContent({
       isGitCheckout,
       isExplorerOpen,
       canToggleExplorer: Boolean(activeExplorerCheckout) || canUseRightPanel,
-      canShowEnvironmentPanel: Boolean(workspaceDirectory),
+      canShowEnvironmentPanel: hasFloatingInspectorContent,
       isTerminalDrawerOpen: terminalDrawerOpen,
       isRightPanelOpen: rightPanelOpen,
       explorerToggleAccessibilityState,
@@ -1115,35 +1134,30 @@ function WorkspaceScreenContent({
       handleToggleExplorer,
       handleToggleRightPanel,
       handleToggleTerminalDrawer,
+      hasFloatingInspectorContent,
       isExplorerOpen,
       isGitCheckout,
       rightPanelOpen,
       terminalDrawerOpen,
-      workspaceDirectory,
     ],
   );
   const workspaceCenterEnvironmentPanel = useMemo(
     () => ({
-      serverId: normalizedServerId,
-      workspaceDirectory,
-      currentBranchName,
-      isGitCheckout,
-      diffStat: workspaceDescriptor?.diffStat ?? null,
-      sourceLabel: environmentSourceLabel,
+      goal: environmentGoal,
       progress: environmentProgress,
-      onOpenChanges: handleOpenEnvironmentChanges,
+      subagents: environmentSubagents,
+      onCancelGoal: cancelEnvironmentGoal ? handleCancelEnvironmentGoal : null,
+      onOpenSubagent: handleOpenEnvironmentSubagent,
       onClose: handleToggleEnvironmentPanel,
     }),
     [
-      currentBranchName,
+      cancelEnvironmentGoal,
+      environmentGoal,
       environmentProgress,
-      environmentSourceLabel,
+      environmentSubagents,
+      handleCancelEnvironmentGoal,
+      handleOpenEnvironmentSubagent,
       handleToggleEnvironmentPanel,
-      handleOpenEnvironmentChanges,
-      isGitCheckout,
-      normalizedServerId,
-      workspaceDescriptor?.diffStat,
-      workspaceDirectory,
     ],
   );
 

@@ -47,19 +47,19 @@ ChisaCode 是 **自托管的多 provider 智能体开发环境**：在真实 pro
 
 ### 3.1 导航层 · Left rail（对齐 `left-sidebar.tsx`）
 
-| 能力                      | 默认可见             | 源码 / 文案                                                                              |
-| ------------------------- | -------------------- | ---------------------------------------------------------------------------------------- |
-| **所有会话**              | 是（顶行标题按钮）   | `sidebar.allSessions` → sessions 路由                                                    |
-| **搜索**                  | 是（顶行图标）       | Command Center                                                                           |
-| **收起侧栏**              | 是（顶行图标，桌面） | Soft 约定：与搜索同簇；收起后为窄 rail + `PanelLeft` 打开（`desktop-left-sidebar-open`） |
-| **新对话**                | 是                   | **唯一主 CTA** `sidebar.newConversation`                                                 |
-| Project → session 列表    | 是                   | `sidebar-session-list`                                                                   |
-| Host 切换                 | 是（footer）         | Host picker + 状态点                                                                     |
-| **打开项目**              | 是（footer 图标）    | `sidebar.addProject` / FolderOpen                                                        |
-| **主页**                  | 是（footer 图标）    | `sidebar.home` / House                                                                   |
-| **设置**                  | 是（footer 图标）    | `sidebar.settings` / Settings                                                            |
-| Pin / archive / rename 等 | 否（hover / 菜单）   | session / project menus                                                                  |
-| 导入会话                  | 否\*                 | workspace 更多菜单等                                                                     |
+| 能力                      | 默认可见                 | 源码 / 文案                                                                                                       |
+| ------------------------- | ------------------------ | ----------------------------------------------------------------------------------------------------------------- |
+| **所有会话**              | 是（顶行标题按钮）       | `sidebar.allSessions` → sessions 路由                                                                             |
+| **搜索**                  | 是（顶行图标）           | Command Center                                                                                                    |
+| **收起/展开侧栏**         | 是（壳层固定控件，桌面） | Soft 对齐 T3 `SidebarTrigger`：`DesktopSidebarControl`（`desktop-sidebar-control`）；展开时侧栏顶行不再重复 close |
+| **新对话**                | 是                       | **唯一主 CTA** `sidebar.newConversation`                                                                          |
+| Project → session 列表    | 是                       | `sidebar-session-list`                                                                                            |
+| Host 切换                 | 是（footer）             | Host picker + 状态点                                                                                              |
+| **打开项目**              | 是（footer 图标）        | `sidebar.addProject` / FolderOpen                                                                                 |
+| **主页**                  | 是（footer 图标）        | `sidebar.home` / House                                                                                            |
+| **设置**                  | 是（footer 图标）        | `sidebar.settings` / Settings                                                                                     |
+| Pin / archive / rename 等 | 否（hover / 菜单）       | session / project menus                                                                                           |
+| 导入会话                  | 否\*                     | workspace 更多菜单等                                                                                              |
 
 主 CTA 收束为「新对话」；**footer 三图标与 Host 不可从原型中抹掉**——那是真实产品能力。
 
@@ -262,9 +262,9 @@ Home 允许大标题；工作态仍靠 **foreground / muted / faint**，不靠�
   IPC：`window:minimize` / `close` / `isMaximized` / `toggleMaximize` + `resized`
 - 几何：3×46 命中区，高度 48 对齐 Soft topbar；  
   `DESKTOP_WINDOW_CONTROLS_WIDTH/HEIGHT` 在 `constants/layout.ts`
-- **侧栏开关互斥**：侧栏展开时只显示侧栏 `PanelLeftClose`；  
-  收起后只显示工作区 `SidebarMenuToggle`；  
-  **折叠时不渲染** 44px 灰底 rail（无灰边、无重复展开图标）
+- **侧栏开关（T3 壳层常驻）**：桌面 `DesktopSidebarControl` 固定在 App shell（`AppContainer`），  
+  展开/收起同一控件（`PanelLeftClose` / `PanelLeft`），不依赖页面 header 挂载；  
+  页面 `SidebarMenuToggle` 仅 compact；**折叠时不渲染** 44px 灰底 rail
 
 ### 6.4 Message stream
 

@@ -32,15 +32,17 @@ export interface SoftComposerCardElevation {
 export function resolveSoftComposerCardElevation(): SoftComposerCardElevation {
   if (isWeb) {
     return {
-      // Soft docked pen-bar: short contact shadow (no long 36px trail).
-      boxShadow: "0 1px 2px rgba(20, 23, 31, 0.04), 0 4px 12px rgba(20, 23, 31, 0.06)",
+      // Soft docked pen-bar: multi-layer ambient veil (matches --shadow-soft family).
+      // Avoid hard contact-only stacks — they read as square corners under light borders.
+      boxShadow:
+        "0 1px 0 rgba(20, 23, 31, 0.04), 0 6px 16px rgba(20, 23, 31, 0.06), 0 14px 36px rgba(20, 23, 31, 0.05)",
     };
   }
   return {
     shadowColor: "rgba(20, 23, 31, 1)",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 14,
+    elevation: 4,
   };
 }

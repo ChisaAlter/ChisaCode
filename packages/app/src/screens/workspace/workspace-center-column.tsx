@@ -264,7 +264,7 @@ export function WorkspaceCenterColumn({
         )}
         {!isMobile ? terminalDrawer : null}
       </View>
-      {/* Legacy floating env rail kept for task progress; git writes live on topbar only. */}
+      {/* Floating goal / plan / subagents inspector (center-column overlay; exclusive with right panel). */}
       {!isMobile ? (
         <WorkspaceEnvironmentPanelRail {...environmentPanel} visible={environmentRailVisible} />
       ) : null}

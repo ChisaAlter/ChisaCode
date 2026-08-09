@@ -26,4 +26,14 @@ describe("resolveSoftComposerCardElevation", () => {
       "boxShadow" in elevation || ("elevation" in elevation && "shadowOpacity" in elevation),
     ).toBe(true);
   });
+
+  it("uses a soft multi-layer ambient veil on web", () => {
+    const elevation = resolveSoftComposerCardElevation();
+    if (!("boxShadow" in elevation) || typeof elevation.boxShadow !== "string") {
+      return;
+    }
+    // Prefer ambient layers over a hard short contact-only stack.
+    expect(elevation.boxShadow).toContain("14px 36px");
+    expect(elevation.boxShadow).not.toContain("0 4px 12px");
+  });
 });

@@ -5,6 +5,7 @@ describe("resolveProviderIconName", () => {
   it("returns the built-in identifier for known provider ids", () => {
     expect(resolveProviderIconName("claude")).toEqual({ kind: "builtin", id: "claude" });
     expect(resolveProviderIconName("codex")).toEqual({ kind: "builtin", id: "codex" });
+    expect(resolveProviderIconName("grokbuild")).toEqual({ kind: "builtin", id: "grokbuild" });
   });
 
   it("maps custom providers that extend a built-in family to that family's icon", () => {
@@ -14,6 +15,10 @@ describe("resolveProviderIconName", () => {
       id: "claude",
     });
     expect(resolveProviderIconName("Codex")).toEqual({ kind: "builtin", id: "codex" });
+    expect(resolveProviderIconName("zai-grokbuild")).toEqual({
+      kind: "builtin",
+      id: "grokbuild",
+    });
   });
 
   it("falls back to the bot icon for unknown providers", () => {

@@ -17,6 +17,7 @@ import {
   WORKBENCH_META_FONT_SIZE,
   WORKBENCH_META_LINE_HEIGHT,
 } from "@/constants/layout";
+import { useWindowControlsPadding } from "@/utils/desktop-window";
 
 const ThemedFileCode2 = withUnistyles(FileCode2);
 const ThemedFolderTree = withUnistyles(FolderTree);
@@ -78,6 +79,12 @@ export function WorkspaceRightPanel({
 }: WorkspaceRightPanelProps) {
   const { t } = useTranslation();
   const hasWorkspaceRoot = Boolean(workspaceRoot && workspaceRoot.trim().length > 0);
+  // Full-height rail shares the caption strip with DesktopWindowControls on Win/Linux.
+  const windowControlsPadding = useWindowControlsPadding("rightPanelHeader");
+  const headerStyle = useMemo(
+    () => [styles.header, { paddingRight: 14 + windowControlsPadding.right }],
+    [windowControlsPadding.right],
+  );
 
   const cards = useMemo<SurfaceCardSpec[]>(
     () => [
@@ -119,7 +126,7 @@ export function WorkspaceRightPanel({
 
   return (
     <View style={styles.rail} testID="workspace-right-panel">
-      <View style={styles.header}>
+      <View style={headerStyle}>
         <Text style={styles.headerTitle} numberOfLines={1}>
           {activeSurface
             ? t(`workspace.rightPanel.surface.${activeSurface}`)
@@ -378,7 +385,9 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 14,
+    // Horizontal: paddingLeft fixed; paddingRight set dynamically for caption reserve.
+    paddingLeft: 14,
+    paddingRight: 14,
     borderBottomWidth: theme.borderWidth[1],
     borderBottomColor: theme.colors.surface2,
   },

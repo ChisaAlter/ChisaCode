@@ -12,6 +12,7 @@ import {
 } from "@/constants/layout";
 import { useWindowControlsPadding } from "@/utils/desktop-window";
 import { TitlebarDragRegion } from "@/components/desktop/titlebar-drag-region";
+import { useDesktopSidebarControlContentPad } from "@/components/desktop/desktop-sidebar-control";
 import { SPACING } from "@/styles/theme";
 import { resolveThemeWorkbenchSurfaceRoles } from "@/styles/workbench-surface-roles";
 
@@ -47,6 +48,8 @@ export function ScreenHeader({
   const insets = useSafeAreaInsets();
   const isMobile = useIsCompactFormFactor();
   const padding = useWindowControlsPadding(windowControlsPaddingRole);
+  // Shell DesktopSidebarControl is fixed; clear titles when the left rail is collapsed.
+  const sidebarControlContentPad = useDesktopSidebarControlContentPad();
   // Only add extra padding on mobile for better touch targets; on desktop, only use safe area insets
   const topPadding = isMobile ? HEADER_TOP_PADDING_MOBILE : 0;
   // `spacing` is the static `SPACING` scale shared by every theme, so the
@@ -63,12 +66,24 @@ export function ScreenHeader({
       styles.row,
       height === undefined ? null : { height },
       {
-        paddingLeft: baseHorizontalPadding + padding.left,
+        paddingLeft: Math.max(
+          baseHorizontalPadding + padding.left,
+          // Collapsed desktop: clear the fixed shell trigger (T3 content-left).
+          isMobile ? 0 : sidebarControlContentPad,
+        ),
         paddingRight: baseHorizontalPadding + padding.right,
       },
       borderless && styles.borderless,
     ],
-    [baseHorizontalPadding, borderless, height, padding.left, padding.right],
+    [
+      baseHorizontalPadding,
+      borderless,
+      height,
+      isMobile,
+      padding.left,
+      padding.right,
+      sidebarControlContentPad,
+    ],
   );
   const headerStyle = useMemo(
     () => [styles.header, backgroundColor ? { backgroundColor } : null],

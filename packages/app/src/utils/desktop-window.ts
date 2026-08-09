@@ -23,7 +23,9 @@ type WindowControlsPaddingRole =
   | "header"
   | "detailHeader"
   | "tabRow"
-  | "explorerSidebar";
+  | "explorerSidebar"
+  /** Full-height right rail header flush to the window edge (Win/Linux caption). */
+  | "rightPanelHeader";
 
 // Module-level cache so hook remounts (e.g., on navigation) don't briefly
 // fall back to the default `false` while the async fullscreen check resolves.
@@ -139,7 +141,7 @@ export function useWindowControlsPadding(role: WindowControlsPaddingRole): {
 /**
  * Resolves which window-control padding a layout role should consume
  * @param input Role, raw platform padding, and desktop panel/focus flags
- * @returns Padding applied for the role; only titlebar currently uses raw padding
+ * @returns Padding for the role; titlebar uses full raw insets, right-panel header uses right only
  */
 export function resolveWindowControlsPadding(input: {
   role: WindowControlsPaddingRole;
@@ -150,6 +152,12 @@ export function resolveWindowControlsPadding(input: {
 }): RawWindowControlsPadding {
   if (input.role === "titlebar") {
     return input.rawPadding;
+  }
+
+  // Docked right rail is full-height to the window edge; its 48px header shares the
+  // caption strip with DesktopWindowControls. Reserve raw.right (Win/Linux 138, else 0).
+  if (input.role === "rightPanelHeader") {
+    return { left: 0, right: input.rawPadding.right, top: 0 };
   }
 
   return { left: 0, right: 0, top: 0 };

@@ -59,8 +59,9 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
     width: "100%",
     minWidth: 0,
-    // Clip any child min-content that would otherwise expand the flex chain.
-    overflow: "hidden",
+    // Keep visible so pen-bar soft shadows are not clipped into hard corners.
+    // Column width is already capped via maxWidth + minWidth:0 (no self-measured width).
+    overflow: "visible",
     // Soft Workbench: center the reading column (design .stream-inner).
     alignItems: "center",
     backgroundColor: resolveThemeWorkbenchSurfaceRoles(theme).content,

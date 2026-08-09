@@ -116,7 +116,7 @@
 ### Model gateway Responses→Chat 工具历史配对（2026-07-25 完成）
 
 - **问题**：`grok-4-5-codex`（及其它 chat-only upstream 的 Responses face）多轮工具调用时，模型“读到空 shell / 幻觉文件内容 / 不按工具结果改盘”。根因在 gateway 转换层，不在 Codex UI notification 路径。
-- **影响范围**：`packages/server/src/server/model-gateway/model-gateway.ts`；所有经 model gateway 的 codex/claude/opencode/pi/kimi faces。
+- **影响范围**：`packages/server/src/server/model-gateway/model-gateway.ts`；所有经 model gateway 的 codex/claude/opencode/pi/kimi/grokbuild faces。
 - **根因**：
   1. Codex 在 `function_call` 与 `function_call_output` 之间插入空 assistant message；转换后打断 chat 的 `assistant.tool_calls → role=tool` 邻接契约。
   2. 非字符串 `function_call_output.output`（stdout 对象等）被 `readTextContent` 静默变成 `""`。

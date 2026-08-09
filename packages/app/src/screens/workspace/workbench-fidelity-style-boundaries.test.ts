@@ -20,15 +20,64 @@ describe("workbench fidelity style boundaries", () => {
     expect(source).toContain('pathname.includes("/workspace/")');
   });
 
-  it("uses Codex-style stacked floating environment cards", () => {
+  it("keeps a T3-style shell DesktopSidebarControl that survives every route", () => {
+    const appContainerSource = readSource("../../app/_layout/AppContainer.tsx");
+    const controlSource = readSource("../../components/desktop/desktop-sidebar-control.tsx");
+    const menuHeaderSource = readSource("../../components/headers/menu-header.tsx");
+    const leftSidebarSource = readSource("../../components/left-sidebar.tsx");
+    const softTopbarSource = readSource("./workspace-header.tsx");
+    const softHomeSource = readSource("../new-workspace-screen.tsx");
+
+    // Shell owns open/close (T3 SidebarControl) — not per-page header mounts.
+    expect(appContainerSource).toContain("DesktopSidebarControl");
+    expect(appContainerSource).toContain("<DesktopSidebarControl enabled={chromeEnabled} />");
+    expect(appContainerSource).not.toContain("desktop-left-sidebar-open-focus");
+    expect(appContainerSource).not.toContain("desktopSidebarRestoreRail");
+
+    expect(controlSource).toContain('testID="desktop-sidebar-control"');
+    expect(controlSource).toContain("PanelLeftClose");
+    expect(controlSource).toContain("PanelLeft");
+    expect(controlSource).toContain("toggleDesktopAgentList");
+    expect(controlSource).toContain("useDesktopSidebarControlContentPad");
+    // Pixel-match Soft sidebar search tile (not HeaderToggleButton border slot).
+    expect(controlSource).toContain("ICON_SIZE.sm");
+    expect(controlSource).toContain("borderWidth: 0");
+    expect(controlSource).toContain("mutedColorMapping");
+    expect(controlSource).not.toContain("HeaderToggleButton");
+    expect(controlSource).toContain("TooltipTrigger");
+
+    // Page-level SidebarMenuToggle is compact-only so Soft Home cannot lose the control.
+    expect(menuHeaderSource).toContain("if (!isMobile) {");
+    expect(menuHeaderSource).toContain("return null;");
+    expect(menuHeaderSource).not.toContain("ThemedPanelLeft");
+
+    // Open rail no longer hosts a second desktop close tile; top-row spacer only
+    // (full-width「新对话」must not inherit shell-control left pad).
+    expect(leftSidebarSource).toContain('testID="sidebar-close"');
+    expect(leftSidebarSource).not.toContain("desktop-sidebar-close");
+    expect(leftSidebarSource).toContain("desktopSidebarControlSpacer");
+    expect(leftSidebarSource).not.toContain("useDesktopSidebarControlOverlayPad");
+
+    // Content topbars clear the fixed control when the rail is collapsed.
+    expect(softTopbarSource).toContain("useDesktopSidebarControlContentPad");
+    expect(softHomeSource).toContain("useDesktopSidebarControlContentPad");
+    expect(softHomeSource).not.toContain(
+      "<SidebarMenuToggle />\n              <View style={styles.desktopSoftTopSpacer}",
+    );
+  });
+
+  it("uses stacked floating goal / plan / subagents cards", () => {
     const source = readSource("./workspace-environment-panel.tsx");
 
-    expect(source).toContain("function EnvironmentInfoCard");
-    expect(source).toContain("function TaskProgressCard");
-    expect(source).toContain("{progress ? <TaskProgressCard progress={progress} /> : null}");
+    expect(source).toContain("function GoalCard");
+    expect(source).toContain("function PlanProgressCard");
+    expect(source).toContain("function SubagentsCard");
     expect(source).toContain("WORKBENCH_ENVIRONMENT_PANEL_SHADOW");
-    expect(source).toContain('testID="workspace-environment-panel"');
+    expect(source).toContain('testID="workspace-environment-rail"');
+    expect(source).toContain('testID="workspace-goal-panel"');
     expect(source).toContain('testID="workspace-task-progress-panel"');
+    expect(source).toContain('testID="workspace-subagents-panel"');
+    expect(source).not.toContain("function EnvironmentInfoCard");
     expect(source).not.toContain("environmentDockTabs");
   });
 
@@ -122,7 +171,7 @@ describe("workbench fidelity style boundaries", () => {
 
     expect(layoutSource).toContain("function resolveSoftComposerCardElevation");
     expect(inputSource).toContain("resolveSoftComposerCardElevation");
-    expect(layoutSource).toContain("elevation: 3");
+    expect(layoutSource).toContain("elevation: 4");
   });
 
   it("renders a single content slot without any tab wall", () => {

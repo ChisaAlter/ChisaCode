@@ -483,6 +483,8 @@ export class DaemonConnectionController {
             [CLIENT_CAPS.customModeIcons]: true,
             [CLIENT_CAPS.reasoningMergeEnum]: true,
             [CLIENT_CAPS.generativeUi]: true,
+            // COMPAT(cindyModules): added in v0.1.102; advertise so goal/team/learn RPCs are accepted.
+            [CLIENT_CAPS.cindyModules]: true,
           },
           ...(this.config.appVersion ? { appVersion: this.config.appVersion } : {}),
         }),

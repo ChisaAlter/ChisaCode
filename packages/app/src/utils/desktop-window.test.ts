@@ -115,4 +115,36 @@ describe("resolveWindowControlsPadding", () => {
       top: 0,
     });
   });
+
+  it("reserves caption width on the docked right-panel header only", () => {
+    expect(
+      resolveWindowControlsPadding({
+        role: "rightPanelHeader",
+        rawPadding,
+        sidebarClosed: false,
+        explorerOpen: false,
+        focusModeEnabled: false,
+      }),
+    ).toEqual({
+      left: 0,
+      right: rawPadding.right,
+      top: 0,
+    });
+  });
+
+  it("clears right-panel header padding when raw caption inset is zero", () => {
+    expect(
+      resolveWindowControlsPadding({
+        role: "rightPanelHeader",
+        rawPadding: { left: 0, right: 0, top: 0 },
+        sidebarClosed: false,
+        explorerOpen: false,
+        focusModeEnabled: false,
+      }),
+    ).toEqual({
+      left: 0,
+      right: 0,
+      top: 0,
+    });
+  });
 });

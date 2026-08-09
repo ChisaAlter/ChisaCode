@@ -23,6 +23,9 @@ const BUILTIN_PROVIDER_ICONS: Record<BuiltinProviderIconName, ProviderIconCompon
   kimi: KimiIcon as unknown as ProviderIconComponent,
   opencode: OpenCodeIcon as unknown as ProviderIconComponent,
   pi: PiIcon as unknown as ProviderIconComponent,
+  // No dedicated brand asset yet; keep a stable non-generic mapping point for
+  // Grok Build / `*-grokbuild` faces (falls through Bot only if removed).
+  grokbuild: Bot,
 };
 
 export function getProviderIcon(provider: string): ProviderIconComponent {

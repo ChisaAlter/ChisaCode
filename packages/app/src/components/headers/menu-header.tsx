@@ -1,7 +1,6 @@
 import { useCallback, useMemo, type ReactNode } from "react";
 import { View, type StyleProp, type ViewStyle } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import { PanelLeft } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { ScreenHeader } from "./screen-header";
 import { ScreenTitle } from "./screen-title";
@@ -9,7 +8,7 @@ import { HeaderToggleButton } from "./header-toggle-button";
 import { selectIsAgentListOpen, usePanelStore } from "@/stores/panel-store";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { getShortcutOs } from "@/utils/shortcut-platform";
-import { ICON_SIZE, type Theme } from "@/styles/theme";
+import type { Theme } from "@/styles/theme";
 
 interface MenuHeaderProps {
   title?: string;
@@ -43,20 +42,20 @@ function MobileMenuIcon({ color }: { color: string }) {
   );
 }
 
-// The toggle glyphs take their theme color through a `color` prop (a non-style
-// prop for lucide icons), so wrap both renderers with `withUnistyles` and feed
-// the theme-reactive color through `uniProps`. `iconSize` is the static
-// `ICON_SIZE` constant, imported directly instead of read from a hook.
-const ThemedPanelLeft = withUnistyles(PanelLeft);
+// The mobile menu glyph takes its theme color through a `color` prop, so wrap
+// the renderer with `withUnistyles` and feed the theme-reactive color through
+// `uniProps`.
 const ThemedMobileMenuIcon = withUnistyles(MobileMenuIcon);
 
 const foregroundMutedColorMapping = (theme: Theme) => ({
   color: theme.colors.foregroundMuted,
 });
-const foregroundColorMapping = (theme: Theme) => ({
-  color: theme.colors.foreground,
-});
 
+/**
+ * Compact-only agent-list toggle. Desktop open/close is the shell-level
+ * `DesktopSidebarControl` (T3 SidebarTrigger) so Soft Home / workspace / focus
+ * mode cannot lose the affordance when a page forgets to mount a header toggle.
+ */
 export function SidebarMenuToggle({
   style,
   tooltipSide = "right",
@@ -71,11 +70,6 @@ export function SidebarMenuToggle({
     [],
   );
 
-  let menuIconColorMapping = foregroundMutedColorMapping;
-  if (!isMobile && isOpen) {
-    menuIconColorMapping = foregroundColorMapping;
-  }
-
   const handlePress = useCallback(() => {
     toggleAgentListForLayout({ isCompact: isMobile });
   }, [toggleAgentListForLayout, isMobile]);
@@ -83,9 +77,9 @@ export function SidebarMenuToggle({
   const { t } = useTranslation();
   const accessibilityState = useMemo(() => ({ expanded: isOpen }), [isOpen]);
 
-  // Desktop: workspace toggle only when the left rail is collapsed. While the
-  // sidebar is open, the sidebar owns the single close affordance (PanelLeftClose).
-  if (!isMobile && isOpen) {
+  // Desktop: shell owns the single open/close control. Page headers must not
+  // mount a second toggle that can disappear with route chrome.
+  if (!isMobile) {
     return null;
   }
 
@@ -103,11 +97,7 @@ export function SidebarMenuToggle({
       accessibilityLabel={isOpen ? t("common.closeMenu") : t("common.openMenu")}
       accessibilityState={accessibilityState}
     >
-      {isMobile ? (
-        <ThemedMobileMenuIcon uniProps={menuIconColorMapping} />
-      ) : (
-        <ThemedPanelLeft size={ICON_SIZE.md} uniProps={menuIconColorMapping} />
-      )}
+      <ThemedMobileMenuIcon uniProps={foregroundMutedColorMapping} />
     </HeaderToggleButton>
   );
 }

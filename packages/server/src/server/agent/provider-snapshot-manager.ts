@@ -1045,6 +1045,14 @@ const PROVIDER_ENV_KEYS: Record<string, string[]> = {
   opencode: ["OPENAI_API_KEY", "OPENAI_BASE_URL"],
   pi: ["OPENAI_API_KEY", "OPENAI_BASE_URL"],
   kimi: ["OPENAI_API_KEY", "OPENAI_BASE_URL"],
+  grokbuild: [
+    "OPENAI_API_KEY",
+    "OPENAI_BASE_URL",
+    "XAI_API_KEY",
+    "GROK_HOME",
+    "GROK_MODELS_BASE_URL",
+    "GROK_DEFAULT_SELECTED_PERMISSION",
+  ],
 };
 
 function collectProviderEnvPresence(

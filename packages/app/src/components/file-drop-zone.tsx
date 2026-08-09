@@ -78,7 +78,9 @@ const styles = StyleSheet.create((theme) => ({
     minWidth: 0,
     width: "100%",
     position: "relative",
-    overflow: "hidden",
+    // Visible so Soft Home / session pen-bar soft shadows are not clipped square.
+    // Drop overlay is absoluteFill and does not rely on clipping.
+    overflow: "visible",
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,

@@ -40,6 +40,7 @@ configuration changes.
 - Displaying an unavailable or legacy MiMoCode tombstone.
 - Mapping MiMoCode sessions or custom providers to OpenCode.
 - Adding Grok Build as a model-gateway face. That is a separate provider integration.
+  (Superseded 2026-08-09: Grok Build is now a first-class model-gateway face.)
 - Changing generic ACP support.
 - Redesigning provider, settings, or model-selector layouts.
 

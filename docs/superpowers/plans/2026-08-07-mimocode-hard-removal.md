@@ -308,6 +308,7 @@ return [ids.opencodeProviderId, ids.piProviderId, ids.kimiProviderId];
 ```
 
 For all-scope return the five implemented gateway faces. Remove the generated model field and update English/Chinese copy to name Claude, Codex, OpenCode, Pi, and Kimi Code. Do not add Grok Build in this task.
+(Superseded 2026-08-09: Grok Build is now included as the sixth model-gateway face.)
 
 - [ ] **Step 5: Remove stale gateway fixtures and run every changed gateway test**
 

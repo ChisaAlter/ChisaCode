@@ -1,34 +1,15 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo } from "react";
 import { Pressable, Text, View, type StyleProp, type ViewStyle } from "react-native";
-import { useQueryClient } from "@tanstack/react-query";
-import {
-  ArrowLeftRight,
-  ArrowUpRight,
-  Check,
-  ChevronDown,
-  Circle,
-  Folder,
-  GitBranch,
-  GitCommitHorizontal,
-  Laptop,
-  RefreshCcw,
-  X,
-} from "lucide-react-native";
+import { Check, Circle, X } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
+import type { GoalListItem, GoalStatus } from "@chisacode/protocol/goal/rpc-schemas";
 
-import { Combobox, ComboboxItem, type ComboboxProps } from "@/components/ui/combobox";
-import { SourceControlPanelIcon } from "@/components/icons/source-control-panel-icon";
-import { getDesktopHost } from "@/desktop/host";
-import { useToast } from "@/contexts/toast-context";
-import { checkoutStatusQueryKey } from "@/git/query-keys";
-import { useBranchSwitcher } from "@/hooks/use-branch-switcher";
-import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import type {
   AgentProgressItem,
   AgentProgressModel,
 } from "@/screens/workspace/workspace-environment-panel-model";
-import type { WorkspaceDescriptor } from "@/stores/session-store";
+import type { SubagentRow } from "@/subagents/select";
 import type { Theme } from "@/styles/theme";
 import { isWeb } from "@/constants/platform";
 import {
@@ -44,260 +25,154 @@ import {
   WORKSPACE_SECONDARY_HEADER_HEIGHT,
 } from "@/constants/layout";
 
-const ThemedArrowLeftRight = withUnistyles(ArrowLeftRight);
-const ThemedArrowUpRight = withUnistyles(ArrowUpRight);
 const ThemedCheck = withUnistyles(Check);
-const ThemedChevronDown = withUnistyles(ChevronDown);
 const ThemedCircle = withUnistyles(Circle);
-const ThemedFolder = withUnistyles(Folder);
-const ThemedGitBranch = withUnistyles(GitBranch);
-const ThemedGitCommitHorizontal = withUnistyles(GitCommitHorizontal);
-const ThemedLaptop = withUnistyles(Laptop);
-const ThemedRefreshCcw = withUnistyles(RefreshCcw);
-const ThemedSourceControlPanelIcon = withUnistyles(SourceControlPanelIcon);
 const ThemedX = withUnistyles(X);
 
 export const WORKSPACE_ENVIRONMENT_PANEL_WIDTH = WORKBENCH_ENVIRONMENT_PANEL_WIDTH;
+
+const MAX_VISIBLE_SUBAGENTS = 6;
 
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 const successColorMapping = (theme: Theme) => ({ color: theme.colors.palette.green[500] });
 const accentColorMapping = (theme: Theme) => ({ color: theme.colors.accent });
 
-type EnvironmentRowIconName =
-  | "changes"
-  | "local"
-  | "branch"
-  | "commit"
-  | "compare"
-  | "chevron"
-  | "arrow";
-
 /**
- * Renders the desktop workspace environment stack (Codex-style floating cards).
- * @param props Environment data, progress model, and command callbacks
- * @returns The environment stack, or null when hidden
+ * Desktop floating inspector: stacked cards for goal, plan/task progress, and subagents.
+ * @param props Visibility, models, and action callbacks
+ * @returns The floating stack, or null when hidden / empty
  */
 export function WorkspaceEnvironmentPanelRail({
   visible,
-  serverId,
-  workspaceDirectory,
-  currentBranchName,
-  isGitCheckout,
-  diffStat,
-  sourceLabel,
+  goal,
   progress,
-  onOpenChanges,
+  subagents,
+  onCancelGoal,
+  onOpenSubagent,
   onClose,
 }: {
   visible: boolean;
-  serverId: string;
-  workspaceDirectory: string | null;
-  currentBranchName: string | null;
-  isGitCheckout: boolean;
-  diffStat: WorkspaceDescriptor["diffStat"];
-  sourceLabel: string | null;
+  goal: GoalListItem | null;
   progress: AgentProgressModel | null;
-  onOpenChanges: () => void;
+  subagents: readonly SubagentRow[];
+  onCancelGoal: (() => void) | null;
+  onOpenSubagent: (subagentId: string) => void;
   onClose: () => void;
 }) {
-  if (!visible) {
+  const hasGoal = goal !== null;
+  const hasProgress = progress !== null;
+  const hasSubagents = subagents.length > 0;
+
+  if (!visible || (!hasGoal && !hasProgress && !hasSubagents)) {
     return null;
   }
 
   return (
     <View style={styles.environmentStack} testID="workspace-environment-rail">
-      <EnvironmentInfoCard
-        serverId={serverId}
-        workspaceDirectory={workspaceDirectory}
-        currentBranchName={currentBranchName}
-        isGitCheckout={isGitCheckout}
-        diffStat={diffStat}
-        sourceLabel={sourceLabel}
-        onOpenChanges={onOpenChanges}
-        onClose={onClose}
-      />
-      {progress ? <TaskProgressCard progress={progress} /> : null}
+      {goal ? (
+        <GoalCard goal={goal} onCancelGoal={onCancelGoal} onClose={onClose} showClose />
+      ) : null}
+      {progress ? (
+        <PlanProgressCard
+          progress={progress}
+          onClose={hasGoal ? null : onClose}
+          showClose={!hasGoal}
+        />
+      ) : null}
+      {hasSubagents ? (
+        <SubagentsCard
+          rows={subagents}
+          onOpenSubagent={onOpenSubagent}
+          onClose={!hasGoal && !hasProgress ? onClose : null}
+          showClose={!hasGoal && !hasProgress}
+        />
+      ) : null}
     </View>
   );
 }
 
-function EnvironmentInfoCard({
-  serverId,
-  workspaceDirectory,
-  currentBranchName,
-  isGitCheckout,
-  diffStat,
-  sourceLabel,
-  onOpenChanges,
+function GoalCard({
+  goal,
+  onCancelGoal,
   onClose,
+  showClose,
 }: {
-  serverId: string;
-  workspaceDirectory: string | null;
-  currentBranchName: string | null;
-  isGitCheckout: boolean;
-  diffStat: WorkspaceDescriptor["diffStat"];
-  sourceLabel: string | null;
-  onOpenChanges: () => void;
+  goal: GoalListItem;
+  onCancelGoal: (() => void) | null;
   onClose: () => void;
+  showClose: boolean;
 }) {
   const { t } = useTranslation();
-  const queryClient = useQueryClient();
-  const [localExpanded, setLocalExpanded] = useState(false);
-  const normalizedCwd = workspaceDirectory?.trim() ?? "";
-  const canRefreshGit = Boolean(normalizedCwd && isGitCheckout);
-  const locationLabel = sourceLabel ?? normalizedCwd;
-
-  const handleRefreshStatus = useCallback(() => {
-    if (!canRefreshGit) {
-      return;
-    }
-    void queryClient.invalidateQueries({
-      queryKey: checkoutStatusQueryKey(serverId, normalizedCwd),
-    });
-  }, [canRefreshGit, normalizedCwd, queryClient, serverId]);
-
-  const handleToggleLocal = useCallback(() => {
-    setLocalExpanded((current) => !current);
-  }, []);
-
-  const handleOpenLocalPath = useCallback(() => {
-    if (!normalizedCwd) {
-      return;
-    }
-    const openPath = getDesktopHost()?.opener?.openPath;
-    if (!openPath) {
-      return;
-    }
-    void openPath(normalizedCwd).catch(() => {
-      // Desktop host may reject; keep silent to match other path openers.
-    });
-  }, [normalizedCwd]);
-
-  const changeCount =
-    diffStat && Number.isFinite(diffStat.additions) && Number.isFinite(diffStat.deletions)
-      ? Math.max(0, diffStat.additions) + Math.max(0, diffStat.deletions)
-      : 0;
+  const statusLabel = formatGoalStatusLabel(goal.status, t);
+  const canCancel = Boolean(onCancelGoal) && isCancellableGoalStatus(goal.status);
+  const statusBadgeStyle = goalStatusBadgeStyle(goal.status);
 
   return (
     <View style={styles.floatingCardOuter}>
-      <View style={styles.floatingCard} testID="workspace-environment-panel">
+      <View style={styles.floatingCard} testID="workspace-goal-panel">
         <View style={styles.cardHeader}>
-          <Text style={styles.cardTitle}>{t("workspace.environment.title")}</Text>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={t("workspace.environment.hideFloatingPanel")}
-            onPress={onClose}
-            style={styles.iconButton}
-            testID="workspace-environment-close"
-          >
-            <ThemedX size={14} uniProps={mutedColorMapping} />
-          </Pressable>
-        </View>
-
-        <View style={styles.cardBody}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={t("workspace.environment.changesShort")}
-            onPress={onOpenChanges}
-            style={infoRowStyle}
-            testID="workspace-environment-changes"
-          >
-            <View style={styles.rowLeading}>
-              <View style={styles.rowIcon}>
-                <RowIcon name="changes" />
-              </View>
-              <Text style={styles.rowLabel} numberOfLines={1}>
-                {t("workspace.environment.changesShort")}
-              </Text>
-            </View>
-            <View style={styles.rowTrailing}>
-              {changeCount > 0 ? <Text style={styles.rowMetaText}>{changeCount}</Text> : null}
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={t("workspace.environment.refreshStatus")}
-                disabled={!canRefreshGit}
-                hitSlop={6}
-                onPress={handleRefreshStatus}
-                style={styles.trailingIconHit}
-                testID="workspace-environment-refresh"
-              >
-                <ThemedRefreshCcw size={14} uniProps={mutedColorMapping} />
-              </Pressable>
-            </View>
-          </Pressable>
-
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={t("workspace.environment.local")}
-            onPress={handleToggleLocal}
-            style={infoRowStyle}
-            testID="workspace-environment-local"
-          >
-            <View style={styles.rowLeading}>
-              <View style={styles.rowIcon}>
-                <RowIcon name="local" />
-              </View>
-              <Text style={styles.rowLabel} numberOfLines={1}>
-                {t("workspace.environment.local")}
-              </Text>
-            </View>
-            <RowIcon name="chevron" />
-          </Pressable>
-          {localExpanded ? (
-            <View style={styles.expandedBlock}>
-              <Text style={styles.expandedPath} numberOfLines={3}>
-                {locationLabel || t("workspace.environment.noSource")}
-              </Text>
-              {normalizedCwd ? (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={t("workspace.environment.openLocation")}
-                  onPress={handleOpenLocalPath}
-                  style={styles.expandedAction}
-                  testID="workspace-environment-open-location"
-                >
-                  <ThemedFolder size={13} uniProps={mutedColorMapping} />
-                  <Text style={styles.expandedActionText}>
-                    {t("workspace.environment.openLocation")}
-                  </Text>
-                </Pressable>
-              ) : null}
-            </View>
+          <Text style={styles.cardTitle}>{t("workspace.environment.goalTitle")}</Text>
+          {showClose ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t("workspace.environment.hideFloatingPanel")}
+              onPress={onClose}
+              style={styles.iconButton}
+              testID="workspace-environment-close"
+            >
+              <ThemedX size={14} uniProps={mutedColorMapping} />
+            </Pressable>
           ) : null}
-
-          <BranchSwitcherRow
-            serverId={serverId}
-            cwd={workspaceDirectory}
-            currentBranchName={currentBranchName}
-            isGitCheckout={isGitCheckout}
-          />
-
-          {/* Git write actions live only on the topbar Git control (P0 de-dupe). */}
-
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={t("workspace.environment.compareBranches")}
-            onPress={onOpenChanges}
-            style={infoRowStyle}
-            testID="workspace-environment-compare"
-          >
-            <View style={styles.rowLeading}>
-              <View style={styles.rowIcon}>
-                <RowIcon name="compare" />
-              </View>
-              <Text style={styles.rowLabel} numberOfLines={1}>
-                {t("workspace.environment.compareBranches")}
+        </View>
+        <View style={styles.cardBody}>
+          <Text style={styles.goalObjective} numberOfLines={4}>
+            {goal.objective}
+          </Text>
+          <View style={styles.badgeRow}>
+            <View style={statusBadgeStyle}>
+              <Text style={styles.badgeText}>{statusLabel}</Text>
+            </View>
+            <View style={styles.badgeNeutralChip}>
+              <Text style={styles.badgeText}>
+                {t("workspace.environment.goalTurns", { count: goal.turnsUsed })}
               </Text>
             </View>
-            <RowIcon name="arrow" />
-          </Pressable>
+            <View style={styles.badgeNeutralChip}>
+              <Text style={styles.badgeText}>
+                {t("workspace.environment.goalTokens", {
+                  count: formatTokenCount(goal.tokensUsed),
+                })}
+              </Text>
+            </View>
+          </View>
+          {canCancel ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t("workspace.environment.cancelGoal")}
+              onPress={onCancelGoal ?? undefined}
+              style={styles.secondaryAction}
+              testID="workspace-goal-cancel"
+            >
+              <Text style={styles.secondaryActionText}>
+                {t("workspace.environment.cancelGoal")}
+              </Text>
+            </Pressable>
+          ) : null}
         </View>
       </View>
     </View>
   );
 }
 
-function TaskProgressCard({ progress }: { progress: AgentProgressModel }) {
+function PlanProgressCard({
+  progress,
+  onClose,
+  showClose,
+}: {
+  progress: AgentProgressModel;
+  onClose: (() => void) | null;
+  showClose: boolean;
+}) {
   const { t } = useTranslation();
   const progressFillStyle = useMemo<StyleProp<ViewStyle>>(
     () => [
@@ -306,18 +181,34 @@ function TaskProgressCard({ progress }: { progress: AgentProgressModel }) {
     ],
     [progress.progress],
   );
+  const title =
+    progress.source === "plan"
+      ? t("workspace.environment.planTitle")
+      : t("workspace.environment.taskProgressTitle");
 
   return (
     <View style={styles.floatingCardOuter}>
       <View style={styles.floatingCard} testID="workspace-task-progress-panel">
         <View style={styles.cardHeader}>
-          <Text style={styles.cardTitle}>{t("workspace.environment.taskProgressTitle")}</Text>
-          <Text style={styles.cardHeaderMeta}>
-            {t("workspace.environment.taskProgress", {
-              completed: progress.completedCount,
-              total: progress.totalCount,
-            })}
-          </Text>
+          <Text style={styles.cardTitle}>{title}</Text>
+          {showClose && onClose ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t("workspace.environment.hideFloatingPanel")}
+              onPress={onClose}
+              style={styles.iconButton}
+              testID="workspace-environment-close"
+            >
+              <ThemedX size={14} uniProps={mutedColorMapping} />
+            </Pressable>
+          ) : (
+            <Text style={styles.cardHeaderMeta}>
+              {t("workspace.environment.taskProgress", {
+                completed: progress.completedCount,
+                total: progress.totalCount,
+              })}
+            </Text>
+          )}
         </View>
         <View style={styles.cardBody}>
           <View style={styles.progressTrack} testID="workspace-task-progress-bar">
@@ -334,6 +225,102 @@ function TaskProgressCard({ progress }: { progress: AgentProgressModel }) {
         </View>
       </View>
     </View>
+  );
+}
+
+function SubagentsCard({
+  rows,
+  onOpenSubagent,
+  onClose,
+  showClose,
+}: {
+  rows: readonly SubagentRow[];
+  onOpenSubagent: (subagentId: string) => void;
+  onClose: (() => void) | null;
+  showClose: boolean;
+}) {
+  const { t } = useTranslation();
+  const visibleRows = rows.slice(0, MAX_VISIBLE_SUBAGENTS);
+  const hiddenCount = Math.max(0, rows.length - visibleRows.length);
+
+  return (
+    <View style={styles.floatingCardOuter}>
+      <View style={styles.floatingCard} testID="workspace-subagents-panel">
+        <View style={styles.cardHeader}>
+          <Text style={styles.cardTitle}>{t("workspace.environment.subagents")}</Text>
+          {showClose && onClose ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t("workspace.environment.hideFloatingPanel")}
+              onPress={onClose}
+              style={styles.iconButton}
+              testID="workspace-environment-close"
+            >
+              <ThemedX size={14} uniProps={mutedColorMapping} />
+            </Pressable>
+          ) : (
+            <Text style={styles.cardHeaderMeta}>{rows.length}</Text>
+          )}
+        </View>
+        <View style={styles.cardBody}>
+          {visibleRows.map((row) => (
+            <SubagentRowButton key={row.id} row={row} onOpenSubagent={onOpenSubagent} />
+          ))}
+          {hiddenCount > 0 ? (
+            <Text style={styles.hiddenCountText}>
+              {t("workspace.environment.moreSubagents", { count: hiddenCount })}
+            </Text>
+          ) : null}
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function SubagentRowButton({
+  row,
+  onOpenSubagent,
+}: {
+  row: SubagentRow;
+  onOpenSubagent: (subagentId: string) => void;
+}) {
+  const { t } = useTranslation();
+  const handlePress = useCallback(() => {
+    onOpenSubagent(row.id);
+  }, [onOpenSubagent, row.id]);
+  const initials = useMemo(() => getProviderInitials(row.provider), [row.provider]);
+  const statusLabel = formatSubagentStatusLabel(row, t);
+  const dotStyle = useMemo(() => {
+    if (row.requiresAttention) {
+      return styles.statusDotAttention;
+    }
+    if (row.status === "running") {
+      return styles.statusDotBusy;
+    }
+    return styles.statusDotIdle;
+  }, [row.requiresAttention, row.status]);
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={row.title}
+      onPress={handlePress}
+      style={subagentRowStyle}
+      testID={`workspace-subagent-row-${row.id}`}
+    >
+      <View style={styles.subagentAvatar}>
+        <Text style={styles.subagentAvatarText}>{initials}</Text>
+      </View>
+      <View style={styles.subagentCopy}>
+        <Text style={styles.subagentTitle} numberOfLines={1}>
+          {row.title}
+        </Text>
+        <Text style={styles.subagentMeta} numberOfLines={1}>
+          {statusLabel}
+        </Text>
+      </View>
+      <View style={dotStyle} />
+    </Pressable>
   );
 }
 
@@ -361,135 +348,81 @@ function ProgressItemIcon({ item }: { item: AgentProgressItem }) {
   return <ThemedCircle size={12} uniProps={mutedColorMapping} />;
 }
 
-function BranchSwitcherRow({
-  serverId,
-  cwd,
-  currentBranchName,
-  isGitCheckout,
-}: {
-  serverId: string;
-  cwd: string | null;
-  currentBranchName: string | null;
-  isGitCheckout: boolean;
-}) {
-  const { t } = useTranslation();
-  const anchorRef = useRef<View>(null);
-  const client = useHostRuntimeClient(serverId);
-  const isConnected = useHostRuntimeIsConnected(serverId);
-  const toast = useToast();
-  const queryClient = useQueryClient();
-  const normalizedCwd = cwd?.trim() ?? "";
-  const canSwitchBranch = Boolean(normalizedCwd && currentBranchName && isGitCheckout);
-  const branchLabel = currentBranchName ?? t("workspace.environment.branch");
-  const { branchOptions, isOpen, setIsOpen, handleBranchSelect } = useBranchSwitcher({
-    client,
-    normalizedServerId: serverId,
-    normalizedWorkspaceId: normalizedCwd,
-    currentBranchName,
-    isGitCheckout: canSwitchBranch,
-    isConnected,
-    toast,
-    queryClient,
-  });
-
-  const branchLeadingSlot = useMemo(
-    () => <ThemedGitBranch size={14} uniProps={mutedColorMapping} />,
-    [],
-  );
-  const renderBranchOption = useCallback<NonNullable<ComboboxProps["renderOption"]>>(
-    ({ option, selected, active, onPress }) => (
-      <ComboboxItem
-        label={option.label}
-        selected={selected}
-        active={active}
-        onPress={onPress}
-        leadingSlot={branchLeadingSlot}
-      />
-    ),
-    [branchLeadingSlot],
-  );
-  const handleOpen = useCallback(() => {
-    if (canSwitchBranch) {
-      setIsOpen(true);
-    }
-  }, [canSwitchBranch, setIsOpen]);
-
-  const branchRowStyle = useCallback(
-    ({ hovered, pressed }: { hovered?: boolean; pressed?: boolean }) => [
-      styles.infoRow,
-      canSwitchBranch && (Boolean(hovered) || Boolean(pressed)) && styles.infoRowHovered,
-      !canSwitchBranch && styles.infoRowDisabled,
-    ],
-    [canSwitchBranch],
-  );
-
-  return (
-    <View ref={anchorRef} collapsable={false}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={branchLabel}
-        disabled={!canSwitchBranch}
-        onPress={handleOpen}
-        style={branchRowStyle}
-        testID="workspace-environment-branch"
-      >
-        <View style={styles.rowLeading}>
-          <View style={styles.rowIcon}>
-            <RowIcon name="branch" />
-          </View>
-          <Text style={styles.rowLabel} numberOfLines={1}>
-            {branchLabel}
-          </Text>
-        </View>
-        <RowIcon name="chevron" />
-      </Pressable>
-      {canSwitchBranch ? (
-        <Combobox
-          options={branchOptions}
-          value={branchLabel}
-          onSelect={handleBranchSelect}
-          searchable
-          placeholder={t("branches.placeholder")}
-          searchPlaceholder={t("branches.searchPlaceholder")}
-          emptyText={t("branches.empty")}
-          title={t("branches.title")}
-          open={isOpen}
-          onOpenChange={setIsOpen}
-          anchorRef={anchorRef}
-          desktopPlacement="bottom-start"
-          desktopPreventInitialFlash
-          desktopMinWidth={280}
-          renderOption={renderBranchOption}
-        />
-      ) : null}
-    </View>
-  );
+function subagentRowStyle({ hovered, pressed }: { hovered?: boolean; pressed?: boolean }) {
+  return [styles.subagentRow, (Boolean(hovered) || Boolean(pressed)) && styles.subagentRowHovered];
 }
 
-function RowIcon({ name }: { name: EnvironmentRowIconName }) {
-  if (name === "changes") {
-    return <ThemedSourceControlPanelIcon size={15} uniProps={mutedColorMapping} />;
-  }
-  if (name === "local") {
-    return <ThemedLaptop size={15} uniProps={mutedColorMapping} />;
-  }
-  if (name === "branch") {
-    return <ThemedGitBranch size={15} uniProps={mutedColorMapping} />;
-  }
-  if (name === "commit") {
-    return <ThemedGitCommitHorizontal size={15} uniProps={mutedColorMapping} />;
-  }
-  if (name === "compare") {
-    return <ThemedArrowLeftRight size={15} uniProps={mutedColorMapping} />;
-  }
-  if (name === "arrow") {
-    return <ThemedArrowUpRight size={14} uniProps={mutedColorMapping} />;
-  }
-  return <ThemedChevronDown size={14} uniProps={mutedColorMapping} />;
+function isCancellableGoalStatus(status: GoalStatus): boolean {
+  return status === "active" || status === "paused" || status === "blocked";
 }
 
-function infoRowStyle({ hovered, pressed }: { hovered?: boolean; pressed?: boolean }) {
-  return [styles.infoRow, (Boolean(hovered) || Boolean(pressed)) && styles.infoRowHovered];
+function formatGoalStatusLabel(status: GoalStatus, t: (key: string) => string): string {
+  switch (status) {
+    case "active":
+      return t("workspace.environment.goalStatus.active");
+    case "paused":
+      return t("workspace.environment.goalStatus.paused");
+    case "blocked":
+      return t("workspace.environment.goalStatus.blocked");
+    case "complete":
+      return t("workspace.environment.goalStatus.complete");
+    case "budgetLimited":
+      return t("workspace.environment.goalStatus.budgetLimited");
+    case "failed":
+      return t("workspace.environment.goalStatus.failed");
+    case "cancelled":
+      return t("workspace.environment.goalStatus.cancelled");
+    default:
+      return status;
+  }
+}
+
+function formatSubagentStatusLabel(row: SubagentRow, t: (key: string) => string): string {
+  if (row.requiresAttention) {
+    return t("workspace.environment.subagentNeedsAttention");
+  }
+  if (row.status === "running") {
+    return t("agentStatus.running");
+  }
+  if (row.status === "error") {
+    return t("agentStatus.errored");
+  }
+  if (row.status === "closed") {
+    return t("agentStatus.completed");
+  }
+  return t("agentStatus.idle");
+}
+
+function goalStatusBadgeStyle(status: GoalStatus) {
+  if (status === "active" || status === "paused") {
+    return styles.badgeSuccessChip;
+  }
+  if (status === "blocked" || status === "budgetLimited") {
+    return styles.badgeWarningChip;
+  }
+  return styles.badgeNeutralChip;
+}
+
+function formatTokenCount(tokens: number): string {
+  if (!Number.isFinite(tokens) || tokens < 0) {
+    return "0";
+  }
+  if (tokens >= 1_000_000) {
+    return `${(tokens / 1_000_000).toFixed(1)}M`;
+  }
+  if (tokens >= 1_000) {
+    return `${Math.round(tokens / 1_000)}k`;
+  }
+  return String(tokens);
+}
+
+function getProviderInitials(provider: string): string {
+  const trimmed = provider.trim();
+  if (!trimmed) {
+    return "?";
+  }
+  const part = trimmed.includes("/") ? (trimmed.split("/").pop() ?? trimmed) : trimmed;
+  return part.slice(0, 2).toUpperCase();
 }
 
 const styles = StyleSheet.create((theme) => ({
@@ -512,7 +445,6 @@ const styles = StyleSheet.create((theme) => ({
     borderWidth: theme.borderWidth[1],
     borderColor: theme.colors.border,
     borderRadius: theme.borderRadius["2xl"],
-    // Soft elevated surface when open — same family as composer / settings cards.
     backgroundColor: theme.colors.surface0,
     overflow: "hidden",
   },
@@ -524,7 +456,6 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[2],
     paddingHorizontal: 12,
     borderBottomWidth: theme.borderWidth[1],
-    // Soft elevated card header: quiet border-soft rule.
     borderBottomColor: theme.colors.secondary,
   },
   cardTitle: {
@@ -541,7 +472,6 @@ const styles = StyleSheet.create((theme) => ({
     lineHeight: WORKBENCH_META_LINE_HEIGHT,
     fontWeight: theme.fontWeight.medium,
   },
-  // Soft quiet icon chip.
   iconButton: {
     width: 26,
     height: 26,
@@ -554,79 +484,56 @@ const styles = StyleSheet.create((theme) => ({
     paddingHorizontal: 6,
     gap: 2,
   },
-  infoRow: {
-    minHeight: 34,
-    paddingHorizontal: 8,
-    borderRadius: 10,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: theme.spacing[2],
-  },
-  infoRowHovered: {
-    backgroundColor: theme.colors.surfaceSidebarHover,
-  },
-  infoRowDisabled: {
-    opacity: 0.55,
-  },
-  rowLeading: {
-    flex: 1,
-    minWidth: 0,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  rowIcon: {
-    width: 18,
-    alignItems: "center",
-  },
-  rowLabel: {
-    flex: 1,
-    minWidth: 0,
+  goalObjective: {
+    marginHorizontal: 6,
+    marginTop: 2,
+    marginBottom: 6,
     color: theme.colors.foreground,
     fontSize: WORKBENCH_BODY_FONT_SIZE,
     lineHeight: WORKBENCH_BODY_LINE_HEIGHT,
   },
-  rowTrailing: {
-    flexShrink: 0,
+  badgeRow: {
     flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "flex-end",
+    flexWrap: "wrap",
     gap: 6,
+    paddingHorizontal: 4,
+    paddingBottom: 4,
   },
-  rowMetaText: {
-    color: theme.colors.foregroundMuted,
-    fontSize: WORKBENCH_META_FONT_SIZE,
-    lineHeight: WORKBENCH_META_LINE_HEIGHT,
-    fontWeight: theme.fontWeight.medium,
+  badgeSuccessChip: {
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    backgroundColor: theme.colors.statusSuccessBg ?? theme.colors.surfaceSidebarHover,
   },
-  trailingIconHit: {
-    minWidth: 22,
-    minHeight: 22,
-    alignItems: "center",
-    justifyContent: "center",
+  badgeWarningChip: {
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    backgroundColor: theme.colors.statusWarningBg ?? theme.colors.surfaceSidebarHover,
   },
-  expandedBlock: {
-    marginHorizontal: 8,
-    marginBottom: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 10,
-    backgroundColor: theme.colors.surfaceWorkspace,
-    gap: 6,
+  badgeNeutralChip: {
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    backgroundColor: theme.colors.surfaceSidebarHover,
   },
-  expandedPath: {
+  badgeText: {
     color: theme.colors.foregroundMuted,
     fontSize: WORKBENCH_MICRO_FONT_SIZE,
     lineHeight: WORKBENCH_MICRO_LINE_HEIGHT,
+    fontWeight: theme.fontWeight.medium,
   },
-  expandedAction: {
-    flexDirection: "row",
+  secondaryAction: {
+    marginHorizontal: 4,
+    marginTop: 4,
+    minHeight: 30,
+    borderRadius: 10,
+    borderWidth: theme.borderWidth[1],
+    borderColor: theme.colors.border,
     alignItems: "center",
-    gap: 6,
-    alignSelf: "flex-start",
+    justifyContent: "center",
   },
-  expandedActionText: {
+  secondaryActionText: {
     color: theme.colors.foregroundMuted,
     fontSize: WORKBENCH_META_FONT_SIZE,
     lineHeight: WORKBENCH_META_LINE_HEIGHT,
@@ -672,5 +579,64 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foregroundSubtleText,
     fontSize: WORKBENCH_MICRO_FONT_SIZE,
     lineHeight: WORKBENCH_MICRO_LINE_HEIGHT,
+  },
+  subagentRow: {
+    minHeight: 40,
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  subagentRowHovered: {
+    backgroundColor: theme.colors.surfaceSidebarHover,
+  },
+  subagentAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: theme.colors.foreground,
+  },
+  subagentAvatarText: {
+    color: theme.colors.surface0,
+    fontSize: 11,
+    fontWeight: theme.fontWeight.bold,
+  },
+  subagentCopy: {
+    flex: 1,
+    minWidth: 0,
+    gap: 1,
+  },
+  subagentTitle: {
+    color: theme.colors.foreground,
+    fontSize: WORKBENCH_META_FONT_SIZE,
+    lineHeight: WORKBENCH_META_LINE_HEIGHT,
+    fontWeight: theme.fontWeight.medium,
+  },
+  subagentMeta: {
+    color: theme.colors.foregroundMuted,
+    fontSize: WORKBENCH_MICRO_FONT_SIZE,
+    lineHeight: WORKBENCH_MICRO_LINE_HEIGHT,
+  },
+  statusDotIdle: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: theme.colors.palette.green[500],
+  },
+  statusDotBusy: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: theme.colors.accent,
+  },
+  statusDotAttention: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: theme.colors.warning,
   },
 }));

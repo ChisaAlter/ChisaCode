@@ -300,11 +300,17 @@ vi.mock("./providers/grok-build-agent.js", () => ({
     };
     readonly provider = "grokbuild";
 
-    constructor(options: { runtimeSettings?: unknown; providerId?: string; label?: string }) {
+    constructor(options: {
+      runtimeSettings?: unknown;
+      providerId?: string;
+      label?: string;
+      models?: unknown;
+    }) {
       mockState.constructorArgs.grokbuild.push({
         runtimeSettings: options.runtimeSettings,
         providerId: options.providerId,
         label: options.label,
+        models: options.models,
       });
     }
 
@@ -674,6 +680,13 @@ test("model gateway materializes provider entries for all built-in agents", asyn
     modelGatewayId: "zai",
     enabled: true,
   });
+  expect(registry["zai-grokbuild"]).toMatchObject({
+    id: "zai-grokbuild",
+    label: "ZAI Grok Build",
+    derivedFromProviderId: "grokbuild",
+    modelGatewayId: "zai",
+    enabled: true,
+  });
 
   const opencodeProviderModels = [
     {
@@ -779,6 +792,7 @@ test("model gateway materializes provider entries for all built-in agents", asyn
   registry["zai-opencode"].createClient(logger);
   registry["zai-pi"].createClient(logger);
   registry["zai-kimi"].createClient(logger);
+  registry["zai-grokbuild"].createClient(logger);
 
   const claudeGatewayArgs = mockState.constructorArgs.claude.find((entry) => {
     const env =
@@ -894,6 +908,43 @@ test("model gateway materializes provider entries for all built-in agents", asyn
       },
     ],
   });
+
+  const grokbuildGatewayArgs = mockState.constructorArgs.grokbuild.find((entry) => {
+    const env =
+      typeof entry.runtimeSettings === "object" && entry.runtimeSettings !== null
+        ? Reflect.get(entry.runtimeSettings, "env")
+        : undefined;
+    return env?.OPENAI_BASE_URL === "http://127.0.0.1:6767/api/model-gateways/zai/v1";
+  });
+  expect(grokbuildGatewayArgs).toEqual({
+    runtimeSettings: {
+      command: undefined,
+      env: {
+        OPENAI_API_KEY: "internal-token",
+        OPENAI_BASE_URL: "http://127.0.0.1:6767/api/model-gateways/zai/v1",
+        XAI_API_KEY: "internal-token",
+        GROK_MODELS_BASE_URL: "http://127.0.0.1:6767/api/model-gateways/zai/v1",
+        GROK_DEFAULT_SELECTED_PERMISSION: "always_allow_all_sessions",
+      },
+    },
+    providerId: "zai-grokbuild",
+    label: "ZAI Grok Build",
+    models: [
+      {
+        id: "glm-5",
+        label: "GLM 5",
+        isDefault: true,
+        contextWindowMaxTokens: 200_000,
+        supportsImages: true,
+      },
+      { id: "glm-5-air", label: "GLM 5 Air" },
+      {
+        id: "moa-coder",
+        label: "MoA Coder",
+        description: "Synthetic coding model",
+      },
+    ],
+  });
 });
 
 test("resolveGatewayAgentFaces narrows faces by protocolPreset", () => {
@@ -910,6 +961,7 @@ test("resolveGatewayAgentFaces narrows faces by protocolPreset", () => {
     opencode: false,
     pi: false,
     kimi: false,
+    grokbuild: false,
   });
 
   expect(
@@ -923,6 +975,7 @@ test("resolveGatewayAgentFaces narrows faces by protocolPreset", () => {
     opencode: true,
     pi: true,
     kimi: true,
+    grokbuild: true,
   });
 
   expect(
@@ -937,6 +990,7 @@ test("resolveGatewayAgentFaces narrows faces by protocolPreset", () => {
     opencode: true,
     pi: true,
     kimi: true,
+    grokbuild: true,
   });
 });
 
@@ -946,6 +1000,7 @@ const ALL_GATEWAY_FACES = {
   opencode: true,
   pi: true,
   kimi: true,
+  grokbuild: true,
 } as const;
 
 test("resolveGatewayAgentFaces supplyScope all wins over preset and legacy fields", () => {
@@ -968,6 +1023,7 @@ test("resolveGatewayAgentFaces supplyScope matched narrows by protocolPreset", (
     opencode: false,
     pi: false,
     kimi: false,
+    grokbuild: false,
   });
 
   expect(resolveGatewayAgentFaces({ supplyScope: "matched", protocolPreset: "codex" })).toEqual({
@@ -976,18 +1032,20 @@ test("resolveGatewayAgentFaces supplyScope matched narrows by protocolPreset", (
     opencode: false,
     pi: false,
     kimi: false,
+    grokbuild: false,
   });
 
-  // openai + matched → the 3 OpenAI-family faces only
+  // openai + matched → the 4 OpenAI-family faces only
   expect(resolveGatewayAgentFaces({ supplyScope: "matched", protocolPreset: "openai" })).toEqual({
     claude: false,
     codex: false,
     opencode: true,
     pi: true,
     kimi: true,
+    grokbuild: true,
   });
 
-  // matched + preset "all" covers every protocol → all five faces
+  // matched + preset "all" covers every protocol → all six faces
   expect(resolveGatewayAgentFaces({ supplyScope: "matched", protocolPreset: "all" })).toEqual(
     ALL_GATEWAY_FACES,
   );
@@ -1005,6 +1063,7 @@ test("resolveGatewayAgentFaces supplyScope matched without preset falls back to 
     opencode: true,
     pi: true,
     kimi: true,
+    grokbuild: true,
   });
 
   expect(
@@ -1032,6 +1091,7 @@ test("resolveGatewayAgentFaces supplyScope wins over conflicting attachToAllAgen
     opencode: false,
     pi: false,
     kimi: false,
+    grokbuild: false,
   });
 
   // all + attachToAllAgents=false → all wins
@@ -1046,12 +1106,12 @@ test("resolveGatewayAgentFaces supplyScope wins over conflicting attachToAllAgen
 
 test("matched openai supply scope materializes only the OpenAI-family candidate faces", () => {
   // Vision fallback and model pickers rely on the materialized face set; the
-  // matched+openai scope must expose exactly the three OpenAI-family faces.
+  // matched+openai scope must expose exactly the four OpenAI-family faces.
   const faces = resolveGatewayAgentFaces({ supplyScope: "matched", protocolPreset: "openai" });
   const providerIds = Object.entries(faces)
     .filter(([, enabled]) => enabled)
     .map(([face]) => `vision-${face}`);
-  expect(providerIds).toEqual(["vision-opencode", "vision-pi", "vision-kimi"]);
+  expect(providerIds).toEqual(["vision-opencode", "vision-pi", "vision-kimi", "vision-grokbuild"]);
   expect(providerIds).not.toContain("vision-claude");
   expect(providerIds).not.toContain("vision-codex");
 });

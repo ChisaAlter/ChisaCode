@@ -1,7 +1,6 @@
 import { type CSSProperties, type ReactNode, useCallback, useMemo } from "react";
-import { Pressable, View, type PressableStateCallbackType } from "react-native";
+import { View } from "react-native";
 import { usePathname } from "expo-router";
-import { PanelLeft } from "lucide-react-native";
 import { StyleSheet } from "react-native-unistyles";
 import { getIsElectronRuntime, useIsCompactFormFactor } from "@/constants/layout";
 import { isNative } from "@/constants/platform";
@@ -12,12 +11,12 @@ import { useCompactWebViewportZoomLock } from "@/hooks/use-compact-web-viewport-
 import { useAppSettings } from "@/hooks/use-settings";
 import { useHosts } from "@/runtime/host-runtime";
 import { usePanelStore } from "@/stores/panel-store";
-import { ACTIVE_THEME_NAMES, type Theme, type ThemeName } from "@/styles/theme";
+import { ACTIVE_THEME_NAMES, type ThemeName } from "@/styles/theme";
 import { toggleDesktopSidebarsWithCheckoutIntent } from "@/utils/desktop-sidebar-toggle";
 import { useWindowControlsPadding } from "@/utils/desktop-window";
 import { resolveActiveHost } from "@/utils/active-host";
 import { LeftSidebar } from "@/components/left-sidebar";
-import { ThemedIconHost } from "@/components/themed-icon-host";
+import { DesktopSidebarControl } from "@/components/desktop/desktop-sidebar-control";
 import { DesktopWindowControls } from "@/components/desktop/window-controls";
 import { LiquidNeonBackdrop } from "@/components/liquid-neon-backdrop";
 import { FloatingPanelPortalHost } from "@/components/ui/floating-panel-portal";
@@ -33,7 +32,6 @@ import { WorkspaceSetupDialog } from "@/components/workspace-setup-dialog";
 import { KeyboardShortcutsDialog } from "@/components/keyboard-shortcuts-dialog";
 import { QuittingOverlay } from "@/components/quitting-overlay";
 import { keyboardActionDispatcher } from "@/keyboard/keyboard-action-dispatcher";
-import { appI18n } from "@/i18n";
 import { MobileGestureWrapper } from "./MobileGesture";
 
 export interface AppContainerProps {
@@ -47,13 +45,6 @@ export const THEME_CYCLE_ORDER: readonly ThemeName[] = ACTIVE_THEME_NAMES;
 const DESKTOP_WORKBENCH_FONT_CSS = `[data-testid="app-surface"] * {
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
 }`;
-
-const foregroundColorMapping = (theme: Theme) => ({
-  color: theme.colors.foreground,
-});
-const foregroundMutedColorMapping = (theme: Theme) => ({
-  color: theme.colors.foregroundMuted,
-});
 
 function AppContainer({
   children,
@@ -108,12 +99,6 @@ function AppContainer({
         }),
     });
   }, [closeDesktopAgentList, closeDesktopFileExplorer, openDesktopAgentList]);
-  const restoreLeftSidebarFromFocusMode = useCallback(() => {
-    if (usePanelStore.getState().desktop.focusModeEnabled) {
-      toggleFocusMode();
-    }
-    openDesktopAgentList();
-  }, [openDesktopAgentList, toggleFocusMode]);
   // TODO: stop matching pathname here as a branch. `chromeEnabled` should not
   // conflate workspace/project-specific chrome (sidebar, mobile gesture) with
   // global concerns like keyboard shortcuts. Split those out so settings (and
@@ -124,13 +109,6 @@ function AppContainer({
   const appRowStyle = useMemo(
     () => [layoutStyles.appRow, !isCompactLayout && layoutStyles.appRowDesktop],
     [isCompactLayout],
-  );
-  const desktopSidebarRestoreButtonStyle = useCallback(
-    ({ hovered, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
-      layoutStyles.desktopSidebarRestoreButton,
-      (Boolean(hovered) || pressed) && layoutStyles.desktopSidebarRestoreButtonHovered,
-    ],
-    [],
   );
 
   useKeyboardShortcuts({
@@ -150,25 +128,6 @@ function AppContainer({
       {!isCompactLayout && chromeEnabled && !isFocusModeEnabled && (
         <LeftSidebar selectedAgentId={selectedAgentId} />
       )}
-      {!isCompactLayout && chromeEnabled && isFocusModeEnabled ? (
-        <View style={layoutStyles.desktopSidebarRestoreRail}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={appI18n.t("sidebar.openSidebar")}
-            onPress={restoreLeftSidebarFromFocusMode}
-            style={desktopSidebarRestoreButtonStyle}
-            testID="desktop-left-sidebar-open-focus"
-          >
-            {({ hovered, pressed }) => {
-              let iconMapping = foregroundMutedColorMapping;
-              if (hovered || pressed) {
-                iconMapping = foregroundColorMapping;
-              }
-              return <ThemedIconHost Icon={PanelLeft} size={20} uniProps={iconMapping} />;
-            }}
-          </Pressable>
-        </View>
-      ) : null}
       <View style={layoutStyles.appContent}>{children}</View>
     </>
   );
@@ -179,6 +138,8 @@ function AppContainer({
       <LiquidNeonBackdrop />
       <DesktopTitlebarDragStrip />
       <View style={appRowStyle}>{appRowContent}</View>
+      {/* T3 SidebarControl: one shell-level open/close that survives every route. */}
+      <DesktopSidebarControl enabled={chromeEnabled} />
       <FloatingPanelPortalHost />
       {isCompactLayout && chromeEnabled && <LeftSidebar selectedAgentId={selectedAgentId} />}
       <DownloadToast />
@@ -266,28 +227,6 @@ export const layoutStyles = StyleSheet.create((theme) => ({
     flex: 1,
     minWidth: 0,
     minHeight: 0,
-  },
-  desktopSidebarRestoreRail: {
-    width: 44,
-    alignSelf: "stretch",
-    alignItems: "center",
-    paddingTop: theme.spacing[3],
-    borderRightWidth: theme.borderWidth[1],
-    borderRightColor: theme.colors.border,
-    backgroundColor: theme.colors.surfaceWorkspace,
-  },
-  desktopSidebarRestoreButton: {
-    width: 32,
-    height: 32,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 10,
-    borderWidth: theme.borderWidth[1],
-    borderColor: theme.colors.border,
-    backgroundColor: theme.colors.surface0,
-  },
-  desktopSidebarRestoreButtonHovered: {
-    backgroundColor: theme.colors.surface1,
   },
 }));
 

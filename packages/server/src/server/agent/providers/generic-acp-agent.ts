@@ -35,7 +35,8 @@ interface GenericACPAgentClientOptions {
 }
 
 export class GenericACPAgentClient extends ACPAgentClient {
-  private readonly command: [string, ...string[]];
+  /** Resolved ACP launcher argv, exposed for provider-specific tests. */
+  readonly command: [string, ...string[]];
   private readonly providerId?: string;
   private readonly label?: string;
   private readonly customSpawn?: ACPProcessSpawner;

@@ -31,6 +31,7 @@ import type { ComboboxOption as ComboboxOptionType } from "@/components/ui/combo
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { TitlebarDragRegion } from "@/components/desktop/titlebar-drag-region";
+import { useDesktopSidebarControlContentPad } from "@/components/desktop/desktop-sidebar-control";
 import { SidebarMenuToggle } from "@/components/headers/menu-header";
 import { ScreenHeader } from "@/components/headers/screen-header";
 import {
@@ -916,6 +917,15 @@ export function NewWorkspaceScreen({
   const { t } = useTranslation();
   const router = useRouter();
   const isCompact = useIsCompactFormFactor();
+  // Shell DesktopSidebarControl is fixed; Soft Home topbar clears it when collapsed.
+  const sidebarControlContentPad = useDesktopSidebarControlContentPad();
+  const desktopSoftTopBarInnerStyle = useMemo(
+    () => [
+      styles.desktopSoftTopBarInner,
+      sidebarControlContentPad > 0 ? { paddingLeft: sidebarControlContentPad } : null,
+    ],
+    [sidebarControlContentPad],
+  );
   const toast = useToast();
   const openProject = useOpenProject(serverId);
   const mergeWorkspaces = useSessionStore((state) => state.mergeWorkspaces);
@@ -1514,9 +1524,8 @@ export function NewWorkspaceScreen({
         ) : (
           <View style={styles.desktopSoftTopBar}>
             <TitlebarDragRegion />
-            <View style={styles.desktopSoftTopBarInner}>
-              {/* Desktop: only when collapsed (SidebarMenuToggle returns null while open). */}
-              <SidebarMenuToggle />
+            {/* Desktop open/close is shell DesktopSidebarControl (T3 SidebarTrigger). */}
+            <View style={desktopSoftTopBarInnerStyle}>
               <View style={styles.desktopSoftTopSpacer} />
             </View>
           </View>

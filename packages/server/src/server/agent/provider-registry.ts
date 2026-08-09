@@ -153,6 +153,7 @@ const PROVIDER_CLIENT_FACTORIES: Record<string, ProviderClientFactory> = {
       runtimeSettings,
       providerId: options?.customProvider?.id,
       label: options?.customProvider?.label,
+      models: [...(options?.profileModels ?? []), ...(options?.additionalModels ?? [])],
     }),
   mock: (logger) => new MockLoadTestAgentClient(logger),
   "mock-slow": () => new MockSlowProviderClient(),
@@ -171,6 +172,9 @@ function toRuntimeSettings(override?: ProviderOverride): ProviderRuntimeSettings
     return undefined;
   }
 
+  // ProviderOverride.command is a full argv replacement. Gateway faces that need
+  // extra CLI flags without replacing the binary use runtimeSettings.command.append
+  // via mergeRuntimeSettings / custom factories instead.
   return {
     command: override.command
       ? {
@@ -805,9 +809,13 @@ function buildAllGatewayProviderModels(
   );
 }
 
+type GatewayAgentFace = "claude" | "codex" | "opencode" | "pi" | "kimi" | "grokbuild";
+
+type GatewayAgentFaceFlags = Record<GatewayAgentFace, boolean>;
+
 function gatewayProviderOverride(params: {
   gateway: ModelGatewayConfig;
-  extendsProvider: "claude" | "codex" | "opencode" | "pi" | "kimi";
+  extendsProvider: GatewayAgentFace;
   label: string;
   baseUrl: string;
   token: string;
@@ -855,6 +863,25 @@ function gatewayProviderOverride(params: {
       enabled: gateway.enabled !== false,
     };
   }
+  if (extendsProvider === "grokbuild") {
+    // Command override is applied after toRuntimeSettings via env+managed home;
+    // append flags are injected in materialize by rewriting runtimeSettings below
+    // is not possible here (override.command is replace-only). The Grok client
+    // itself appends --always-approve when gateway env is present.
+    return {
+      extends: "grokbuild",
+      label: params.label,
+      env: {
+        OPENAI_API_KEY: token,
+        OPENAI_BASE_URL: `${routeBase}/v1`,
+        XAI_API_KEY: token,
+        GROK_MODELS_BASE_URL: `${routeBase}/v1`,
+        GROK_DEFAULT_SELECTED_PERMISSION: "always_allow_all_sessions",
+      },
+      models,
+      enabled: gateway.enabled !== false,
+    };
+  }
   if (extendsProvider === "opencode") {
     const configPath = writeOpenCodeCompatibleGatewayConfig({
       gatewayId: gateway.id,
@@ -891,12 +918,12 @@ function gatewayProviderOverride(params: {
  *
  * Closed-set semantics for `supplyScope` (mirrored by the app read path in
  * `custom-model-providers.ts`):
- * - `supplyScope === "all"` → all 5 faces, regardless of preset/attachToAllAgents
+ * - `supplyScope === "all"` → all 6 faces, regardless of preset/attachToAllAgents
  * - `supplyScope === "matched"` → narrowed by protocolPreset
- *   (claude → 1, codex → 1, openai → 3, all → 5); without a preset, falls back
+ *   (claude → 1, codex → 1, openai → 4, all → 6); without a preset, falls back
  *   to legacy upstream inference below
  * - `supplyScope` omitted → legacy behavior: `attachToAllAgents === true` or
- *   `protocolPreset === "all"` → all 5 faces; preset narrows; no preset infers
+ *   `protocolPreset === "all"` → all 6 faces; preset narrows; no preset infers
  *   from enabled upstreams
  * - When both `supplyScope` and `attachToAllAgents` are present, `supplyScope`
  *   wins.
@@ -910,38 +937,20 @@ export function resolveGatewayAgentFaces(gateway: {
     chatCompletions?: { enabled?: boolean };
     responses?: { enabled?: boolean };
   };
-}): {
-  claude: boolean;
-  codex: boolean;
-  opencode: boolean;
-  pi: boolean;
-  kimi: boolean;
-} {
+}): GatewayAgentFaceFlags {
   if (gateway.supplyScope === "all") {
     return allFaces();
   }
   if (gateway.supplyScope === "matched") {
     const preset = gateway.protocolPreset;
     if (preset === "claude") {
-      return {
-        claude: true,
-        codex: false,
-        opencode: false,
-        pi: false,
-        kimi: false,
-      };
+      return singleFace("claude");
     }
     if (preset === "codex") {
-      return {
-        claude: false,
-        codex: true,
-        opencode: false,
-        pi: false,
-        kimi: false,
-      };
+      return singleFace("codex");
     }
     if (preset === "openai") {
-      return { claude: false, codex: false, opencode: true, pi: true, kimi: true };
+      return openaiFamilyFaces();
     }
     if (preset === "all") {
       return allFaces();
@@ -956,49 +965,55 @@ export function resolveGatewayAgentFaces(gateway: {
 
   const preset = gateway.protocolPreset;
   if (preset === "claude") {
-    return {
-      claude: true,
-      codex: false,
-      opencode: false,
-      pi: false,
-      kimi: false,
-    };
+    return singleFace("claude");
   }
   if (preset === "codex") {
-    return {
-      claude: false,
-      codex: true,
-      opencode: false,
-      pi: false,
-      kimi: false,
-    };
+    return singleFace("codex");
   }
   if (preset === "openai") {
-    return {
-      claude: false,
-      codex: false,
-      opencode: true,
-      pi: true,
-      kimi: true,
-    };
+    return openaiFamilyFaces();
   }
 
   return inferFacesFromUpstreams(gateway);
 }
 
-function allFaces(): {
-  claude: boolean;
-  codex: boolean;
-  opencode: boolean;
-  pi: boolean;
-  kimi: boolean;
-} {
+function allFaces(): GatewayAgentFaceFlags {
   return {
     claude: true,
     codex: true,
     opencode: true,
     pi: true,
     kimi: true,
+    grokbuild: true,
+  };
+}
+
+function noneFaces(): GatewayAgentFaceFlags {
+  return {
+    claude: false,
+    codex: false,
+    opencode: false,
+    pi: false,
+    kimi: false,
+    grokbuild: false,
+  };
+}
+
+function singleFace(face: GatewayAgentFace): GatewayAgentFaceFlags {
+  return {
+    ...noneFaces(),
+    [face]: true,
+  };
+}
+
+function openaiFamilyFaces(): GatewayAgentFaceFlags {
+  return {
+    claude: false,
+    codex: false,
+    opencode: true,
+    pi: true,
+    kimi: true,
+    grokbuild: true,
   };
 }
 
@@ -1008,13 +1023,7 @@ function inferFacesFromUpstreams(gateway: {
     chatCompletions?: { enabled?: boolean };
     responses?: { enabled?: boolean };
   };
-}): {
-  claude: boolean;
-  codex: boolean;
-  opencode: boolean;
-  pi: boolean;
-  kimi: boolean;
-} {
+}): GatewayAgentFaceFlags {
   // If only one upstream is enabled we can still infer a narrow set for cleaner pickers.
   const anthropic = gateway.upstreams?.anthropic?.enabled === true;
   const chat = gateway.upstreams?.chatCompletions?.enabled === true;
@@ -1022,31 +1031,13 @@ function inferFacesFromUpstreams(gateway: {
   const enabledCount = Number(anthropic) + Number(chat) + Number(responses);
   if (enabledCount === 1) {
     if (anthropic) {
-      return {
-        claude: true,
-        codex: false,
-        opencode: false,
-        pi: false,
-        kimi: false,
-      };
+      return singleFace("claude");
     }
     if (responses) {
-      return {
-        claude: false,
-        codex: true,
-        opencode: false,
-        pi: false,
-        kimi: false,
-      };
+      return singleFace("codex");
     }
     if (chat) {
-      return {
-        claude: false,
-        codex: false,
-        opencode: true,
-        pi: true,
-        kimi: true,
-      };
+      return openaiFamilyFaces();
     }
   }
 
@@ -1057,8 +1048,8 @@ function registerGatewayFaceOverride(params: {
   gatewayOverrides: Record<string, ProviderOverride>;
   modelGatewayIds: Map<string, string>;
   gateway: ModelGatewayConfig;
-  face: "claude" | "codex" | "opencode" | "pi" | "kimi";
-  extendsProvider: "claude" | "codex" | "opencode" | "pi" | "kimi";
+  face: GatewayAgentFace;
+  extendsProvider: GatewayAgentFace;
   labelSuffix: string;
   baseUrl: string;
   token: string;
@@ -1143,6 +1134,17 @@ function materializeGatewayProviderOverrides(
       labelSuffix: "Kimi Code",
       models: buildAllGatewayProviderModels(gateway, {
         models: gateway.generatedModels?.kimi,
+      }),
+    });
+  }
+  if (faces.grokbuild) {
+    registerGatewayFaceOverride({
+      ...shared,
+      face: "grokbuild",
+      extendsProvider: "grokbuild",
+      labelSuffix: "Grok Build",
+      models: buildAllGatewayProviderModels(gateway, {
+        models: gateway.generatedModels?.grokbuild,
       }),
     });
   }

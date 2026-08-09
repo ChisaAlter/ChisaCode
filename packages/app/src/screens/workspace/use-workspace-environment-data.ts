@@ -1,5 +1,7 @@
 import { useMemo } from "react";
+import type { GoalListItem } from "@chisacode/protocol/goal/rpc-schemas";
 
+import { useGoals } from "@/hooks/use-goal";
 import { useSubagentsForParent, type SubagentRow } from "@/subagents/select";
 import { useSessionStore, type Agent, type WorkspaceDescriptor } from "@/stores/session-store";
 import type { StreamItem, TodoEntry, TurnChangesItem } from "@/types/stream";
@@ -27,11 +29,14 @@ interface UseWorkspaceEnvironmentDataResult {
   environmentSubagents: SubagentRow[];
   environmentTodoItems: TodoEntry[] | null;
   environmentProgress: AgentProgressModel | null;
+  environmentGoal: GoalListItem | null;
+  cancelEnvironmentGoal: (() => Promise<unknown>) | null;
   environmentTurnChanges: TurnChangesItem | null;
   environmentSourceLabel: string | null;
   environmentWorkspaceStatus: WorkspaceDescriptor["status"] | null;
   workspaceStatusStripModel: WorkspaceStatusStripModel;
   workspaceActivityItems: WorkspaceActivityItem[];
+  hasFloatingInspectorContent: boolean;
 }
 
 function getWorkspaceEnvironmentSourceLabel(
@@ -141,6 +146,27 @@ export function useWorkspaceEnvironmentData(
       }),
     [environmentStreamHead, environmentStreamTail],
   );
+  const { goals, cancelGoal } = useGoals(normalizedServerId || null);
+  const environmentGoal = useMemo(() => {
+    if (!activeTargetAgentId) {
+      return null;
+    }
+    return goals.find((goal) => goal.agentId === activeTargetAgentId) ?? null;
+  }, [activeTargetAgentId, goals]);
+  const cancelEnvironmentGoal = useMemo(() => {
+    if (!activeTargetAgentId || !environmentGoal) {
+      return null;
+    }
+    if (
+      environmentGoal.status !== "active" &&
+      environmentGoal.status !== "paused" &&
+      environmentGoal.status !== "blocked"
+    ) {
+      return null;
+    }
+    const agentId = activeTargetAgentId;
+    return () => cancelGoal(agentId);
+  }, [activeTargetAgentId, cancelGoal, environmentGoal]);
   const environmentTurnChanges = useEnvironmentPanelTurnChanges(
     normalizedServerId,
     activeTargetAgentId,
@@ -164,6 +190,9 @@ export function useWorkspaceEnvironmentData(
       }),
     [currentBranchName, environmentPanelAgent, workspaceDescriptor],
   );
+  const hasFloatingInspectorContent = Boolean(
+    environmentGoal || environmentProgress || environmentSubagents.length > 0,
+  );
 
   return {
     environmentPanelAgent,
@@ -171,10 +200,13 @@ export function useWorkspaceEnvironmentData(
     environmentSubagents,
     environmentTodoItems,
     environmentProgress,
+    environmentGoal,
+    cancelEnvironmentGoal,
     environmentTurnChanges,
     environmentSourceLabel: getWorkspaceEnvironmentSourceLabel(workspaceDescriptor),
     environmentWorkspaceStatus: workspaceDescriptor?.status ?? null,
     workspaceStatusStripModel,
     workspaceActivityItems,
+    hasFloatingInspectorContent,
   };
 }

@@ -548,6 +548,8 @@ function SidebarTopActions({
   variant?: "mobile" | "desktop";
 }) {
   const { t } = useTranslation();
+  // Desktop open rail: shell control is fixed over the empty left of the top row only.
+  // Do NOT left-pad the whole top area — that shortens the full-width「新对话」CTA.
   const topAreaStyle = useMemo(
     () => [styles.sidebarTopArea, variant === "desktop" && styles.desktopSidebarTopArea],
     [variant],
@@ -560,9 +562,13 @@ function SidebarTopActions({
     [variant],
   );
 
+  // Desktop: shell DesktopSidebarControl owns open/close (T3 SidebarTrigger).
+  // Keep the close tile only on compact so the mobile drawer can still dismiss.
   return (
     <View style={topAreaStyle}>
       <View style={styles.sidebarTopActions}>
+        {/* Empty left clearance under the fixed shell control (top row only). */}
+        {variant === "desktop" ? <View style={styles.desktopSidebarControlSpacer} /> : null}
         <View style={styles.sidebarTopHeadingSpacer} />
         <View style={styles.sidebarTopIconCluster}>
           <SidebarTopAction
@@ -571,12 +577,14 @@ function SidebarTopActions({
             onPress={onSearch}
             testID="sidebar-search"
           />
-          <SidebarTopAction
-            icon={PanelLeftClose}
-            label={t("sidebar.closeSidebar")}
-            onPress={onCloseSidebar}
-            testID={variant === "desktop" ? "desktop-sidebar-close" : "sidebar-close"}
-          />
+          {variant === "desktop" ? null : (
+            <SidebarTopAction
+              icon={PanelLeftClose}
+              label={t("sidebar.closeSidebar")}
+              onPress={onCloseSidebar}
+              testID="sidebar-close"
+            />
+          )}
         </View>
       </View>
       <View style={primaryActionsStyle}>
@@ -1363,8 +1371,8 @@ function DesktopSidebar({
     () => [styles.resizeHandle, isWeb && ({ cursor: "col-resize" } as object)],
     [],
   );
-  // Collapsed: no rail / gray strip — workspace owns the single open control
-  // (SidebarMenuToggle). Open: full panel with PanelLeftClose only.
+  // Collapsed: no rail / gray strip — shell DesktopSidebarControl owns open/close.
+  // Open: full panel; close is the fixed shell trigger (T3 SidebarTrigger).
   return (
     <Animated.View
       style={desktopSidebarStyle}
@@ -1574,7 +1582,7 @@ const styles = StyleSheet.create((theme) => ({
     userSelect: "none",
   },
   desktopSidebarTopArea: {
-    // Soft .nav-top: padding 12 12 8.
+    // Soft .nav-top: padding 12 12 8. Shell control overlays top-row spacer only.
     paddingTop: 12,
     paddingRight: 12,
     paddingBottom: 8,
@@ -1587,6 +1595,12 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     justifyContent: "space-between",
     gap: 6,
+  },
+  // Fixed shell control is 32@left 12; reserve that tile on the top row only.
+  desktopSidebarControlSpacer: {
+    width: 32,
+    height: 32,
+    flexShrink: 0,
   },
   sidebarTopHeadingSpacer: {
     flex: 1,
