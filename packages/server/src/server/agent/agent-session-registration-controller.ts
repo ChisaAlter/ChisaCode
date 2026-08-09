@@ -98,11 +98,17 @@ export class AgentSessionRegistrationController {
       options,
     });
 
+    const sessionConnected = session.isConnected?.() ?? true;
+
     this.options.beginInitialSnapshotPersist(resolvedAgentId);
     try {
       this.options.addAgent(managed);
       this.options.recordInitialStatus(resolvedAgentId, managed.lifecycle);
-      await this.options.refreshRuntimeInfo(managed);
+      // Skip runtime refresh for deferred-connect sessions so registration does
+      // not force a provider process spawn before the first turn.
+      if (sessionConnected) {
+        await this.options.refreshRuntimeInfo(managed);
+      }
       await this.options.persistSnapshot(managed, {
         workspaceId: options?.workspaceId,
         title: initialPersistedTitle.title,
@@ -113,7 +119,9 @@ export class AgentSessionRegistrationController {
     }
     this.options.emitState(managed, { persist: false });
 
-    await this.options.refreshSessionState(managed);
+    if (sessionConnected) {
+      await this.options.refreshSessionState(managed);
+    }
     (managed as ActiveManagedAgent).lifecycle = "idle";
     await this.options.persistSnapshot(managed, { workspaceId: options?.workspaceId });
     this.options.emitState(managed, { persist: false });

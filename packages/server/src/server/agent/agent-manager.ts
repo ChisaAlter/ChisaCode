@@ -24,6 +24,7 @@ import {
   type AgentFeature,
   type AgentSlashCommand,
   type AgentMode,
+  type AgentModelDefinition,
   type AgentPermissionRequest,
   type AgentPermissionResponse,
   type AgentPermissionResult,
@@ -151,6 +152,14 @@ export interface AgentManagerOptions {
   terminalManager?: TerminalManager | null;
   mcpBaseUrl?: string;
   appendSystemPrompt?: string;
+  /**
+   * Optional model-list cache for default model resolution during launch config
+   * normalization. Avoids throwaway provider process spawns when a snapshot is warm.
+   */
+  resolveCachedModels?: (
+    cwd: string | undefined,
+    provider: AgentProvider,
+  ) => readonly AgentModelDefinition[] | undefined;
   resolveSkillPolicy?: (
     agentId: string,
     config: AgentSessionConfig,
@@ -418,6 +427,7 @@ export class AgentManager {
       logger: this.logger,
       mcpBaseUrl: options.mcpBaseUrl ?? null,
       providers: this.providers,
+      resolveCachedModels: options.resolveCachedModels,
       resolveMcpServers: options.resolveMcpServers,
       resolveSkillPolicy: options.resolveSkillPolicy,
     });
@@ -1266,6 +1276,14 @@ export class AgentManager {
     options?: HydrateTimelineOptions,
   ): Promise<void> {
     await this.history.hydrate(agentId, options);
+  }
+
+  getHydrationState(agentId: string): "idle" | "hydrating" | "hydrated" {
+    return this.history.getHydrationState(agentId);
+  }
+
+  getHydrationPromise(agentId: string): Promise<void> | undefined {
+    return this.history.getHydrationPromise(agentId);
   }
 
   async rewind(agentId: string, messageId: string, mode: RewindMode): Promise<void> {

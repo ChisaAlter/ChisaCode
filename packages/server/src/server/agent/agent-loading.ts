@@ -13,11 +13,64 @@ import {
 
 const pendingAgentInitializations = new Map<string, Promise<ManagedAgent>>();
 
+/** Maximum number of recently-active agents to preload after a directory fetch. */
+export const AGENT_PRELOAD_LIMIT = 3;
+
 export interface EnsureAgentLoadedDeps {
   agentManager: AgentManager;
   agentStorage: AgentStorage;
   validProviders?: Iterable<AgentProvider>;
   logger: Logger;
+}
+
+export interface PreloadAgentCandidate {
+  readonly id: string;
+  readonly updatedAt?: string | null;
+}
+
+/**
+ * Select the most recently updated agent ids for background preload.
+ * Stable for equal timestamps by preserving input order after sort key ties.
+ */
+export function selectAgentsForPreload(
+  candidates: readonly PreloadAgentCandidate[],
+  limit: number = AGENT_PRELOAD_LIMIT,
+): string[] {
+  if (limit <= 0 || candidates.length === 0) {
+    return [];
+  }
+  return [...candidates]
+    .map((candidate, index) => ({
+      id: candidate.id,
+      index,
+      updatedAtMs: Date.parse(candidate.updatedAt ?? ""),
+    }))
+    .sort((left, right) => {
+      const leftTime = Number.isFinite(left.updatedAtMs)
+        ? left.updatedAtMs
+        : Number.NEGATIVE_INFINITY;
+      const rightTime = Number.isFinite(right.updatedAtMs)
+        ? right.updatedAtMs
+        : Number.NEGATIVE_INFINITY;
+      if (rightTime !== leftTime) {
+        return rightTime - leftTime;
+      }
+      return left.index - right.index;
+    })
+    .slice(0, limit)
+    .map((candidate) => candidate.id);
+}
+
+/**
+ * Fire-and-forget ensureAgentLoaded for a bounded set of agent ids.
+ * Failures are logged at debug and never rejected to the caller.
+ */
+export function preloadAgents(agentIds: readonly string[], deps: EnsureAgentLoadedDeps): void {
+  for (const agentId of agentIds) {
+    void ensureAgentLoaded(agentId, deps).catch((error) => {
+      deps.logger.debug({ err: error, agentId }, "Background agent preload failed");
+    });
+  }
 }
 
 export async function ensureAgentLoaded(
@@ -74,7 +127,12 @@ export async function ensureAgentLoaded(
       deps.logger.info({ agentId, provider: record.provider }, "Agent created from stored config");
     }
 
-    await deps.agentManager.hydrateTimelineFromProvider(agentId);
+    // Seed provider history in the background so create/resume is not blocked
+    // on a full thread/read. fetch_agent_timeline can wait briefly or report
+    // hydrating=true while this is in flight.
+    void deps.agentManager.hydrateTimelineFromProvider(agentId).catch((error) => {
+      deps.logger.debug({ err: error, agentId }, "Background timeline hydration failed");
+    });
     return deps.agentManager.getAgent(agentId) ?? snapshot;
   })();
 

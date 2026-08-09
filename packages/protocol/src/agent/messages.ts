@@ -399,6 +399,11 @@ export const AgentCreatedStatusPayloadSchema = z
   .object({
     status: z.literal("agent_created"),
     agent: AgentSnapshotPayloadSchema,
+    /**
+     * When true, the agent session was constructed and the initial prompt (if any)
+     * was dispatched asynchronously. Optional for wire compatibility.
+     */
+    pendingRun: z.boolean().optional(),
   })
   .extend(AgentStatusWithRequestSchema.shape);
 
@@ -551,6 +556,11 @@ export const FetchAgentTimelineResponseMessageSchema = z.object({
     hasNewer: z.boolean(),
     entries: z.array(AgentTimelineEntryPayloadSchema),
     error: z.string().nullable(),
+    /**
+     * When true, provider history is still seeding into the in-memory timeline.
+     * Optional for wire compatibility; old clients ignore the field.
+     */
+    hydrating: z.boolean().optional(),
   }),
 });
 
@@ -579,6 +589,12 @@ export const SendAgentMessageResponseMessageSchema = z.object({
     agentId: z.string(),
     accepted: z.boolean(),
     error: z.string().nullable(),
+    /**
+     * When true, the prompt was dispatched but the run has not necessarily
+     * started yet. Failures after acceptance arrive as stream/state events.
+     * Optional for wire compatibility.
+     */
+    pendingRun: z.boolean().optional(),
   }),
 });
 

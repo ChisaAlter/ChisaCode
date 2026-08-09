@@ -15,7 +15,11 @@ import {
   listImportableProviderSessions,
   ImportSessionsRequestError,
 } from "../agent/import-sessions.js";
-import { ensureAgentLoaded } from "../agent/agent-loading.js";
+import {
+  ensureAgentLoaded,
+  preloadAgents,
+  selectAgentsForPreload,
+} from "../agent/agent-loading.js";
 import { normalizeWorkspaceId as normalizePersistedWorkspaceId } from "../workspace-registry-model.js";
 import {
   FETCH_AGENTS_SORT_KEYS,
@@ -229,6 +233,22 @@ export class AgentDirectoryHandler implements DisposableHandler {
           ...payload,
         },
       });
+
+      // Background-preload the most recent active agents so the first send
+      // does not pay createSession/resume cost on the critical path.
+      if (request.scope === "active" && payload.entries.length > 0) {
+        const preloadIds = selectAgentsForPreload(
+          payload.entries.map((entry) => ({
+            id: entry.agent.id,
+            updatedAt: entry.agent.updatedAt,
+          })),
+        );
+        preloadAgents(preloadIds, {
+          agentManager: this.context.agentManager,
+          agentStorage: this.context.agentStorage,
+          logger: this.context.sessionLogger,
+        });
+      }
 
       if (subscriptionId && this.agentUpdatesSubscription?.subscriptionId === subscriptionId) {
         this.flushBootstrappedAgentUpdates({ snapshotUpdatedAtByAgentId });
@@ -532,6 +552,9 @@ export class AgentDirectoryHandler implements DisposableHandler {
         agentStorage: this.context.agentStorage,
         logger: this.context.sessionLogger,
       });
+      // Background hydrate may still be seeding; wait briefly so first paint can
+      // include history without blocking the send path.
+      const hydrating = await this.waitForHydrationBriefly(msg.agentId);
       const agentPayload = await this.buildAgentPayload(snapshot);
 
       let timeline = this.fetchTimelineForClient({
@@ -607,6 +630,7 @@ export class AgentDirectoryHandler implements DisposableHandler {
               : entry.collapsed.filter((value) => value !== "reasoning_merge"),
           })),
           error: null,
+          hydrating,
         },
       });
     } catch (error) {
@@ -936,5 +960,27 @@ export class AgentDirectoryHandler implements DisposableHandler {
       }
       throw error;
     }
+  }
+
+  /**
+   * Wait briefly for background provider-history hydration.
+   * @returns true when hydration is still in flight after the wait window
+   */
+  private async waitForHydrationBriefly(agentId: string, timeoutMs = 800): Promise<boolean> {
+    const state = this.context.agentManager.getHydrationState(agentId);
+    if (state !== "hydrating") {
+      return false;
+    }
+    const pending = this.context.agentManager.getHydrationPromise(agentId);
+    if (!pending) {
+      return this.context.agentManager.getHydrationState(agentId) === "hydrating";
+    }
+    await Promise.race([
+      pending.catch(() => undefined),
+      new Promise<void>((resolve) => {
+        setTimeout(resolve, timeoutMs);
+      }),
+    ]);
+    return this.context.agentManager.getHydrationState(agentId) === "hydrating";
   }
 }

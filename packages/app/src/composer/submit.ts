@@ -54,6 +54,8 @@ export async function submitAgentInput<TAttachment>(
     input.setAttachments([]);
   }
   input.setSendError(null);
+  // isProcessing is submit-dedupe only; composer busy is released by projection
+  // ack / error / timeout in the assembly layer (not by this promise settling).
   input.setIsProcessing(true);
 
   try {

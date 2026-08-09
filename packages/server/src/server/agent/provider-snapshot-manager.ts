@@ -325,6 +325,23 @@ export class ProviderSnapshotManager {
     return client;
   }
 
+  private warmCodexVersionGates(provider: AgentProvider): void {
+    if (provider !== "codex") {
+      return;
+    }
+    const client = this.providerClients[provider] as
+      | (AgentClient & { warmVersionGates?: () => void })
+      | undefined;
+    if (!client || typeof client.warmVersionGates !== "function") {
+      return;
+    }
+    try {
+      client.warmVersionGates();
+    } catch (error) {
+      this.logger.debug({ err: error, provider }, "Failed to warm codex version gates");
+    }
+  }
+
   async listProviders(input: ProviderSnapshotReadOptions = {}): Promise<ProviderSnapshotEntry[]> {
     const cwd = resolveSnapshotCwd(input.cwd);
     if (input.wait) {
@@ -792,6 +809,9 @@ export class ProviderSnapshotManager {
           modes,
           fetchedAt: new Date().toISOString(),
         });
+        // Fire-and-forget codex version probes once the snapshot is warm so the
+        // first createSession does not block on `codex --version`.
+        this.warmCodexVersionGates(provider);
       } catch (error) {
         const message = toErrorMessage(error);
         const emitted = await setEntry({

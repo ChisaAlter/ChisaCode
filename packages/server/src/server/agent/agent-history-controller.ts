@@ -15,6 +15,8 @@ export interface HydrateTimelineOptions {
   broadcast?: boolean;
 }
 
+export type AgentHydrationState = "idle" | "hydrating" | "hydrated";
+
 interface AgentHistoryControllerOptions {
   cancelAgentRun(agentId: string): Promise<boolean>;
   coalescer: AgentStreamCoalescer;
@@ -35,7 +37,29 @@ interface AgentHistoryControllerOptions {
 
 /** Owns provider history hydration, timeline epoch replacement, and rewind coordination. */
 export class AgentHistoryController {
+  private readonly pendingHydrations = new Map<string, Promise<void>>();
+
   constructor(private readonly options: AgentHistoryControllerOptions) {}
+
+  /**
+   * Returns whether provider history has been fully seeded for the agent.
+   * `historyPrimed` is only true after a successful/failed seed completes.
+   */
+  getHydrationState(agentId: string): AgentHydrationState {
+    if (this.pendingHydrations.has(agentId)) {
+      return "hydrating";
+    }
+    try {
+      const agent = this.options.getAgent(agentId);
+      return agent.historyPrimed ? "hydrated" : "idle";
+    } catch {
+      return "idle";
+    }
+  }
+
+  getHydrationPromise(agentId: string): Promise<void> | undefined {
+    return this.pendingHydrations.get(agentId);
+  }
 
   async hydrate(agentId: string, options?: HydrateTimelineOptions): Promise<void> {
     const agent = this.options.getAgent(agentId);
@@ -48,7 +72,19 @@ export class AgentHistoryController {
       return;
     }
 
-    await this.seedFromProviderHistory(agent);
+    const inflight = this.pendingHydrations.get(agentId);
+    if (inflight) {
+      await inflight;
+      return;
+    }
+
+    const hydrationPromise = this.seedFromProviderHistory(agent).finally(() => {
+      if (this.pendingHydrations.get(agentId) === hydrationPromise) {
+        this.pendingHydrations.delete(agentId);
+      }
+    });
+    this.pendingHydrations.set(agentId, hydrationPromise);
+    await hydrationPromise;
   }
 
   async rewind(agentId: string, messageId: string, mode: RewindMode): Promise<void> {
@@ -119,7 +155,6 @@ export class AgentHistoryController {
   }
 
   private async seedFromProviderHistory(agent: ActiveManagedAgent): Promise<void> {
-    agent.historyPrimed = true;
     try {
       for await (const event of this.streamTimelineHistory(agent)) {
         this.options.timeline.append(
@@ -133,6 +168,10 @@ export class AgentHistoryController {
         { err: error, agentId: agent.id },
         "Failed to hydrate timeline from legacy provider history",
       );
+    } finally {
+      // Mark primed only after the seed attempt finishes so callers can distinguish
+      // "hydration in flight" from "hydration complete" (including best-effort failures).
+      agent.historyPrimed = true;
     }
   }
 

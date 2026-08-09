@@ -21,11 +21,7 @@ import {
 } from "../agent/lifecycle-command.js";
 import { respondToAgentPermission } from "../agent/permission-response.js";
 import { importProviderSession, normalizeImportAgentRequest } from "../agent/import-sessions.js";
-import {
-  sendPromptToAgent,
-  unarchiveAgentState,
-  waitForAgentRunStartWithTimeout,
-} from "../agent/agent-prompt.js";
+import { sendPromptToAgent, unarchiveAgentState } from "../agent/agent-prompt.js";
 import {
   buildConfigOverrides,
   extractTimestamps,
@@ -208,34 +204,8 @@ export class AgentLifecycleHandler implements DisposableHandler {
         return;
       }
 
-      if (dispatchResult.outOfBand) {
-        this.context.emit({
-          type: "send_agent_message_response",
-          payload: {
-            requestId: msg.requestId,
-            agentId,
-            accepted: true,
-            error: null,
-          },
-        });
-        return;
-      }
-
-      try {
-        await waitForAgentRunStartWithTimeout(this.context.agentManager, agentId);
-      } catch (error) {
-        this.context.emit({
-          type: "send_agent_message_response",
-          payload: {
-            requestId: msg.requestId,
-            agentId,
-            accepted: false,
-            error: errorToFriendlyMessage(error),
-          },
-        });
-        return;
-      }
-
+      // Accept immediately after dispatch. Run-start success/failure is reported via
+      // agent_state / turn events (forwardTurn emits turn_failed + lifecycle error).
       this.context.emit({
         type: "send_agent_message_response",
         payload: {
@@ -243,6 +213,7 @@ export class AgentLifecycleHandler implements DisposableHandler {
           agentId,
           accepted: true,
           error: null,
+          pendingRun: !dispatchResult.outOfBand,
         },
       });
     } catch (error) {
@@ -729,6 +700,8 @@ export class AgentLifecycleHandler implements DisposableHandler {
             agentId: liveSnapshot.id,
             requestId,
             agent: agentPayload,
+            // Initial prompt (if any) is dispatched asynchronously after create.
+            pendingRun: true,
           },
         });
       }

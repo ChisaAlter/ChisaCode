@@ -459,6 +459,10 @@ export class CodexAppServerAgentSession implements AgentSession {
     await this.connection.connect();
   }
 
+  isConnected(): boolean {
+    return this.connection.isConnected();
+  }
+
   private traceContext(): CodexAppServerTraceContext {
     return {
       agentId: this.agentId,

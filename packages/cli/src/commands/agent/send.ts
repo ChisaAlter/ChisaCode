@@ -203,10 +203,11 @@ export async function runSendCommand(
     const images =
       options.image && options.image.length > 0 ? await readImageFiles(options.image) : undefined;
 
-    // Send the message
+    // Send the message. With non-blocking server acceptance, run-start failures
+    // after acceptance are reported by waitForFinish (or not at all for --no-wait).
     await client.sendAgentMessage(agentIdArg, promptInput, { images });
 
-    // If --no-wait, return immediately
+    // If --no-wait, return immediately. Run-start failures are not reported here.
     if (options.wait === false) {
       await client.close();
 
@@ -215,7 +216,7 @@ export async function runSendCommand(
         data: {
           agentId: agentIdArg,
           status: "sent",
-          message: "Message sent, not waiting for completion",
+          message: "Message accepted for dispatch; not waiting for run start or completion",
         },
         schema: agentSendSchema,
       };

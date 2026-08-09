@@ -265,6 +265,7 @@ import type { MimoSpeechProviderConfig } from "./speech/providers/mimo/config.js
 import type { RequestedSpeechProviders } from "./speech/speech-types.js";
 import { createSpeechService } from "./speech/speech-runtime.js";
 import { AgentManager } from "./agent/agent-manager.js";
+import { AgentSessionReaper } from "./agent/agent-session-reaper.js";
 import { FileBackedUsageStore } from "./usage/usage-store.js";
 import { resolveEffectiveManagedMcpServers } from "./agent/mcp-server-management.js";
 import { resolveAgentSkillPolicy } from "./agent/skill-policy.js";
@@ -969,11 +970,24 @@ export async function createChisaCodeDaemon(
     registry: agentStorage,
     usageStore,
     appendSystemPrompt: config.appendSystemPrompt,
+    resolveCachedModels: (cwd, provider) => {
+      const entry = providerSnapshotManager
+        .getSnapshot(cwd)
+        .find((candidate) => candidate.provider === provider);
+      if (!entry || entry.status !== "ready" || !entry.models || entry.models.length === 0) {
+        return undefined;
+      }
+      return entry.models;
+    },
     resolveSkillPolicy: (agentId, sessionConfig) =>
       resolveAgentSkillPolicy(daemonConfigStore.get(), agentId, sessionConfig.provider),
     resolveMcpServers: (agentId, sessionConfig) =>
       resolveEffectiveManagedMcpServers(agentId, sessionConfig, daemonConfigStore.get()),
     logger,
+  });
+  const agentSessionReaper = new AgentSessionReaper({
+    agentManager,
+    logger: logger.child({ module: "agent-session-reaper" }),
   });
 
   const detachAgentStoragePersistence = attachAgentStoragePersistence(
@@ -1508,9 +1522,11 @@ export async function createChisaCodeDaemon(
     // model loading doesn't block the server from accepting connections.
     speechService.start();
     scriptHealthMonitor.start();
+    agentSessionReaper.start();
   };
 
   const stop = async () => {
+    agentSessionReaper.stop();
     scriptHealthMonitor.stop();
     await closeAllAgents(logger, agentManager);
     await agentManager.flush().catch(() => undefined);

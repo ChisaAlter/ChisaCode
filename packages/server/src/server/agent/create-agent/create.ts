@@ -165,12 +165,17 @@ export async function createAgentCommand(
     agentId: snapshot.id,
   });
 
-  let liveSnapshot = snapshot;
+  // Fire-and-forget initial prompt so create responses are not blocked on run start.
+  // Session construction already registered the agent; connect/startTurn happen async.
   let initialPromptStarted = false;
   if (resolved.prompt !== undefined) {
-    const sendResult = await sendInitialPrompt(dependencies, resolved, snapshot);
-    initialPromptStarted = sendResult.started;
-    liveSnapshot = sendResult.liveSnapshot;
+    initialPromptStarted = true;
+    void sendInitialPrompt(dependencies, resolved, snapshot).catch((error) => {
+      dependencies.logger.error(
+        { err: error, agentId: snapshot.id },
+        "Background initial prompt failed",
+      );
+    });
   }
 
   if (input.kind === "mcp" && input.notifyOnFinish && input.callerAgentId && initialPromptStarted) {
@@ -185,7 +190,7 @@ export async function createAgentCommand(
 
   return {
     snapshot,
-    liveSnapshot,
+    liveSnapshot: snapshot,
     background: resolved.background,
     initialPromptStarted,
   };
@@ -335,9 +340,8 @@ async function sendInitialPrompt(
     });
     return { started: true, liveSnapshot };
   } catch (error) {
-    if (resolved.promptFailure === "throw") {
-      throw error;
-    }
+    // Initial-prompt failures after session construction are reported via stream
+    // events (turn_failed / agent_state error). Do not convert them into create failures.
     dependencies.logger.error({ err: error, agentId: snapshot.id }, "Failed to run initial prompt");
     return { started: false, liveSnapshot: snapshot };
   }

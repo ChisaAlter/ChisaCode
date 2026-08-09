@@ -871,12 +871,18 @@ function ChatAgentContent({
     if (!hasActiveCreateHandoff || !agentId) {
       return { kind: "none" };
     }
+    // Prefer the live agent status once available so post-create run-start
+    // failures (agent status error) are not masked as forever-running.
+    const status =
+      agent?.status === "error" || agent?.status === "idle" || agent?.status === "running"
+        ? agent.status
+        : "running";
     return {
       kind: "optimistic-create",
       agent: {
         serverId,
         id: agentId,
-        status: "running",
+        status,
         cwd: agent?.cwd ?? ".",
         projectPlacement: agent?.projectPlacement ?? null,
       },

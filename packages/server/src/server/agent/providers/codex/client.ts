@@ -114,6 +114,15 @@ export class CodexAppServerAgentClient implements AgentClient {
     return this.autoReviewEnabledPromise;
   }
 
+  /**
+   * Pre-warm memoized version probes so the first createSession/startTurn does not
+   * pay a cold `codex --version` exec on the critical path.
+   */
+  warmVersionGates(): void {
+    void this.resolveGoalsEnabled();
+    void this.resolveAutoReviewEnabled();
+  }
+
   private async spawnAppServer(
     launchEnv?: Record<string, string>,
     options?: { goalsEnabled?: boolean; agentId?: string },
@@ -156,7 +165,8 @@ export class CodexAppServerAgentClient implements AgentClient {
       autoReviewEnabled,
       agentId: launchContext?.agentId,
     });
-    await session.connect();
+    // Defer app-server spawn + initialize to startTurn/connect (idempotent).
+    // Returning a disconnected session keeps create/resume off the send critical path.
     return session;
   }
 
@@ -188,7 +198,7 @@ export class CodexAppServerAgentClient implements AgentClient {
       autoReviewEnabled,
       agentId: launchContext?.agentId,
     });
-    await session.connect();
+    // Same deferred-connect contract as createSession.
     return session;
   }
 

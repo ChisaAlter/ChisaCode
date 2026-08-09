@@ -252,19 +252,11 @@ export async function startCreatedAgentInitialPrompt(
     return currentSnapshot;
   }
 
-  const dispatchResult = startAgentRun(
-    params.agentManager,
-    params.agentId,
-    params.prompt,
-    params.logger,
-    {
-      runOptions: params.runOptions,
-    },
-  );
-
-  if (!dispatchResult.outOfBand) {
-    await waitForAgentRunStartWithTimeout(params.agentManager, params.agentId);
-  }
+  // Dispatch only — do not wait for run start. Create-agent responses should
+  // return after session construction; run-start failures arrive as stream events.
+  startAgentRun(params.agentManager, params.agentId, params.prompt, params.logger, {
+    runOptions: params.runOptions,
+  });
 
   const refreshedSnapshot = params.agentManager.getAgent(params.agentId) ?? params.snapshot ?? null;
   if (!refreshedSnapshot) {

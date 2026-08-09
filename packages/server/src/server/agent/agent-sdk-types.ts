@@ -668,6 +668,12 @@ export interface AgentSession {
   describePersistence(): AgentPersistenceHandle | null;
   interrupt(): Promise<void>;
   close(): Promise<void>;
+  /**
+   * Optional connectivity probe for deferred-connect providers (e.g. codex).
+   * When false, registration may skip runtime/session refreshes that would
+   * otherwise force a process spawn before the first turn.
+   */
+  isConnected?(): boolean;
   listCommands?(): Promise<AgentSlashCommand[]>;
   listSkills?(): Promise<AgentSkill[]>;
   setModel?(modelId: string | null): Promise<void>;

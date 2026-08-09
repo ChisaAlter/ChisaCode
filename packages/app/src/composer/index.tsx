@@ -292,11 +292,13 @@ export function Composer({
   });
 
   // Send-busy is projection-driven: stay busy until the daemon adopts the
-  // optimistic user message, not until the whole turn settles.
-  const { isServerAdopted, trackPendingSend } = useComposerSendProjectionAck({
+  // optimistic user message (or errors/times out), not until the RPC settles.
+  // isProcessing is only used for submit dedupe while the dispatch is in flight.
+  const { isServerAdopted, trackPendingSend, pendingSendMessageId } = useComposerSendProjectionAck({
     serverId,
     agentId,
   });
+  const hasPendingSend = pendingSendMessageId !== null;
 
   // Track the optimistic message id via the dispatch callback (sync after
   // stream append) so busy-ack / turn-anchor do not re-scan the store.
@@ -356,6 +358,19 @@ export function Composer({
       trackPendingSend(null);
     }
   }, [sendError, trackPendingSend]);
+
+  // Fallback timeout replaces the old 15s RPC hold: if the send is never
+  // adopted and never errors, release busy and surface a retryable error.
+  useEffect(() => {
+    if (!hasPendingSend || isServerAdopted) {
+      return;
+    }
+    const timeout = setTimeout(() => {
+      trackPendingSend(null);
+      setSendError(t("composer.sendTimeout"));
+    }, 30_000);
+    return () => clearTimeout(timeout);
+  }, [hasPendingSend, isServerAdopted, t, trackPendingSend]);
 
   useEffect(() => {
     setCursorIndex((current) => Math.min(current, userInput.length));
@@ -641,7 +656,7 @@ export function Composer({
 
   const messageInputContainerRef = useRef<View>(null);
 
-  const isSubmitBusy = (isProcessing && !isServerAdopted) || isSubmitLoading;
+  const isSubmitBusy = (hasPendingSend && !isServerAdopted) || isSubmitLoading;
   const messageInputAutoFocus = autoFocus && isDesktopWebBreakpoint;
   const submitLoadingPressHandler = isAgentRunning ? handleCancelAgent : undefined;
   const sendErrorNode = useMemo(
@@ -742,13 +757,14 @@ const styles = StyleSheet.create((theme: Theme) => ({
   },
   // Soft .composer-dock vertical only on desktop: ConversationAspectColumn /
   // Soft Home already own the 28px session inset. Compact keeps .m-composer-wrap 12.
+  // Keep overflow visible so the pen-bar card's soft shadow is not clipped square.
   inputAreaContainer: {
     position: "relative",
     minHeight: FOOTER_HEIGHT,
     alignItems: "center",
     width: "100%",
     minWidth: 0,
-    overflow: "hidden",
+    overflow: "visible",
     paddingLeft: {
       xs: 12,
       md: 0,

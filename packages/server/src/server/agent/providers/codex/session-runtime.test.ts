@@ -59,7 +59,7 @@ describe("CodexSessionRuntime", () => {
     });
   });
 
-  test("connects once to resolve runtime info and invalidates the cached session id", async () => {
+  test("returns lightweight runtime info when disconnected and caches after connect", async () => {
     let connected = false;
     let threadId: string | null = null;
     const connect = vi.fn(async () => {
@@ -84,6 +84,17 @@ describe("CodexSessionRuntime", () => {
       refreshResolvedCollaborationMode: vi.fn(),
     });
 
+    // Disconnected path must not force spawn/connect.
+    await expect(runtime.getRuntimeInfo()).resolves.toMatchObject({
+      sessionId: null,
+      model: "gpt-5.4",
+      thinkingOptionId: "medium",
+      modeId: "auto",
+    });
+    expect(connect).not.toHaveBeenCalled();
+    expect(ensureThread).not.toHaveBeenCalled();
+
+    connected = true;
     await expect(runtime.getRuntimeInfo()).resolves.toMatchObject({
       sessionId: "thread-1",
       model: "gpt-5.4",
@@ -91,7 +102,6 @@ describe("CodexSessionRuntime", () => {
       modeId: "auto",
       extra: { collaborationMode: "Code" },
     });
-    expect(connect).toHaveBeenCalledTimes(1);
     expect(ensureThread).toHaveBeenCalledTimes(1);
 
     threadId = "thread-2";

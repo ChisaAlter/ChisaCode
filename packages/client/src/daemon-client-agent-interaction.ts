@@ -70,7 +70,7 @@ export class AgentInteractionClient {
     agentId: string,
     text: string,
     options?: SendMessageOptions,
-  ): Promise<void> {
+  ): Promise<{ pendingRun?: boolean }> {
     const requestId = this.transport.createRequestId();
     const messageId = options?.messageId ?? crypto.randomUUID();
     const message = SessionInboundMessageSchema.parse({
@@ -91,6 +91,7 @@ export class AgentInteractionClient {
     if (!response.accepted) {
       throw new Error(response.error ?? "sendAgentMessage rejected");
     }
+    return { pendingRun: response.pendingRun };
   }
 
   /**

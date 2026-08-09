@@ -236,7 +236,7 @@ export interface ChisaCodeAgentHandle {
   readonly timeline: ChisaCodeAgentTimelineHandle;
   latest(): ChisaCodeAgent | null;
   refetch(requestId?: string): Promise<ChisaCodeAgentRefetchResult | null>;
-  send(text: string, options?: ChisaCodeAgentSendOptions): Promise<void>;
+  send(text: string, options?: ChisaCodeAgentSendOptions): Promise<{ pendingRun?: boolean }>;
   archive(): Promise<{ archivedAt: string }>;
   subscribe(handler: (update: ChisaCodeAgentUpdate) => void): () => void;
 }

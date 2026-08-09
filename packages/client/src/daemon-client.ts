@@ -973,11 +973,15 @@ export class DaemonClient {
     agentId: string,
     text: string,
     options?: SendMessageOptions,
-  ): Promise<void> {
+  ): Promise<{ pendingRun?: boolean }> {
     return this.agentInteraction.sendAgentMessage(agentId, text, options);
   }
 
-  async sendMessage(agentId: string, text: string, options?: SendMessageOptions): Promise<void> {
+  async sendMessage(
+    agentId: string,
+    text: string,
+    options?: SendMessageOptions,
+  ): Promise<{ pendingRun?: boolean }> {
     return this.sendAgentMessage(agentId, text, options);
   }
 

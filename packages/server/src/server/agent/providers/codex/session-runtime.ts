@@ -79,8 +79,16 @@ export class CodexSessionRuntime {
 
   async getRuntimeInfo(): Promise<AgentRuntimeInfo> {
     if (this.cachedRuntimeInfo) return { ...this.cachedRuntimeInfo };
+    // Prefer a lightweight snapshot when the app-server is not connected yet so
+    // registration/refresh does not force a cold spawn. startTurn still connects.
     if (!this.options.isConnected()) {
-      await this.options.connect();
+      return {
+        provider: CODEX_PROVIDER,
+        sessionId: this.options.getThreadId(),
+        model: this.config.model ?? null,
+        thinkingOptionId: normalizeCodexThinkingOptionId(this.config.thinkingOptionId) ?? null,
+        modeId: this.currentMode,
+      };
     }
     if (!this.options.getThreadId()) {
       await this.options.ensureThread();

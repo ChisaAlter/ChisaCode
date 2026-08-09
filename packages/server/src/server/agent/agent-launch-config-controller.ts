@@ -25,6 +25,15 @@ interface AgentLaunchConfigControllerOptions {
   logger: Logger;
   mcpBaseUrl: string | null;
   providers: Pick<AgentProviderController, "getClient">;
+  /**
+   * Optional cache lookup for default model resolution. When present and non-empty,
+   * `normalizeConfig` reuses these models instead of calling `client.listModels`
+   * (which for codex spawns a throwaway app-server process).
+   */
+  resolveCachedModels?: (
+    cwd: string | undefined,
+    provider: AgentSessionConfig["provider"],
+  ) => readonly AgentModelDefinition[] | undefined;
   resolveMcpServers?: (
     agentId: string,
     config: AgentSessionConfig,
@@ -46,6 +55,7 @@ export class AgentLaunchConfigController {
   private readonly logger: Logger;
   private mcpBaseUrl: string | null;
   private readonly providers: Pick<AgentProviderController, "getClient">;
+  private readonly resolveCachedModels: AgentLaunchConfigControllerOptions["resolveCachedModels"];
   private readonly resolveMcpServers: AgentLaunchConfigControllerOptions["resolveMcpServers"];
   private readonly resolveSkillPolicy: AgentLaunchConfigControllerOptions["resolveSkillPolicy"];
 
@@ -54,6 +64,7 @@ export class AgentLaunchConfigController {
     this.logger = options.logger;
     this.mcpBaseUrl = options.mcpBaseUrl;
     this.providers = options.providers;
+    this.resolveCachedModels = options.resolveCachedModels;
     this.resolveMcpServers = options.resolveMcpServers;
     this.resolveSkillPolicy = options.resolveSkillPolicy;
   }
@@ -118,18 +129,7 @@ export class AgentLaunchConfigController {
     }
 
     if (!normalized.model) {
-      const client = this.providers.getClient(runtimeProvider);
-      if (client) {
-        try {
-          const models = await client.listModels({ cwd: normalized.cwd, force: false });
-          normalized.model = resolveDefaultModelId(models);
-        } catch (error) {
-          this.logger.debug(
-            { err: error, provider: runtimeProvider },
-            "Failed to list models for default resolution",
-          );
-        }
-      }
+      normalized.model = await this.resolveDefaultModel(normalized.cwd, runtimeProvider);
     }
 
     if (!normalized.modeId) {
@@ -145,6 +145,32 @@ export class AgentLaunchConfigController {
     }
 
     return normalized;
+  }
+
+  private async resolveDefaultModel(
+    cwd: string | undefined,
+    provider: AgentSessionConfig["provider"],
+  ): Promise<string | undefined> {
+    const cachedModels = this.resolveCachedModels?.(cwd, provider);
+    if (cachedModels && cachedModels.length > 0) {
+      return resolveDefaultModelId(cachedModels);
+    }
+
+    const client = this.providers.getClient(provider);
+    if (!client) {
+      return undefined;
+    }
+
+    try {
+      const models = await client.listModels({
+        cwd: cwd ?? process.cwd(),
+        force: false,
+      });
+      return resolveDefaultModelId(models);
+    } catch (error) {
+      this.logger.debug({ err: error, provider }, "Failed to list models for default resolution");
+      return undefined;
+    }
   }
 
   buildRuntimeLaunchConfig(config: AgentSessionConfig): AgentSessionConfig {
