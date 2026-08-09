@@ -69,6 +69,9 @@ const MENU_BROWSER_CONTEXT_ICON = (
 
 const EXPLORER_TOGGLE_KEYS: ShortcutKey[] = ["mod", "E"];
 const TERMINAL_TOGGLE_KEYS: ShortcutKey[] = ["mod", "`"];
+// Environment panel has no keyboard shortcut yet; keep a stable empty array so
+// HeaderToggleButton still receives the required prop without inline [].
+const ENVIRONMENT_TOGGLE_KEYS: ShortcutKey[] = [];
 
 interface WorkspaceHeaderMenuProps {
   normalizedWorkspaceId: string;
@@ -845,6 +848,7 @@ export function WorkspaceHeaderRightControls({
               ? t("workspace.environment.hideFloatingPanel")
               : t("workspace.environment.showFloatingPanel")
           }
+          tooltipKeys={ENVIRONMENT_TOGGLE_KEYS}
           tooltipSide="left"
           style={styles.headerActionButton}
           accessible

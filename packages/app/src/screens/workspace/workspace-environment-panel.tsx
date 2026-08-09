@@ -303,7 +303,7 @@ function SubagentRowButton({
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={row.title}
+      accessibilityLabel={row.title ?? row.id}
       onPress={handlePress}
       style={subagentRowStyle}
       testID={`workspace-subagent-row-${row.id}`}
@@ -503,13 +503,15 @@ const styles = StyleSheet.create((theme) => ({
     borderRadius: 999,
     paddingHorizontal: 8,
     paddingVertical: 3,
-    backgroundColor: theme.colors.statusSuccessBg ?? theme.colors.surfaceSidebarHover,
+    // statusSuccessBg is defined on every active theme; avoid `??` so Unistyles
+    // does not narrow the fallback branch to `never`.
+    backgroundColor: theme.colors.statusSuccessBg,
   },
   badgeWarningChip: {
     borderRadius: 999,
     paddingHorizontal: 8,
     paddingVertical: 3,
-    backgroundColor: theme.colors.statusWarningBg ?? theme.colors.surfaceSidebarHover,
+    backgroundColor: theme.colors.statusWarningBg,
   },
   badgeNeutralChip: {
     borderRadius: 999,
