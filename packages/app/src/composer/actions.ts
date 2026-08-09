@@ -47,7 +47,7 @@ export interface ComposerSendClient {
       images: Array<{ data: string; mimeType: string }>;
       attachments: ReturnType<typeof splitComposerAttachmentsForSubmit>["attachments"];
     },
-  ) => Promise<void>;
+  ) => Promise<{ pendingRun?: boolean } | void>;
 }
 
 export interface ComposerCancelClient {
