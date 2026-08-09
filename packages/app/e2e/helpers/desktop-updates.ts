@@ -98,7 +98,12 @@ export async function injectDesktopBridge(page: Page, config: DesktopBridgeConfi
       return {
         serverId: cfg.serverId,
         status: daemonRunning ? "running" : "stopped",
-        listen: null,
+        // Desktop bootstrap is hard-bound and always calls start_desktop_daemon.
+        // A valid listen address is required for DaemonStartService.start() to
+        // succeed and upsert the connection — without it the bootstrap fails and
+        // the app stays on the error splash, breaking tests that expect to
+        // navigate into settings.
+        listen: daemonRunning ? "127.0.0.1:6767" : null,
         hostname: null,
         pid: currentPid,
         home: "",

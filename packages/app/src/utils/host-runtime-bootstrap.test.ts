@@ -3,6 +3,7 @@ import {
   resolveActiveHostRedirectRoute,
   resolveStartupRedirectRoute,
   resolveStartupWorkspaceSelection,
+  shouldArmStartupGiveUpToWelcome,
   startHostRuntimeBootstrap,
   WELCOME_ROUTE,
 } from "./host-runtime-bootstrap";
@@ -146,7 +147,7 @@ describe("resolveStartupRedirectRoute", () => {
         anyOnlineHostServerId: "server-1",
         isWorkspaceSelectionLoaded: false,
       }),
-    ).toBe("/h/server-1");
+    ).toBe("/h/server-1/new");
   });
 
   it("still waits on hydration only when a workspace selection may be restored", () => {
@@ -228,7 +229,7 @@ describe("resolveStartupRedirectRoute", () => {
         workspaceSelectionExists: false,
       });
 
-      expect(route).toBe("/h/server-1");
+      expect(route).toBe("/h/server-1/new");
       expect(selection).toBeNull();
     });
 
@@ -252,24 +253,24 @@ describe("resolveStartupRedirectRoute", () => {
       expect(selection).toEqual({ serverId: "server-1", workspaceId: "workspace-a" });
     });
 
-    it("redirects to the host root when no persisted workspace exists", () => {
+    it("redirects to Soft Home (/new) when no persisted workspace exists", () => {
       const route = resolveStartupRedirectRoute({
         ...baseInput,
         anyOnlineHostServerId: "server-2",
       });
 
-      expect(route).toBe("/h/server-2");
+      expect(route).toBe("/h/server-2/new");
     });
   });
 
   describe("scenario: daemon-start-success-only (host comes online via daemon-start upsert)", () => {
-    it("redirects to the host that came online", () => {
+    it("redirects to Soft Home (/new) for the host that came online", () => {
       const route = resolveStartupRedirectRoute({
         ...baseInput,
         anyOnlineHostServerId: "srv_desktop",
       });
 
-      expect(route).toBe("/h/srv_desktop");
+      expect(route).toBe("/h/srv_desktop/new");
     });
   });
 
@@ -295,15 +296,95 @@ describe("resolveStartupRedirectRoute", () => {
       expect(route).toBe(WELCOME_ROUTE);
     });
 
-    it("still redirects to the host when one comes online before the timer expires", () => {
+    it("still redirects to Soft Home (/new) when one host comes online before the timer expires", () => {
       const route = resolveStartupRedirectRoute({
         ...baseInput,
         anyOnlineHostServerId: "server-saved",
         hasGivenUpWaitingForHost: true,
       });
 
-      expect(route).toBe("/h/server-saved");
+      expect(route).toBe("/h/server-saved/new");
     });
+  });
+
+  describe("scenario: desktop hard-bound (isDesktop: true)", () => {
+    it("never redirects to welcome even when give-up fires and no host is online", () => {
+      expect(
+        resolveStartupRedirectRoute({
+          ...baseInput,
+          isDesktop: true,
+          hasGivenUpWaitingForHost: true,
+        }),
+      ).toBeNull();
+    });
+
+    it("redirects to Soft Home when an online host appears", () => {
+      const route = resolveStartupRedirectRoute({
+        ...baseInput,
+        isDesktop: true,
+        anyOnlineHostServerId: "srv_desktop",
+      });
+
+      expect(route).toBe("/h/srv_desktop/new");
+    });
+
+    it("returns null while waiting (no give-up, no online host)", () => {
+      expect(
+        resolveStartupRedirectRoute({
+          ...baseInput,
+          isDesktop: true,
+        }),
+      ).toBeNull();
+    });
+
+    it("online host wins over give-up on desktop", () => {
+      const route = resolveStartupRedirectRoute({
+        ...baseInput,
+        isDesktop: true,
+        anyOnlineHostServerId: "srv_desktop",
+        hasGivenUpWaitingForHost: true,
+      });
+
+      expect(route).toBe("/h/srv_desktop/new");
+    });
+  });
+});
+
+describe("shouldArmStartupGiveUpToWelcome", () => {
+  it("returns false for desktop (hard-bound, no welcome fallback)", () => {
+    expect(
+      shouldArmStartupGiveUpToWelcome({
+        isDesktop: true,
+        waitForConfiguredLocalDaemon: false,
+      }),
+    ).toBe(false);
+  });
+
+  it("returns true for non-desktop (legacy give-up behavior)", () => {
+    expect(
+      shouldArmStartupGiveUpToWelcome({
+        isDesktop: false,
+        waitForConfiguredLocalDaemon: false,
+      }),
+    ).toBe(true);
+  });
+
+  it("returns false when waiting for a configured local daemon override", () => {
+    expect(
+      shouldArmStartupGiveUpToWelcome({
+        isDesktop: false,
+        waitForConfiguredLocalDaemon: true,
+      }),
+    ).toBe(false);
+  });
+
+  it("returns false for desktop even when also waiting for a configured override", () => {
+    expect(
+      shouldArmStartupGiveUpToWelcome({
+        isDesktop: true,
+        waitForConfiguredLocalDaemon: true,
+      }),
+    ).toBe(false);
   });
 });
 

@@ -11,7 +11,7 @@ import {
 import { useSessionStore } from "@/stores/session-store";
 import { shouldUseDesktopDaemon } from "@/desktop/daemon/desktop-daemon";
 import { resolveWorkspaceMapKeyByIdentity } from "@/utils/workspace-execution";
-import { buildHostRootRoute } from "@/utils/host-routes";
+import { buildHostNewWorkspaceRoute } from "@/utils/host-routes";
 
 const isDesktop = shouldUseDesktopDaemon();
 const HARD_ESCAPE_TIMEOUT_MS = 8_000;
@@ -70,6 +70,7 @@ export default function Index() {
     isWorkspaceSelectionValidationPending,
     workspaceSelectionExists,
     hasGivenUpWaitingForHost: bootstrapState.hasGivenUpWaitingForHost,
+    isDesktop,
   });
 
   // Hard escape hatch: if bootstrap never unlatches (hung hydrate / hung
@@ -102,7 +103,13 @@ export default function Index() {
 
   if (hardEscape) {
     if (anyOnlineHostServerId) {
-      return <Redirect href={buildHostRootRoute(anyOnlineHostServerId)} />;
+      return <Redirect href={buildHostNewWorkspaceRoute(anyOnlineHostServerId)} />;
+    }
+    // Desktop is hard-bound to its built-in daemon: never redirect to the
+    // welcome route. Stay on the retryable splash so the user can retry the
+    // daemon start or open settings to add a remote host manually.
+    if (isDesktop) {
+      return <StartupSplashScreen bootstrapState={hardEscapeBootstrapState} />;
     }
     if (bootstrapState.storeReady) {
       return <Redirect href="/welcome" />;

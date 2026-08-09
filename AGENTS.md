@@ -46,6 +46,7 @@ These align with the Quick Check before Any Change, Improvement Tracking, and Te
 - `npm run dev`, `dev:server`, and `dev:app` do initial builds and then watch `protocol` and `client`; outside those workflows, rebuild after changing protocol/client code.
 - On macOS/Linux `npm run dev` uses portless names such as `https://daemon.localhost` / `https://app.localhost` with ephemeral ports; Windows dev binds the daemon to `localhost:6767`.
 - Daemon logs are in `$CHISACODE_HOME/daemon.log`; set `CHISACODE_LOG_LEVEL=trace` before launch for provider/session/agent-manager traces.
+- **Desktop packaging rebuild order**: `app.asar` contains both the renderer web export and the compiled desktop main process. After changing app or desktop source, rebuild both: `expo export` to `packages/app/dist` **then** `tsc` in `packages/desktop`, before running `electron-builder`. Skipping either rebuild produces a package with stale code that fails silently at runtime (no type error, just wrong behavior).
 
 ## Improvement Tracking
 
@@ -108,6 +109,27 @@ The master improvement roadmap lives at `docs/refactors/comprehensive-improvemen
 - **AppImage disables Chromium sandbox** (`packages/desktop/src/main.ts`): Linux AppImage runs from a FUSE-mounted `/tmp` path where the SUID `chrome-sandbox` helper cannot function. Only AppImage sets `--no-sandbox`; `.deb`/`.rpm` keep the sandbox on. This is consistent with VS Code and accepted across the Electron ecosystem. The remaining defense-in-depth layers (contextIsolation, nodeIntegration:false, webview will-attach validation, privileged IPC sender checks) must not be weakened. Do not extend `--no-sandbox` to other distributions.
 - **Privileged IPC commands validate sender URL** (`packages/desktop/src/daemon/daemon-manager.ts`): commands that start/stop the daemon or write attachments check `event.senderFrame.url` against `chisacode://app` (packaged) or `localhost:8081`/`file://` (dev). New privileged commands must be added to `PRIVILEGED_COMMANDS` and use `isMainAppSenderUrl`.
 - **Webview attachment is hardened** (`packages/desktop/src/main.ts` `will-attach-webview`): `src` must be `http`/`https`/`about:blank`; `sandbox`, `webSecurity`, `disableDialogs` are forced true; preload is stripped. Do not relax these.
+
+## Desktop Daemon Hard-Bind Contract
+
+The desktop Electron app is hard-bound to its built-in daemon. See `docs/cross-cutting/desktop-daemon-spawn.md` for the full contract. Key invariants:
+
+- **Cold start always starts the daemon**: `shouldStartBuiltInDaemon()` returns `shouldUseDesktopDaemon()` (always true on Electron); it does not read `manageBuiltInDaemon`. `startDaemon()` does not call `assertBuiltInDaemonManagementEnabled`. `manageBuiltInDaemon` only gates runtime manual stop/restart, not cold start.
+- **Desktop never falls back to `/welcome` on timeout**: `resolveStartupRedirectRoute` with `isDesktop=true` never returns `WELCOME_ROUTE`. `shouldArmStartupGiveUpToWelcome` returns `false` for desktop. Hard-escape returns `StartupSplashScreen`, not a welcome redirect.
+- **Connecting timeout**: `DaemonStartService` watches the store after a successful start; if `connectionStatus` does not reach `"online"` within 20s, `lastError` is set and `hasSettledWithError()` unlatches `storeReady` so `/settings` is reachable.
+- **Retry uses restart when daemon is running**: `BootstrapProvider.retry` calls `service.restart()` (stop + spawn) when `hasEverSucceededCheck() && !online`.
+
+### Desktop Hard-Bind Test Gate
+
+When changing daemon startup, bootstrap, redirect, or daemon-manager code:
+
+- [ ] Run `npx vitest run packages/app/src/utils/host-runtime-bootstrap.test.ts --bail=1` — must include desktop+giveUp→null, desktop+online→Soft Home, non-desktop+giveUp→welcome (regression), `shouldArmStartupGiveUpToWelcome` branches.
+- [ ] Run `npx vitest run packages/app/src/runtime/daemon-start-service.test.ts --bail=1` — must include connecting timeout, online clear, restart call, `hasEverSucceededCheck`.
+- [ ] Run `npx vitest run packages/desktop/src/daemon/daemon-manager.test.ts --bail=1` — must include start with `manageBuiltInDaemon=false` succeeds, restart with `manageBuiltInDaemon=false` still throws.
+- [ ] Typecheck + lint all modified files (`npm run typecheck`, `npm run lint -- <paths>`).
+- [ ] **Rebuild both layers before packaging**: `expo export` to `packages/app/dist` **then** `tsc` in `packages/desktop` — `app.asar` contains both; stale dist in either causes silent runtime failures.
+- [ ] Real win-unpacked verification: cold start with `manageBuiltInDaemon=false` still starts daemon; `main.log` has no `/welcome` redirect; `daemon status --json` reports `running`/`reachable`/`desktopManaged:true`.
+- [ ] E2E mocks that simulate desktop bridge must handle `start_desktop_daemon` and return a valid `listen` address (not `null`), since the bootstrap now always calls start on desktop.
 
 ## Style
 

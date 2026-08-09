@@ -9,11 +9,14 @@ import {
   useSyncExternalStore,
 } from "react";
 import { shouldUseDesktopDaemon } from "@/desktop/daemon/desktop-daemon";
-import { loadDesktopSettings } from "@/desktop/settings/desktop-settings";
 import { useLatchedBoolean } from "@/hooks/use-latched-boolean";
 import { getHostRuntimeStore, hasConfiguredLocalDaemonOverride } from "@/runtime/host-runtime";
 import { getDaemonStartService } from "@/runtime/daemon-start-service";
-import { startDaemonIfGateAllows, startHostRuntimeBootstrap } from "@/utils/host-runtime-bootstrap";
+import {
+  shouldArmStartupGiveUpToWelcome,
+  startDaemonIfGateAllows,
+  startHostRuntimeBootstrap,
+} from "@/utils/host-runtime-bootstrap";
 
 export interface HostRuntimeBootstrapState {
   splashError: string | null;
@@ -60,15 +63,27 @@ function useDaemonStartLastError(): string | null {
 
 const STARTUP_GIVE_UP_TIMEOUT_MS = 5_000;
 
+/**
+ * Desktop is hard-bound to its built-in daemon: always start it on boot
+ * regardless of the manageBuiltInDaemon setting. The setting only controls
+ * whether the desktop may manually stop/restart the daemon during a session.
+ */
 async function shouldStartBuiltInDaemon(): Promise<boolean> {
-  if (!shouldUseDesktopDaemon()) {
-    return false;
-  }
-  const settings = await loadDesktopSettings();
-  return settings.daemon.manageBuiltInDaemon;
+  return shouldUseDesktopDaemon();
+}
+
+function useDaemonStartSettledError(): boolean {
+  const service = getDaemonStartService({ store: getHostRuntimeStore() });
+  return useSyncExternalStore(
+    (listener) => service.subscribe(listener),
+    () => service.hasSettledWithError(),
+    () => service.hasSettledWithError(),
+  );
 }
 
 function HostRuntimeBootstrapProvider({ children }: { children: ReactNode }) {
+  const isDesktop = shouldUseDesktopDaemon();
+
   useEffect(() => {
     const store = getHostRuntimeStore();
     const daemonStartService = getDaemonStartService({ store });
@@ -82,6 +97,7 @@ function HostRuntimeBootstrapProvider({ children }: { children: ReactNode }) {
 
   const anyOnlineHostServerId = useEarliestOnlineHostServerId();
   const daemonStartError = useDaemonStartLastError();
+  const daemonStartSettledError = useDaemonStartSettledError();
   const waitForConfiguredLocalDaemon =
     hasConfiguredLocalDaemonOverride() && !shouldUseDesktopDaemon();
 
@@ -90,8 +106,16 @@ function HostRuntimeBootstrapProvider({ children }: { children: ReactNode }) {
   // flapping or host probes re-render this provider — resetting was a common
   // way to keep the pure-logo splash on screen forever. Online host / error
   // still unlatch storeReady immediately via isCurrentlyStoreReady below.
+  //
+  // Desktop is hard-bound to its built-in daemon and must never redirect to the
+  // welcome route due to a timeout — it stays on the retryable splash instead.
   useEffect(() => {
-    if (waitForConfiguredLocalDaemon) {
+    if (
+      !shouldArmStartupGiveUpToWelcome({
+        isDesktop,
+        waitForConfiguredLocalDaemon,
+      })
+    ) {
       return;
     }
     const handle = setTimeout(() => {
@@ -100,20 +124,32 @@ function HostRuntimeBootstrapProvider({ children }: { children: ReactNode }) {
     return () => {
       clearTimeout(handle);
     };
-  }, [waitForConfiguredLocalDaemon]);
+  }, [waitForConfiguredLocalDaemon, isDesktop]);
 
   const retry = useCallback(() => {
     const daemonStartService = getDaemonStartService({ store: getHostRuntimeStore() });
+    // If a prior start succeeded (daemon likely running) but no host is online,
+    // the connection is stuck — restart the daemon instead of no-op starting.
+    if (daemonStartService.hasEverSucceededCheck() && !anyOnlineHostServerId) {
+      void daemonStartService.restart();
+      return;
+    }
     startDaemonIfGateAllows({
       daemonStartService,
       shouldStartDaemon: shouldStartBuiltInDaemon,
       onGateError: (message) => daemonStartService.recordError(message),
     });
-  }, []);
+  }, [anyOnlineHostServerId]);
 
   const splashError = !anyOnlineHostServerId ? daemonStartError : null;
+  // Desktop unlatches storeReady when the daemon start has settled with an
+  // error (start failed or connecting timed out) so the settings route becomes
+  // reachable — without redirecting to the welcome route.
   const isCurrentlyStoreReady =
-    Boolean(anyOnlineHostServerId) || Boolean(splashError) || hasGivenUpWaitingForHost;
+    Boolean(anyOnlineHostServerId) ||
+    Boolean(splashError) ||
+    Boolean(daemonStartSettledError) ||
+    hasGivenUpWaitingForHost;
   const storeReady = useLatchedBoolean(isCurrentlyStoreReady);
 
   const state = useMemo<HostRuntimeBootstrapState>(

@@ -601,8 +601,9 @@ async function pollForRunningDaemon(): Promise<DesktopDaemonStatus> {
 }
 
 async function startDaemon(): Promise<DesktopDaemonStatus> {
-  assertBuiltInDaemonManagementEnabled(await getDesktopSettingsStore().get());
-
+  // Desktop cold start is hard-bound to the built-in daemon: the
+  // manageBuiltInDaemon setting no longer blocks start. It only controls
+  // whether the desktop may manually stop/restart the daemon during a session.
   const current = await resolveDesktopDaemonStatus();
   logDesktopDaemonLifecycle("initial status check before start", {
     status: current.status,

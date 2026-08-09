@@ -118,11 +118,34 @@ describe("daemon-manager commands", () => {
     mocks.spawnProcess.mockReset();
   });
 
-  it("refuses start and restart while built-in daemon management is disabled", async () => {
+  it("starts the daemon even while built-in daemon management is disabled (hard-bound)", async () => {
+    mocks.settings = desktopSettingsWithManagement(false);
+    // Status check reports a reachable running daemon — start returns it
+    // without spawning. The key assertion: start does NOT throw
+    // "daemon management disabled" even though manageBuiltInDaemon is false.
+    mocks.runExternalCliJsonCommand.mockResolvedValue({
+      localDaemon: "stale_pid",
+      connectedDaemon: "reachable",
+      serverId: "srv_hardbound",
+      pid: 9999,
+      listen: "127.0.0.1:6767",
+      hostname: "dev-host",
+      daemonVersion: "1.2.3",
+      desktopManaged: true,
+    });
+    const handlers = createDaemonCommandHandlers();
+
+    const status = await handlers.start_desktop_daemon();
+
+    expect(status.status).toBe("running");
+    expect(status.serverId).toBe("srv_hardbound");
+    expect(mocks.spawnProcess).not.toHaveBeenCalled();
+  });
+
+  it("refuses restart while built-in daemon management is disabled", async () => {
     mocks.settings = desktopSettingsWithManagement(false);
     const handlers = createDaemonCommandHandlers();
 
-    await expect(handlers.start_desktop_daemon()).rejects.toThrow(/daemon 管理已禁用|disabled/);
     await expect(handlers.restart_desktop_daemon()).rejects.toThrow(/daemon 管理已禁用|disabled/);
 
     expect(mocks.runExternalCliJsonCommand).not.toHaveBeenCalled();

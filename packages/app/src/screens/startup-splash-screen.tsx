@@ -1,14 +1,19 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ScrollView, Text, View } from "react-native";
 import * as Clipboard from "expo-clipboard";
+import { useRouter } from "expo-router";
 import { openExternalUrl } from "@/utils/open-external-url";
-import { BookOpen, Copy, RotateCw, TriangleAlert } from "lucide-react-native";
+import { BookOpen, Copy, RotateCw, Settings, TriangleAlert } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { type Theme } from "@/styles/theme";
 import { ChisaCodeLogo } from "@/components/icons/chisacode-logo";
 import { Button } from "@/components/ui/button";
 import { Fonts } from "@/constants/theme";
-import { getDesktopDaemonLogs, type DesktopDaemonLogs } from "@/desktop/daemon/desktop-daemon";
+import {
+  getDesktopDaemonLogs,
+  shouldUseDesktopDaemon,
+  type DesktopDaemonLogs,
+} from "@/desktop/daemon/desktop-daemon";
 import { TitlebarDragRegion } from "@/components/desktop/titlebar-drag-region";
 import { isWeb } from "@/constants/platform";
 import { useWebScrollbarStyle } from "@/hooks/use-web-scrollbar-style";
@@ -30,6 +35,7 @@ const ThemedCopy = withUnistyles(Copy);
 const ThemedTriangleAlert = withUnistyles(TriangleAlert);
 const ThemedBookOpen = withUnistyles(BookOpen);
 const ThemedRotateCw = withUnistyles(RotateCw);
+const ThemedSettings = withUnistyles(Settings);
 
 const foregroundColorMapping = (theme: Theme) => ({
   color: theme.colors.foreground,
@@ -150,6 +156,7 @@ const styles = StyleSheet.create((theme) => ({
 
 export function StartupSplashScreen({ bootstrapState }: StartupSplashScreenProps) {
   const { t } = useTranslation();
+  const router = useRouter();
   const webScrollbarStyle = useWebScrollbarStyle();
   const errorScrollViewStyle = useMemo(
     () => [styles.errorScrollView, webScrollbarStyle],
@@ -237,6 +244,14 @@ export function StartupSplashScreen({ bootstrapState }: StartupSplashScreenProps
     () => <ThemedRotateCw size={16} uniProps={paletteWhiteColorMapping} />,
     [],
   );
+  const settingsIcon = useMemo(
+    () => <ThemedSettings size={16} uniProps={foregroundColorMapping} />,
+    [],
+  );
+
+  const handleOpenSettings = useCallback(() => {
+    router.push("/settings");
+  }, [router]);
 
   if (!isError) {
     return (
@@ -289,6 +304,11 @@ export function StartupSplashScreen({ bootstrapState }: StartupSplashScreenProps
             <Button variant="outline" leftIcon={bookIcon} onPress={openDocs}>
               {t("startup.docs")}
             </Button>
+            {shouldUseDesktopDaemon() && (
+              <Button variant="outline" leftIcon={settingsIcon} onPress={handleOpenSettings}>
+                {t("startup.openSettings")}
+              </Button>
+            )}
             <Button variant="default" leftIcon={retryIcon} onPress={bootstrapState.retry}>
               {t("common.retry")}
             </Button>

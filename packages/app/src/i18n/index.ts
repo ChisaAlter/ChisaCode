@@ -58,12 +58,14 @@ export const resources = {
         errorTitle: "出错了",
         serverFailed:
           "本地服务器启动失败。如果问题持续出现，请在 GitHub 提交 issue，并附上下面的日志。",
+        connectingTimeout: "本地主机服务已启动，但连接尚未建立。请重试，或检查日志。",
         loadingDaemonLogs: "正在加载主机服务日志...",
         daemonLogsLoadFailed: "无法加载主机服务日志：{{message}}",
         noDaemonLogs: "没有可用的主机服务日志。",
         copyLogs: "复制日志",
         openGithubIssue: "打开 GitHub issue",
         docs: "文档",
+        openSettings: "打开设置",
       },
       openProject: {
         heroTitle: "打开项目",
@@ -1891,7 +1893,7 @@ export const resources = {
           running: "运行中",
           notRunning: "未运行",
           manageBuiltIn: "管理内置主机服务",
-          manageBuiltInHint: "允许 ChisaCode 启动和停止内置主机服务",
+          manageBuiltInHint: "暂停后桌面不会停止/重启当前主机服务，但下次启动仍会自动拉起",
           keepRunningAfterQuit: "退出后保持主机服务运行",
           keepRunningAfterQuitHint: "退出 ChisaCode 后主机服务会继续运行",
           logs: "日志文件",
@@ -1998,12 +2000,15 @@ export const resources = {
         errorTitle: "Something went wrong",
         serverFailed:
           "The local server failed to start. If this keeps happening, please report the issue on GitHub and include the logs below.",
+        connectingTimeout:
+          "The local daemon has started, but the connection hasn't been established yet. Please retry or check the logs.",
         loadingDaemonLogs: "Loading daemon logs...",
         daemonLogsLoadFailed: "Unable to load daemon logs: {{message}}",
         noDaemonLogs: "No daemon logs available.",
         copyLogs: "Copy logs",
         openGithubIssue: "Open GitHub issue",
         docs: "Docs",
+        openSettings: "Open Settings",
       },
       openProject: {
         heroTitle: "Open project",
@@ -3882,7 +3887,8 @@ export const resources = {
           running: "Running",
           notRunning: "Not running",
           manageBuiltIn: "Manage built-in daemon",
-          manageBuiltInHint: "Allow ChisaCode to start and stop the built-in daemon",
+          manageBuiltInHint:
+            "When paused, desktop won't stop/restart the current daemon, but it will still auto-start on next launch",
           keepRunningAfterQuit: "Keep daemon running after quit",
           keepRunningAfterQuitHint: "The daemon keeps running after ChisaCode quits",
           logs: "Log file",

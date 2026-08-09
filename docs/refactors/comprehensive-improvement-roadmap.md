@@ -9,6 +9,14 @@
 
 ## 进行中
 
+### Desktop 内置 Daemon 强绑定启动（2026-08-09 完成）
+
+- **问题**：桌面 Electron 冷启动不是强绑定内置 daemon——`manageBuiltInDaemon=false` 时 renderer 不调 `start_desktop_daemon`，main process `startDaemon()` 也 assert 拒绝；5s give-up + 8s hard-escape 超时后桌面掉 `/welcome`（远程配对页），而非留在可重试的启动 splash。根因链：① `shouldStartBuiltInDaemon()` 读 `manageBuiltInDaemon` 开关，false 则跳过启动；② main `startDaemon()` 调 `assertBuiltInDaemonManagementEnabled` throw；③ `resolveStartupRedirectRoute` 无桌面分支，give-up 后返回 `WELCOME_ROUTE`；④ `DaemonStartService.start()` 成功后无 connecting 超时观察，daemon 在跑但 client 连不上时纯 logo splash 永久卡死；⑤ `storeReady` 仅靠 give-up 解锁，桌面去掉 give-up 后 settings/welcome 全不可达；⑥ retry 调 start 在 daemon 已 running 时是 no-op（main 直接返回不重启）
+- **影响范围**：`packages/app/src/utils/host-runtime-bootstrap.ts`（策略函数）、`packages/app/src/runtime/daemon-start-service.ts`（connecting 观察 + restart + hasEverSucceeded）、`packages/app/src/app/_layout/BootstrapProvider.tsx`（gate 不读开关 + give-up 不 arm + storeReady unlatch + retry 区分）、`packages/app/src/app/index.tsx`（hard-escape 桌面不 welcome）、`packages/desktop/src/daemon/daemon-manager.ts`（start 删 assert；restart 保留）、`packages/app/src/screens/startup-splash-screen.tsx`（打开设置按钮）、`packages/app/src/i18n/index.ts`（文案）、E2E mock 适配
+- **方案**：8 切片——1 策略函数 `isDesktop` + `shouldArmStartupGiveUpToWelcome`；2 DaemonStartService connecting 20s 超时观察 + `restart()` + `hasEverSucceededCheck()` + `hasSettledWithError()`；3 BootstrapProvider gate 不读 `manageBuiltInDaemon` + give-up 桌面不 arm + storeReady settled-error unlatch + retry 区分 start/restart；4 index.tsx hard-escape 桌面留 splash；5 main `startDaemon` 删 assert、`restartDaemon` 保留；6 设置文案 `manageBuiltInHint` 更新；7 splash 新增"打开设置"按钮；8 E2E mock 适配（listen 地址 + start handler）。详见 `docs/cross-cutting/desktop-daemon-spawn.md` "Desktop Hard-Bind Contract" 章节
+- **强制门禁**：只跑改动 Vitest 文件（`--bail=1`）、改动文件 typecheck + lint/format；**打包关键**：必须先 `expo export` 到 `packages/app/dist` **再** `tsc` 编译 `packages/desktop`，最后 `electron-builder --win --dir`——app.asar 同时包含 renderer export 和编译后的 main process，任一 stale 都会导致静默运行时失败；真机验证 win-unpacked：`manageBuiltInDaemon=false` 冷启动仍启动 daemon、main.log 无 welcome 重定向、`daemon status --json` 报 `running`/`reachable`/`desktopManaged:true`
+- **状态**：完成（2026-08-09）。88 tests passed（3 suites: host-runtime-bootstrap 34 + daemon-start-service 18 + daemon-manager 36）；typecheck 0 errors in modified files；lint 0 errors；真机 win-unpacked 验收通过（manage=true 冷启动 → Soft Home、manage=false 冷启动 → daemon 仍启动 → Soft Home、main.log 无 welcome 重定向）。验收记录 `.omo/evidence/desktop-daemon-hard-bind-2026-08-09.md`
+
 ### T3 Sidebar V2 左侧栏全量移植（2026-08-03 完成）
 
 - **问题**：ChisaCode 左侧栏与 T3 Code SidebarV2 体感差距大——新会话沉底、worktree slug（如 naive-seahorse）闪现成假项目目录、无搜索/scope 过滤/状态分层

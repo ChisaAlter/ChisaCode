@@ -86,9 +86,9 @@ test.describe("Settings host page", () => {
     const serverId = getServerId();
 
     // Simulate the Electron desktop bridge so `useIsLocalDaemon` resolves the
-    // seeded host to the local daemon. `manageBuiltInDaemon: false` (returned
-    // from get_desktop_settings) bypasses the desktop bootstrap flow so only
-    // the sidebar's status query runs against the seeded test daemon.
+    // seeded host to the local daemon. The desktop bootstrap now always starts
+    // the built-in daemon (hard-bound, ignores manageBuiltInDaemon), so the
+    // start command must return a running status for the bootstrap to succeed.
     await page.addInitScript((localServerId) => {
       (window as unknown as { chisacodeDesktop: unknown }).chisacodeDesktop = {
         platform: "darwin",
@@ -97,7 +97,20 @@ test.describe("Settings host page", () => {
             return {
               serverId: localServerId,
               status: "running",
-              listen: null,
+              listen: "127.0.0.1:6767",
+              hostname: null,
+              pid: null,
+              home: "",
+              version: null,
+              desktopManaged: true,
+              error: null,
+            };
+          }
+          if (command === "start_desktop_daemon") {
+            return {
+              serverId: localServerId,
+              status: "running",
+              listen: "127.0.0.1:6767",
               hostname: null,
               pid: null,
               home: "",
@@ -111,6 +124,9 @@ test.describe("Settings host page", () => {
               releaseChannel: "stable",
               daemon: { manageBuiltInDaemon: false, keepRunningAfterQuit: true },
             };
+          }
+          if (command === "desktop_daemon_logs") {
+            return { logPath: "", contents: "" };
           }
           return null;
         },

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { DaemonStartService } from "./daemon-start-service";
 import type { HostRuntimeStore } from "./host-runtime";
 import type { DesktopDaemonStatus } from "@/desktop/daemon/desktop-daemon";
@@ -9,18 +9,50 @@ interface RecordedUpsert {
   hostname: string | null;
 }
 
+/**
+ * Fake store that implements the three surfaces the DaemonStartService needs:
+ * upsertConnectionFromListen (returns a fake profile), subscribeAll (notifies
+ * listeners), and getSnapshot (returns a controllable connectionStatus).
+ */
 function createFakeStore(): {
-  store: Pick<HostRuntimeStore, "upsertConnectionFromListen">;
+  store: Pick<HostRuntimeStore, "upsertConnectionFromListen" | "subscribeAll" | "getSnapshot">;
   upserts: RecordedUpsert[];
+  setConnectionStatus: (serverId: string, status: string) => void;
+  notifyStoreChange: () => void;
 } {
   const upserts: RecordedUpsert[] = [];
-  const store = {
-    upsertConnectionFromListen: async (input: RecordedUpsert) => {
-      upserts.push(input);
-      return {} as Awaited<ReturnType<HostRuntimeStore["upsertConnectionFromListen"]>>;
+  const listeners = new Set<() => void>();
+  const statuses = new Map<string, string>();
+  return {
+    store: {
+      upsertConnectionFromListen: async (input: RecordedUpsert) => {
+        upserts.push(input);
+        statuses.set(input.serverId, "connecting");
+        return { serverId: input.serverId } as Awaited<
+          ReturnType<HostRuntimeStore["upsertConnectionFromListen"]>
+        >;
+      },
+      subscribeAll: (listener: () => void) => {
+        listeners.add(listener);
+        return () => {
+          listeners.delete(listener);
+        };
+      },
+      getSnapshot: (serverId: string) => {
+        const status = statuses.get(serverId) ?? "connecting";
+        return { connectionStatus: status } as Awaited<ReturnType<HostRuntimeStore["getSnapshot"]>>;
+      },
+    },
+    upserts,
+    setConnectionStatus: (serverId: string, status: string) => {
+      statuses.set(serverId, status);
+    },
+    notifyStoreChange: () => {
+      for (const listener of listeners) {
+        listener();
+      }
     },
   };
-  return { store, upserts };
 }
 
 function makeStatus(overrides: Partial<DesktopDaemonStatus> = {}): DesktopDaemonStatus {
@@ -221,5 +253,143 @@ describe("DaemonStartService", () => {
     unsubscribe();
     await service.start();
     expect(notifications).toBe(countAfterFirst);
+  });
+});
+
+describe("DaemonStartService connecting watch", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("surfaces a timeout error when the connection does not reach online within the timeout", async () => {
+    vi.useFakeTimers();
+    const fake = createFakeStore();
+    const service = new DaemonStartService({
+      store: fake.store,
+      startDesktopDaemon: async () => makeStatus(),
+      connectingTimeoutMs: 5_000,
+    });
+
+    const result = await service.start();
+    expect(result).toEqual({ ok: true });
+    expect(service.getLastError()).toBeNull();
+
+    vi.advanceTimersByTime(5_000);
+
+    expect(service.getLastError()).toBe(
+      "Desktop daemon started but the connection was not established. Please retry.",
+    );
+    expect(service.hasSettledWithError()).toBe(true);
+  });
+
+  it("clears the timeout when the connection reaches online before the deadline", async () => {
+    vi.useFakeTimers();
+    const fake = createFakeStore();
+    const service = new DaemonStartService({
+      store: fake.store,
+      startDesktopDaemon: async () => makeStatus(),
+      connectingTimeoutMs: 5_000,
+    });
+
+    await service.start();
+    expect(service.getLastError()).toBeNull();
+
+    fake.setConnectionStatus("srv_desktop", "online");
+    fake.notifyStoreChange();
+    vi.advanceTimersByTime(10_000);
+
+    expect(service.getLastError()).toBeNull();
+    expect(service.hasSettledWithError()).toBe(false);
+  });
+
+  it("does not arm a connecting watch when start fails", async () => {
+    vi.useFakeTimers();
+    const fake = createFakeStore();
+    const service = new DaemonStartService({
+      store: fake.store,
+      startDesktopDaemon: async () => {
+        throw new Error("ipc broke");
+      },
+      connectingTimeoutMs: 5_000,
+    });
+
+    await service.start();
+    vi.advanceTimersByTime(10_000);
+
+    expect(service.getLastError()).toBe("ipc broke");
+  });
+});
+
+describe("DaemonStartService restart", () => {
+  it("calls restartDesktopDaemon instead of startDesktopDaemon", async () => {
+    const fake = createFakeStore();
+    const restartMock = vi.fn(async () => makeStatus());
+    const service = new DaemonStartService({
+      store: fake.store,
+      startDesktopDaemon: vi.fn(async () => makeStatus()),
+      restartDesktopDaemon: restartMock,
+    });
+
+    await service.restart();
+
+    expect(restartMock).toHaveBeenCalledTimes(1);
+    expect(fake.upserts).toHaveLength(1);
+    expect(service.hasEverSucceededCheck()).toBe(true);
+  });
+
+  it("reports an error when restart throws", async () => {
+    const fake = createFakeStore();
+    const service = new DaemonStartService({
+      store: fake.store,
+      restartDesktopDaemon: async () => {
+        throw new Error("restart failed");
+      },
+    });
+
+    const result = await service.restart();
+    expect(result.ok).toBe(false);
+    expect(service.getLastError()).toBe("restart failed");
+  });
+});
+
+describe("DaemonStartService hasEverSucceeded", () => {
+  it("returns false before any successful start", () => {
+    const fake = createFakeStore();
+    const service = new DaemonStartService({
+      store: fake.store,
+      startDesktopDaemon: async () => makeStatus(),
+    });
+
+    expect(service.hasEverSucceededCheck()).toBe(false);
+  });
+
+  it("returns true after a successful start", async () => {
+    const fake = createFakeStore();
+    const service = new DaemonStartService({
+      store: fake.store,
+      startDesktopDaemon: async () => makeStatus(),
+    });
+
+    await service.start();
+
+    expect(service.hasEverSucceededCheck()).toBe(true);
+  });
+
+  it("returns true after a successful restart even when a prior start failed", async () => {
+    const fake = createFakeStore();
+    const startMock = vi
+      .fn<() => Promise<DesktopDaemonStatus>>()
+      .mockRejectedValueOnce(new Error("first attempt failed"))
+      .mockResolvedValueOnce(makeStatus());
+    const service = new DaemonStartService({
+      store: fake.store,
+      startDesktopDaemon: () => startMock(),
+    });
+
+    await service.start();
+    expect(service.hasEverSucceededCheck()).toBe(false);
+
+    await service.start();
+    expect(service.hasEverSucceededCheck()).toBe(true);
   });
 });
