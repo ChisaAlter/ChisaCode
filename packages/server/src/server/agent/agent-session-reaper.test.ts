@@ -176,4 +176,34 @@ describe("AgentSessionReaper", () => {
     reaper.stop();
     expect(clearIntervalFn).toHaveBeenCalledWith(1);
   });
+
+  test("deterministic long-idle clock: reaps only after full 30-minute threshold", async () => {
+    let now = Date.parse("2026-08-09T12:00:00.000Z");
+    const idleMs = AGENT_SESSION_REAPER_DEFAULT_IDLE_MS;
+    const closeAgent = vi.fn(async () => undefined);
+    const agent = createAgent({
+      id: "long-idle",
+      lifecycle: "idle",
+      updatedAt: new Date(now),
+    });
+    const reaper = new AgentSessionReaper({
+      agentManager: {
+        listAgents: () => [agent],
+        closeAgent,
+      },
+      logger: createTestLogger(),
+      idleTimeoutMs: idleMs,
+      now: () => now,
+    });
+
+    // Just under threshold: keep alive.
+    now = Date.parse("2026-08-09T12:00:00.000Z") + idleMs - 1;
+    await expect(reaper.sweep()).resolves.toEqual([]);
+    expect(closeAgent).not.toHaveBeenCalled();
+
+    // Exactly at threshold: reap.
+    now = Date.parse("2026-08-09T12:00:00.000Z") + idleMs;
+    await expect(reaper.sweep()).resolves.toEqual(["long-idle"]);
+    expect(closeAgent).toHaveBeenCalledWith("long-idle");
+  });
 });

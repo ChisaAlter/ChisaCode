@@ -310,20 +310,16 @@ async function main(): Promise<void> {
     await expectComposerEditable(page);
     console.log("[desktop-packaged] agent route open, composer editable");
 
-    // SidebarV2 smoke is best-effort: row testIDs can lag title hydration /
-    // soft-home presentation, and must not block Slice B/C/D/E verification.
-    const sidebarThreadRow = page.getByTestId(`sidebar-v2-thread-${agent.id}`);
-    try {
-      await expect(sidebarThreadRow).toBeVisible({ timeout: 10_000 });
-      await sidebarThreadRow.click();
-      await expect(page).toHaveURL(/\/workspace\//, { timeout: 60_000 });
-      console.log("[desktop-packaged] SidebarV2: thread row click navigated to workspace route");
-    } catch (error) {
-      console.warn(
-        "[desktop-packaged] SidebarV2 smoke skipped (testid not ready):",
-        error instanceof Error ? error.message : String(error),
-      );
-    }
+    // SidebarV2 smoke: prefer stable testID, fall back to the visible "新会话"
+    // row when packaged Electron has not yet projected the testID attribute.
+    const sidebarThreadById = page.getByTestId(`sidebar-v2-thread-${agent.id}`);
+    const sidebarThreadFallback = page.getByRole("button", { name: /新会话|New session/i }).first();
+    const sidebarThreadRow =
+      (await sidebarThreadById.count()) > 0 ? sidebarThreadById : sidebarThreadFallback;
+    await expect(sidebarThreadRow).toBeVisible({ timeout: 30_000 });
+    await sidebarThreadRow.click();
+    await expect(page).toHaveURL(/\/workspace\//, { timeout: 60_000 });
+    console.log("[desktop-packaged] SidebarV2: thread row click navigated to workspace route");
 
     // Slice D + E first: the trailing-tool-run turn drains in a few seconds,
     // the tool run folds to a "+N" badge once complete, and the streamed

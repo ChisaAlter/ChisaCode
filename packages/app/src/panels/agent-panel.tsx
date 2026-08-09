@@ -1241,6 +1241,13 @@ function ChatAgentReadyContent({
               />
             ) : null}
 
+            {agentState.status === "error" && agentState.lastError ? (
+              <HistorySyncErrorBanner
+                title={t("panels.agent.runFailed")}
+                message={agentState.lastError}
+              />
+            ) : null}
+
             <AgentComposerSection
               agentId={agentId}
               serverId={serverId}

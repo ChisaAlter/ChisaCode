@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useReducer } from "react";
+import { useCallback, useEffect, useMemo, useReducer } from "react";
 import type { ComposerAttachment } from "@/attachments/types";
 import { splitComposerAttachmentsForSubmit } from "@/composer/attachments/submit";
 import { useCreateFlowStore } from "@/stores/create-flow-store";
@@ -124,6 +124,36 @@ export function useDraftAgentCreateFlow<TDraftAgent, TCreateResult>({
   const appendOptimisticUserMessageToAgentStream = useSessionStore(
     (state) => state.appendOptimisticUserMessageToAgentStream,
   );
+  const pendingCreate = useCreateFlowStore((state) => state.pendingByDraftId[draftId] ?? null);
+  const postCreateAgentError = useSessionStore((state) => {
+    if (!pendingCreate?.agentId || pendingCreate.lifecycle !== "sent") {
+      return null;
+    }
+    const agent = state.sessions[pendingCreate.serverId]?.agents?.get(pendingCreate.agentId);
+    if (!agent || agent.status !== "error") {
+      return null;
+    }
+    return agent.lastError?.trim() || "Agent run failed after create";
+  });
+
+  // After create accepts, run-start failures arrive as agent_state{error}. Surface
+  // them in the draft form instead of leaving the handoff stuck as "creating".
+  useEffect(() => {
+    if (!postCreateAgentError || !pendingCreate?.agentId) {
+      return;
+    }
+    dispatch({ type: "CREATE_FAILED", message: postCreateAgentError });
+    markPendingCreateLifecycle({ draftId, lifecycle: "abandoned" });
+    clearPendingCreateAttempt({ draftId });
+    onCreateError?.(new Error(postCreateAgentError));
+  }, [
+    clearPendingCreateAttempt,
+    draftId,
+    markPendingCreateLifecycle,
+    onCreateError,
+    pendingCreate?.agentId,
+    postCreateAgentError,
+  ]);
 
   const formErrorMessage = machine.tag === "draft" ? machine.errorMessage : "";
   const isSubmitting = machine.tag === "creating";

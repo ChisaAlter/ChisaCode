@@ -125,4 +125,128 @@ describe("useDraftAgentCreateFlow", () => {
     expect(onCreateError).toHaveBeenCalledTimes(1);
     expect(useCreateFlowStore.getState().pendingByDraftId["draft-before-submit"]).toBeUndefined();
   });
+
+  it("surfaces post-create agent_state error after create accepts", async () => {
+    const { useSessionStore } = await import("@/stores/session-store");
+    const createRequest = vi.fn(async () => ({
+      agentId: "agent-post-create",
+      result: { id: "agent-post-create" },
+    }));
+    const onCreateError = vi.fn();
+    const onCreateSuccess = vi.fn();
+
+    useCreateFlowStore.setState({ pendingByDraftId: {} });
+    useSessionStore.setState((state) => ({
+      ...state,
+      sessions: {
+        ...state.sessions,
+        "server-1": {
+          serverId: "server-1",
+          client: null,
+          serverInfo: null,
+          hasHydratedAgents: true,
+          hasHydratedWorkspaces: true,
+          isPlayingAudio: false,
+          focusedAgentId: null,
+          messages: [],
+          currentAssistantMessage: "",
+          agents: new Map([
+            [
+              "agent-post-create",
+              {
+                serverId: "server-1",
+                id: "agent-post-create",
+                provider: "mock",
+                status: "running",
+                createdAt: new Date(0),
+                updatedAt: new Date(0),
+                lastUserMessageAt: null,
+                lastActivityAt: new Date(0),
+                capabilities: {
+                  supportsImages: false,
+                  supportsTools: false,
+                  supportsModes: false,
+                  supportsThinking: false,
+                } as never,
+                currentModeId: null,
+                availableModes: [],
+                pendingPermissions: [],
+                persistence: null,
+                title: null,
+                cwd: "/tmp",
+                model: null,
+                lastError: null,
+              } as never,
+            ],
+          ]),
+          agentStreamTail: new Map(),
+          agentStreamHead: new Map(),
+          pendingPermissions: new Map(),
+        } as never,
+      },
+    }));
+
+    const { result } = renderHook(() =>
+      useDraftAgentCreateFlow({
+        draftId: "draft-post-create",
+        getPendingServerId: () => "server-1",
+        buildDraftAgent: (currentAttempt) => ({ currentAttempt }),
+        createRequest,
+        onCreateSuccess,
+        onCreateError,
+      }),
+    );
+
+    await act(async () => {
+      await result.current.handleCreateFromInput({
+        text: "start me",
+        attachments: [],
+        cwd: "/repo",
+      });
+    });
+
+    expect(createRequest).toHaveBeenCalledTimes(1);
+    expect(onCreateSuccess).toHaveBeenCalledTimes(1);
+    expect(useCreateFlowStore.getState().pendingByDraftId["draft-post-create"]?.lifecycle).toBe(
+      "sent",
+    );
+
+    function markAgentPostCreateFailed(): void {
+      useSessionStore.setState((state) => {
+        const session = state.sessions["server-1"];
+        if (!session) {
+          return state;
+        }
+        const current = session.agents.get("agent-post-create");
+        if (!current) {
+          return state;
+        }
+        const agents = new Map(session.agents);
+        agents.set("agent-post-create", {
+          ...current,
+          status: "error",
+          lastError: "Failed to start turn",
+        });
+        return {
+          ...state,
+          sessions: {
+            ...state.sessions,
+            "server-1": {
+              ...session,
+              agents,
+            },
+          },
+        };
+      });
+    }
+
+    await act(async () => {
+      markAgentPostCreateFailed();
+    });
+
+    expect(result.current.isSubmitting).toBe(false);
+    expect(result.current.formErrorMessage).toBe("Failed to start turn");
+    expect(onCreateError).toHaveBeenCalledTimes(1);
+    expect(useCreateFlowStore.getState().pendingByDraftId["draft-post-create"]).toBeUndefined();
+  });
 });

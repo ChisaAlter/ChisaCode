@@ -459,24 +459,32 @@ export function SidebarV2Row({
     return null;
   };
 
+  const threadTestId = `sidebar-v2-thread-${thread.id}`;
   return (
     <ContextMenu>
-      <ContextMenuTrigger>
-        <Pressable
-          style={rowStyle}
-          onPress={handlePress}
-          onLongPress={handleLongPress}
-          testID={`sidebar-v2-thread-${thread.id}`}
-          aria-selected={isActive}
-          accessibilityLabel={
-            thread.projectName ? `${thread.projectName}: ${thread.title}` : thread.title
-          }
-          {...hoverProps}
-        >
-          {variant === "card" ? renderCard() : renderSlim()}
-          {renderVariantAction()}
-        </Pressable>
-      </ContextMenuTrigger>
+      {/*
+        Keep the stable thread testID on both the outer wrapper and Pressable.
+        Electron/RNW can collapse one of the layers depending on ContextMenu
+        composition, so dual placement keeps Playwright locators stable.
+      */}
+      <View testID={threadTestId} collapsable={false} accessibilityLabel={threadTestId}>
+        <ContextMenuTrigger>
+          <Pressable
+            style={rowStyle}
+            onPress={handlePress}
+            onLongPress={handleLongPress}
+            testID={threadTestId}
+            aria-selected={isActive}
+            accessibilityLabel={
+              thread.projectName ? `${thread.projectName}: ${thread.title}` : thread.title
+            }
+            {...hoverProps}
+          >
+            {variant === "card" ? renderCard() : renderSlim()}
+            {renderVariantAction()}
+          </Pressable>
+        </ContextMenuTrigger>
+      </View>
       {selectedCount > 1 && isSelected && bulkMenuCapabilities && bulkMenuCallbacks ? (
         <SidebarV2BulkMenu
           count={selectedCount}
