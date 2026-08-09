@@ -1,4 +1,12 @@
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -121,7 +129,10 @@ describe("prepareGrokGatewayEnv / GrokBuildAgentClient managed home", () => {
         env: { OPENAI_API_KEY: "secret" },
         models: [{ id: "grok-4.5", label: "Grok 4.5" }],
       }),
-    ).toEqual({ OPENAI_API_KEY: "secret" });
+    ).toEqual({
+      env: { OPENAI_API_KEY: "secret" },
+      managedHome: null,
+    });
 
     expect(
       prepareGrokGatewayEnv({
@@ -133,12 +144,15 @@ describe("prepareGrokGatewayEnv / GrokBuildAgentClient managed home", () => {
         models: [],
       }),
     ).toEqual({
-      OPENAI_API_KEY: "secret",
-      OPENAI_BASE_URL: "http://127.0.0.1:6767/api/model-gateways/zai/v1",
+      env: {
+        OPENAI_API_KEY: "secret",
+        OPENAI_BASE_URL: "http://127.0.0.1:6767/api/model-gateways/zai/v1",
+      },
+      managedHome: null,
     });
   });
 
-  test("does not overwrite an explicit GROK_HOME", () => {
+  test("does not overwrite an explicit external GROK_HOME but still forces gateway routing env", () => {
     const env = {
       OPENAI_API_KEY: "secret",
       OPENAI_BASE_URL: "http://127.0.0.1:6767/api/model-gateways/zai/v1",
@@ -150,7 +164,63 @@ describe("prepareGrokGatewayEnv / GrokBuildAgentClient managed home", () => {
         env,
         models: [{ id: "grok-4.5", label: "Grok 4.5" }],
       }),
-    ).toBe(env);
+    ).toEqual({
+      env: {
+        OPENAI_API_KEY: "secret",
+        OPENAI_BASE_URL: "http://127.0.0.1:6767/api/model-gateways/zai/v1",
+        GROK_HOME: "C:\\explicit\\grok-home",
+        GROK_MODELS_BASE_URL: "http://127.0.0.1:6767/api/model-gateways/zai/v1",
+        GROK_DEFAULT_SELECTED_PERMISSION: "always_allow_all_sessions",
+        XAI_API_KEY: "secret",
+      },
+      managedHome: null,
+    });
+  });
+
+  test("rewrites a stale managed config.toml that Grok mutated away from endpoints routing", () => {
+    const chisacodeHome = mkdtempSync(join(tmpdir(), "chisacode-grok-home-"));
+    tempHomes.push(chisacodeHome);
+    process.env.CHISACODE_HOME = chisacodeHome;
+
+    const managedRoot = join(chisacodeHome, "provider-runtime", "grokbuild");
+    const staleHome = join(managedRoot, "zai-grokbuild-stale");
+    mkdirSync(staleHome, { recursive: true });
+    writeFileSync(
+      join(staleHome, "config.toml"),
+      `[models]
+default = "grok-4.5"
+
+[model.grok-4.5]
+model = "grok-4.5"
+base_url = "http://127.0.0.1:6767/api/model-gateways/zai/v1"
+api_backend = "chat_completions"
+
+[marketplace]
+default_skills_installs_purged = true
+`,
+      "utf8",
+    );
+
+    const prepared = prepareGrokGatewayEnv({
+      providerId: "zai-grokbuild",
+      env: {
+        OPENAI_API_KEY: "secret-key",
+        OPENAI_BASE_URL: "http://127.0.0.1:6767/api/model-gateways/zai/v1",
+        GROK_HOME: staleHome,
+      },
+      models: [{ id: "grok-4.5", label: "Grok 4.5", isDefault: true }],
+    });
+
+    expect(prepared.managedHome?.grokHome).toBe(staleHome);
+    expect(prepared.env?.GROK_HOME).toBe(staleHome);
+    expect(prepared.env?.GROK_MODELS_BASE_URL).toBe(
+      "http://127.0.0.1:6767/api/model-gateways/zai/v1",
+    );
+    const toml = readFileSync(join(staleHome, "config.toml"), "utf8");
+    expect(toml).toContain("[endpoints]");
+    expect(toml).toContain('models_base_url = "http://127.0.0.1:6767/api/model-gateways/zai/v1"');
+    expect(toml).not.toMatch(/(?:^|\n)\s*base_url\s*=/u);
+    expect(toml).not.toContain("[marketplace]");
   });
 
   test("writes an isolated managed GROK_HOME for gateway faces", () => {

@@ -34,6 +34,46 @@ function assertNever(value: never): never {
   throw new Error(`Unhandled state: ${JSON.stringify(value)}`);
 }
 
+function projectOptimisticSidebarAgent<TDraftAgent>(input: {
+  serverId: string;
+  draftId: string;
+  attempt: CreateAttempt;
+  buildDraftAgent: (attempt: CreateAttempt) => TDraftAgent;
+}): void {
+  try {
+    const optimisticAgent = input.buildDraftAgent(input.attempt);
+    if (!optimisticAgent || typeof optimisticAgent !== "object") {
+      return;
+    }
+    const candidate = optimisticAgent as {
+      id?: string;
+      serverId?: string;
+      cwd?: string;
+    };
+    if (!candidate.id || !candidate.serverId || !candidate.cwd) {
+      return;
+    }
+    useSessionStore.getState().setAgents(input.serverId, (prev) => {
+      const next = new Map(prev);
+      next.set(candidate.id as string, optimisticAgent as never);
+      return next;
+    });
+  } catch {
+    // Sidebar projection is best-effort; create still proceeds.
+  }
+}
+
+function removeOptimisticSidebarAgent(input: { serverId: string; draftId: string }): void {
+  useSessionStore.getState().setAgents(input.serverId, (prev) => {
+    if (!prev.has(input.draftId)) {
+      return prev;
+    }
+    const next = new Map(prev);
+    next.delete(input.draftId);
+    return next;
+  });
+}
+
 function reducer(
   state: DraftAgentMachineState,
   event: DraftAgentMachineEvent,
@@ -235,6 +275,8 @@ export function useDraftAgentCreateFlow<TDraftAgent, TCreateResult>({
         await onCreateSuccess({ result: createResult.result, attempt });
       } catch (error) {
         const resolved = error instanceof Error ? error : new Error("Failed to create agent");
+        // Remove optimistic sidebar projection if create never produced a real agent.
+        removeOptimisticSidebarAgent({ serverId: pendingServerId, draftId });
         dispatch({ type: "CREATE_FAILED", message: resolved.message });
         markPendingCreateLifecycle({ draftId, lifecycle: "abandoned" });
         clearPendingCreateAttempt({ draftId });
@@ -312,12 +354,22 @@ export function useDraftAgentCreateFlow<TDraftAgent, TCreateResult>({
           : {}),
       });
 
+      // Project a sidebar row immediately. Chat already has an optimistic user
+      // message; the left rail previously waited for createAgent to return.
+      projectOptimisticSidebarAgent({
+        serverId: pendingServerId,
+        draftId,
+        attempt,
+        buildDraftAgent,
+      });
+
       dispatch({ type: "SUBMIT", attempt });
       onCreateStart?.();
       await runCreateAttempt({ attempt, cwd });
     },
     [
       allowEmptyText,
+      buildDraftAgent,
       draftId,
       getPendingServerId,
       isSubmitting,

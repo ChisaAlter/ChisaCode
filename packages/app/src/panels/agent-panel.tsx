@@ -71,6 +71,7 @@ import { getInitDeferred, getInitKey } from "@/utils/agent-initialization";
 import { derivePendingPermissionKey, normalizeAgentSnapshot } from "@/utils/agent-snapshots";
 import type { WorkspaceFileOpenRequest } from "@/workspace/file-open";
 import { navigateToAgent } from "@/utils/navigate-to-agent";
+import { resolveProjectPlacement } from "@/utils/project-placement";
 import { deriveSidebarStateBucket } from "@/utils/sidebar-agent-state";
 import { buildDraftAgentSetup, type ClientSlashCommand } from "@/client-slash-commands";
 import { useQueryClient } from "@tanstack/react-query";
@@ -323,9 +324,19 @@ function DraftPanel() {
   const handleCreated = useCallback(
     (agentSnapshot: Parameters<typeof normalizeAgentSnapshot>[0]) => {
       const normalized = normalizeAgentSnapshot(agentSnapshot, serverId);
+      const projectPlacement = resolveProjectPlacement({
+        projectPlacement: null,
+        cwd: normalized.cwd,
+      });
+      const hydrated = {
+        ...normalized,
+        projectPlacement,
+      };
       useSessionStore.getState().setAgents(serverId, (prev) => {
         const next = new Map(prev);
-        next.set(agentSnapshot.id, normalized);
+        // Drop the optimistic draft-id row once the real agent id is known.
+        next.delete(target.draftId);
+        next.set(agentSnapshot.id, hydrated);
         return next;
       });
       // Invalidate agent history so the sidebar picks up the new conversation
@@ -339,7 +350,7 @@ function DraftPanel() {
         useWorkspaceLayoutStore.getState().convertDraftToAgent(workspaceKey, agentSnapshot.id);
       }
     },
-    [queryClient, serverId, workspaceId],
+    [queryClient, serverId, target, workspaceId],
   );
 
   return (

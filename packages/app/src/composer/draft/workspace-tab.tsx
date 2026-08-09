@@ -34,6 +34,7 @@ import type { Agent } from "@/stores/session-store";
 import { useWorkspace, useWorkspaceExecutionAuthority } from "@/stores/session-store-hooks";
 import { useWorkspaceDraftSubmissionStore } from "@/stores/workspace-draft-submission-store";
 import { encodeImages } from "@/utils/encode-images";
+import { resolveProjectPlacement } from "@/utils/project-placement";
 import type { WorkspaceFileOpenRequest } from "@/workspace/file-open";
 import { shouldAutoFocusWorkspaceDraftComposer } from "@/screens/workspace/workspace-draft-pane-focus";
 import {
@@ -229,7 +230,7 @@ async function submitDraftCreateRequest(input: {
 }
 
 function buildDraftAgentSnapshot(input: {
-  attempt: { timestamp: Date };
+  attempt: { timestamp: Date; text?: string };
   serverId: string;
   draftId: string;
   workspaceDirectory: string | null;
@@ -261,6 +262,7 @@ function buildDraftAgentSnapshot(input: {
   }
   const runtimeProvider =
     autoSubmitConfig?.runtimeProvider ?? composerState.selectedRuntimeProvider ?? provider;
+  const provisionalTitle = resolveProvisionalCreateTitle(attempt.text);
   return {
     serverId,
     id: draftId,
@@ -276,14 +278,28 @@ function buildDraftAgentSnapshot(input: {
     pendingPermissions: [],
     persistence: null,
     runtimeInfo: { provider: runtimeProvider, sessionId: null, model, modeId },
-    title: "智能体",
+    title: provisionalTitle,
     cwd: workspaceDirectory,
     model,
     features: composerState.agentControls.features,
     thinkingOptionId,
     parentAgentId: null,
     labels: {},
+    projectPlacement: resolveProjectPlacement({
+      projectPlacement: null,
+      cwd: workspaceDirectory,
+    }),
   };
+}
+
+function resolveProvisionalCreateTitle(text: string | undefined): string {
+  const trimmed = text?.trim() ?? "";
+  if (!trimmed) {
+    return "新对话";
+  }
+  // Match server provisional title behavior: first line / short preview.
+  const firstLine = trimmed.split(/\r?\n/u, 1)[0]?.trim() || trimmed;
+  return firstLine.length > 80 ? `${firstLine.slice(0, 77)}...` : firstLine;
 }
 
 function buildDraftInitialValues(input: {

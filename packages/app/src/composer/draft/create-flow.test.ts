@@ -88,6 +88,99 @@ describe("useDraftAgentCreateFlow", () => {
     expect(onCreateSuccess).toHaveBeenCalledTimes(1);
   });
 
+  it("projects an optimistic sidebar agent immediately on submit", async () => {
+    const { useSessionStore } = await import("@/stores/session-store");
+    const createRequest = vi.fn(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      return {
+        agentId: "agent-optimistic",
+        result: { id: "agent-optimistic" },
+      };
+    });
+
+    useSessionStore.setState((state) => ({
+      ...state,
+      sessions: {
+        ...state.sessions,
+        "server-1": {
+          serverId: "server-1",
+          client: null,
+          serverInfo: null,
+          hasHydratedAgents: true,
+          hasHydratedWorkspaces: true,
+          isPlayingAudio: false,
+          focusedAgentId: null,
+          messages: [],
+          currentAssistantMessage: "",
+          agents: new Map(),
+          agentStreamTail: new Map(),
+          agentStreamHead: new Map(),
+          pendingPermissions: new Map(),
+        } as never,
+      },
+    }));
+
+    const { result } = renderHook(() =>
+      useDraftAgentCreateFlow({
+        draftId: "draft-optimistic",
+        getPendingServerId: () => "server-1",
+        buildDraftAgent: (currentAttempt) =>
+          ({
+            serverId: "server-1",
+            id: "draft-optimistic",
+            provider: "grokbuild",
+            status: "running",
+            createdAt: currentAttempt.timestamp,
+            updatedAt: currentAttempt.timestamp,
+            lastUserMessageAt: currentAttempt.timestamp,
+            lastActivityAt: currentAttempt.timestamp,
+            capabilities: {},
+            currentModeId: null,
+            availableModes: [],
+            pendingPermissions: [],
+            persistence: null,
+            title: currentAttempt.text,
+            cwd: "/repo/chisa-terminal",
+            model: "grok-4.5",
+            parentAgentId: null,
+            labels: {},
+            projectPlacement: {
+              projectKey: "/repo/chisa-terminal",
+              projectName: "ChisaTerminal",
+              checkout: {
+                cwd: "/repo/chisa-terminal",
+                isGit: false,
+                currentBranch: null,
+                remoteUrl: null,
+                worktreeRoot: null,
+                isChisaCodeOwnedWorktree: false,
+                mainRepoRoot: null,
+              },
+            },
+          }) as never,
+        createRequest,
+        onCreateSuccess: vi.fn(),
+      }),
+    );
+
+    let createPromise: Promise<void> | undefined;
+    act(() => {
+      createPromise = result.current.handleCreateFromInput({
+        text: "你怎么看这个项目",
+        attachments: [],
+        cwd: "/repo/chisa-terminal",
+      });
+    });
+
+    expect(
+      useSessionStore.getState().sessions["server-1"]?.agents.get("draft-optimistic")?.title,
+    ).toBe("你怎么看这个项目");
+
+    await act(async () => {
+      await createPromise;
+    });
+  });
+
   it("returns to draft with an error when onBeforeSubmit throws", async () => {
     const createRequest = vi.fn(async () => ({
       agentId: "agent-1",

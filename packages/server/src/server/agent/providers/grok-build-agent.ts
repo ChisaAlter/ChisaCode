@@ -17,14 +17,17 @@ interface GrokBuildAgentClientOptions {
 }
 
 export class GrokBuildAgentClient extends GenericACPAgentClient {
+  private readonly managedGatewayHome: ManagedGrokGatewayHome | null;
+
   constructor(options: GrokBuildAgentClientOptions) {
     const providerId = options.providerId ?? "grokbuild";
     const label = options.label ?? "Grok Build";
-    const env = prepareGrokGatewayEnv({
+    const prepared = prepareGrokGatewayEnv({
       providerId,
       env: options.runtimeSettings?.env,
       models: options.models,
     });
+    const env = prepared.env;
     const runtimeSettings = withGatewayAlwaysApproveCommand(options.runtimeSettings, env);
 
     super({
@@ -34,7 +37,39 @@ export class GrokBuildAgentClient extends GenericACPAgentClient {
       providerId,
       label,
     });
+    this.managedGatewayHome = prepared.managedHome;
   }
+
+  /**
+   * Grok CLI mutates managed `config.toml` after launch (marketplace, per-model
+   * base_url, dropped `[endpoints]`). Re-materialize before every process spawn so
+   * built-in ids like `grok-4.5` keep routing through the model gateway.
+   */
+  protected override async spawnProcess(
+    launchEnv?: Record<string, string>,
+    options?: { initializeTimeoutMs?: number },
+  ) {
+    if (this.managedGatewayHome) {
+      writeManagedGrokConfig(this.managedGatewayHome.grokHome, {
+        apiKey: this.managedGatewayHome.apiKey,
+        baseUrl: this.managedGatewayHome.baseUrl,
+        models: this.managedGatewayHome.models,
+      });
+    }
+    return super.spawnProcess(launchEnv, options);
+  }
+}
+
+interface ManagedGrokGatewayHome {
+  grokHome: string;
+  apiKey: string;
+  baseUrl: string;
+  models: ProviderProfileModel[];
+}
+
+interface PreparedGrokGatewayEnv {
+  env: Record<string, string> | undefined;
+  managedHome: ManagedGrokGatewayHome | null;
 }
 
 /**
@@ -103,42 +138,106 @@ export function resolveGrokBuildCommand(
 /**
  * Materializes an isolated Grok home when gateway credentials are present so
  * model-gateway faces never read or write the user's `~/.grok` free-tier config.
+ *
+ * Always rewrites managed `config.toml` for ChisaCode-owned homes. Grok CLI can
+ * rewrite that file after launch and drop `[endpoints]`, which sends built-in
+ * model ids such as `grok-4.5` back to native xAI auth.
  * @param options Provider id, runtime env, and gateway models
- * @returns Env with `GROK_HOME` (and token fallbacks) or the original env unchanged
+ * @returns Prepared env plus optional managed-home rewrite handle
  */
 export function prepareGrokGatewayEnv(options: {
   providerId: string;
   env: Record<string, string> | undefined;
   models: ProviderProfileModel[] | undefined;
-}): Record<string, string> | undefined {
+}): PreparedGrokGatewayEnv {
   const env = options.env;
-  const apiKey = env?.OPENAI_API_KEY?.trim() || env?.XAI_API_KEY?.trim();
-  const baseUrl = env?.OPENAI_BASE_URL?.trim();
-  const models = options.models ?? [];
-  if (!apiKey || !baseUrl || models.length === 0 || env?.GROK_HOME) {
-    return env;
+  const gateway = resolveGatewayRoutingCredentials(env, options.models);
+  if (!gateway) {
+    return { env, managedHome: null };
   }
 
-  const grokHome = resolveManagedGrokHome(options.providerId, baseUrl);
-  writeManagedGrokConfig(grokHome, {
-    apiKey,
-    baseUrl,
-    models,
-  });
+  const managedHomePath = resolveManagedGrokHome(options.providerId, gateway.baseUrl);
+  const existingHome = env?.GROK_HOME?.trim() || "";
+  if (existingHome && !isManagedGrokHomePath(existingHome, managedHomePath)) {
+    // Respect an explicit external GROK_HOME, but still force gateway routing env
+    // so built-in model ids do not fall back to console.x.ai with the gateway token.
+    return {
+      env: withGatewayRoutingEnv(env, gateway),
+      managedHome: null,
+    };
+  }
 
+  const managedHome = materializeManagedGrokHome({
+    grokHome: existingHome || managedHomePath,
+    ...gateway,
+  });
+  return {
+    env: withGatewayRoutingEnv(env, {
+      apiKey: managedHome.apiKey,
+      baseUrl: managedHome.baseUrl,
+      grokHome: managedHome.grokHome,
+    }),
+    managedHome,
+  };
+}
+
+function resolveGatewayRoutingCredentials(
+  env: Record<string, string> | undefined,
+  models: ProviderProfileModel[] | undefined,
+): { apiKey: string; baseUrl: string; models: ProviderProfileModel[] } | null {
+  const apiKey = env?.OPENAI_API_KEY?.trim() || env?.XAI_API_KEY?.trim() || "";
+  const baseUrl = env?.OPENAI_BASE_URL?.trim() || env?.GROK_MODELS_BASE_URL?.trim() || "";
+  const resolvedModels = models ?? [];
+  if (!apiKey || !baseUrl || resolvedModels.length === 0) {
+    return null;
+  }
+  return { apiKey, baseUrl, models: resolvedModels };
+}
+
+function materializeManagedGrokHome(options: ManagedGrokGatewayHome): ManagedGrokGatewayHome {
+  writeManagedGrokConfig(options.grokHome, options);
+  return options;
+}
+
+function withGatewayRoutingEnv(
+  env: Record<string, string> | undefined,
+  options: { apiKey: string; baseUrl: string; grokHome?: string },
+): Record<string, string> {
   return {
     ...env,
-    GROK_HOME: grokHome,
+    ...(options.grokHome ? { GROK_HOME: options.grokHome } : {}),
     // Grok CLI routes OpenAI-compatible inference through models_base_url /
     // GROK_MODELS_BASE_URL. Per-model base_url on built-in ids like grok-4.5 is
     // ignored and still hits console.x.ai.
-    GROK_MODELS_BASE_URL: baseUrl,
+    GROK_MODELS_BASE_URL: options.baseUrl,
     // Prefer the "always allow" row when Grok still surfaces a first prompt.
     GROK_DEFAULT_SELECTED_PERMISSION: "always_allow_all_sessions",
-    XAI_API_KEY: apiKey,
-    OPENAI_API_KEY: apiKey,
-    OPENAI_BASE_URL: baseUrl,
+    XAI_API_KEY: options.apiKey,
+    OPENAI_API_KEY: options.apiKey,
+    OPENAI_BASE_URL: options.baseUrl,
   };
+}
+
+/**
+ * Compatibility wrapper for callers that only need the env map.
+ * @param options Provider id, runtime env, and gateway models
+ * @returns Env with gateway routing applied, or the original env
+ */
+export function resolveGrokGatewayEnv(options: {
+  providerId: string;
+  env: Record<string, string> | undefined;
+  models: ProviderProfileModel[] | undefined;
+}): Record<string, string> | undefined {
+  return prepareGrokGatewayEnv(options).env;
+}
+
+function isManagedGrokHomePath(existingHome: string, managedHomePath: string): boolean {
+  if (existingHome === managedHomePath) {
+    return true;
+  }
+  const normalizedExisting = existingHome.replaceAll("\\", "/").toLowerCase();
+  const marker = "/provider-runtime/grokbuild/";
+  return normalizedExisting.includes(marker);
 }
 
 function resolveManagedGrokHome(providerId: string, baseUrl: string): string {
