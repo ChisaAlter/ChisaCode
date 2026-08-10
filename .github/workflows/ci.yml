@@ -2,6 +2,10 @@ name: CI
 
 on:
   workflow_dispatch:
+  push:
+    branches: [cn-main]
+  pull_request:
+    branches: [cn-main]
 
 # Least-privilege: CI only needs to read code and actions metadata. Jobs that
 # need to write (artifacts) grant that at the job level.
@@ -425,6 +429,119 @@ jobs:
           CHISACODE_VOICE_MODE_ENABLED: "0"
           CHISACODE_CLI_TEST_SHARD: ${{ matrix.shard }}
           CHISACODE_CLI_TEST_SHARD_TOTAL: "3"
+
+  desktop-packaged-electron:
+    name: desktop-packaged-electron
+    runs-on: windows-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Build server and app dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run build:server
+          npm run build:app-deps
+
+      - name: Build and package Windows x64 desktop
+        shell: bash
+        run: |
+          set -euo pipefail
+          # build:desktop exports the electron web renderer, builds desktop main,
+          # then electron-builder packages. Restrict to win x64 for the packaged gate.
+          npm run build:desktop -- --win --x64
+          ls -la packages/desktop/release
+          # Ensure the packaged gate can find either zip or an already-unpacked exe.
+          if compgen -G "packages/desktop/release/ChisaCode-Setup-*-x64.zip" > /dev/null; then
+            echo "found packaged zip artifact(s)"
+            ls -la packages/desktop/release/ChisaCode-Setup-*-x64.zip
+          elif [[ -f packages/desktop/release/win-unpacked/ChisaCode.exe ]]; then
+            echo "found win-unpacked exe; mirroring to .unpacked-x64 for the gate script"
+            mkdir -p packages/desktop/release/.unpacked-x64
+            cp -R packages/desktop/release/win-unpacked/. packages/desktop/release/.unpacked-x64/
+          elif [[ -f packages/desktop/release/.unpacked-x64/ChisaCode.exe ]]; then
+            echo "found pre-extracted .unpacked-x64 exe"
+          else
+            echo "No packaged zip or unpacked ChisaCode.exe under packages/desktop/release" >&2
+            ls -laR packages/desktop/release || true
+            exit 1
+          fi
+
+      - name: Run packaged Electron gate
+        shell: bash
+        run: npm run test:desktop-packaged --workspace=@chisacode/app
+        env:
+          CHISACODE_ENABLE_DEV_PROVIDERS: "1"
+          CHISACODE_DICTATION_ENABLED: "0"
+          CHISACODE_VOICE_MODE_ENABLED: "0"
+          CHISACODE_RELAY_ENABLED: "0"
+
+      - name: Upload packaged electron artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-packaged-electron-results
+          path: |
+            packages/app/test-results/
+            packages/desktop/release/**
+            ${{ runner.temp }}/**
+          if-no-files-found: warn
+          retention-days: 7
+
+  coverage-server:
+    name: coverage-server
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Server coverage report
+        run: npm run test:unit --workspace=@chisacode/server -- --coverage --bail=1
+      - name: Upload coverage artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-coverage
+          path: |
+            packages/server/coverage/**
+            coverage/**
+          if-no-files-found: warn
+
+  knowledge-graph-drift:
+    name: knowledge-graph-drift
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+      - name: Install dependencies
+        run: npm ci
+      - name: Regenerate modular knowledge graphs
+        run: node scripts/generate-modular-knowledge-graphs.mjs
+      - name: Fail on graph drift
+        run: |
+          git add -A docs/knowledge-graphs docs/modules .understand-anything || true
+          git diff --cached --exit-code -- docs/knowledge-graphs docs/modules .understand-anything
 
   knip:
     runs-on: ubuntu-latest

@@ -8,6 +8,8 @@ import { RotateCw, Copy, Check } from "lucide-react-native";
 import { settingsStyles } from "@/styles/settings";
 import { Button } from "@/components/ui/button";
 import { getDesktopDaemonPairing, shouldUseDesktopDaemon } from "@/desktop/daemon/desktop-daemon";
+import { useHosts, useHostMutations } from "@/runtime/host-runtime";
+import { useTranslation } from "react-i18next";
 import { useState } from "react";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 
@@ -49,8 +51,47 @@ function resolvePairingViewState(args: {
 }
 
 export function PairDeviceSection() {
+  const { t } = useTranslation();
   const showSection = shouldUseDesktopDaemon();
+  const hosts = useHosts();
+  const { clearRelayDeviceCredentials } = useHostMutations();
   const [copied, setCopied] = useState(false);
+  const [credentialMessage, setCredentialMessage] = useState<string | null>(null);
+  const [isClearing, setIsClearing] = useState(false);
+
+  const relayConnections = hosts.flatMap((host) =>
+    host.connections
+      .filter((connection) => connection.type === "relay")
+      .map((connection) => ({ host, connection })),
+  );
+  const pairedCount = relayConnections.filter(
+    (entry) => entry.connection.type === "relay" && entry.connection.deviceSecret,
+  ).length;
+  const securityChip =
+    pairedCount > 0
+      ? t("settings.hostPage.pairDevice.securityV2")
+      : t("settings.hostPage.pairDevice.securityMissing");
+
+  const handleClearCredentials = useCallback(async () => {
+    if (isClearing) return;
+    setIsClearing(true);
+    setCredentialMessage(null);
+    try {
+      for (const entry of relayConnections) {
+        if (entry.connection.type !== "relay") continue;
+        await clearRelayDeviceCredentials(entry.host.serverId, entry.connection.id);
+      }
+      setCredentialMessage(t("settings.hostPage.pairDevice.clearCredentialsDone"));
+    } catch {
+      setCredentialMessage(t("settings.hostPage.pairDevice.clearCredentialsFailed"));
+    } finally {
+      setIsClearing(false);
+    }
+  }, [clearRelayDeviceCredentials, isClearing, relayConnections, t]);
+
+  const onClearCredentialsPress = useCallback(() => {
+    void handleClearCredentials();
+  }, [handleClearCredentials]);
 
   const pairingQuery = useQuery({
     queryKey: ["desktop-daemon-pairing"],
@@ -127,6 +168,13 @@ export function PairDeviceSection() {
           copied={copied}
           handleRefetch={handleRefetch}
           handleCopyPress={handleCopyPress}
+          securityChip={securityChip}
+          credentialMessage={credentialMessage}
+          isClearing={isClearing}
+          onClearCredentials={onClearCredentialsPress}
+          clearCredentialsLabel={t("settings.hostPage.pairDevice.clearCredentials")}
+          clearCredentialsHint={t("settings.hostPage.pairDevice.clearCredentialsHint")}
+          alwaysVisibleNote={t("settings.hostPage.pairDevice.alwaysVisibleActions")}
         />
       </View>
     </View>
@@ -142,6 +190,13 @@ interface PairDeviceBodyProps {
   copied: boolean;
   handleRefetch: () => void;
   handleCopyPress: () => void;
+  securityChip: string;
+  credentialMessage: string | null;
+  isClearing: boolean;
+  onClearCredentials: () => void;
+  clearCredentialsLabel: string;
+  clearCredentialsHint: string;
+  alwaysVisibleNote: string;
 }
 
 function PairDeviceBody(props: PairDeviceBodyProps) {
@@ -154,6 +209,13 @@ function PairDeviceBody(props: PairDeviceBodyProps) {
     copied,
     handleRefetch,
     handleCopyPress,
+    securityChip,
+    credentialMessage,
+    isClearing,
+    onClearCredentials,
+    clearCredentialsLabel,
+    clearCredentialsHint,
+    alwaysVisibleNote,
   } = props;
 
   if (viewState.tag === "loading") {
@@ -178,6 +240,9 @@ function PairDeviceBody(props: PairDeviceBodyProps) {
 
   return (
     <View style={styles.content}>
+      <Text style={styles.securityChip} testID="pair-device-security-chip">
+        {securityChip}
+      </Text>
       <Text style={styles.hint}>用手机上的ChisaCode扫描这个二维码，或复制下面的链接。</Text>
       <View style={styles.qrContainer}>
         <PairDeviceQrContent qrImageSource={qrImageSource} qrQuery={qrQuery} />
@@ -196,6 +261,18 @@ function PairDeviceBody(props: PairDeviceBodyProps) {
           {copied ? "已复制" : "复制"}
         </Button>
       </View>
+      <Text style={styles.hint}>{clearCredentialsHint}</Text>
+      <Button
+        variant="outline"
+        size="sm"
+        onPress={onClearCredentials}
+        disabled={isClearing}
+        testID="pair-device-clear-credentials"
+      >
+        {isClearing ? "..." : clearCredentialsLabel}
+      </Button>
+      {credentialMessage ? <Text style={styles.hint}>{credentialMessage}</Text> : null}
+      <Text style={styles.hint}>{alwaysVisibleNote}</Text>
     </View>
   );
 }
@@ -230,6 +307,13 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: 12.5,
     lineHeight: 16,
     textAlign: "center",
+  },
+  securityChip: {
+    alignSelf: "center",
+    color: theme.colors.accent,
+    fontSize: 12,
+    fontWeight: "600",
+    lineHeight: 16,
   },
   // Soft QR card: r14 quiet elevation family.
   qrContainer: {

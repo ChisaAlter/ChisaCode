@@ -20,6 +20,10 @@
     "./internal/daemon-client-transport-types": {
       "types": "./dist/daemon-client-transport-types.d.ts",
       "default": "./dist/daemon-client-transport-types.js"
+    },
+    "./relay-device-credentials": {
+      "types": "./dist/relay-device-credentials.d.ts",
+      "default": "./dist/relay-device-credentials.js"
     }
   },
   "publishConfig": {

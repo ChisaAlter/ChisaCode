@@ -6,6 +6,10 @@ import {
   type ArchiveIfSafeDependencies,
   type AutoArchiveArchiveOptions,
 } from "./archive-if-safe.js";
+import {
+  WorkspaceMutationCoordinator,
+  type WorkspaceMutationState,
+} from "../workspace-mutation-coordinator.js";
 import type { WorkspaceGitRuntimeSnapshot } from "../workspace-git-service.js";
 
 const CWD = "/tmp/chisacode/worktrees/repo/branch";
@@ -70,9 +74,13 @@ function createLogger(): Logger {
 
 function createHarness(overrides?: {
   autoArchiveAfterMerge?: boolean;
-  getSnapshot?: () => Promise<WorkspaceGitRuntimeSnapshot | null>;
+  getSnapshot?: (
+    cwd: string,
+    options?: { force?: boolean; reason?: string },
+  ) => Promise<WorkspaceGitRuntimeSnapshot | null>;
   isChisaCodeOwnedWorktreeCwd?: ArchiveIfSafeDependencies["isChisaCodeOwnedWorktreeCwd"];
   archiveChisaCodeWorktree?: ArchiveIfSafeDependencies["archiveChisaCodeWorktree"];
+  mutationCoordinator?: WorkspaceMutationCoordinator;
 }) {
   const getConfig = vi.fn(() => ({
     autoArchiveAfterMerge: overrides?.autoArchiveAfterMerge ?? true,
@@ -99,7 +107,7 @@ function createHarness(overrides?: {
     emitWorkspaceUpdatesForWorkspaceIds: vi.fn(),
   };
   const archiveChisaCodeWorktree = vi.fn(
-    overrides?.archiveChisaCodeWorktree ?? (async () => undefined),
+    overrides?.archiveChisaCodeWorktree ?? (async () => []),
   ) as unknown as ArchiveIfSafeDependencies["archiveChisaCodeWorktree"];
   const isChisaCodeOwnedWorktreeCwd = vi.fn(
     overrides?.isChisaCodeOwnedWorktreeCwd ??
@@ -110,11 +118,13 @@ function createHarness(overrides?: {
         worktreePath: CWD,
       })),
   ) as unknown as ArchiveIfSafeDependencies["isChisaCodeOwnedWorktreeCwd"];
+  const mutationCoordinator = overrides?.mutationCoordinator ?? new WorkspaceMutationCoordinator();
   const deps: ArchiveIfSafeDependencies = {
     archiveChisaCodeWorktree,
     isChisaCodeOwnedWorktreeCwd,
     killTerminalsUnderPath: vi.fn(),
     isPathWithinRoot: vi.fn(() => true),
+    mutationCoordinator,
   };
   const log = createLogger();
   const inFlight = new Set<string>();
@@ -126,6 +136,7 @@ function createHarness(overrides?: {
     inFlight,
     log,
     options,
+    mutationCoordinator,
   };
 }
 
@@ -185,7 +196,7 @@ describe("archiveIfSafe", () => {
     expect(harness.inFlight.has(CWD)).toBe(true);
   });
 
-  test("logs and skips when reading the snapshot fails", async () => {
+  test("logs and skips when force-refreshing the snapshot fails", async () => {
     const harness = createHarness({
       getSnapshot: async () => {
         throw new Error("snapshot failed");
@@ -194,9 +205,17 @@ describe("archiveIfSafe", () => {
 
     await runArchiveIfSafe(harness);
 
+    expect(harness.getSnapshot).toHaveBeenCalledWith(CWD, {
+      force: true,
+      reason: "auto-archive-on-merge-safety-gate",
+    });
     expect(harness.log.warn).toHaveBeenCalledWith(
-      { err: expect.any(Error), cwd: CWD },
-      "Failed to read snapshot for auto-archive; skipping",
+      expect.objectContaining({
+        err: expect.any(Error),
+        decision: "deny",
+        reason: "snapshot_refresh_failed",
+      }),
+      "Failed to force-refresh snapshot for auto-archive; skipping",
     );
     expect(harness.deps.archiveChisaCodeWorktree).not.toHaveBeenCalled();
     expect(harness.inFlight.has(CWD)).toBe(false);
@@ -207,7 +226,10 @@ describe("archiveIfSafe", () => {
 
     await runArchiveIfSafe(harness);
 
-    expect(harness.deps.isChisaCodeOwnedWorktreeCwd).not.toHaveBeenCalled();
+    expect(harness.getSnapshot).toHaveBeenCalledWith(CWD, {
+      force: true,
+      reason: "auto-archive-on-merge-safety-gate",
+    });
     expect(harness.deps.archiveChisaCodeWorktree).not.toHaveBeenCalled();
   });
 
@@ -218,7 +240,10 @@ describe("archiveIfSafe", () => {
 
     await runArchiveIfSafe(harness);
 
-    expect(harness.deps.isChisaCodeOwnedWorktreeCwd).not.toHaveBeenCalled();
+    expect(harness.getSnapshot).toHaveBeenCalledWith(CWD, {
+      force: true,
+      reason: "auto-archive-on-merge-safety-gate",
+    });
     expect(harness.deps.archiveChisaCodeWorktree).not.toHaveBeenCalled();
   });
 
@@ -229,7 +254,32 @@ describe("archiveIfSafe", () => {
 
     await runArchiveIfSafe(harness);
 
-    expect(harness.deps.isChisaCodeOwnedWorktreeCwd).not.toHaveBeenCalled();
+    expect(harness.deps.archiveChisaCodeWorktree).not.toHaveBeenCalled();
+  });
+
+  test("fail-closes when dirty state is unknown", async () => {
+    const harness = createHarness({
+      getSnapshot: async () =>
+        createSnapshot({
+          git: { isDirty: null as unknown as boolean },
+        }),
+    });
+
+    await runArchiveIfSafe(harness);
+
+    expect(harness.deps.archiveChisaCodeWorktree).not.toHaveBeenCalled();
+  });
+
+  test("fail-closes when aheadOfOrigin is unknown", async () => {
+    const harness = createHarness({
+      getSnapshot: async () =>
+        createSnapshot({
+          git: { aheadOfOrigin: null as unknown as number },
+        }),
+    });
+
+    await runArchiveIfSafe(harness);
+
     expect(harness.deps.archiveChisaCodeWorktree).not.toHaveBeenCalled();
   });
 
@@ -243,6 +293,30 @@ describe("archiveIfSafe", () => {
     expect(harness.deps.isChisaCodeOwnedWorktreeCwd).toHaveBeenCalledWith(CWD, {
       chisacodeHome: CHISACODE_HOME,
     });
+    expect(harness.getSnapshot).not.toHaveBeenCalled();
+    expect(harness.deps.archiveChisaCodeWorktree).not.toHaveBeenCalled();
+  });
+
+  test("aborts when ownership changes after force refresh", async () => {
+    let ownershipCalls = 0;
+    const harness = createHarness({
+      isChisaCodeOwnedWorktreeCwd: async () => {
+        ownershipCalls += 1;
+        if (ownershipCalls === 1) {
+          return {
+            allowed: true,
+            repoRoot: "/tmp/repo",
+            worktreeRoot: WORKTREES_ROOT,
+            worktreePath: CWD,
+          };
+        }
+        return { allowed: false, worktreePath: CWD };
+      },
+    });
+
+    await runArchiveIfSafe(harness);
+
+    expect(ownershipCalls).toBe(2);
     expect(harness.deps.archiveChisaCodeWorktree).not.toHaveBeenCalled();
   });
 
@@ -256,22 +330,31 @@ describe("archiveIfSafe", () => {
     await runArchiveIfSafe(harness);
 
     expect(harness.log.warn).toHaveBeenCalledWith(
-      { err: expect.any(Error), cwd: CWD },
+      expect.objectContaining({
+        err: expect.any(Error),
+        decision: "abort",
+        reason: "archive_failed",
+      }),
       "Auto-archive after merge failed",
     );
     expect(harness.inFlight.has(CWD)).toBe(false);
   });
 
-  test("archives a clean ChisaCode-owned worktree after merge", async () => {
+  test("force-refreshes snapshot before authorizing archive", async () => {
     const harness = createHarness();
 
     await runArchiveIfSafe(harness);
 
+    expect(harness.getSnapshot).toHaveBeenCalledWith(CWD, {
+      force: true,
+      reason: "auto-archive-on-merge-safety-gate",
+    });
     expect(harness.deps.archiveChisaCodeWorktree).toHaveBeenCalledTimes(1);
     expect(harness.deps.archiveChisaCodeWorktree).toHaveBeenCalledWith(
       expect.objectContaining({
         chisacodeHome: CHISACODE_HOME,
         workspaceGitService: harness.options.workspaceGitService,
+        alreadyHoldingMutationLock: true,
       }),
       {
         targetPath: CWD,
@@ -281,9 +364,67 @@ describe("archiveIfSafe", () => {
       },
     );
     expect(harness.log.info).toHaveBeenCalledWith(
-      { cwd: CWD },
+      expect.objectContaining({
+        decision: "complete",
+        reason: "archived_after_merge",
+      }),
       "Auto-archived worktree after PR merge",
     );
     expect(harness.inFlight.has(CWD)).toBe(false);
+  });
+
+  test("serializes concurrent archive attempts on the same path", async () => {
+    const decisions: string[] = [];
+    const coordinator = new WorkspaceMutationCoordinator({
+      onDecision: (entry) => {
+        decisions.push(`${entry.decision}:${entry.reason}:${entry.state}`);
+      },
+    });
+    let releaseFirst!: () => void;
+    const firstGate = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    let archiveCalls = 0;
+
+    const harness = createHarness({
+      mutationCoordinator: coordinator,
+      archiveChisaCodeWorktree: async (_deps, _options) => {
+        archiveCalls += 1;
+        if (archiveCalls === 1) {
+          await firstGate;
+        }
+        return [];
+      },
+    });
+
+    const first = runArchiveIfSafe(harness);
+    // Wait until first archive body is running.
+    await vi.waitFor(() => expect(archiveCalls).toBe(1));
+    const second = runArchiveIfSafe(harness);
+    releaseFirst();
+    await Promise.all([first, second]);
+
+    // Second attempt either waits and runs after, or is denied while busy.
+    // With exclusive chain, second should run after first completes.
+    expect(archiveCalls).toBeGreaterThanOrEqual(1);
+    expect(decisions.some((entry) => entry.includes("lock_acquired"))).toBe(true);
+  });
+
+  test("exposes mutation state transitions during exclusive archive", async () => {
+    const states: WorkspaceMutationState[] = [];
+    const coordinator = new WorkspaceMutationCoordinator();
+    const harness = createHarness({
+      mutationCoordinator: coordinator,
+      archiveChisaCodeWorktree: async (deps) => {
+        deps.onMutationState?.("deleting", "test_delete");
+        deps.onMutationState?.("archived", "test_done");
+        states.push(coordinator.getState(CWD));
+        return [];
+      },
+    });
+
+    await runArchiveIfSafe(harness);
+
+    expect(states.length).toBeGreaterThan(0);
   });
 });

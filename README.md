@@ -1,6 +1,6 @@
 # ChisaCode
 
-**Local-first, multi-provider agent control surface.** Run, monitor, and interact with coding agents from desktop, mobile, web, and CLI — your code never leaves your machine.
+**Local-first, multi-provider agent control surface.** Run, monitor, and interact with coding agents from desktop, mobile, web, and CLI — the daemon is local-first; relay metadata may be visible and providers may receive prompts.
 
 [![License](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue.svg)](LICENSE)
 
@@ -9,7 +9,7 @@
 - **Multi-provider** — Built-in support for Claude, Codex, OpenCode, Pi, Kimi Code, and Grok Build. Custom providers extend built-in ones or use the ACP (Agent Client Protocol) command interface. Pick the right model for each job, switch freely.
 - **Cross-platform** — Desktop (macOS, Linux, Windows via Electron), mobile (iOS, Android via Expo), web, and CLI. Start work at your desk, check progress from your phone, script from the terminal.
 - **Local-first** — The daemon runs on your machine. Your code, your keys, your environment. No cloud dependency, no telemetry.
-- **E2E encrypted relay** — Remote access via an untrusted relay with Curve25519 + XSalsa20-Poly1305 encryption. The relay routes bytes, cannot read content.
+- **E2E encrypted relay** — Remote access via an untrusted relay with Curve25519 + XSalsa20-Poly1305 encryption. The relay routes bytes, cannot read E2EE payload content (metadata remains visible).
 - **BYOK** — Bring your own API keys. Use your subsidized plans and first-party provider pricing. ChisaCode adds zero markup.
 - **Agent orchestration** — Launch multiple agents side-by-side in split panes, mix providers, delegate sub-agent tasks, schedule cron-triggered runs.
 - **Voice mode** — Dictate prompts or talk through problems hands-free with built-in dictation and voice agent support.
@@ -131,9 +131,9 @@ See the `docs/` directory for detailed guides:
 
 ## Security
 
-- **E2E encryption** — Relay traffic is encrypted with Curve25519 ECDH + XSalsa20-Poly1305. The relay is zero-knowledge.
+- **E2E encryption** — Relay traffic is encrypted with Curve25519 ECDH + XSalsa20-Poly1305. The relay is payload-confidential (metadata still visible).
 - **DNS rebinding protection** — Host header validation on every HTTP request and WebSocket upgrade.
-- **Agent isolation** — Providers handle their own authentication. ChisaCode never stores or transmits API keys.
+- **Agent isolation** — Providers handle their own authentication. ChisaCode may store API keys locally and transmit them to user-selected upstreams.
 - **Local trust boundary** — Daemon binds `127.0.0.1` by default. Optional password auth via bearer token for TCP exposure.
 
 See [SECURITY.md](SECURITY.md) for the full threat model and vulnerability reporting.

@@ -74,6 +74,8 @@ git tag "android-v$version" HEAD
 git push origin HEAD:cn-main
 gh workflow run ci.yml --ref cn-main
 # Wait for the release-only CI run to succeed before publishing tags.
+
+Enforced gate: `scripts/push-current-release-tag.mjs` now calls `scripts/require-ci-green-for-sha.mjs` against the exact HEAD SHA and fails closed if CI is missing/failed/cancelled.
 git push origin "desktop-windows-v$version" "android-v$version"
 gh workflow run release-notes-sync.yml -f tag="v$version" -f create_if_missing=true
 ```

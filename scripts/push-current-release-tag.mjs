@@ -1,4 +1,4 @@
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -66,6 +66,14 @@ if (!version) {
 
 const tag = `v${version}`;
 const headCommit = runQuiet("git", ["rev-parse", "HEAD"]);
+const __ciGate = spawnSync(
+  process.execPath,
+  ["scripts/require-ci-green-for-sha.mjs", "--sha", headCommit],
+  { stdio: "inherit" },
+);
+if (__ciGate.status !== 0) {
+  throw new Error(`CI exact-SHA gate failed for ${headCommit}`);
+}
 
 let localTagCommit = "";
 try {

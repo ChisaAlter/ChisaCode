@@ -571,6 +571,46 @@ async function inferRepoRootPathFromWorktreePath(worktreePath: string): Promise<
   }
 }
 
+async function forceRemoveWorktreePath(worktreePath: string): Promise<void> {
+  try {
+    await runGitCommand(["worktree", "remove", worktreePath, "--force"], {
+      cwd: worktreePath,
+      timeout: 120_000,
+    });
+  } catch {
+    rmSync(worktreePath, { recursive: true, force: true });
+  }
+}
+
+async function cleanupFailedWorktreeSetup(worktreePath: string): Promise<void> {
+  // Route setup-failure cleanup through the same exclusive delete path as
+  // archive/delete so concurrent mutations cannot race this worktree.
+  try {
+    const { workspaceMutationCoordinator } =
+      await import("../server/workspace-mutation-coordinator.js");
+    await workspaceMutationCoordinator.runExclusive(
+      worktreePath,
+      "setup-failure-cleanup",
+      async ({ setState }) => {
+        setState("quiescing", "setup_failure_cleanup_begin");
+        setState("deleting", "setup_failure_cleanup_delete");
+        try {
+          await runGitCommand(["worktree", "remove", worktreePath], {
+            cwd: worktreePath,
+            timeout: 120_000,
+          });
+        } catch {
+          await forceRemoveWorktreePath(worktreePath);
+        }
+        setState("archived", "setup_failure_cleanup_complete");
+      },
+    );
+  } catch {
+    // Last-resort residual cleanup if coordinator import/lock fails.
+    await forceRemoveWorktreePath(worktreePath);
+  }
+}
+
 export async function runWorktreeSetupCommands(options: {
   worktreePath: string;
   branchName: string;
@@ -613,14 +653,7 @@ export async function runWorktreeSetupCommands(options: {
 
     if (result.exitCode !== 0) {
       if (options.cleanupOnFailure) {
-        try {
-          await runGitCommand(["worktree", "remove", options.worktreePath, "--force"], {
-            cwd: options.worktreePath,
-            timeout: 120_000,
-          });
-        } catch {
-          rmSync(options.worktreePath, { recursive: true, force: true });
-        }
+        await cleanupFailedWorktreeSetup(options.worktreePath);
       }
       throw new WorktreeSetupError(
         `Worktree setup command failed: ${cmd}\n${result.stderr}`.trim(),
@@ -1014,12 +1047,25 @@ export async function deleteChisaCodeWorktree({
   worktreeSlug,
   worktreesRoot,
   chisacodeHome,
+  alreadyHoldingMutationLock,
+  mutationCoordinator,
 }: {
   cwd: string | null;
   worktreePath?: string;
   worktreeSlug?: string;
   worktreesRoot?: string;
   chisacodeHome?: string;
+  /**
+   * When true, the caller (archive service) already holds the mutation lock.
+   */
+  alreadyHoldingMutationLock?: boolean;
+  mutationCoordinator?: {
+    runExclusive: <T>(
+      path: string,
+      reason: string,
+      fn: (ctx: { setState: (state: string, reason: string) => void }) => Promise<T>,
+    ) => Promise<T>;
+  };
 }): Promise<void> {
   if (!worktreePath && !worktreeSlug) {
     throw new Error("worktreePath or worktreeSlug is required");
@@ -1048,35 +1094,71 @@ export async function deleteChisaCodeWorktree({
     throw new Error("Refusing to delete non-ChisaCode worktree");
   }
 
-  if (await pathExists(resolvedWorktree)) {
-    await runWorktreeTeardownCommands({
-      worktreePath: resolvedWorktree,
-    });
-  }
-
-  if (cwd) {
-    try {
-      await runGitCommand(["worktree", "remove", resolvedWorktree, "--force"], {
-        cwd,
-        timeout: 120_000,
+  const runDelete = async (): Promise<void> => {
+    if (await pathExists(resolvedWorktree)) {
+      await runWorktreeTeardownCommands({
+        worktreePath: resolvedWorktree,
       });
-    } catch {
-      // `git worktree remove` fails if the admin dir is already gone (e.g. a
-      // prior archive attempt removed it before the working tree could be
-      // fully cleaned up), or if the repo root has moved. Fall through to the
-      // rm retry loop below so the operation stays idempotent.
     }
+
+    // Non-force probe first: success means the worktree was truly clean/unbusy.
+    // Real ChisaCode worktrees usually fail this probe (node_modules / processes),
+    // so the quiesced force path remains the normal deletion mechanism.
+    let nonForceSucceeded = false;
+    if (cwd) {
+      try {
+        await runGitCommand(["worktree", "remove", resolvedWorktree], {
+          cwd,
+          timeout: 120_000,
+        });
+        nonForceSucceeded = true;
+      } catch {
+        // Expected for dirty/untracked/busy worktrees; continue to force path.
+      }
+    }
+
+    if (!nonForceSucceeded && cwd) {
+      try {
+        await runGitCommand(["worktree", "remove", resolvedWorktree, "--force"], {
+          cwd,
+          timeout: 120_000,
+        });
+      } catch {
+        // `git worktree remove` fails if the admin dir is already gone (e.g. a
+        // prior archive attempt removed it before the working tree could be
+        // fully cleaned up), or if the repo root has moved. Fall through to the
+        // rm retry loop below so the operation stays idempotent.
+      }
+    }
+
+    // Idempotent residual cleanup only after git remove was attempted; still
+    // constrained to the managed worktree root resolved above.
+    await removeDirectoryWithRetries(resolvedWorktree);
+
+    if (cwd) {
+      try {
+        await runGitCommand(["worktree", "prune"], { cwd, timeout: 30_000 });
+      } catch {
+        // not critical; git will prune lazily
+      }
+    }
+  };
+
+  if (alreadyHoldingMutationLock || !mutationCoordinator) {
+    await runDelete();
+    return;
   }
 
-  await removeDirectoryWithRetries(resolvedWorktree);
-
-  if (cwd) {
-    try {
-      await runGitCommand(["worktree", "prune"], { cwd, timeout: 30_000 });
-    } catch {
-      // not critical; git will prune lazily
-    }
-  }
+  await mutationCoordinator.runExclusive(
+    resolvedWorktree,
+    "delete-worktree",
+    async ({ setState }) => {
+      setState("quiescing", "delete_begin");
+      setState("deleting", "delete_fs");
+      await runDelete();
+      setState("archived", "delete_complete");
+    },
+  );
 }
 
 async function pathExists(path: string): Promise<boolean> {

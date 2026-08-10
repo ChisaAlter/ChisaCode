@@ -1,5 +1,5 @@
 import { execSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
@@ -143,6 +143,49 @@ describe("createSnapshot", () => {
     // The user's staged file must STILL be staged after the snapshot — the old
     // implementation ran `git reset HEAD --` which wiped ALL staging.
     expect(git("status --porcelain")).toContain("A  staged-by-user.ts");
+  });
+
+  test("does not import nested secrets from untracked directories and keeps HEAD baseline files", async () => {
+    const nestedDir = path.join(tmpDir, "vendor-cache");
+    mkdirSync(nestedDir, { recursive: true });
+    writeFileSync(path.join(nestedDir, ".env"), "SECRET=nested\n");
+    writeFileSync(path.join(nestedDir, "safe.txt"), "ok\n");
+    writeFileSync(path.join(tmpDir, "tracked-edit.ts"), "export const z = 3;\n");
+
+    const result = await createSnapshot(tmpDir, { kind: "before-edit" }, logger);
+    expect(result.ok).toBe(true);
+    expect(result.commitHash).toBeDefined();
+    expect(
+      result.excludedFiles?.some((f) => f.replace(/\\/g, "/").endsWith("vendor-cache/.env")),
+    ).toBe(true);
+
+    // Snapshot tree must retain unmodified HEAD files (README.md) and must not
+    // contain the nested secret leaf.
+    const tree = execSync(`git ls-tree -r --name-only ${result.commitHash}`, {
+      cwd: tmpDir,
+      encoding: "utf8",
+    });
+    expect(tree).toContain("README.md");
+    expect(tree).toContain("tracked-edit.ts");
+    expect(tree).toContain("vendor-cache/safe.txt");
+    expect(tree).not.toContain("vendor-cache/.env");
+
+    // Relative to HEAD, secret leaf must not appear as an added path.
+    const diff = execSync(
+      `git diff-tree --no-commit-id --name-status -r HEAD ${result.commitHash}`,
+      {
+        cwd: tmpDir,
+        encoding: "utf8",
+      },
+    );
+    expect(diff).not.toMatch(/vendor-cache\/\.env/);
+  });
+
+  test("rejects empty tree-diff snapshots after filtering", async () => {
+    writeFileSync(path.join(tmpDir, ".env"), "SECRET=only\n");
+    const result = await createSnapshot(tmpDir, { kind: "before-edit" }, logger);
+    expect(result.ok).toBe(false);
+    expect(result.reason).toMatch(/sensitive|no tree diff/i);
   });
 });
 

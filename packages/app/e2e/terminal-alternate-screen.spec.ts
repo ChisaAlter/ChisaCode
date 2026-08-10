@@ -225,8 +225,8 @@ test.describe("Terminal alternate-screen transitions", () => {
 
       const firstSample = samples[0];
       const finalSample = samples.at(-1);
-      expect(firstSample, "expected an initial layout sample").toBeTruthy();
-      expect(finalSample, "expected a final layout sample").toBeTruthy();
+      expect(firstSample, "expected an initial layout sample").not.toBeNull();
+      expect(finalSample, "expected a final layout sample").not.toBeNull();
 
       expect(
         finalSample?.visibleSurfaceCount ?? 0,

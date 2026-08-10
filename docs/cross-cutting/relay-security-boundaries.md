@@ -18,7 +18,7 @@ Use this when changing relay connection behavior, pairing, encryption, key excha
 
 ## Invariants
 
-- Relay is designed as a zero-knowledge encrypted bridge.
+- Relay is designed as a payload-confidential (metadata still visible) encrypted bridge.
 - Threat-model changes need security review, not only typecheck.
 - Pairing transfers daemon identity assumptions to clients.
 - Direct and relay transport should preserve the same client-facing API where possible.

@@ -22,15 +22,15 @@ flowchart LR
   relay --> server
   client --> app
   client --> cli
-  client --> desktop
   highlight --> app
+  highlight --> server
   audio --> app
   server --> cli
   server --> desktop
-  app --> desktop
+  cli --> desktop
 ```
 
-The dependency arrows above are conceptual. The generated graph files contain the current workspace dependency edges discovered from package manifests and imports.
+The dependency arrows above are generated from package manifests where available; verify with CI generator. The generated graph files contain the current workspace dependency edges discovered from package manifests and imports.
 
 ## Ownership Boundaries
 
@@ -55,7 +55,7 @@ Use a coordinator agent when a change crosses one of these seams:
 - Agent lifecycle: `server`, `protocol`, `client`, `app`, `cli`.
 - Agent delegation or relation semantics: `protocol`, `server`, `client`, `app`, and `desktop` when MCP injection is involved.
 - Rebuildable local indexes: `server` and storage docs first; keep public protocol/API changes out until an explicit query surface exists.
-- Assistant presets: `protocol`, `server`, `client`, `app`, `cli`, and top-level `MCP`; presets fill drafts, never start agents by themselves, and remain hidden from agent-scoped MCP.
+- Assistant presets: `protocol`, `server`, `client`, `app`, `cli`; presets fill drafts, never start agents by themselves, and remain hidden from agent-scoped MCP.
 - Desktop daemon behavior: `desktop`, `server`, `app`, `client`.
 - Relay security or pairing: `relay`, `server`, `client`, `app`, `desktop`.
 - Cross-platform UI behavior: `app`, optionally `desktop` and `expo-two-way-audio`.

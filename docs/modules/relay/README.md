@@ -30,7 +30,7 @@
 
 ## Invariants
 
-- Relay is zero-knowledge by design.
+- Relay is payload-confidential (metadata still visible) by design.
 - Encryption and pairing changes need security review.
 - Direct and relay transports should preserve client-facing API parity.
 - Remote access must not weaken local-first guarantees.

@@ -101,6 +101,10 @@
       "types": "./dist/connection-offer.d.ts",
       "default": "./dist/connection-offer.js"
     },
+    "./relay-device-auth": {
+      "types": "./dist/relay-device-auth.d.ts",
+      "default": "./dist/relay-device-auth.js"
+    },
     "./daemon-endpoints": {
       "types": "./dist/daemon-endpoints.d.ts",
       "default": "./dist/daemon-endpoints.js"

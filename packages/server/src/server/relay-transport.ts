@@ -25,6 +25,12 @@ interface RelayTransportOptions {
   daemonKeyPair?: KeyPair;
   daemonRelayAuthKeyPair?: RelayAuthKeyPair;
   createWebSocket?: RelayWebSocketFactory;
+  chisacodeHome?: string;
+  daemonPublicKeyB64?: string;
+  /**
+   * When true, reject relay hellos without device auth. Default false for legacy v1.0.x.
+   */
+  requireDeviceAuth?: boolean;
 }
 
 export interface RelayTransportController {
@@ -202,6 +208,9 @@ export function startRelayTransport({
   daemonKeyPair,
   daemonRelayAuthKeyPair,
   createWebSocket = createDefaultRelayWebSocket,
+  chisacodeHome,
+  daemonPublicKeyB64,
+  requireDeviceAuth = false,
 }: RelayTransportOptions): RelayTransportController {
   const relayLogger = logger.child({ module: "relay-transport" });
 
@@ -498,6 +507,10 @@ export function startRelayTransport({
       const externalMetadata: ExternalSocketMetadata = {
         transport: "relay",
         externalSessionKey: `session:${connectionId}`,
+        requireDeviceAuth,
+        chisacodeHome,
+        daemonPublicKeyB64,
+        serverId,
       };
       if (daemonKeyPair) {
         void attachEncryptedSocket(

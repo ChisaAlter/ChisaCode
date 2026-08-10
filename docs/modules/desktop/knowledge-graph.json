@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "generatedAt": "2026-06-27T10:03:06.701Z",
+  "generatedAt": "2026-08-10T06:57:20.573Z",
   "generator": "scripts/generate-modular-knowledge-graphs.mjs",
   "module": {
     "id": "desktop",
@@ -20,6 +20,7 @@
     "exports": null,
     "scripts": {
       "build": "npm --prefix ../.. run build:server && npm run build:main && node scripts/build.js",
+      "build:x64": "npm --prefix ../.. run build:server && npm run build:main && cd ../app && cross-env CHISACODE_WEB_PLATFORM=electron npx expo export --platform web && cd ../desktop && node scripts/build-x64.js",
       "build:main": "tsc -p tsconfig.json",
       "dev": "./scripts/dev.sh",
       "dev:win": "powershell ./scripts/dev.ps1",
@@ -28,17 +29,18 @@
     }
   },
   "stats": {
-    "files": 70,
+    "files": 75,
     "categories": {
       "config": 3,
       "docs": 1,
-      "support": 6,
-      "source": 40,
-      "test": 20
+      "support": 7,
+      "test": 23,
+      "source": 41
     },
-    "internalImportEdges": 88,
+    "internalImportEdges": 94,
     "workspaceDependencies": ["server"],
     "externalDependencies": [
+      "@electron/rebuild",
       "app-builder-lib",
       "builder-util-runtime",
       "electron",
@@ -46,6 +48,7 @@
       "electron-log",
       "electron-updater",
       "fs",
+      "node-abi",
       "node:child_process",
       "node:crypto",
       "node:events",
@@ -71,29 +74,36 @@
       "id": "file:packages/desktop/electron-builder.yml",
       "type": "config",
       "path": "packages/desktop/electron-builder.yml",
-      "lines": 74,
+      "lines": 80,
       "imports": []
     },
     {
       "id": "file:packages/desktop/package.json",
       "type": "config",
       "path": "packages/desktop/package.json",
-      "lines": 44,
+      "lines": 52,
       "imports": []
     },
     {
       "id": "file:packages/desktop/README.md",
       "type": "docs",
       "path": "packages/desktop/README.md",
-      "lines": 4,
+      "lines": 18,
       "imports": []
     },
     {
       "id": "file:packages/desktop/scripts/after-pack.js",
       "type": "support",
       "path": "packages/desktop/scripts/after-pack.js",
-      "lines": 138,
-      "imports": ["./smoke-packaged-desktop-app.js", "fs", "path"]
+      "lines": 228,
+      "imports": [
+        "./smoke-packaged-desktop-app.js",
+        "@electron/rebuild",
+        "electron/package.json",
+        "fs",
+        "node-abi",
+        "path"
+      ]
     },
     {
       "id": "file:packages/desktop/scripts/after-sign.js",
@@ -115,6 +125,13 @@
       ]
     },
     {
+      "id": "file:packages/desktop/scripts/build-x64.js",
+      "type": "support",
+      "path": "packages/desktop/scripts/build-x64.js",
+      "lines": 49,
+      "imports": ["app-builder-lib", "electron-builder", "node:path"]
+    },
+    {
       "id": "file:packages/desktop/scripts/build.js",
       "type": "support",
       "path": "packages/desktop/scripts/build.js",
@@ -125,8 +142,24 @@
       "id": "file:packages/desktop/scripts/smoke-packaged-desktop-app.js",
       "type": "support",
       "path": "packages/desktop/scripts/smoke-packaged-desktop-app.js",
-      "lines": 539,
+      "lines": 609,
       "imports": ["node:child_process", "node:fs", "node:os", "node:path", "node:timers/promises"]
+    },
+    {
+      "id": "file:packages/desktop/scripts/smoke-packaged-desktop-app.test.ts",
+      "type": "test",
+      "path": "packages/desktop/scripts/smoke-packaged-desktop-app.test.ts",
+      "lines": 148,
+      "imports": [
+        "./smoke-packaged-desktop-app.js",
+        "node:child_process",
+        "node:fs",
+        "node:fs/promises",
+        "node:module",
+        "node:os",
+        "node:path",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/desktop/scripts/verify-electron-cdp.mjs",
@@ -134,6 +167,20 @@
       "path": "packages/desktop/scripts/verify-electron-cdp.mjs",
       "lines": 596,
       "imports": ["node:fs/promises", "node:path", "node:process", "playwright"]
+    },
+    {
+      "id": "file:packages/desktop/src/browser-webview-security.test.ts",
+      "type": "test",
+      "path": "packages/desktop/src/browser-webview-security.test.ts",
+      "lines": 125,
+      "imports": ["./browser-webview-security", "vitest"]
+    },
+    {
+      "id": "file:packages/desktop/src/browser-webview-security.ts",
+      "type": "source",
+      "path": "packages/desktop/src/browser-webview-security.ts",
+      "lines": 98,
+      "imports": []
     },
     {
       "id": "file:packages/desktop/src/daemon/cli/entrypoints.ts",
@@ -187,14 +234,20 @@
       "id": "file:packages/desktop/src/daemon/daemon-manager.test.ts",
       "type": "test",
       "path": "packages/desktop/src/daemon/daemon-manager.test.ts",
-      "lines": 336,
-      "imports": ["../settings/desktop-settings", "./daemon-manager", "node:events", "vitest"]
+      "lines": 560,
+      "imports": [
+        "../settings/desktop-settings",
+        "./daemon-manager",
+        "node:events",
+        "node:path",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/desktop/src/daemon/daemon-manager.ts",
       "type": "source",
       "path": "packages/desktop/src/daemon/daemon-manager.ts",
-      "lines": 765,
+      "lines": 921,
       "imports": [
         "../features/attachments.js",
         "../features/auto-updater.js",
@@ -305,14 +358,14 @@
       "id": "file:packages/desktop/src/desktop-startup.test.ts",
       "type": "test",
       "path": "packages/desktop/src/desktop-startup.test.ts",
-      "lines": 56,
+      "lines": 112,
       "imports": ["./desktop-startup", "vitest"]
     },
     {
       "id": "file:packages/desktop/src/desktop-startup.ts",
       "type": "source",
       "path": "packages/desktop/src/desktop-startup.ts",
-      "lines": 16,
+      "lines": 31,
       "imports": []
     },
     {
@@ -356,7 +409,7 @@
         "node:crypto",
         "node:fs/promises",
         "node:path",
-        "zod"
+        "zod/v3"
       ]
     },
     {
@@ -396,21 +449,27 @@
       "id": "file:packages/desktop/src/features/opener.test.ts",
       "type": "test",
       "path": "packages/desktop/src/features/opener.test.ts",
-      "lines": 65,
+      "lines": 108,
       "imports": ["./opener", "electron", "vitest"]
     },
     {
       "id": "file:packages/desktop/src/features/opener.ts",
       "type": "source",
       "path": "packages/desktop/src/features/opener.ts",
-      "lines": 34,
-      "imports": ["../i18n.js", "../settings/desktop-settings-electron.js", "electron"]
+      "lines": 63,
+      "imports": [
+        "../daemon/daemon-manager.js",
+        "../i18n.js",
+        "../settings/desktop-settings-electron.js",
+        "electron",
+        "node:path"
+      ]
     },
     {
       "id": "file:packages/desktop/src/features/react-devtools.ts",
       "type": "source",
       "path": "packages/desktop/src/features/react-devtools.ts",
-      "lines": 103,
+      "lines": 119,
       "imports": ["electron", "node:fs", "node:fs/promises", "node:path", "unzip-crx-3"]
     },
     {
@@ -473,21 +532,21 @@
       "id": "file:packages/desktop/src/integrations/skills/index.ts",
       "type": "source",
       "path": "packages/desktop/src/integrations/skills/index.ts",
-      "lines": 11,
+      "lines": 14,
       "imports": ["./operations.js"]
     },
     {
       "id": "file:packages/desktop/src/integrations/skills/operations.test.ts",
       "type": "test",
       "path": "packages/desktop/src/integrations/skills/operations.test.ts",
-      "lines": 443,
+      "lines": 502,
       "imports": ["./operations", "node:fs", "node:os", "node:path", "vitest"]
     },
     {
       "id": "file:packages/desktop/src/integrations/skills/operations.ts",
       "type": "source",
       "path": "packages/desktop/src/integrations/skills/operations.ts",
-      "lines": 425,
+      "lines": 455,
       "imports": [
         "./paths.js",
         "./sync.js",
@@ -524,15 +583,16 @@
       "id": "file:packages/desktop/src/login-shell-env.ts",
       "type": "source",
       "path": "packages/desktop/src/login-shell-env.ts",
-      "lines": 126,
+      "lines": 232,
       "imports": ["node:child_process", "node:crypto", "node:os", "node:path"]
     },
     {
       "id": "file:packages/desktop/src/main.ts",
       "type": "source",
       "path": "packages/desktop/src/main.ts",
-      "lines": 830,
+      "lines": 851,
       "imports": [
+        "./browser-webview-security.js",
         "./daemon/cli/passthrough.js",
         "./daemon/daemon-manager.js",
         "./daemon/local-transport.js",
@@ -573,10 +633,17 @@
       "imports": ["node:fs", "node:path"]
     },
     {
+      "id": "file:packages/desktop/src/preload.test.ts",
+      "type": "test",
+      "path": "packages/desktop/src/preload.test.ts",
+      "lines": 234,
+      "imports": ["./preload", "vitest"]
+    },
+    {
       "id": "file:packages/desktop/src/preload.ts",
       "type": "source",
       "path": "packages/desktop/src/preload.ts",
-      "lines": 85,
+      "lines": 160,
       "imports": ["electron"]
     },
     {
@@ -653,15 +720,20 @@
       "id": "file:packages/desktop/src/window/window-manager.test.ts",
       "type": "test",
       "path": "packages/desktop/src/window/window-manager.test.ts",
-      "lines": 190,
+      "lines": 192,
       "imports": ["./window-manager", "vitest"]
     },
     {
       "id": "file:packages/desktop/src/window/window-manager.ts",
       "type": "source",
       "path": "packages/desktop/src/window/window-manager.ts",
-      "lines": 341,
-      "imports": ["../i18n.js", "../settings/desktop-settings-electron.js", "electron"]
+      "lines": 362,
+      "imports": [
+        "../features/opener.js",
+        "../i18n.js",
+        "../settings/desktop-settings-electron.js",
+        "electron"
+      ]
     },
     {
       "id": "file:packages/desktop/tsconfig.json",
@@ -689,6 +761,18 @@
       "target": "file:packages/desktop/scripts/smoke-packaged-desktop-app.js",
       "type": "imports",
       "specifier": "./smoke-packaged-desktop-app.js"
+    },
+    {
+      "source": "file:packages/desktop/scripts/smoke-packaged-desktop-app.test.ts",
+      "target": "file:packages/desktop/scripts/smoke-packaged-desktop-app.js",
+      "type": "imports",
+      "specifier": "./smoke-packaged-desktop-app.js"
+    },
+    {
+      "source": "file:packages/desktop/src/browser-webview-security.test.ts",
+      "target": "file:packages/desktop/src/browser-webview-security.ts",
+      "type": "imports",
+      "specifier": "./browser-webview-security"
     },
     {
       "source": "file:packages/desktop/src/daemon/cli/entrypoints.ts",
@@ -968,6 +1052,12 @@
     },
     {
       "source": "file:packages/desktop/src/features/opener.ts",
+      "target": "file:packages/desktop/src/daemon/daemon-manager.ts",
+      "type": "imports",
+      "specifier": "../daemon/daemon-manager.js"
+    },
+    {
+      "source": "file:packages/desktop/src/features/opener.ts",
       "target": "file:packages/desktop/src/i18n.ts",
       "type": "imports",
       "specifier": "../i18n.js"
@@ -1043,6 +1133,12 @@
       "target": "file:packages/desktop/src/integrations/skills/sync.ts",
       "type": "imports",
       "specifier": "./sync"
+    },
+    {
+      "source": "file:packages/desktop/src/main.ts",
+      "target": "file:packages/desktop/src/browser-webview-security.ts",
+      "type": "imports",
+      "specifier": "./browser-webview-security.js"
     },
     {
       "source": "file:packages/desktop/src/main.ts",
@@ -1153,6 +1249,12 @@
       "specifier": "./open-project-routing"
     },
     {
+      "source": "file:packages/desktop/src/preload.test.ts",
+      "target": "file:packages/desktop/src/preload.ts",
+      "type": "imports",
+      "specifier": "./preload"
+    },
+    {
       "source": "file:packages/desktop/src/settings/desktop-settings-commands.test.ts",
       "target": "file:packages/desktop/src/settings/desktop-settings.ts",
       "type": "imports",
@@ -1205,6 +1307,12 @@
       "target": "file:packages/desktop/src/window/window-manager.ts",
       "type": "imports",
       "specifier": "./window-manager"
+    },
+    {
+      "source": "file:packages/desktop/src/window/window-manager.ts",
+      "target": "file:packages/desktop/src/features/opener.ts",
+      "type": "imports",
+      "specifier": "../features/opener.js"
     },
     {
       "source": "file:packages/desktop/src/window/window-manager.ts",

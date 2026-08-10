@@ -2036,7 +2036,7 @@ describe("archiveChisaCodeWorktree", () => {
     });
   });
 
-  test("proceeds to FS delete even when terminal teardown rejects", async () => {
+  test("fails closed and preserves the worktree when terminal teardown rejects", async () => {
     const { tempDir, repoDir } = createGitRepo();
     cleanupPaths.push(tempDir);
 
@@ -2054,33 +2054,35 @@ describe("archiveChisaCodeWorktree", () => {
       throw new Error("simulated terminal teardown failure");
     });
 
-    await archiveChisaCodeWorktree(
-      {
-        chisacodeHome,
-        github: createGitHubServiceStub(),
-        agentManager: {
-          listAgents: () => [],
-          archiveAgent: vi.fn(async () => ({ archivedAt: new Date().toISOString() })),
-          archiveSnapshot: vi.fn(async () => {
-            throw new Error("not expected for empty agent list");
-          }),
+    await expect(
+      archiveChisaCodeWorktree(
+        {
+          chisacodeHome,
+          github: createGitHubServiceStub(),
+          agentManager: {
+            listAgents: () => [],
+            archiveAgent: vi.fn(async () => ({ archivedAt: new Date().toISOString() })),
+            archiveSnapshot: vi.fn(async () => {
+              throw new Error("not expected for empty agent list");
+            }),
+          },
+          agentStorage: createAgentStorageStub(),
+          archiveWorkspaceRecord: vi.fn(async () => {}),
+          ...createWorkspaceArchivingDeps(),
+          isPathWithinRoot: createIsPathWithinRoot(),
+          killTerminalsUnderPath,
+          sessionLogger: createLogger(),
         },
-        agentStorage: createAgentStorageStub(),
-        archiveWorkspaceRecord: vi.fn(async () => {}),
-        ...createWorkspaceArchivingDeps(),
-        isPathWithinRoot: createIsPathWithinRoot(),
-        killTerminalsUnderPath,
-        sessionLogger: createLogger(),
-      },
-      {
-        targetPath: created.worktreePath,
-        repoRoot: repoDir,
-        requestId: "req-archive-terminal-throws",
-      },
-    );
+        {
+          targetPath: created.worktreePath,
+          repoRoot: repoDir,
+          requestId: "req-archive-terminal-throws",
+        },
+      ),
+    ).rejects.toThrow("Teardown failed before worktree delete");
 
     expect(killTerminalsUnderPath).toHaveBeenCalledTimes(1);
-    expect(existsSync(created.worktreePath)).toBe(false);
+    expect(existsSync(created.worktreePath)).toBe(true);
   });
 
   test("forces a workspace git snapshot refresh after archive deletes a worktree", async () => {

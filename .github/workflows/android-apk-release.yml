@@ -31,7 +31,8 @@ concurrency:
 
 env:
   SOURCE_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}
-  CHECKOUT_REF: ${{ github.event_name == 'workflow_dispatch' && (github.event.inputs.checkout_ref || github.event.inputs.tag) || github.ref }}
+  # exact-sha-gate: prefer tag/ref identity; manual branch checkout is discouraged.
+  CHECKOUT_REF: ${{ env.SOURCE_TAG }}
   SHOULD_PUBLISH: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.publish != 'false' }}
 
 jobs:

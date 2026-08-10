@@ -60,6 +60,8 @@ import {
 } from "./websocket/runtime-metrics.js";
 import { summarizeUntrustedLogIdentifier } from "./log-metadata.js";
 import { isWebSocketPayloadWithinLimit, WEBSOCKET_MAX_PAYLOAD_BYTES } from "./websocket-limits.js";
+import { RelayDeviceCredentialStore } from "./relay-device-credential-store.js";
+import { MessageLaneExecutor, classifySessionMessageLane } from "./websocket-message-lanes.js";
 
 const WS_CLOSE_DAEMON_AUTH_FAILED = 4401;
 const WS_CLOSE_POLICY_VIOLATION = 1008;
@@ -69,11 +71,28 @@ const PRE_AUTH_MAX_TOTAL_BYTES = 64 * 1024;
 export interface ExternalSocketMetadata {
   transport: "relay";
   externalSessionKey?: string;
+  /**
+   * When true, relay hellos without valid device auth are rejected.
+   * Default false preserves released v1.0.x offer-only clients (legacy).
+   */
+  requireDeviceAuth?: boolean;
+  chisacodeHome?: string;
+  daemonPublicKeyB64?: string;
+  serverId?: string;
 }
 
 interface PendingConnection {
   connectionLogger: pino.Logger;
   helloTimeout: ReturnType<typeof setTimeout> | null;
+  transport?: "relay" | "direct";
+  requireDeviceAuth?: boolean;
+  chisacodeHome?: string;
+  daemonPublicKeyB64?: string;
+  serverId?: string;
+  /**
+   * Device id proven for this connection (relay auth). Used to gate session resume.
+   */
+  authenticatedDeviceId?: string;
 }
 
 interface WebSocketServerConfig {
@@ -282,6 +301,12 @@ interface SessionConnection {
   sockets: Set<WebSocketLike>;
   externalDisconnectCleanupTimeout: ReturnType<typeof setTimeout> | null;
   inflightMessages: number;
+  messageLanes: MessageLaneExecutor;
+  /**
+   * Relay-authenticated device id for this logical session. Required for resume
+   * on transport=relay once a device has been bound.
+   */
+  authenticatedDeviceId: string | null;
 }
 
 const SLOW_REQUEST_THRESHOLD_MS = 500;
@@ -847,6 +872,11 @@ export class VoiceAssistantWebSocketServer {
     const pending: PendingConnection = {
       connectionLogger,
       helloTimeout: null,
+      transport: metadata?.transport === "relay" ? "relay" : "direct",
+      requireDeviceAuth: metadata?.requireDeviceAuth === true,
+      chisacodeHome: metadata?.chisacodeHome,
+      daemonPublicKeyB64: metadata?.daemonPublicKeyB64,
+      serverId: metadata?.serverId,
     };
     const timeout = setTimeout(() => {
       if (this.pendingConnections.get(ws) !== pending) {
@@ -885,8 +915,16 @@ export class VoiceAssistantWebSocketServer {
     appVersion: string | null;
     clientCapabilities: Record<string, unknown> | null;
     connectionLogger: pino.Logger;
+    authenticatedDeviceId?: string | null;
   }): SessionConnection {
-    const { ws, clientId, appVersion, clientCapabilities, connectionLogger } = params;
+    const {
+      ws,
+      clientId,
+      appVersion,
+      clientCapabilities,
+      connectionLogger,
+      authenticatedDeviceId = null,
+    } = params;
     let connection: SessionConnection | null = null;
 
     const session = new Session({
@@ -951,6 +989,10 @@ export class VoiceAssistantWebSocketServer {
       sockets: new Set([ws]),
       externalDisconnectCleanupTimeout: null,
       inflightMessages: 0,
+      messageLanes: new MessageLaneExecutor({
+        maxDepthPerLane: MAX_SESSION_INFLIGHT_MESSAGES,
+      }),
+      authenticatedDeviceId,
     };
     return connection;
   }
@@ -966,6 +1008,161 @@ export class VoiceAssistantWebSocketServer {
     }
     this.pendingConnections.delete(ws);
     return pending;
+  }
+
+  /**
+   * Relay-only device auth gate. Returns false when the socket was closed.
+   */
+  private authorizeRelayPairingToken(
+    ws: WebSocketLike,
+    pending: PendingConnection,
+    store: RelayDeviceCredentialStore,
+    auth: NonNullable<WSHelloMessage["relayDeviceAuth"]>,
+  ): boolean {
+    if (!auth.pairingToken) {
+      return false;
+    }
+    if (!store.consumePairingToken(auth.pairingToken)) {
+      this.rejectRelayAuth(
+        ws,
+        pending,
+        "relay_pairing_token_invalid",
+        "Relay pairing token invalid or reused",
+      );
+      return false;
+    }
+    try {
+      const issued = store.issueDevice("relay-pair", auth.deviceId);
+      pending.authenticatedDeviceId = issued.deviceId;
+      this.sendToClient(ws, {
+        type: "relay_device_auth_result",
+        version: 1,
+        ok: true,
+        deviceId: issued.deviceId,
+        deviceSecret: issued.deviceSecret,
+        securityLevel: "v2",
+      } as unknown as WSOutboundMessage);
+      pending.connectionLogger.info(
+        { securityLevel: "v2", deviceId: issued.deviceId },
+        "Relay pairing token accepted; device issued",
+      );
+      return true;
+    } catch (error) {
+      this.rejectRelayAuth(
+        ws,
+        pending,
+        "relay_device_issue_failed",
+        error instanceof Error ? error.message : "Relay device issue failed",
+      );
+      return false;
+    }
+  }
+
+  private authorizeRelayHello(
+    ws: WebSocketLike,
+    message: WSHelloMessage,
+    pending: PendingConnection,
+  ): boolean {
+    if (pending.transport !== "relay") {
+      return true;
+    }
+    const auth = message.relayDeviceAuth;
+    const requireAuth = pending.requireDeviceAuth === true;
+    const serverId = pending.serverId ?? "";
+    const daemonPublicKeyB64 = pending.daemonPublicKeyB64 ?? "";
+
+    if (!auth) {
+      if (requireAuth) {
+        this.rejectRelayAuth(
+          ws,
+          pending,
+          "relay_device_auth_required",
+          "Relay device auth required; upgrade and re-pair",
+        );
+        return false;
+      }
+      pending.connectionLogger.info(
+        { securityLevel: "legacy" },
+        "Accepted relay hello under legacy offer-only mode",
+      );
+      return true;
+    }
+
+    if (!pending.chisacodeHome) {
+      if (requireAuth) {
+        this.rejectRelayAuth(
+          ws,
+          pending,
+          "relay_device_store_unavailable",
+          "Relay device auth unavailable",
+        );
+        return false;
+      }
+      return true;
+    }
+
+    const store = new RelayDeviceCredentialStore(pending.chisacodeHome);
+
+    // First pairing: consume one-time bootstrap token and issue/bind device secret.
+    if (auth.pairingToken) {
+      return this.authorizeRelayPairingToken(ws, pending, store, auth);
+    }
+
+    // Subsequent connects: require HMAC proof over challenge transcript.
+    if (
+      !auth.proof ||
+      !auth.challenge ||
+      !auth.clientPublicKeyB64 ||
+      !serverId ||
+      !daemonPublicKeyB64
+    ) {
+      if (requireAuth) {
+        this.rejectRelayAuth(
+          ws,
+          pending,
+          "relay_device_auth_incomplete",
+          "Relay device auth proof required",
+        );
+        return false;
+      }
+      const device = store.getDevice(auth.deviceId);
+      if (device && !device.revokedAt) {
+        pending.authenticatedDeviceId = auth.deviceId;
+        return true;
+      }
+      this.rejectRelayAuth(ws, pending, "relay_device_unknown", "Relay device unknown");
+      return false;
+    }
+
+    const ok = store.verifyDeviceProof({
+      deviceId: auth.deviceId,
+      proof: auth.proof,
+      challenge: auth.challenge,
+      serverId,
+      daemonPublicKeyB64,
+      clientPublicKeyB64: auth.clientPublicKeyB64,
+    });
+    if (!ok) {
+      this.rejectRelayAuth(ws, pending, "relay_device_auth_invalid", "Relay device auth failed");
+      return false;
+    }
+    pending.authenticatedDeviceId = auth.deviceId;
+    return true;
+  }
+
+  private rejectRelayAuth(
+    ws: WebSocketLike,
+    pending: PendingConnection,
+    reason: string,
+    closeReason: string,
+  ): void {
+    this.clearPendingConnection(ws);
+    pending.connectionLogger.warn({ reason }, "Rejected relay hello");
+    try {
+      ws.close(WS_CLOSE_DAEMON_AUTH_FAILED, closeReason);
+    } catch {
+      // ignore
+    }
   }
 
   private handleHello(params: {
@@ -1004,42 +1201,104 @@ export class VoiceAssistantWebSocketServer {
       return;
     }
 
-    this.clearPendingConnection(ws);
-    const existing = this.externalSessionsByKey.get(clientId);
-    if (existing) {
-      this.incrementRuntimeCounter("helloResumed");
-      if (existing.externalDisconnectCleanupTimeout) {
-        clearTimeout(existing.externalDisconnectCleanupTimeout);
-        existing.externalDisconnectCleanupTimeout = null;
-      }
-      const newAppVersion = message.appVersion ?? null;
-      if (newAppVersion && newAppVersion !== existing.appVersion) {
-        existing.appVersion = newAppVersion;
-        existing.session.updateAppVersion(newAppVersion);
-      }
-      const newClientCapabilities = message.capabilities ?? null;
-      if (
-        JSON.stringify(existing.clientCapabilities ?? null) !==
-        JSON.stringify(newClientCapabilities ?? null)
-      ) {
-        existing.clientCapabilities = newClientCapabilities;
-        existing.session.updateClientCapabilities(newClientCapabilities);
-      }
-      existing.sockets.add(ws);
-      this.sessions.set(ws, existing);
-      this.sendToClient(ws, this.createServerInfoMessage());
-      existing.connectionLogger.trace(
-        {
-          clientId: summarizeUntrustedLogIdentifier(clientId),
-          resumed: true,
-          totalSessions: this.sessions.size,
-        },
-        "Client connected via hello",
-      );
+    if (!this.authorizeRelayHello(ws, message, pending)) {
       return;
     }
 
-    const connectionLogger = pending.connectionLogger.child({
+    const authenticatedDeviceId = pending.authenticatedDeviceId ?? null;
+    const transport = pending.transport;
+    this.clearPendingConnection(ws);
+    const existing = this.externalSessionsByKey.get(clientId);
+    if (existing) {
+      this.resumeExistingSessionFromHello({
+        ws,
+        message,
+        existing,
+        authenticatedDeviceId,
+        transport,
+      });
+      return;
+    }
+    this.createNewSessionFromHello({
+      ws,
+      message,
+      clientId,
+      authenticatedDeviceId,
+      connectionLogger: pending.connectionLogger,
+    });
+  }
+
+  private resumeExistingSessionFromHello(params: {
+    ws: WebSocketLike;
+    message: WSHelloMessage;
+    existing: SessionConnection;
+    authenticatedDeviceId: string | null;
+    transport?: "relay" | "direct";
+  }): void {
+    const { ws, message, existing, authenticatedDeviceId, transport } = params;
+    if (
+      transport === "relay" &&
+      existing.authenticatedDeviceId &&
+      existing.authenticatedDeviceId !== authenticatedDeviceId
+    ) {
+      existing.connectionLogger.warn(
+        {
+          reason: "relay_device_resume_mismatch",
+          expectedDeviceId: existing.authenticatedDeviceId,
+          gotDeviceId: authenticatedDeviceId,
+        },
+        "Rejected relay session resume due to device mismatch",
+      );
+      try {
+        ws.close(WS_CLOSE_DAEMON_AUTH_FAILED, "Relay device identity mismatch on resume");
+      } catch {
+        // ignore
+      }
+      return;
+    }
+    this.incrementRuntimeCounter("helloResumed");
+    if (existing.externalDisconnectCleanupTimeout) {
+      clearTimeout(existing.externalDisconnectCleanupTimeout);
+      existing.externalDisconnectCleanupTimeout = null;
+    }
+    if (authenticatedDeviceId && !existing.authenticatedDeviceId) {
+      existing.authenticatedDeviceId = authenticatedDeviceId;
+    }
+    const newAppVersion = message.appVersion ?? null;
+    if (newAppVersion && newAppVersion !== existing.appVersion) {
+      existing.appVersion = newAppVersion;
+      existing.session.updateAppVersion(newAppVersion);
+    }
+    const newClientCapabilities = message.capabilities ?? null;
+    if (
+      JSON.stringify(existing.clientCapabilities ?? null) !==
+      JSON.stringify(newClientCapabilities ?? null)
+    ) {
+      existing.clientCapabilities = newClientCapabilities;
+      existing.session.updateClientCapabilities(newClientCapabilities);
+    }
+    existing.sockets.add(ws);
+    this.sessions.set(ws, existing);
+    this.sendToClient(ws, this.createServerInfoMessage());
+    existing.connectionLogger.trace(
+      {
+        clientId: summarizeUntrustedLogIdentifier(existing.clientId),
+        resumed: true,
+        totalSessions: this.sessions.size,
+      },
+      "Client connected via hello",
+    );
+  }
+
+  private createNewSessionFromHello(params: {
+    ws: WebSocketLike;
+    message: WSHelloMessage;
+    clientId: string;
+    authenticatedDeviceId: string | null;
+    connectionLogger: pino.Logger;
+  }): void {
+    const { ws, message, clientId, authenticatedDeviceId, connectionLogger } = params;
+    const childLogger = connectionLogger.child({
       clientId: summarizeUntrustedLogIdentifier(clientId),
     });
     this.incrementRuntimeCounter("helloNew");
@@ -1048,7 +1307,8 @@ export class VoiceAssistantWebSocketServer {
       clientId,
       appVersion: message.appVersion ?? null,
       clientCapabilities: message.capabilities ?? null,
-      connectionLogger,
+      connectionLogger: childLogger,
+      authenticatedDeviceId,
     });
     this.sessions.set(ws, connection);
     this.externalSessionsByKey.set(clientId, connection);
@@ -1258,6 +1518,7 @@ export class VoiceAssistantWebSocketServer {
       },
       logMessage,
     );
+    connection.messageLanes.close("connection closed");
     await connection.session.cleanup();
   }
 
@@ -1513,6 +1774,30 @@ export class VoiceAssistantWebSocketServer {
       "requestId" in message.message && typeof message.message.requestId === "string"
         ? message.message.requestId
         : null;
+    const terminalId =
+      "terminalId" in message.message &&
+      typeof (message.message as { terminalId?: unknown }).terminalId === "string"
+        ? (message.message as { terminalId: string }).terminalId
+        : null;
+    const agentId =
+      "agentId" in message.message &&
+      typeof (message.message as { agentId?: unknown }).agentId === "string"
+        ? (message.message as { agentId: string }).agentId
+        : null;
+    const streamId =
+      "streamId" in message.message &&
+      typeof (message.message as { streamId?: unknown }).streamId === "string"
+        ? (message.message as { streamId: string }).streamId
+        : null;
+
+    const laneClass = classifySessionMessageLane(message.message.type, {
+      requestId,
+      terminalId,
+      agentId,
+      streamId,
+    });
+
+    // Global busy cap preserved for compatibility with old clients.
     if (activeConnection.inflightMessages >= MAX_SESSION_INFLIGHT_MESSAGES) {
       activeConnection.connectionLogger.warn(
         {
@@ -1540,9 +1825,44 @@ export class VoiceAssistantWebSocketServer {
       return;
     }
 
+    // Count inflight before waiting on a lane so the global busy ceiling remains exact.
     activeConnection.inflightMessages += 1;
+    let releaseLane: (() => void) | null = null;
     const startMs = performance.now();
     try {
+      if (laneClass.class !== "preempt") {
+        const scheduled = activeConnection.messageLanes.schedule(laneClass.laneKey);
+        if (!scheduled.ok) {
+          activeConnection.connectionLogger.warn(
+            {
+              requestType: message.message.type,
+              laneKey: scheduled.laneKey,
+              category: "overload",
+              code: "server_busy",
+              reason: scheduled.reason,
+            },
+            "Rejected session request due to lane overflow",
+          );
+          if (requestId) {
+            this.sendToConnection(
+              activeConnection,
+              wrapSessionMessage({
+                type: "rpc_error",
+                payload: {
+                  requestId,
+                  requestType: message.message.type,
+                  error: "Server is busy; retry the request",
+                  code: "server_busy",
+                },
+              }),
+            );
+          }
+          return;
+        }
+        await scheduled.waitForTurn;
+        releaseLane = scheduled.release;
+      }
+
       await activeConnection.session.handleMessage(message.message);
       const durationMs = performance.now() - startMs;
       this.recordRequestLatency(message.message.type, durationMs);
@@ -1553,12 +1873,14 @@ export class VoiceAssistantWebSocketServer {
             requestType: message.message.type,
             durationMs: Math.round(durationMs),
             inflightRequests: activeConnection.session.getRuntimeMetrics().inflightRequests,
+            laneKey: laneClass.laneKey,
           },
           "ws_slow_request",
         );
       }
     } finally {
       activeConnection.inflightMessages -= 1;
+      releaseLane?.();
     }
   }
 

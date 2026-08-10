@@ -167,101 +167,172 @@ export async function createSnapshot(
   return withSnapshotLock(cwd, () => createSnapshotUnlocked(cwd, meta, logger));
 }
 
+interface SnapshotLeafPartition {
+  excludedFiles: string[];
+  safeAdds: string[];
+  safeDeletes: string[];
+}
+
+function partitionSnapshotLeaves(entries: SnapshotStatusEntry[]): SnapshotLeafPartition {
+  const excludedFiles: string[] = [];
+  const safeAdds: string[] = [];
+  const safeDeletes: string[] = [];
+  for (const entry of entries) {
+    const pathValidation = validateSnapshotLeafPath(entry.path);
+    if (!pathValidation.ok || detectSensitivePath(entry.path)) {
+      excludedFiles.push(entry.path);
+      continue;
+    }
+    if (entry.kind === "delete") {
+      safeDeletes.push(entry.path);
+    } else {
+      safeAdds.push(entry.path);
+    }
+  }
+  return { excludedFiles, safeAdds, safeDeletes };
+}
+
+async function resolveSnapshotParentHash(
+  cwd: string,
+): Promise<{ parentHash: string | null; hasHead: boolean }> {
+  try {
+    const headResult = await runGitCommand(["rev-parse", "HEAD"], { cwd });
+    const parentHash = headResult.stdout?.trim() || null;
+    return { parentHash, hasHead: Boolean(parentHash) };
+  } catch {
+    return { parentHash: null, hasHead: false };
+  }
+}
+
+async function seedTempIndexFromHead(options: {
+  cwd: string;
+  indexEnv: Record<string, string>;
+  parentHash: string;
+}): Promise<SnapshotResult | null> {
+  try {
+    await runGitCommand(["read-tree", options.parentHash], {
+      cwd: options.cwd,
+      envOverlay: options.indexEnv,
+    });
+    return null;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { ok: false, reason: `failed to seed snapshot index from HEAD: ${message}` };
+  }
+}
+
+async function treeMatchesHead(options: {
+  cwd: string;
+  parentHash: string;
+  treeHash: string;
+}): Promise<boolean> {
+  try {
+    const headTreeResult = await runGitCommand(["rev-parse", `${options.parentHash}^{tree}`], {
+      cwd: options.cwd,
+    });
+    const headTree = headTreeResult.stdout?.trim();
+    return Boolean(headTree && headTree === options.treeHash);
+  } catch {
+    return false;
+  }
+}
+
+async function storeSnapshotRef(cwd: string, commitHash: string, logger: Logger): Promise<void> {
+  try {
+    await runGitCommand(
+      ["update-ref", `refs/${SNAPSHOT_BRANCH}/${commitHash.slice(0, 12)}`, commitHash],
+      { cwd },
+    );
+  } catch (refError) {
+    logger.warn({ err: refError, commitHash }, "failed to store snapshot ref");
+  }
+}
+
 async function createSnapshotUnlocked(
   cwd: string,
   meta: SnapshotMeta,
   logger: Logger,
 ): Promise<SnapshotResult> {
-  // 1. Check blocking state
   const blocked = await detectBlockedGitState(cwd, logger);
   if (blocked) {
     return { ok: false, reason: `git ${blocked.reason} in progress` };
   }
 
-  // Temporary index file so the user's real staging area is never touched.
-  // Created in the system tmp dir (not inside the repo) to avoid polluting the
-  // workspace; cleaned up in finally regardless of success/failure.
+  // Temporary index keeps the user's real staging area untouched.
   const tmpDir = mkdtempSync(path.join(os.tmpdir(), "chisacode-snap-idx-"));
   const tmpIndex = path.join(tmpDir, "index");
   try {
-    // 2. Get list of changed files
-    const statusResult = await runGitCommand(["status", "--porcelain", "-z"], { cwd });
-    const changedFiles = parseStatusPorcelain(statusResult.stdout ?? "");
-    if (changedFiles.length === 0) {
+    // Leaf paths only: --untracked-files=all avoids directory-token collapse.
+    const statusResult = await runGitCommand(
+      ["status", "--porcelain=v1", "-z", "--untracked-files=all"],
+      { cwd },
+    );
+    const statusEntries = parseStatusPorcelainEntries(statusResult.stdout ?? "");
+    if (statusEntries.length === 0) {
       return { ok: false, reason: "no changes to snapshot" };
     }
 
-    // 3. Filter sensitive files
-    const excludedFiles: string[] = [];
-    const safeFiles = changedFiles.filter((f) => {
-      const detector = detectSensitivePath(f);
-      if (detector) {
-        excludedFiles.push(f);
-        return false;
-      }
-      return true;
-    });
-
-    if (safeFiles.length === 0) {
+    const { excludedFiles, safeAdds, safeDeletes } = partitionSnapshotLeaves(statusEntries);
+    if (safeAdds.length === 0 && safeDeletes.length === 0) {
       return { ok: false, reason: "all changed files are sensitive", excludedFiles };
     }
 
-    // 4. Stage safe files into the TEMPORARY index (user's real index untouched).
-    //    GIT_INDEX_FILE redirects git's staging area to the temp file for this
-    //    command only.
     const indexEnv = { GIT_INDEX_FILE: tmpIndex };
-    await runGitCommand(["add", "--", ...safeFiles], { cwd, envOverlay: indexEnv });
+    const { parentHash, hasHead } = await resolveSnapshotParentHash(cwd);
+    if (hasHead && parentHash) {
+      const seedError = await seedTempIndexFromHead({ cwd, indexEnv, parentHash });
+      if (seedError) {
+        return seedError;
+      }
+    }
 
-    // 5. Create a tree object from the TEMPORARY index.
+    await applyIndexPathBatches({ cwd, indexEnv, paths: safeDeletes, mode: "delete" });
+    await applyIndexPathBatches({ cwd, indexEnv, paths: safeAdds, mode: "add" });
+
     const treeResult = await runGitCommand(["write-tree"], { cwd, envOverlay: indexEnv });
     const treeHash = treeResult.stdout?.trim();
-
     if (!treeHash) {
       return { ok: false, reason: "failed to create tree object" };
     }
 
-    // 6. Create a commit object pointing at the tree (does NOT touch HEAD)
-    const message = buildSnapshotCommitMessage(meta);
-    const headResult = await runGitCommand(["rev-parse", "HEAD"], { cwd });
-    const parentHash = headResult.stdout?.trim();
+    if (hasHead && parentHash && (await treeMatchesHead({ cwd, parentHash, treeHash }))) {
+      return {
+        ok: false,
+        reason: "no tree diff relative to HEAD after filtering",
+        excludedFiles,
+      };
+    }
 
+    const message = buildSnapshotCommitMessage(meta);
     const commitArgs = parentHash
       ? ["commit-tree", treeHash, "-p", parentHash, "-m", message]
       : ["commit-tree", treeHash, "-m", message];
     const commitResult = await runGitCommand(commitArgs, { cwd });
     const commitHash = commitResult.stdout?.trim();
-
     if (!commitHash) {
       return { ok: false, reason: "failed to create commit object" };
     }
 
-    // 7. Store the snapshot ref for later listing/rewind
-    try {
-      await runGitCommand(
-        ["update-ref", `refs/${SNAPSHOT_BRANCH}/${commitHash.slice(0, 12)}`, commitHash],
-        { cwd },
-      );
-    } catch (refError) {
-      // Non-fatal: commit object exists but isn't easily discoverable
-      logger.warn({ err: refError, commitHash }, "failed to store snapshot ref");
-    }
-
+    await storeSnapshotRef(cwd, commitHash, logger);
     logger.info(
-      { commitHash, kind: meta.kind, files: safeFiles.length, excluded: excludedFiles.length },
+      {
+        commitHash,
+        kind: meta.kind,
+        files: safeAdds.length + safeDeletes.length,
+        excluded: excludedFiles.length,
+      },
       "snapshot created",
     );
-
     return { ok: true, commitHash, excludedFiles };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     logger.error({ err: error }, "snapshot creation failed");
     return { ok: false, reason: message };
   } finally {
-    // Always remove the temp index dir, even on crash/SIGKILL mid-snapshot.
     try {
       rmSync(tmpDir, { recursive: true, force: true });
     } catch {
-      // Non-fatal: OS tmp reaper will eventually clean it up.
+      // OS tmp reaper will clean leftovers.
     }
   }
 }
@@ -357,12 +428,24 @@ export async function listSnapshots(
 
 // ── Internals ──────────────────────────────────────────────────────────────
 
-function parseStatusPorcelain(output: string): string[] {
+/** Max paths per git add/update-index invocation to stay under OS argv limits. */
+const INDEX_PATH_BATCH_SIZE = 64;
+
+interface SnapshotStatusEntry {
+  path: string;
+  kind: "add" | "modify" | "delete";
+}
+
+/**
+ * Parse `git status --porcelain=v1 -z --untracked-files=all` into leaf entries.
+ * Directory tokens are rejected later by validateSnapshotLeafPath.
+ */
+export function parseStatusPorcelainEntries(output: string): SnapshotStatusEntry[] {
   // -z format: entries separated by NUL, each entry is "XY path".
   // Rename/copy entries (R/C status) have an extra NUL-separated old path
-  // immediately after the new path entry — we skip those.
+  // immediately after the new path entry.
   const entries = output.split("\0").filter(Boolean);
-  const files: string[] = [];
+  const files: SnapshotStatusEntry[] = [];
   let skipNext = false;
   for (const entry of entries) {
     if (skipNext) {
@@ -371,12 +454,87 @@ function parseStatusPorcelain(output: string): string[] {
     }
     // Format: "XY <path>" where XY is 2 status chars + space
     const status = entry.slice(0, 2);
-    const filePath = entry.slice(3).trim();
-    if (filePath) files.push(filePath);
-    // Rename (R) and copy (C) entries are followed by the original path
-    if (status[0] === "R" || status[0] === "C") {
-      skipNext = true;
+    const filePath = entry.slice(3);
+    if (!filePath) {
+      continue;
     }
+
+    // Rename/copy: treat destination as add/modify and include source as delete
+    // so the snapshot tree reflects the rename fully.
+    if (status[0] === "R" || status[0] === "C" || status[1] === "R" || status[1] === "C") {
+      files.push({ path: filePath, kind: "add" });
+      skipNext = true;
+      continue;
+    }
+
+    const xy = `${status[0] ?? " "}${status[1] ?? " "}`;
+    if (xy === "D " || xy === " D" || xy === "DD") {
+      files.push({ path: filePath, kind: "delete" });
+      continue;
+    }
+    if (xy.includes("D")) {
+      // e.g. MD / AD: still present in worktree as modified content after delete+recreate.
+      files.push({ path: filePath, kind: "modify" });
+      continue;
+    }
+    if (xy === "??" || xy === "A " || xy === " A" || xy === "AM" || xy === "MA") {
+      files.push({ path: filePath, kind: "add" });
+      continue;
+    }
+    files.push({ path: filePath, kind: "modify" });
   }
   return files;
+}
+
+/**
+ * Legacy path list helper retained for tests/callers that only need paths.
+ */
+export function parseStatusPorcelain(output: string): string[] {
+  return parseStatusPorcelainEntries(output).map((entry) => entry.path);
+}
+
+function validateSnapshotLeafPath(
+  relativePath: string,
+): { ok: true } | { ok: false; reason: string } {
+  if (!relativePath || relativePath.includes("\0")) {
+    return { ok: false, reason: "empty_or_nul" };
+  }
+  const normalized = relativePath.replace(/\\/g, "/");
+  if (normalized.endsWith("/")) {
+    // Directory tokens must never be passed to git add.
+    return { ok: false, reason: "directory_token" };
+  }
+  if (normalized.startsWith("/") || /^[a-zA-Z]:\//.test(normalized)) {
+    return { ok: false, reason: "absolute_path" };
+  }
+  const parts = normalized.split("/");
+  if (parts.some((part) => part === ".." || part === "")) {
+    return { ok: false, reason: "path_traversal_or_empty_segment" };
+  }
+  return { ok: true };
+}
+
+async function applyIndexPathBatches(options: {
+  cwd: string;
+  indexEnv: Record<string, string>;
+  paths: string[];
+  mode: "add" | "delete";
+}): Promise<void> {
+  for (let i = 0; i < options.paths.length; i += INDEX_PATH_BATCH_SIZE) {
+    const batch = options.paths.slice(i, i + INDEX_PATH_BATCH_SIZE);
+    if (batch.length === 0) {
+      continue;
+    }
+    if (options.mode === "add") {
+      await runGitCommand(["add", "--", ...batch], {
+        cwd: options.cwd,
+        envOverlay: options.indexEnv,
+      });
+    } else {
+      await runGitCommand(["update-index", "--force-remove", "--", ...batch], {
+        cwd: options.cwd,
+        envOverlay: options.indexEnv,
+      });
+    }
+  }
 }

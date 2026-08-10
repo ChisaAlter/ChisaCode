@@ -61,6 +61,28 @@ export interface DaemonClientConfig {
     enabled?: boolean;
     daemonPublicKeyB64?: string;
   };
+  /**
+   * Optional relay device-auth material for hello. When omitted, legacy offer-only
+   * mode is used against daemons that still accept it.
+   */
+  relayDeviceAuth?: {
+    version: 1;
+    deviceId: string;
+    proof?: string;
+    pairingToken?: string;
+    clientPublicKeyB64?: string;
+    challenge?: string;
+  };
+  /**
+   * Called when daemon issues a device secret after first pairing.
+   */
+  onRelayDeviceAuthResult?: (result: {
+    ok: boolean;
+    deviceId?: string;
+    deviceSecret?: string;
+    reason?: string;
+    securityLevel?: "v2" | "legacy";
+  }) => void;
   reconnect?: {
     enabled?: boolean;
     baseDelayMs?: number;
@@ -460,7 +482,44 @@ export class DaemonConnectionController {
         .catch(() => undefined);
       return;
     }
+    if (typeof rawData === "string") {
+      try {
+        const parsed = JSON.parse(rawData) as unknown;
+        if (this.handleRelayDeviceAuthResultMessage(parsed)) {
+          return;
+        }
+      } catch {
+        // fall through to normal message handling
+      }
+    }
     this.callbacks.onMessage(rawData);
+  }
+
+  private handleRelayDeviceAuthResultMessage(raw: unknown): boolean {
+    if (!raw || typeof raw !== "object") {
+      return false;
+    }
+    const message = raw as {
+      type?: unknown;
+      ok?: unknown;
+      deviceId?: unknown;
+      deviceSecret?: unknown;
+      reason?: unknown;
+      securityLevel?: unknown;
+    };
+    if (message.type !== "relay_device_auth_result") {
+      return false;
+    }
+    this.config.onRelayDeviceAuthResult?.({
+      ok: message.ok === true,
+      ...(typeof message.deviceId === "string" ? { deviceId: message.deviceId } : {}),
+      ...(typeof message.deviceSecret === "string" ? { deviceSecret: message.deviceSecret } : {}),
+      ...(typeof message.reason === "string" ? { reason: message.reason } : {}),
+      ...(message.securityLevel === "v2" || message.securityLevel === "legacy"
+        ? { securityLevel: message.securityLevel }
+        : {}),
+    });
+    return true;
   }
 
   private sendHelloMessage(): void {
@@ -487,6 +546,7 @@ export class DaemonConnectionController {
             [CLIENT_CAPS.cindyModules]: true,
           },
           ...(this.config.appVersion ? { appVersion: this.config.appVersion } : {}),
+          ...(this.config.relayDeviceAuth ? { relayDeviceAuth: this.config.relayDeviceAuth } : {}),
         }),
       );
     } catch (error) {

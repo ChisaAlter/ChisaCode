@@ -292,6 +292,7 @@ import { wrapSessionMessage, type SessionOutboundMessage } from "./messages.js";
 import type { TerminalManager } from "../terminal/terminal-manager.js";
 import { createConfiguredTerminalManager } from "../terminal/terminal-manager-factory.js";
 import { createConnectionOfferV2, encodeOfferToFragmentUrl } from "./connection-offer.js";
+import { RelayDeviceCredentialStore } from "./relay-device-credential-store.js";
 import { loadOrCreateDaemonKeyPair } from "./daemon-keypair.js";
 import { startRelayTransport, type RelayTransportController } from "./relay-transport.js";
 import type { PushNotificationSender } from "./push/notifications.js";
@@ -1473,10 +1474,17 @@ export async function createChisaCodeDaemon(
           );
 
           if (relayEnabled) {
+            const deviceStore = new RelayDeviceCredentialStore(chisacodeHome);
+            const pairingBootstrap = deviceStore.issuePairingToken(10 * 60_000);
             const offer = await createConnectionOfferV2({
               serverId,
               daemonPublicKeyB64: daemonKeyPair.publicKeyB64,
               relayAuthPublicKeyB64: daemonKeyPair.relayAuthPublicKeyB64,
+              authBootstrap: {
+                version: 1,
+                pairingToken: pairingBootstrap.token,
+                expiresAtMs: pairingBootstrap.expiresAtMs,
+              },
               relay: {
                 endpoint: relayPublicEndpoint,
                 useTls: relayPublicUseTls,
@@ -1499,6 +1507,10 @@ export async function createChisaCodeDaemon(
               serverId,
               daemonKeyPair: daemonKeyPair.keyPair,
               daemonRelayAuthKeyPair: daemonKeyPair.relayAuthKeyPair,
+              chisacodeHome,
+              daemonPublicKeyB64: daemonKeyPair.publicKeyB64,
+              // Legacy default: accept offer-only v1.0.x clients. Set true to force re-pair.
+              requireDeviceAuth: process.env.CHISACODE_RELAY_REQUIRE_DEVICE_AUTH === "1",
             });
           }
         };

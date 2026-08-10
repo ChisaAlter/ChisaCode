@@ -158,7 +158,12 @@ export function PairLinkModal({ visible, onClose, onCancel, onSaved }: PairLinkM
       onSaved?.({ profile, serverId: parsedOffer.serverId, hostname, isNewHost });
       handleClose();
     } catch (error) {
-      const message = error instanceof Error ? error.message : t("pairing.unableToPairHost");
+      const errorText = error instanceof Error ? error.message : t("pairing.unableToPairHost");
+      const message = /relay device auth|upgrade and re-pair|4401|device auth required/i.test(
+        errorText,
+      )
+        ? t("settings.hostPage.pairDevice.upgradeRequiredBody")
+        : errorText;
       setErrorMessage(message);
       if (!isMobile) {
         Alert.alert(t("pairing.pairFailed"), message);

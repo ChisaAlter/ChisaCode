@@ -27,6 +27,10 @@ export interface RelayHostConnection {
   relayEndpoint: string;
   useTls?: boolean;
   daemonPublicKeyB64: string;
+  /** Paired relay device id for handshake v2. */
+  deviceId?: string;
+  /** Locally stored device secret for HMAC proofs. Never log. */
+  deviceSecret?: string;
 }
 
 export type HostConnection =
@@ -60,7 +64,6 @@ function hostConnectionEquals(left: HostConnection, right: HostConnection): bool
   if (left.type !== right.type || left.id !== right.id) {
     return false;
   }
-
   if (left.type === "directTcp" && right.type === "directTcp") {
     return (
       left.endpoint === right.endpoint &&
@@ -75,14 +78,19 @@ function hostConnectionEquals(left: HostConnection, right: HostConnection): bool
     return left.path === right.path;
   }
   if (left.type === "relay" && right.type === "relay") {
-    return (
-      left.relayEndpoint === right.relayEndpoint &&
-      left.useTls === right.useTls &&
-      left.daemonPublicKeyB64 === right.daemonPublicKeyB64
-    );
+    return relayConnectionEquals(left, right);
   }
-
   return false;
+}
+
+function relayConnectionEquals(left: RelayHostConnection, right: RelayHostConnection): boolean {
+  return (
+    left.relayEndpoint === right.relayEndpoint &&
+    left.useTls === right.useTls &&
+    left.daemonPublicKeyB64 === right.daemonPublicKeyB64 &&
+    (left.deviceId ?? null) === (right.deviceId ?? null) &&
+    (left.deviceSecret ?? null) === (right.deviceSecret ?? null)
+  );
 }
 
 function hostLifecycleEquals(left: HostLifecycle, right: HostLifecycle): boolean {
@@ -243,6 +251,40 @@ function toObjectRecord(value: unknown): Record<string, unknown> | undefined {
   return isPlainRecord(value) ? value : undefined;
 }
 
+function normalizeStoredRelayConnection(
+  record: Record<string, unknown>,
+): RelayHostConnection | null {
+  try {
+    const relayEndpoint = normalizeHostPort(
+      typeof record.relayEndpoint === "string" ? record.relayEndpoint : "",
+    );
+    const daemonPublicKeyB64 = (
+      typeof record.daemonPublicKeyB64 === "string" ? record.daemonPublicKeyB64 : ""
+    ).trim();
+    if (!daemonPublicKeyB64) return null;
+    const useTls = typeof record.useTls === "boolean" ? record.useTls : undefined;
+    const deviceId =
+      typeof record.deviceId === "string" && record.deviceId.trim().length >= 8
+        ? record.deviceId.trim()
+        : undefined;
+    const deviceSecret =
+      typeof record.deviceSecret === "string" && record.deviceSecret.trim().length >= 32
+        ? record.deviceSecret.trim()
+        : undefined;
+    return {
+      id: useTls === true ? `relay:wss:${relayEndpoint}` : `relay:${relayEndpoint}`,
+      type: "relay",
+      relayEndpoint,
+      ...(useTls !== undefined ? { useTls } : {}),
+      daemonPublicKeyB64,
+      ...(deviceId ? { deviceId } : {}),
+      ...(deviceSecret ? { deviceSecret } : {}),
+    };
+  } catch {
+    return null;
+  }
+}
+
 function normalizeStoredConnection(connection: unknown): HostConnection | null {
   const record = toObjectRecord(connection);
   if (!record) {
@@ -274,25 +316,7 @@ function normalizeStoredConnection(connection: unknown): HostConnection | null {
     return path ? { id: `pipe:${path}`, type: "directPipe", path } : null;
   }
   if (type === "relay") {
-    try {
-      const relayEndpoint = normalizeHostPort(
-        typeof record.relayEndpoint === "string" ? record.relayEndpoint : "",
-      );
-      const daemonPublicKeyB64 = (
-        typeof record.daemonPublicKeyB64 === "string" ? record.daemonPublicKeyB64 : ""
-      ).trim();
-      if (!daemonPublicKeyB64) return null;
-      const useTls = typeof record.useTls === "boolean" ? record.useTls : undefined;
-      return {
-        id: useTls === true ? `relay:wss:${relayEndpoint}` : `relay:${relayEndpoint}`,
-        type: "relay",
-        relayEndpoint,
-        ...(useTls !== undefined ? { useTls } : {}),
-        daemonPublicKeyB64,
-      };
-    } catch {
-      return null;
-    }
+    return normalizeStoredRelayConnection(record);
   }
 
   return null;

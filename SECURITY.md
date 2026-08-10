@@ -2,7 +2,7 @@
 
 ChisaCode follows a client-server architecture, similar to Docker. The daemon runs on your machine and manages your coding agents. Clients (the mobile app, CLI, or web interface) connect to the daemon to monitor and control those agents.
 
-Your code never leaves your machine. ChisaCode is a local-first tool that connects directly to your development environment.
+ChisaCode is local-first: the daemon runs on your machine. Relay traffic is end-to-end encrypted, but message metadata (size, timing, serverId) can still be observed by the relay, and prompts/code may be sent to user-selected model providers/gateways.
 
 ## Architecture
 
@@ -75,7 +75,7 @@ ChisaCode validates the complete `Host` authority on every HTTP request and ever
 
 ## Agent authentication
 
-ChisaCode wraps agent CLIs (Claude, Codex, OpenCode, Pi, Kimi Code, and Grok Build) but does not manage their authentication. Each agent provider handles its own credentials. ChisaCode never stores or transmits provider API keys. Agents run in your user context with your existing credentials.
+ChisaCode wraps agent CLIs (Claude, Codex, OpenCode, Pi, Kimi Code, and Grok Build) but does not manage their authentication. Each agent provider handles its own credentials. Provider API keys may be stored locally in daemon configuration and transmitted to user-selected upstream providers/gateways when those integrations are enabled. Keys are not sent to the ChisaCode relay as plaintext application payloads. Agents run in your user context with your existing credentials.
 
 ## Reporting vulnerabilities
 

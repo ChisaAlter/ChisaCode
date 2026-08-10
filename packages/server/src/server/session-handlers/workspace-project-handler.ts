@@ -443,13 +443,20 @@ export class WorkspaceProjectHandler implements DisposableHandler {
               },
             }),
           );
-          this.context.emitBinary(
-            encodeFileTransferFrame({
-              opcode: FileTransferOpcode.FileChunk,
-              requestId,
-              payload: file.bytes,
-            }),
-          );
+          // Chunk large files so clients can apply per-chunk idle deadlines and
+          // avoid a single 64MB logical frame on constrained links.
+          const FILE_TRANSFER_CHUNK_BYTES = 1024 * 1024;
+          const bytes = file.bytes;
+          for (let offset = 0; offset < bytes.byteLength; offset += FILE_TRANSFER_CHUNK_BYTES) {
+            const end = Math.min(offset + FILE_TRANSFER_CHUNK_BYTES, bytes.byteLength);
+            this.context.emitBinary(
+              encodeFileTransferFrame({
+                opcode: FileTransferOpcode.FileChunk,
+                requestId,
+                payload: bytes.subarray(offset, end),
+              }),
+            );
+          }
           this.context.emitBinary(
             encodeFileTransferFrame({
               opcode: FileTransferOpcode.FileEnd,

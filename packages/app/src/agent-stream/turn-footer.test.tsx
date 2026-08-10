@@ -129,11 +129,11 @@ describe("RunningTurnFooter", () => {
   it("uses the synced amber pixel loader for a running turn", () => {
     render(<RunningTurnFooter inFlightTurnStartedAt={new Date("2026-06-18T00:00:00.000Z")} />);
 
-    expect(screen.getByTestId("turn-working-indicator")).toBeTruthy();
-    expect(screen.getByTestId("turn-working-pixel-loader")).toBeTruthy();
+    expect(screen.getByTestId("turn-working-indicator")).not.toBeNull();
+    expect(screen.getByTestId("turn-working-pixel-loader")).not.toBeNull();
     expect(screen.getByTestId("synced-loader").getAttribute("data-color")).toBe("#b45309");
     expect(screen.queryByTestId("brain-icon")).toBeNull();
-    expect(screen.getByTestId("turn-working-elapsed")).toBeTruthy();
+    expect(screen.getByTestId("turn-working-elapsed")).not.toBeNull();
   });
 });
 

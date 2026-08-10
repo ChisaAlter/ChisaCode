@@ -1745,6 +1745,18 @@ export const resources = {
             sectionTitle: "配对设备",
             rowTitle: "配对设备",
             rowHint: "扫描二维码或复制链接，将手机连接到此主机",
+            securityV2: "安全等级：v2 设备认证",
+            securityLegacy: "安全等级：legacy（仅 offer）",
+            securityMissing: "需要重新配对以启用设备认证",
+            clearCredentials: "清除本地凭据",
+            clearCredentialsHint: "删除此主机上的 device secret，下次连接将要求重新配对",
+            clearCredentialsDone: "已清除本地凭据",
+            clearCredentialsFailed: "清除本地凭据失败",
+            upgradeRequiredTitle: "需要升级并重新配对",
+            upgradeRequiredBody:
+              "当前连接未通过设备认证。请升级应用，并使用新的配对码重新绑定设备。",
+            rePairCta: "重新配对",
+            alwaysVisibleActions: "主要操作始终可见（不依赖悬停）",
           },
           restart: {
             title: "重启主机服务",
@@ -3735,6 +3747,19 @@ export const resources = {
             sectionTitle: "Pair device",
             rowTitle: "Pair device",
             rowHint: "Scan the QR code or copy the link to connect your phone to this host",
+            securityV2: "Security level: v2 device auth",
+            securityLegacy: "Security level: legacy (offer-only)",
+            securityMissing: "Re-pair required to enable device auth",
+            clearCredentials: "Clear local credentials",
+            clearCredentialsHint:
+              "Remove the device secret on this host; the next connect will require re-pairing",
+            clearCredentialsDone: "Local credentials cleared",
+            clearCredentialsFailed: "Failed to clear local credentials",
+            upgradeRequiredTitle: "Upgrade and re-pair required",
+            upgradeRequiredBody:
+              "This connection is not device-authenticated. Upgrade the app and re-pair with a fresh offer.",
+            rePairCta: "Re-pair",
+            alwaysVisibleActions: "Primary actions stay visible (no hover-only controls)",
           },
           restart: {
             title: "Restart host service",

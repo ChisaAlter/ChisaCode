@@ -2,7 +2,7 @@
 
 ChisaCode is a client-server system for monitoring and controlling local AI coding agents. The daemon runs on your machine, manages agent processes, and streams their output in real time over WebSocket. Clients (mobile app, CLI, desktop app) connect to the daemon to observe and interact with agents.
 
-Your code never leaves your machine. ChisaCode is local-first.
+The daemon is local-first; relay metadata may be visible and providers may receive prompts. ChisaCode is local-first.
 
 ## System overview
 
@@ -118,7 +118,7 @@ Communicates with the daemon via the same WebSocket protocol as the app.
 Enables remote access when the daemon is behind a firewall.
 
 - Curve25519 ECDH key exchange + XSalsa20-Poly1305 (NaCl `box`) encryption
-- Relay server is zero-knowledge — it routes encrypted bytes, cannot read content
+- Relay server is payload-confidential (metadata still visible) — it routes encrypted bytes, cannot read E2EE payload content (metadata remains visible)
 - Client and daemon channels with identical API (`createClientChannel`, `createDaemonChannel`)
 - Pairing via QR code transfers the daemon's public key to the client
 - Self-hosted relays opt into TLS with `daemon.relay.useTls` or `CHISACODE_RELAY_USE_TLS=true`; the public (client-facing) TLS setting can be overridden independently via `daemon.relay.publicUseTls` or `CHISACODE_RELAY_PUBLIC_USE_TLS`
