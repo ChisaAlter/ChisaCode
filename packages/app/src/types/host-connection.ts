@@ -29,7 +29,7 @@ export interface RelayHostConnection {
   daemonPublicKeyB64: string;
   /** Paired relay device id for handshake v2. */
   deviceId?: string;
-  /** Locally stored device secret for HMAC proofs. Never log. */
+  /** Runtime-only secret hydrated from platform secure storage. Never persist or log. */
   deviceSecret?: string;
 }
 

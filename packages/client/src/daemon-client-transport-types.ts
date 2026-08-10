@@ -5,6 +5,13 @@ export interface DaemonTransport {
   onOpen: (handler: () => void) => () => void;
   onClose: (handler: (event?: unknown) => void) => () => void;
   onError: (handler: (event?: unknown) => void) => () => void;
+  getRelaySecurityContext?: () => RelaySecurityContext | null;
+}
+
+/** Values from the encrypted relay handshake used to bind device authentication. */
+export interface RelaySecurityContext {
+  clientPublicKeyB64: string;
+  authChallenge?: string;
 }
 
 export type DaemonTransportFactory = (options: {

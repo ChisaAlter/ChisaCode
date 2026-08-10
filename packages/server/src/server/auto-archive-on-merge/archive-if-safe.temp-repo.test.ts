@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync, existsSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
@@ -37,7 +37,7 @@ describe("archiveIfSafe temp repo safety", () => {
     cleanup.push(tempDir);
     const repoDir = join(tempDir, "repo");
     const chisacodeHome = join(tempDir, ".chisacode");
-    run(tempDir, "mkdir", [repoDir]);
+    mkdirSync(repoDir);
     run(repoDir, "git", ["init"]);
     run(repoDir, "git", ["config", "user.email", "test@example.com"]);
     run(repoDir, "git", ["config", "user.name", "Test"]);
@@ -158,7 +158,7 @@ describe("archiveIfSafe temp repo safety", () => {
     const tempDir = mkdtempSync(join(tmpdir(), "chisacode-delete-refuse-"));
     cleanup.push(tempDir);
     const outside = join(tempDir, "outside");
-    run(tempDir, "mkdir", [outside]);
+    mkdirSync(outside);
     writeFileSync(join(outside, "file.txt"), "x\n");
 
     await expect(

@@ -15,16 +15,23 @@ Clients connect to the daemon over WebSocket. There are two ways to establish th
 
 ## Relay threat model
 
-The relay is designed to be untrusted. All traffic between your phone and daemon is end-to-end encrypted. The relay server cannot read your messages, see your code, or modify traffic without detection. Even if the relay is compromised, your data remains protected.
+For the dated implementation/rollout snapshot, see [Production Hardening Current State](docs/security/production-hardening-current-state-2026-08-10.md). It records the default-auth policy, recovery override, credential storage boundaries, and the explicitly unverified real-surface checks.
+
+The relay is designed to be untrusted. Application traffic between your phone and daemon is end-to-end encrypted. The relay cannot read encrypted messages or alter encrypted payloads without detection. It can still observe metadata, drop connections, or tamper with plaintext handshake frames to cause denial of service. With the default device-auth policy enabled, it cannot turn those actions into an authorized daemon session.
 
 ### How it works
 
 1. The daemon generates a persistent Curve25519 keypair on first run and stores it at `$CHISACODE_HOME/daemon-keypair.json` with mode `0600`
 2. The pairing URL (rendered as a QR code or opened directly) carries the daemon's public key in its URL fragment (`https://app.chisacode.sh/#offer=...`). Fragments are not sent to the web server, so `app.chisacode.sh` never sees the key.
-3. When the phone connects via the relay, it generates a fresh ephemeral Curve25519 keypair and sends an `e2ee_hello` message containing its public key. The daemon will not process any application messages until this handshake completes.
-4. Both sides perform a Curve25519 ECDH key exchange to derive a shared key. All subsequent messages are encrypted with XSalsa20-Poly1305 (NaCl `box`). The wire format is `[24-byte nonce][ciphertext]`, base64-encoded as a WebSocket text frame.
+3. When the phone connects via the relay, it generates a fresh ephemeral Curve25519 keypair and sends an `e2ee_hello` message containing its public key. The daemon returns a fresh authentication challenge with `e2ee_ready`.
+4. Both sides perform a Curve25519 ECDH key exchange to derive a shared key. The first encrypted application hello must pair with a one-time token or prove a per-device secret over the daemon identity, the daemon challenge, and the actual client E2EE public key. The daemon will not process commands before this device-auth gate succeeds.
+5. All subsequent messages are encrypted with XSalsa20-Poly1305 (NaCl `box`). The wire format is `[24-byte nonce][ciphertext]`, base64-encoded as a WebSocket text frame.
 
-The relay sees only: IP addresses, timing, message sizes, session IDs, and the plaintext `e2ee_hello` / `e2ee_ready` handshake frames (which contain only public keys). It cannot read message contents, forge messages, or derive encryption keys from observing the handshake.
+The relay sees IP addresses, timing, message sizes, the stable `serverId` routing key, connection/session identifiers such as `connectionId`, and the plaintext `e2ee_hello` / `e2ee_ready` handshake frames (the ephemeral client public key and a random challenge). Daemon control/data sockets also expose their URL `role`/version and relay-auth fields (public key, nonce, issue time, and signature) to the relay. It cannot read the encrypted device proof or pairing token, forge encrypted application messages, or derive encryption keys from observing the handshake. A compromised relay can still alter plaintext handshake frames to deny service, but the channel-binding check prevents that alteration from becoming an authenticated daemon session under the default policy.
+
+Relay device authentication is required by default. `CHISACODE_RELAY_ALLOW_UNAUTHENTICATED_RECOVERY=1` is an emergency, fail-visible compatibility override for old clients; enabling it accepts only an unauthenticated legacy hello and never upgrades an incomplete device claim to an authenticated identity. The override is scheduled for removal after 2026-11-10.
+
+Per-device secrets are excluded from the host registry. Android and iOS persist them through Expo SecureStore (Keystore/Keychain); Electron encrypts them with `safeStorage` and rejects Linux's unprotected `basic_text` backend; browser web keeps them in session memory only and therefore requires re-pairing after a page reload.
 
 Relay v2 daemon sockets are authenticated before the relay accepts them as `role=server`.
 Each daemon persists an Ed25519 relay-auth signing key alongside its E2EE keypair. Server-control and server-data WebSocket URLs include a nonce, issue time, and signature over the server id, role, connection id, nonce, and issue time. The relay rejects missing, invalid, expired, future-dated, or replayed credentials by default, persists the short replay window in Durable Object storage across hibernation, and will not let a socket signed by a different relay-auth public key replace an existing daemon socket for the same relay session. Legacy unsigned server sockets require the explicit `RELAY_ALLOW_UNSIGNED_SERVER_AUTH=1` Worker opt-in.
@@ -41,10 +48,10 @@ Each daemon persists an Ed25519 relay-auth signing key alongside its E2EE keypai
 
 ### Why the relay can't attack you
 
-The daemon requires a valid cryptographic handshake before processing any commands. A compromised relay cannot:
+The daemon requires a valid cryptographic handshake and, for Relay connections, a device-auth proof before processing commands. A compromised relay cannot:
 
 - **Impersonate the daemon to your phone** — Without the daemon's secret key, it cannot derive the shared key, so any traffic it injects fails authenticated decryption on the phone
-- **Send commands as you** — The daemon only accepts traffic that decrypts and authenticates under a shared key derived with its own secret key. The phone's keypair is ephemeral per connection, so there is no persistent phone-side secret to steal; protection comes from the daemon's secret key never leaving the daemon.
+- **Send commands as you** — The daemon requires a one-time pairing token or an HMAC from a previously paired device. That proof is bound to the daemon-issued challenge and the actual ephemeral client key accepted by the E2EE channel, so a relay cannot substitute its own client key and reuse the proof.
 - **Read your traffic** — All messages are encrypted with XSalsa20-Poly1305 (NaCl box) after the handshake
 - **Forge messages** — NaCl box provides authenticated encryption; tampered messages are rejected
 - **Replay old messages across sessions** — Each session derives fresh encryption keys, so ciphertext from one session cannot be replayed into another session. Within a live session, replay protection is enforced: each direction maintains a monotonic 64-bit sequence counter and a per-direction random 16-byte salt locked to the first encrypted frame; the 24-byte nonce is derived as `salt(16)+seq(8)` (little-endian). Reuse, regression, or salt tampering causes a fatal `1011` close — the encrypted channel aborts rather than accept a replayed frame.

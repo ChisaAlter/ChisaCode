@@ -693,6 +693,36 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
       expect(existsSync(expectedWorktreePath)).toBe(false);
     });
 
+    it("preserves unknown setup output for recovery when setup fails", async () => {
+      const chisacodeConfig = {
+        worktree: {
+          setup: ['echo "user output" > recovery.txt; exit 1'],
+        },
+      };
+      writeFileSync(join(repoDir, "chisacode.json"), JSON.stringify(chisacodeConfig));
+      execFileSync("git", ["add", "chisacode.json"], { cwd: repoDir });
+      execFileSync(
+        "git",
+        ["-c", "commit.gpgsign=false", "commit", "-m", "add failing setup output"],
+        { cwd: repoDir },
+      );
+
+      const expectedWorktreePath = join(chisacodeHome, "worktrees", "test-repo", "recover-test");
+      await expect(
+        createLegacyWorktreeForTest({
+          branchName: "main",
+          cwd: repoDir,
+          baseBranch: "main",
+          worktreeSlug: "recover-test",
+          chisacodeHome,
+        }),
+      ).rejects.toThrow("Worktree preserved for recovery");
+
+      expect(readFileSync(join(expectedWorktreePath, "recovery.txt"), "utf8")).toBe(
+        "user output\n",
+      );
+    });
+
     it("reads worktree terminal specs from chisacode.json with optional name", async () => {
       const chisacodeConfig = {
         worktree: {

@@ -15,6 +15,8 @@ Use this when changing relay connection behavior, pairing, encryption, key excha
 - `SECURITY.md`
 - `docs/architecture.md`
 - `docs/development.md`
+- `docs/security/relay-auth-handshake-v2-threat-model.md`
+- `docs/security/production-hardening-current-state-2026-08-10.md`
 
 ## Invariants
 
@@ -26,7 +28,7 @@ Use this when changing relay connection behavior, pairing, encryption, key excha
 
 ## Handoff Checklist
 
-1. Read `SECURITY.md` before editing.
+1. Read `SECURITY.md`, the Relay threat model, and the current hardening state before editing.
 2. Identify whether the change affects cryptography, transport routing, deployment, or UX only.
 3. Preserve direct/relay API parity unless intentionally changing the contract.
 4. Add targeted tests around handshake, encryption, and transport behavior.

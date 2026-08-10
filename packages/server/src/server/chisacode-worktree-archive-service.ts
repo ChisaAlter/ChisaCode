@@ -61,6 +61,11 @@ async function archiveChisaCodeWorktreeBody(
     targetPath = resolvedWorktree.worktreePath;
   }
 
+  const coordinator = dependencies.mutationCoordinator ?? workspaceMutationCoordinator;
+  setState("quiescing", "archive_mark_quiescing");
+  await coordinator.waitForWritesToDrain(targetPath);
+  let filesystemDeleted = false;
+
   const archivedAgents = new Set<string>();
   const affectedWorkspaceCwds = new Set<string>([targetPath]);
   const affectedWorkspaceIds = new Set<string>([normalizePersistedWorkspaceId(targetPath)]);
@@ -95,7 +100,6 @@ async function archiveChisaCodeWorktreeBody(
 
   const affectedWorkspaceIdList = Array.from(affectedWorkspaceIds);
   dependencies.markWorkspaceArchiving(affectedWorkspaceIdList, new Date().toISOString());
-  setState("quiescing", "archive_mark_quiescing");
 
   try {
     await dependencies.emitWorkspaceUpdatesForWorkspaceIds(affectedWorkspaceIdList);
@@ -139,6 +143,7 @@ async function archiveChisaCodeWorktreeBody(
           }
         | undefined,
     });
+    filesystemDeleted = true;
 
     if (options.repoRoot) {
       try {
@@ -179,8 +184,9 @@ async function archiveChisaCodeWorktreeBody(
       setState("archived", "archive_complete");
     }
   } catch (error) {
-    // Restore active only if we have not already deleted the filesystem.
-    if (dependencies.mutationCoordinator?.getState(targetPath) !== "deleting") {
+    if (filesystemDeleted) {
+      setState("delete_complete_pending_finalize", "post_delete_finalize_failed");
+    } else {
       setState("active", "archive_aborted_before_delete");
     }
     throw error;
@@ -210,12 +216,23 @@ export async function archiveChisaCodeWorktree(
     });
   }
 
-  return coordinator.runExclusive(options.targetPath, "archive-worktree", async ({ setState }) => {
-    return archiveChisaCodeWorktreeBody(dependencies, options, (state, reason) => {
-      setState(state, reason);
-      setStateExternal?.(state, reason);
-    });
+  const resolvedWorktree = await resolveChisaCodeWorktreeRootForCwd(options.targetPath, {
+    chisacodeHome: dependencies.chisacodeHome,
   });
+  const resolvedOptions = resolvedWorktree
+    ? { ...options, targetPath: resolvedWorktree.worktreePath }
+    : options;
+
+  return coordinator.runExclusive(
+    resolvedOptions.targetPath,
+    "archive-worktree",
+    async ({ setState }) => {
+      return archiveChisaCodeWorktreeBody(dependencies, resolvedOptions, (state, reason) => {
+        setState(state, reason);
+        setStateExternal?.(state, reason);
+      });
+    },
+  );
 }
 
 export async function killTerminalsUnderPath(

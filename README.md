@@ -111,16 +111,19 @@ npm run format       # Auto-format with oxfmt
 
 See the `docs/` directory for detailed guides:
 
-| Document                                           | Topic                                                        |
-| -------------------------------------------------- | ------------------------------------------------------------ |
-| [docs/product.md](docs/product.md)                 | Product philosophy, target user, strategic bets              |
-| [docs/architecture.md](docs/architecture.md)       | System design, packages, WebSocket protocol, agent lifecycle |
-| [docs/development.md](docs/development.md)         | Dev server, build sync gotchas, CLI reference                |
-| [docs/testing.md](docs/testing.md)                 | TDD workflow, test organization                              |
-| [docs/providers.md](docs/providers.md)             | Adding a new agent provider                                  |
-| [docs/rpc-namespacing.md](docs/rpc-namespacing.md) | WebSocket RPC naming convention                              |
-| [docs/design.md](docs/design.md)                   | Theme tokens, colors, fonts, spacing                         |
-| [docs/release.md](docs/release.md)                 | Release playbook and checklist                               |
+| Document                                                                                                                         | Topic                                                                      |
+| -------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| [docs/product.md](docs/product.md)                                                                                               | Product philosophy, target user, strategic bets                            |
+| [docs/architecture.md](docs/architecture.md)                                                                                     | System design, packages, WebSocket protocol, agent lifecycle               |
+| [docs/development.md](docs/development.md)                                                                                       | Dev server, build sync gotchas, CLI reference                              |
+| [docs/testing.md](docs/testing.md)                                                                                               | TDD workflow, test organization                                            |
+| [docs/providers.md](docs/providers.md)                                                                                           | Adding a new agent provider                                                |
+| [SECURITY.md](SECURITY.md)                                                                                                       | Security boundaries, Relay threat model, and vulnerability reporting       |
+| [docs/security/production-hardening-current-state-2026-08-10.md](docs/security/production-hardening-current-state-2026-08-10.md) | Current production-hardening state, Relay rollout, and verification bounds |
+| [docs/security/relay-auth-handshake-v2-threat-model.md](docs/security/relay-auth-handshake-v2-threat-model.md)                   | Relay client-authentication threat model and compatibility contract        |
+| [docs/rpc-namespacing.md](docs/rpc-namespacing.md)                                                                               | WebSocket RPC naming convention                                            |
+| [docs/design.md](docs/design.md)                                                                                                 | Theme tokens, colors, fonts, spacing                                       |
+| [docs/release.md](docs/release.md)                                                                                               | Release playbook and checklist                                             |
 
 **Important rules for contributors:**
 

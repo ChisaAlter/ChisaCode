@@ -48,6 +48,13 @@ interface EncryptedChannelOptions {
    * the daemon should re-send `{type:"e2ee_ready"}` without changing keys.
    */
   daemonKeyPair?: KeyPair;
+  securityContext?: EncryptedChannelSecurityContext;
+}
+
+/** Channel-bound values used by the higher-level relay device-auth handshake. */
+export interface EncryptedChannelSecurityContext {
+  clientPublicKeyB64: string;
+  authChallenge?: string;
 }
 
 interface E2EEHelloMessage {
@@ -57,6 +64,7 @@ interface E2EEHelloMessage {
 
 interface E2EEReadyMessage {
   type: "e2ee_ready";
+  authChallenge?: string;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -73,7 +81,20 @@ function isE2EEHelloMessage(value: unknown): value is E2EEHelloMessage {
 }
 
 function isE2EEReadyMessage(value: unknown): value is E2EEReadyMessage {
-  return isRecord(value) && value.type === "e2ee_ready";
+  return (
+    isRecord(value) &&
+    value.type === "e2ee_ready" &&
+    (value.authChallenge === undefined ||
+      (typeof value.authChallenge === "string" && value.authChallenge.trim().length > 0))
+  );
+}
+
+function createAuthChallenge(): string {
+  ensurePrng();
+  const bytes = nacl.randomBytes(32);
+  const copy = new Uint8Array(bytes.byteLength);
+  copy.set(bytes);
+  return arrayBufferToBase64(copy.buffer);
 }
 
 function buildInvalidHelloError(rawText: string, parsed?: unknown): Error {
@@ -133,10 +154,12 @@ export async function createClientChannel(
   const daemonPublicKey = importPublicKey(daemonPublicKeyB64);
   const sharedKey = deriveSharedKey(keyPair.secretKey, daemonPublicKey);
 
-  const channel = new EncryptedChannel(transport, sharedKey, events);
+  const ourPublicKeyB64 = exportPublicKey(keyPair.publicKey);
+  const channel = new EncryptedChannel(transport, sharedKey, events, {
+    securityContext: { clientPublicKeyB64: ourPublicKeyB64 },
+  });
 
   // Send e2ee_hello with our public key
-  const ourPublicKeyB64 = exportPublicKey(keyPair.publicKey);
   const hello: E2EEHelloMessage = { type: "e2ee_hello", key: ourPublicKeyB64 };
   const helloText = JSON.stringify(hello);
 
@@ -240,8 +263,17 @@ export async function createDaemonChannel(
         const clientPublicKey = importPublicKey(msg.key);
         const sharedKey = deriveSharedKey(daemonKeyPair.secretKey, clientPublicKey);
 
-        const channel = new EncryptedChannel(transport, sharedKey, events, { daemonKeyPair });
-        transport.send(JSON.stringify({ type: "e2ee_ready" } satisfies E2EEReadyMessage));
+        const authChallenge = createAuthChallenge();
+        const channel = new EncryptedChannel(transport, sharedKey, events, {
+          daemonKeyPair,
+          securityContext: {
+            clientPublicKeyB64: msg.key,
+            authChallenge,
+          },
+        });
+        transport.send(
+          JSON.stringify({ type: "e2ee_ready", authChallenge } satisfies E2EEReadyMessage),
+        );
 
         channel.setState("open");
         events.onopen?.();
@@ -278,6 +310,7 @@ export class EncryptedChannel {
   private state: ChannelState = "handshaking";
   private events: EncryptedChannelEvents;
   private options: EncryptedChannelOptions;
+  private securityContext: EncryptedChannelSecurityContext | null;
   private pendingSends: Array<string | ArrayBuffer> = [];
   private onOpenCallbacks: Array<() => void> = [];
   private onCloseCallbacks: Array<() => void> = [];
@@ -300,6 +333,7 @@ export class EncryptedChannel {
     this.sharedKey = sharedKey;
     this.events = events;
     this.options = options;
+    this.securityContext = options.securityContext ? { ...options.securityContext } : null;
 
     Object.assign(transport, {
       onmessage: (data: string | ArrayBuffer) => this.handleMessage(data),
@@ -331,6 +365,9 @@ export class EncryptedChannel {
         const text = typeof data === "string" ? data : new TextDecoder().decode(data);
         const parsed: unknown = JSON.parse(text);
         if (isE2EEReadyMessage(parsed)) {
+          if (this.securityContext && parsed.authChallenge) {
+            this.securityContext.authChallenge = parsed.authChallenge;
+          }
           // Use setState so the send direction (salt + seq) is initialised.
           this.setState("open");
           this.events.onopen?.();
@@ -483,7 +520,14 @@ export class EncryptedChannel {
     // "ready" but do not re-key. Re-keying here would desync
     // the channel and cause decrypt failures.
     if (keysEqual(nextSharedKey, this.sharedKey)) {
-      this.transport.send(JSON.stringify({ type: "e2ee_ready" } satisfies E2EEReadyMessage));
+      this.transport.send(
+        JSON.stringify({
+          type: "e2ee_ready",
+          ...(this.securityContext?.authChallenge
+            ? { authChallenge: this.securityContext.authChallenge }
+            : {}),
+        } satisfies E2EEReadyMessage),
+      );
       return;
     }
 
@@ -504,6 +548,14 @@ export class EncryptedChannel {
 
   isOpen(): boolean {
     return this.state === "open";
+  }
+
+  /**
+   * Returns the E2EE handshake values that relay device auth must bind to.
+   * @returns A defensive copy of the channel security context, or null before setup
+   */
+  getSecurityContext(): EncryptedChannelSecurityContext | null {
+    return this.securityContext ? { ...this.securityContext } : null;
   }
 
   onTransitionToOpen(cb: () => void): void {

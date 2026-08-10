@@ -39,6 +39,8 @@
 
 - `docs/cross-cutting/relay-security-boundaries.md`
 - `SECURITY.md`
+- `docs/security/relay-auth-handshake-v2-threat-model.md`
+- `docs/security/production-hardening-current-state-2026-08-10.md`
 - `docs/cross-cutting/websocket-rpc-protocol.md`
 
 ## Verification

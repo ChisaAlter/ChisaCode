@@ -73,12 +73,14 @@ export interface ExternalSocketMetadata {
   externalSessionKey?: string;
   /**
    * When true, relay hellos without valid device auth are rejected.
-   * Default false preserves released v1.0.x offer-only clients (legacy).
+   * Defaults true in the relay transport. False is an explicit recovery mode.
    */
   requireDeviceAuth?: boolean;
   chisacodeHome?: string;
   daemonPublicKeyB64?: string;
   serverId?: string;
+  relayClientPublicKeyB64?: string;
+  relayAuthChallenge?: string;
 }
 
 interface PendingConnection {
@@ -89,6 +91,8 @@ interface PendingConnection {
   chisacodeHome?: string;
   daemonPublicKeyB64?: string;
   serverId?: string;
+  relayClientPublicKeyB64?: string;
+  relayAuthChallenge?: string;
   /**
    * Device id proven for this connection (relay auth). Used to gate session resume.
    */
@@ -877,6 +881,8 @@ export class VoiceAssistantWebSocketServer {
       chisacodeHome: metadata?.chisacodeHome,
       daemonPublicKeyB64: metadata?.daemonPublicKeyB64,
       serverId: metadata?.serverId,
+      relayClientPublicKeyB64: metadata?.relayClientPublicKeyB64,
+      relayAuthChallenge: metadata?.relayAuthChallenge,
     };
     const timeout = setTimeout(() => {
       if (this.pendingConnections.get(ws) !== pending) {
@@ -1022,6 +1028,15 @@ export class VoiceAssistantWebSocketServer {
     if (!auth.pairingToken) {
       return false;
     }
+    if (!this.isRelayAuthBoundToChannel(auth, pending)) {
+      this.rejectRelayAuth(
+        ws,
+        pending,
+        "relay_pairing_channel_binding_invalid",
+        "Relay pairing is not bound to this encrypted channel",
+      );
+      return false;
+    }
     if (!store.consumePairingToken(auth.pairingToken)) {
       this.rejectRelayAuth(
         ws,
@@ -1089,16 +1104,13 @@ export class VoiceAssistantWebSocketServer {
     }
 
     if (!pending.chisacodeHome) {
-      if (requireAuth) {
-        this.rejectRelayAuth(
-          ws,
-          pending,
-          "relay_device_store_unavailable",
-          "Relay device auth unavailable",
-        );
-        return false;
-      }
-      return true;
+      this.rejectRelayAuth(
+        ws,
+        pending,
+        "relay_device_store_unavailable",
+        "Relay device auth unavailable",
+      );
+      return false;
     }
 
     const store = new RelayDeviceCredentialStore(pending.chisacodeHome);
@@ -1114,23 +1126,15 @@ export class VoiceAssistantWebSocketServer {
       !auth.challenge ||
       !auth.clientPublicKeyB64 ||
       !serverId ||
-      !daemonPublicKeyB64
+      !daemonPublicKeyB64 ||
+      !this.isRelayAuthBoundToChannel(auth, pending)
     ) {
-      if (requireAuth) {
-        this.rejectRelayAuth(
-          ws,
-          pending,
-          "relay_device_auth_incomplete",
-          "Relay device auth proof required",
-        );
-        return false;
-      }
-      const device = store.getDevice(auth.deviceId);
-      if (device && !device.revokedAt) {
-        pending.authenticatedDeviceId = auth.deviceId;
-        return true;
-      }
-      this.rejectRelayAuth(ws, pending, "relay_device_unknown", "Relay device unknown");
+      this.rejectRelayAuth(
+        ws,
+        pending,
+        "relay_device_auth_incomplete",
+        "Relay device auth proof and channel binding required",
+      );
       return false;
     }
 
@@ -1148,6 +1152,18 @@ export class VoiceAssistantWebSocketServer {
     }
     pending.authenticatedDeviceId = auth.deviceId;
     return true;
+  }
+
+  private isRelayAuthBoundToChannel(
+    auth: NonNullable<WSHelloMessage["relayDeviceAuth"]>,
+    pending: PendingConnection,
+  ): boolean {
+    return (
+      typeof auth.clientPublicKeyB64 === "string" &&
+      typeof auth.challenge === "string" &&
+      auth.clientPublicKeyB64 === pending.relayClientPublicKeyB64 &&
+      auth.challenge === pending.relayAuthChallenge
+    );
   }
 
   private rejectRelayAuth(

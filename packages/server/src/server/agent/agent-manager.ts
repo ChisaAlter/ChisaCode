@@ -182,6 +182,11 @@ export interface AgentManagerOptions {
    * AgentForegroundExecutionController.
    */
   foregroundToolCallStallTimeoutMs?: number;
+  /** Coordinates agent registration and run starts with destructive workspace mutations. */
+  workspaceWriteCoordinator?: {
+    assertAcceptingWrites(path: string, operation: string): void;
+    runWithWriteLease<T>(path: string, operation: string, fn: () => Promise<T>): Promise<T>;
+  };
   logger: Logger;
 }
 
@@ -365,6 +370,7 @@ export class AgentManager {
   private readonly backgroundTasks = new Set<Promise<void>>();
   private readonly agentStreamCoalescer: AgentStreamCoalescer;
   private readonly generativeUiActionQueue: GenerativeUiActionQueue;
+  private readonly workspaceWriteCoordinator: AgentManagerOptions["workspaceWriteCoordinator"];
   private onAgentAttention?: AgentAttentionCallback;
   private logger: Logger;
 
@@ -372,6 +378,7 @@ export class AgentManager {
     this.idFactory = options?.idFactory ?? (() => randomUUID());
     this.registry = options?.registry;
     this.onAgentAttention = options?.onAgentAttention;
+    this.workspaceWriteCoordinator = options.workspaceWriteCoordinator;
     this.logger = options.logger.child({ module: "agent", component: "agent-manager" });
     this.eventBus = new AgentManagerEventBus({
       logger: this.logger,
@@ -622,6 +629,23 @@ export class AgentManager {
     });
   }
 
+  private async runWorkspaceRegistration<T>(
+    cwd: string,
+    operation: string,
+    fn: () => Promise<T>,
+  ): Promise<T> {
+    if (!this.workspaceWriteCoordinator) {
+      return await fn();
+    }
+    return await this.workspaceWriteCoordinator.runWithWriteLease(cwd, operation, fn);
+  }
+
+  private assertAgentWorkspaceAcceptingWrites(agentId: string, operation: string): ManagedAgent {
+    const agent = this.requireAgent(agentId);
+    this.workspaceWriteCoordinator?.assertAcceptingWrites(agent.cwd, operation);
+    return agent;
+  }
+
   /**
    * Enqueues a generative UI action without interrupting an active agent turn.
    * @param agentId Target agent identifier
@@ -629,12 +653,13 @@ export class AgentManager {
    * @returns Confirmation that the action entered the manager-owned queue
    */
   enqueueGenerativeUiAction(agentId: string, action: GenerativeUiQueuedAction): { queued: true } {
-    this.requireAgent(agentId);
+    this.assertAgentWorkspaceAcceptingWrites(agentId, "enqueue agent action");
     this.generativeUiActionQueue.enqueue(agentId, action);
     return { queued: true };
   }
 
   private async initiateGenerativeUiPrompt(agentId: string, prompt: string): Promise<void> {
+    this.assertAgentWorkspaceAcceptingWrites(agentId, "start agent action");
     let started = false;
     let resolveInitiated!: () => void;
     let rejectInitiated!: (error: unknown) => void;
@@ -832,7 +857,9 @@ export class AgentManager {
       initialTitle?: string | null;
     },
   ): Promise<ManagedAgent> {
-    return await this.sessionLifecycle.create(config, agentId, options);
+    return await this.runWorkspaceRegistration(config.cwd, "create agent", () =>
+      this.sessionLifecycle.create(config, agentId, options),
+    );
   }
 
   // Reconstruct an agent from provider persistence. Callers should explicitly
@@ -849,7 +876,14 @@ export class AgentManager {
       relation?: AgentRelation;
     },
   ): Promise<ManagedAgent> {
-    return await this.sessionLifecycle.resume(handle, overrides, agentId, options);
+    const metadata = handle.metadata as Partial<AgentSessionConfig> | undefined;
+    const cwd = overrides?.cwd ?? metadata?.cwd;
+    if (!cwd) {
+      return await this.sessionLifecycle.resume(handle, overrides, agentId, options);
+    }
+    return await this.runWorkspaceRegistration(cwd, "resume agent", () =>
+      this.sessionLifecycle.resume(handle, overrides, agentId, options),
+    );
   }
 
   // Hot-reload an active agent session with config overrides. By default the
@@ -863,7 +897,10 @@ export class AgentManager {
     overrides?: Partial<AgentSessionConfig>,
     options?: { rehydrateFromDisk?: boolean },
   ): Promise<ManagedAgent> {
-    return await this.sessionLifecycle.reload(agentId, overrides, options);
+    const cwd = overrides?.cwd ?? this.requireAgent(agentId).cwd;
+    return await this.runWorkspaceRegistration(cwd, "reload agent", () =>
+      this.sessionLifecycle.reload(agentId, overrides, options),
+    );
   }
 
   async closeAgent(agentId: string): Promise<void> {
@@ -1040,6 +1077,7 @@ export class AgentManager {
    * broadcast like normal timeline events.
    */
   tryRunOutOfBand(agentId: string, prompt: AgentPromptInput): boolean {
+    this.assertAgentWorkspaceAcceptingWrites(agentId, "start agent command");
     const agent = this.requireSessionAgent(agentId);
     const handler = agent.session.tryHandleOutOfBand?.(prompt);
     if (!handler) {
@@ -1110,6 +1148,7 @@ export class AgentManager {
     prompt: AgentPromptInput,
     options?: AgentRunOptions,
   ): AsyncGenerator<AgentStreamEvent> {
+    this.assertAgentWorkspaceAcceptingWrites(agentId, "start agent run");
     return this.foregroundExecution.stream(agentId, prompt, options);
   }
 
@@ -1118,6 +1157,7 @@ export class AgentManager {
     prompt: AgentPromptInput,
     options?: AgentRunOptions,
   ): AsyncGenerator<AgentStreamEvent> {
+    this.assertAgentWorkspaceAcceptingWrites(agentId, "replace agent run");
     return this.runControl.replace(agentId, prompt, options);
   }
 
@@ -1225,6 +1265,7 @@ export class AgentManager {
       const prompt = buildContinuationPrompt(updated);
       this.logger.info({ agentId }, "Goal auto-continuing");
       try {
+        this.assertAgentWorkspaceAcceptingWrites(agentId, "continue agent goal");
         for await (const _event of this.foregroundExecution.stream(agentId, prompt)) {
           // Drain the stream — events are dispatched internally. The stream can
           // be aborted mid-iteration by cancelAgentRun if the user cancels now.

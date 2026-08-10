@@ -1,7 +1,7 @@
 import { type ChildProcess } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { app, ipcMain, powerMonitor } from "electron";
+import { app, ipcMain, powerMonitor, safeStorage } from "electron";
 import log from "electron-log/main";
 import { resolveChisaCodeHome, spawnProcess } from "@chisacode/server";
 import {
@@ -88,6 +88,8 @@ const PRIVILEGED_COMMANDS: ReadonlySet<string> = new Set([
   // restricting it keeps the privileged surface consistent and prevents a
   // compromised frame from triggering update probes.
   "check_app_update",
+  "encrypt_relay_device_secret",
+  "decrypt_relay_device_secret",
 ]);
 
 export { PRIVILEGED_COMMANDS };
@@ -740,6 +742,49 @@ function getDaemonLogs(): DesktopDaemonLogs {
   };
 }
 
+function assertElectronSecureStorageAvailable(): void {
+  if (!safeStorage.isEncryptionAvailable()) {
+    throw new Error("Electron secure storage is unavailable");
+  }
+  if (process.platform === "linux") {
+    const backend = safeStorage.getSelectedStorageBackend();
+    if (backend === "basic_text" || backend === "unknown") {
+      throw new Error("Electron secure storage has no protected Linux backend");
+    }
+  }
+}
+
+function encryptRelayDeviceSecret(args: Record<string, unknown> | undefined): {
+  ciphertextB64: string;
+} {
+  const deviceSecret = args?.deviceSecret;
+  if (typeof deviceSecret !== "string" || deviceSecret.length < 32 || deviceSecret.length > 512) {
+    throw new Error("Invalid relay device secret");
+  }
+  assertElectronSecureStorageAvailable();
+  return { ciphertextB64: safeStorage.encryptString(deviceSecret).toString("base64") };
+}
+
+function decryptRelayDeviceSecret(args: Record<string, unknown> | undefined): {
+  deviceSecret: string;
+} {
+  const ciphertextB64 = args?.ciphertextB64;
+  if (
+    typeof ciphertextB64 !== "string" ||
+    ciphertextB64.length < 16 ||
+    ciphertextB64.length > 4096 ||
+    !/^[A-Za-z0-9+/]+={0,2}$/u.test(ciphertextB64)
+  ) {
+    throw new Error("Invalid encrypted relay device secret");
+  }
+  assertElectronSecureStorageAvailable();
+  const deviceSecret = safeStorage.decryptString(Buffer.from(ciphertextB64, "base64"));
+  if (deviceSecret.length < 32 || deviceSecret.length > 512) {
+    throw new Error("Invalid decrypted relay device secret");
+  }
+  return { deviceSecret };
+}
+
 async function getCliDaemonStatus(): Promise<string> {
   return await runExternalCliTextCommand(["daemon", "status"]);
 }
@@ -816,6 +861,8 @@ export function createDaemonCommandHandlers(): Record<string, DesktopCommandHand
     desktop_daemon_logs: () => getDaemonLogs(),
     desktop_daemon_pairing: () => getDaemonPairing(),
     desktop_get_system_idle_time: () => powerMonitor.getSystemIdleTime() * 1000,
+    encrypt_relay_device_secret: (args) => encryptRelayDeviceSecret(args),
+    decrypt_relay_device_secret: (args) => decryptRelayDeviceSecret(args),
     cli_daemon_status: () => getCliDaemonStatus(),
     write_attachment_base64: (args) => writeAttachmentBase64(args ?? {}),
     write_attachment_bytes: (args) => writeAttachmentBytes(args ?? {}),

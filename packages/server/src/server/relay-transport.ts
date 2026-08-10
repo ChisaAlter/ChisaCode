@@ -28,7 +28,7 @@ interface RelayTransportOptions {
   chisacodeHome?: string;
   daemonPublicKeyB64?: string;
   /**
-   * When true, reject relay hellos without device auth. Default false for legacy v1.0.x.
+   * When true, reject relay hellos without device auth. Defaults true.
    */
   requireDeviceAuth?: boolean;
 }
@@ -210,7 +210,7 @@ export function startRelayTransport({
   createWebSocket = createDefaultRelayWebSocket,
   chisacodeHome,
   daemonPublicKeyB64,
-  requireDeviceAuth = false,
+  requireDeviceAuth = true,
 }: RelayTransportOptions): RelayTransportController {
   const relayLogger = logger.child({ module: "relay-transport" });
 
@@ -602,7 +602,19 @@ async function attachEncryptedSocket(
       },
     });
     const encryptedSocket = createEncryptedSocket(channel, emitter);
-    await attachSocket(encryptedSocket, metadata);
+    const securityContext = channel.getSecurityContext();
+    const boundMetadata = metadata
+      ? {
+          ...metadata,
+          ...(securityContext
+            ? {
+                relayClientPublicKeyB64: securityContext.clientPublicKeyB64,
+                relayAuthChallenge: securityContext.authChallenge,
+              }
+            : {}),
+        }
+      : undefined;
+    await attachSocket(encryptedSocket, boundMetadata);
     attached = true;
     for (const message of pendingMessages) {
       emitter.emit("message", message);

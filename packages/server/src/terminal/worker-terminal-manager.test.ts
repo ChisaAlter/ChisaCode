@@ -269,6 +269,33 @@ it("does not surface fire-and-forget send timeouts as unhandled rejections", asy
   expect(unhandledRejections).toEqual([]);
 });
 
+it("rejects terminal input while its workspace is quiescing", () => {
+  const worker = new FakeTerminalWorker();
+  const assertAcceptingWrites = vi.fn(() => {
+    throw new Error("Workspace is quiescing; write terminal input was rejected");
+  });
+  manager = createWorkerTerminalManager({
+    forkWorker: () => worker,
+    workspaceWriteCoordinator: {
+      assertAcceptingWrites,
+      runWithWriteLease: async (_path, _operation, fn) => await fn(),
+    },
+  });
+  worker.emitWorkerMessage({
+    type: "terminalCreated",
+    terminal: { id: "terminal-quiescing", name: "Terminal", cwd: "/tmp/worktree" },
+    state: createTerminalState(),
+  });
+  const session = manager.getTerminal("terminal-quiescing");
+
+  expect(() => session?.send({ type: "input", data: "touch unsafe" })).toThrow(
+    "Workspace is quiescing",
+  );
+  expect(() => session?.send({ type: "resize", rows: 24, cols: 80 })).not.toThrow();
+  expect(assertAcceptingWrites).toHaveBeenCalledWith("/tmp/worktree", "write terminal input");
+  expect(worker.sentMessages.filter((message) => message.type === "send")).toHaveLength(1);
+});
+
 it("keeps registered cwd env inheritance behind the worker manager interface", async () => {
   manager = createWorkerTerminalManager();
   const cwd = mkdtempSync(join(tmpdir(), "worker-terminal-manager-env-"));

@@ -124,6 +124,7 @@ export default {
     plugins: [
       "./plugins/with-android-export-embed-cli",
       "expo-asset",
+      "expo-secure-store",
       "expo-router",
       [
         "expo-camera",

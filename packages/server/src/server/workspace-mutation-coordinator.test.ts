@@ -56,6 +56,49 @@ describe("WorkspaceMutationCoordinator", () => {
     expect(order).toEqual(["first-enter", "first-exit", "second-enter", "second-exit"]);
   });
 
+  test("keeps queued mutations on the same slot after an archived transition", async () => {
+    const coordinator = new WorkspaceMutationCoordinator();
+    const order: string[] = [];
+    let releaseFirst!: () => void;
+    let releaseSecond!: () => void;
+    const firstGate = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    const secondGate = new Promise<void>((resolve) => {
+      releaseSecond = resolve;
+    });
+
+    const first = coordinator.runExclusive(
+      "/tmp/wt-queue",
+      "archive-worktree",
+      async ({ setState }) => {
+        order.push("first-enter");
+        await firstGate;
+        setState("archived", "first-done");
+      },
+    );
+    const second = coordinator.runExclusive("/tmp/wt-queue", "archive-worktree", async () => {
+      order.push("second-enter");
+      await secondGate;
+      order.push("second-exit");
+    });
+
+    releaseFirst();
+    await vi.waitFor(() => {
+      expect(order).toEqual(["first-enter", "second-enter"]);
+    });
+
+    const third = coordinator.runExclusive("/tmp/wt-queue", "archive-worktree", async () => {
+      order.push("third-enter");
+    });
+    await Promise.resolve();
+    expect(order).toEqual(["first-enter", "second-enter"]);
+
+    releaseSecond();
+    await Promise.all([first, second, third]);
+    expect(order).toEqual(["first-enter", "second-enter", "second-exit", "third-enter"]);
+  });
+
   test("restores active and rethrows when callback fails before terminal state", async () => {
     const coordinator = new WorkspaceMutationCoordinator();
     await expect(
@@ -66,6 +109,50 @@ describe("WorkspaceMutationCoordinator", () => {
     ).rejects.toThrow("boom");
     expect(coordinator.getState("/tmp/wt-fail")).toBe("active");
     expect(coordinator.isAcceptingWrites("/tmp/wt-fail")).toBe(true);
+  });
+
+  test("quiescing rejects descendant writes and waits for admitted registrations", async () => {
+    const coordinator = new WorkspaceMutationCoordinator();
+    const order: string[] = [];
+    let releaseRegistration!: () => void;
+    const registrationGate = new Promise<void>((resolve) => {
+      releaseRegistration = resolve;
+    });
+
+    const registration = coordinator.runWithWriteLease(
+      "/tmp/wt-lease/packages/app",
+      "create agent",
+      async () => {
+        order.push("registration-enter");
+        await registrationGate;
+        order.push("registration-exit");
+      },
+    );
+    await vi.waitFor(() => expect(order).toEqual(["registration-enter"]));
+
+    const archive = coordinator.runExclusive(
+      "/tmp/wt-lease",
+      "archive-worktree",
+      async ({ setState }) => {
+        setState("quiescing", "test_quiesce");
+        order.push("quiescing");
+        await coordinator.waitForWritesToDrain("/tmp/wt-lease");
+        order.push("drained");
+        setState("active", "test_complete");
+      },
+    );
+
+    await vi.waitFor(() => expect(order).toEqual(["registration-enter", "quiescing"]));
+    expect(coordinator.isAcceptingWrites("/tmp/wt-lease/packages/server")).toBe(false);
+    await expect(
+      coordinator.runWithWriteLease("/tmp/wt-lease/packages/server", "create terminal", async () =>
+        Promise.resolve(),
+      ),
+    ).rejects.toThrow("Workspace is quiescing");
+
+    releaseRegistration();
+    await Promise.all([registration, archive]);
+    expect(order).toEqual(["registration-enter", "quiescing", "registration-exit", "drained"]);
   });
 
   test("allows concurrent mutations on different paths", async () => {

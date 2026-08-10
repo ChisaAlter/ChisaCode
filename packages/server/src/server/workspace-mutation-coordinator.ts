@@ -10,6 +10,7 @@ export type WorkspaceMutationState =
   | "quiescing"
   | "deleting"
   | "archived"
+  | "setup_failed_recovery"
   | "delete_complete_pending_finalize";
 
 export type WorkspaceMutationReason =
@@ -41,6 +42,16 @@ interface MutationSlot {
   state: WorkspaceMutationState;
   chain: Promise<unknown>;
   holders: number;
+  waiters: number;
+}
+
+interface WorkspaceWriteLease {
+  count: number;
+}
+
+interface WorkspaceWriteDrainWaiter {
+  canonicalRoot: string;
+  resolve: () => void;
 }
 
 /**
@@ -49,6 +60,8 @@ interface MutationSlot {
  */
 export class WorkspaceMutationCoordinator {
   private readonly slots = new Map<string, MutationSlot>();
+  private readonly writeLeases = new Map<string, WorkspaceWriteLease>();
+  private readonly writeDrainWaiters = new Set<WorkspaceWriteDrainWaiter>();
   private readonly onDecision: WorkspaceMutationCoordinatorOptions["onDecision"];
 
   constructor(options: WorkspaceMutationCoordinatorOptions = {}) {
@@ -90,7 +103,68 @@ export class WorkspaceMutationCoordinator {
    * @param path Worktree path
    */
   isAcceptingWrites(path: string): boolean {
-    return this.getState(path) === "active";
+    return this.findBlockingMutation(this.canonicalize(path)) === null;
+  }
+
+  /**
+   * Reject new work while this path or an ancestor is being destructively mutated.
+   * @param path Workspace path that would be written
+   * @param operation Human-readable operation name for diagnostics
+   * @throws {WorkspaceWriteRejectedError} If a mutation is quiescing or deleting the path
+   */
+  assertAcceptingWrites(path: string, operation: string): void {
+    const canonicalPath = this.canonicalize(path);
+    const blocker = this.findBlockingMutation(canonicalPath);
+    if (!blocker) {
+      return;
+    }
+    this.emitDecision({
+      decision: "deny",
+      reason: `write_rejected:${operation}`,
+      pathHash: this.pathHash(blocker.canonicalRoot),
+      state: blocker.state,
+    });
+    throw new WorkspaceWriteRejectedError(blocker.state, operation);
+  }
+
+  /**
+   * Run a bounded registration operation under a write lease.
+   * Destructive mutations switch to quiescing before waiting for these leases.
+   * @param path Workspace path being registered
+   * @param operation Human-readable operation name for diagnostics
+   * @param fn Registration body
+   * @returns Result of `fn`
+   */
+  async runWithWriteLease<T>(path: string, operation: string, fn: () => Promise<T>): Promise<T> {
+    const canonicalPath = this.canonicalize(path);
+    this.assertAcceptingWrites(canonicalPath, operation);
+    const lease = this.writeLeases.get(canonicalPath) ?? { count: 0 };
+    lease.count += 1;
+    this.writeLeases.set(canonicalPath, lease);
+    try {
+      return await fn();
+    } finally {
+      lease.count = Math.max(0, lease.count - 1);
+      if (lease.count === 0) {
+        this.writeLeases.delete(canonicalPath);
+        this.resolveWriteDrainWaiters();
+      }
+    }
+  }
+
+  /**
+   * Wait until registration operations already admitted under a path have settled.
+   * The caller must set the mutation state to `quiescing` before calling this.
+   * @param path Worktree root being quiesced
+   */
+  async waitForWritesToDrain(path: string): Promise<void> {
+    const canonicalRoot = this.canonicalize(path);
+    if (!this.hasWriteLeaseWithin(canonicalRoot)) {
+      return;
+    }
+    await new Promise<void>((resolveWaiter) => {
+      this.writeDrainWaiters.add({ canonicalRoot, resolve: resolveWaiter });
+    });
   }
 
   /**
@@ -125,7 +199,9 @@ export class WorkspaceMutationCoordinator {
       () => gate,
     );
 
+    slot.waiters += 1;
     await previous.catch(() => undefined);
+    slot.waiters = Math.max(0, slot.waiters - 1);
     slot.holders += 1;
 
     try {
@@ -134,6 +210,9 @@ export class WorkspaceMutationCoordinator {
       // and reset to active so a recreated worktree (or a subsequent archive
       // attempt after restore) can proceed.
       if (slot.state === "archived") {
+        slot.state = "active";
+      }
+      if (slot.state === "setup_failed_recovery" && mutationReason === "setup-failure-cleanup") {
         slot.state = "active";
       }
       if (slot.state !== "active" && slot.state !== "delete_complete_pending_finalize") {
@@ -177,7 +256,7 @@ export class WorkspaceMutationCoordinator {
 
       return await fn({ canonicalPath, pathHash, setState, assertState });
     } catch (error) {
-      if (slot.state !== "archived" && slot.state !== "delete_complete_pending_finalize") {
+      if (!this.shouldPreserveStateAfterFailure(slot.state)) {
         slot.state = "active";
         this.emitDecision({
           decision: "abort",
@@ -190,17 +269,9 @@ export class WorkspaceMutationCoordinator {
       throw error;
     } finally {
       slot.holders = Math.max(0, slot.holders - 1);
-      if (slot.holders === 0 && (slot.state === "active" || slot.state === "archived")) {
-        // Drop terminal states so a recreated worktree at the same path can mutate again.
-        if (slot.state === "archived") {
-          this.slots.delete(canonicalPath);
-        } else if (slot.chain === previous || slot.holders === 0) {
-          // Keep slot only while chain still has waiters; otherwise prune idle active slots.
-          const stillChained = slot.chain !== previous && slot.holders > 0;
-          if (!stillChained && slot.state === "active") {
-            this.slots.delete(canonicalPath);
-          }
-        }
+      if (this.shouldPruneSlot(slot)) {
+        // Waiter accounting keeps the slot alive until the last queued holder exits.
+        this.slots.delete(canonicalPath);
       }
       release();
     }
@@ -213,10 +284,61 @@ export class WorkspaceMutationCoordinator {
         state: "active",
         chain: Promise.resolve(),
         holders: 0,
+        waiters: 0,
       };
       this.slots.set(canonicalPath, slot);
     }
     return slot;
+  }
+
+  private shouldPreserveStateAfterFailure(state: WorkspaceMutationState): boolean {
+    return (
+      state === "archived" ||
+      state === "setup_failed_recovery" ||
+      state === "delete_complete_pending_finalize"
+    );
+  }
+
+  private shouldPruneSlot(slot: MutationSlot): boolean {
+    return (
+      slot.holders === 0 &&
+      slot.waiters === 0 &&
+      (slot.state === "active" || slot.state === "archived")
+    );
+  }
+
+  private findBlockingMutation(
+    canonicalPath: string,
+  ): { canonicalRoot: string; state: WorkspaceMutationState } | null {
+    for (const [canonicalRoot, slot] of this.slots) {
+      if (slot.state !== "active" && this.isPathWithin(canonicalRoot, canonicalPath)) {
+        return { canonicalRoot, state: slot.state };
+      }
+    }
+    return null;
+  }
+
+  private hasWriteLeaseWithin(canonicalRoot: string): boolean {
+    for (const [canonicalPath, lease] of this.writeLeases) {
+      if (lease.count > 0 && this.isPathWithin(canonicalRoot, canonicalPath)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private resolveWriteDrainWaiters(): void {
+    for (const waiter of this.writeDrainWaiters) {
+      if (this.hasWriteLeaseWithin(waiter.canonicalRoot)) {
+        continue;
+      }
+      this.writeDrainWaiters.delete(waiter);
+      waiter.resolve();
+    }
+  }
+
+  private isPathWithin(canonicalRoot: string, canonicalPath: string): boolean {
+    return canonicalPath === canonicalRoot || canonicalPath.startsWith(`${canonicalRoot}/`);
   }
 
   private emitDecision(entry: WorkspaceMutationDecisionLog): void {
@@ -242,6 +364,19 @@ export class WorkspaceMutationBusyError extends Error {
     this.canonicalPath = canonicalPath;
     this.state = state;
     this.mutationReason = mutationReason;
+  }
+}
+
+/** Thrown when new workspace work races an archive/delete transition. */
+export class WorkspaceWriteRejectedError extends Error {
+  readonly state: WorkspaceMutationState;
+  readonly operation: string;
+
+  constructor(state: WorkspaceMutationState, operation: string) {
+    super(`Workspace is ${state}; ${operation} was rejected`);
+    this.name = "WorkspaceWriteRejectedError";
+    this.state = state;
+    this.operation = operation;
   }
 }
 

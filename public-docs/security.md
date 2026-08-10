@@ -24,23 +24,24 @@ Clients connect to the daemon over WebSocket. There are two ways to establish th
 
 The relay is the simplest way to connect from your phone. It requires no VPN setup, no port forwarding, and no firewall configuration. The daemon can stay bound to localhost or a socket file, it connects _outbound_ to the relay, and your phone meets it there.
 
-> **The relay is designed to be untrusted.** All traffic between your phone and daemon is end-to-end encrypted. The relay server cannot read your messages, see your code, or modify traffic without detection. Even if the relay is compromised, your data remains protected.
+> **The relay is designed to be untrusted.** Encrypted application traffic between your phone and daemon is end-to-end encrypted. The relay cannot read or modify those encrypted payloads without detection, but it can observe routing metadata and tamper with the plaintext E2EE handshake to cause a denial of service. With the default device-auth policy enabled, that tampering cannot become an authorized daemon session.
 
 ### How it works
 
 1. The daemon generates a persistent ECDH keypair and stores it in `$CHISACODE_HOME/daemon-keypair.json`
-2. When you scan the QR code or click the pairing link, your phone receives the daemon's public key
-3. Your phone sends a handshake message with its own public key. The daemon will not accept any commands until this handshake completes.
-4. Both sides perform a Curve25519 ECDH key exchange to derive a shared key. All subsequent
-   messages are encrypted with XSalsa20-Poly1305 (NaCl `box`).
+2. A pairing offer carries the daemon's public key and a short-lived, one-time bootstrap token
+3. Your phone generates a fresh ephemeral keypair and sends its public key in `e2ee_hello`
+4. The daemon completes Curve25519 ECDH and returns a fresh per-channel challenge in `e2ee_ready`
+5. The first encrypted hello carries either the bootstrap token or a per-device HMAC proof. Both are bound to the actual client public key and daemon challenge before the daemon creates or resumes a session.
+6. All subsequent messages are encrypted with XSalsa20-Poly1305 (NaCl `box`).
 
-The relay sees only: IP addresses, timing, message sizes, and session IDs. It cannot read message contents, forge messages, or derive encryption keys from observing the handshake.
+The relay can observe IP addresses, timing, message sizes, the stable `serverId`, `role`/version, `connectionId`, and the daemon server-socket authentication query fields (public key, nonce, issue time, and signature). It also sees the plaintext `e2ee_hello` / `e2ee_ready` frames. It cannot read encrypted application contents, pairing tokens, or HMAC proofs, and it cannot derive encryption keys from the handshake.
 
 ### Why the relay can't attack you
 
-The daemon requires a valid cryptographic handshake before processing any commands. A compromised relay cannot:
+With the default device-auth policy, the daemon requires both the cryptographic handshake and a valid device-auth gate before processing commands. A compromised relay cannot:
 
-- **Send commands**, Without a paired device credential (or, on legacy clients, possession of the offer), it cannot complete an authorized session
+- **Send commands**, It cannot substitute a client key or reuse a pairing token/proof because the device-auth proof is bound to the daemon challenge and the actual E2EE client key. An old client connecting to a new daemon is rejected unless the daemon operator explicitly enables the emergency recovery override `CHISACODE_RELAY_ALLOW_UNAUTHENTICATED_RECOVERY=1`
 - **Read your traffic**, All messages are encrypted with XSalsa20-Poly1305 (NaCl `box`) after the handshake
 - **Forge messages**, NaCl `box` provides authenticated encryption; tampered messages are rejected
 - **Replay old messages**, Each session derives fresh encryption keys
@@ -49,7 +50,7 @@ The daemon requires a valid cryptographic handshake before processing any comman
 
 The QR code or pairing link is the trust anchor. It contains the daemon's public key, which is required to establish the encrypted connection. Treat it like a password, don't share it publicly.
 
-If you believe a pairing offer has been compromised, restart the daemon to generate a new session ID and rotate the relay pairing.
+Treat the pairing offer like a password: anyone who obtains an unexpired offer can enroll one device. Restarting the daemon alone does not rotate its persisted server identity or E2EE keypair, and does not invalidate an unconsumed bootstrap token. The token is one-time and short-lived (10 minutes by default); clear the affected device credential when possible, wait for a compromised unconsumed token to expire, and then issue a new pairing offer.
 
 ## Direct connections
 

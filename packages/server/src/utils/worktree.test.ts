@@ -4,12 +4,21 @@ import {
   deriveWorktreeProjectHash,
   deleteChisaCodeWorktree,
   isChisaCodeOwnedWorktreeCwd,
+  runWorktreeSetupCommands,
   slugify,
   type CreateWorktreeOptions,
   type WorktreeConfig,
 } from "./worktree";
 import { execFileSync } from "child_process";
-import { mkdtempSync, mkdirSync, rmSync, existsSync, realpathSync, writeFileSync } from "fs";
+import {
+  mkdtempSync,
+  mkdirSync,
+  rmSync,
+  existsSync,
+  readFileSync,
+  realpathSync,
+  writeFileSync,
+} from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 
@@ -115,7 +124,7 @@ describe("chisacode worktree manager", () => {
     });
   });
 
-  it("deletes a worktree whose .git admin dir has already been removed", async () => {
+  it("preserves a worktree whose .git admin dir has already been removed", async () => {
     const created = await createLegacyWorktreeForTest({
       branchName: "orphan-delete-branch",
       cwd: repoDir,
@@ -130,13 +139,17 @@ describe("chisacode worktree manager", () => {
     });
     expect(existsSync(created.worktreePath)).toBe(true);
 
-    await deleteChisaCodeWorktree({
-      cwd: repoDir,
-      worktreePath: created.worktreePath,
-      chisacodeHome,
-    });
+    writeFileSync(join(created.worktreePath, "recovery.txt"), "preserve me\n");
 
-    expect(existsSync(created.worktreePath)).toBe(false);
+    await expect(
+      deleteChisaCodeWorktree({
+        cwd: repoDir,
+        worktreePath: created.worktreePath,
+        chisacodeHome,
+      }),
+    ).rejects.toThrow();
+
+    expect(readFileSync(join(created.worktreePath, "recovery.txt"), "utf8")).toBe("preserve me\n");
   });
 
   it("is idempotent: deleting an already-absent worktree succeeds", async () => {
@@ -161,7 +174,7 @@ describe("chisacode worktree manager", () => {
     ).resolves.toBeUndefined();
   });
 
-  it("deletes a worktree when the parent repo root is not available", async () => {
+  it("preserves a worktree when the parent repo root is not available", async () => {
     const created = await createLegacyWorktreeForTest({
       branchName: "no-cwd-branch",
       cwd: repoDir,
@@ -176,14 +189,66 @@ describe("chisacode worktree manager", () => {
 
     // Simulate the handler path when git has forgotten about the worktree:
     // caller forwards the path-derived worktreesRoot from the ownership check.
-    await deleteChisaCodeWorktree({
-      cwd: null,
-      worktreePath: created.worktreePath,
-      worktreesRoot: ownership.worktreeRoot,
+    writeFileSync(join(created.worktreePath, "recovery.txt"), "preserve me\n");
+    await expect(
+      deleteChisaCodeWorktree({
+        cwd: null,
+        worktreePath: created.worktreePath,
+        worktreesRoot: ownership.worktreeRoot,
+        chisacodeHome,
+      }),
+    ).rejects.toThrow("preserved for recovery");
+
+    expect(readFileSync(join(created.worktreePath, "recovery.txt"), "utf8")).toBe("preserve me\n");
+  });
+
+  it("preserves untracked content instead of escalating to force", async () => {
+    const created = await createLegacyWorktreeForTest({
+      branchName: "dirty-delete-branch",
+      cwd: repoDir,
+      baseBranch: "main",
+      worktreeSlug: "dirty-delete",
       chisacodeHome,
     });
+    writeFileSync(join(created.worktreePath, "untracked.txt"), "user data\n");
 
-    expect(existsSync(created.worktreePath)).toBe(false);
+    await expect(
+      deleteChisaCodeWorktree({
+        cwd: repoDir,
+        worktreePath: created.worktreePath,
+        chisacodeHome,
+      }),
+    ).rejects.toThrow();
+
+    expect(readFileSync(join(created.worktreePath, "untracked.txt"), "utf8")).toBe("user data\n");
+  });
+
+  it("preserves setup output for recovery on every platform", async () => {
+    const created = await createLegacyWorktreeForTest({
+      branchName: "setup-recovery-branch",
+      cwd: repoDir,
+      baseBranch: "main",
+      worktreeSlug: "setup-recovery",
+      runSetup: false,
+      chisacodeHome,
+    });
+    const setupCommand =
+      "node -e \"require('node:fs').writeFileSync('recovery.txt','user output');process.exit(1)\"";
+    writeFileSync(
+      join(created.worktreePath, "chisacode.json"),
+      JSON.stringify({ worktree: { setup: [setupCommand] } }),
+    );
+
+    await expect(
+      runWorktreeSetupCommands({
+        worktreePath: created.worktreePath,
+        branchName: created.branchName,
+        cleanupOnFailure: true,
+        repoRootPath: repoDir,
+      }),
+    ).rejects.toThrow("Worktree preserved for recovery");
+
+    expect(readFileSync(join(created.worktreePath, "recovery.txt"), "utf8")).toBe("user output");
   });
 });
 
