@@ -1063,7 +1063,8 @@ export async function deleteChisaCodeWorktree({
     runExclusive: <T>(
       path: string,
       reason: string,
-      fn: (ctx: { setState: (state: string, reason: string) => void }) => Promise<T>,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      fn: (ctx: any) => Promise<T>,
     ) => Promise<T>;
   };
 }): Promise<void> {

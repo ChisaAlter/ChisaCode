@@ -1474,7 +1474,7 @@ export async function createChisaCodeDaemon(
           );
 
           if (relayEnabled) {
-            const deviceStore = new RelayDeviceCredentialStore(chisacodeHome);
+            const deviceStore = new RelayDeviceCredentialStore(config.chisacodeHome);
             const pairingBootstrap = deviceStore.issuePairingToken(10 * 60_000);
             const offer = await createConnectionOfferV2({
               serverId,
@@ -1507,7 +1507,7 @@ export async function createChisaCodeDaemon(
               serverId,
               daemonKeyPair: daemonKeyPair.keyPair,
               daemonRelayAuthKeyPair: daemonKeyPair.relayAuthKeyPair,
-              chisacodeHome,
+              chisacodeHome: config.chisacodeHome,
               daemonPublicKeyB64: daemonKeyPair.publicKeyB64,
               // Legacy default: accept offer-only v1.0.x clients. Set true to force re-pair.
               requireDeviceAuth: process.env.CHISACODE_RELAY_REQUIRE_DEVICE_AUTH === "1",

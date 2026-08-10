@@ -86,6 +86,15 @@ interface DaemonClientInboundControllerOptions {
   markConnected(): void;
   onInboundActivity(): void;
   onRequestMessage(message: SessionOutboundMessage): void;
+  onRelayDeviceAuthResult?: (message: {
+    type: "relay_device_auth_result";
+    ok: boolean;
+    version: 1;
+    reason?: string;
+    deviceId?: string;
+    deviceSecret?: string;
+    securityLevel?: "v2" | "legacy";
+  }) => void;
   onTerminalFrame(frame: TerminalStreamFrame): void;
   onTerminalStreamExit(terminalId: string): void;
   resolvePong(): void;
@@ -199,6 +208,13 @@ export class DaemonClientInboundController {
     if (parsed.data.type === "pong") {
       this.options.resolvePong();
       metrics?.recordMessage("pong", bytes, perfNow() - startMs);
+      return;
+    }
+
+    // Relay device-auth results are WS-level (not session-wrapped).
+    if (parsed.data.type === "relay_device_auth_result") {
+      this.options.onRelayDeviceAuthResult?.(parsed.data);
+      metrics?.recordMessage("relay_device_auth_result", bytes, perfNow() - startMs);
       return;
     }
 

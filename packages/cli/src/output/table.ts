@@ -4,8 +4,10 @@
  * Renders structured data as aligned ASCII tables with optional color support.
  */
 
-import chalk, { type ChalkInstance } from "chalk";
+import chalk from "chalk";
 import type { AnyCommandResult, ColumnDef, OutputOptions, OutputSchema } from "./types.js";
+
+type ChalkColorFn = (text: string) => string;
 
 // ANSI escape code regex for stripping colors when measuring width
 const ANSI_REGEX =
@@ -44,7 +46,7 @@ function padCell(cell: string, width: number, align: "left" | "right" | "center"
 /** Apply a chalk color to a string */
 function applyColor(str: string, colorName: string): string {
   // Map color names to chalk methods
-  const colorMap: Record<string, ChalkInstance> = {
+  const colorMap: Record<string, ChalkColorFn> = {
     red: chalk.red,
     green: chalk.green,
     blue: chalk.blue,

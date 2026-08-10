@@ -129,7 +129,15 @@ async function archiveChisaCodeWorktreeBody(
       chisacodeHome: dependencies.chisacodeHome,
       // Caller already holds the mutation lock.
       alreadyHoldingMutationLock: true,
-      mutationCoordinator: dependencies.mutationCoordinator,
+      mutationCoordinator: dependencies.mutationCoordinator as
+        | {
+            runExclusive: <T>(
+              path: string,
+              reason: string,
+              fn: (ctx: { setState: (state: string, reason: string) => void }) => Promise<T>,
+            ) => Promise<T>;
+          }
+        | undefined,
     });
 
     if (options.repoRoot) {

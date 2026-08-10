@@ -35,7 +35,7 @@ const serverDir = path.join(repoRoot, "packages/server");
 const desktopDir = path.join(repoRoot, "packages/desktop");
 const tsxBin = path.join(repoRoot, "node_modules/.bin/tsx.cmd");
 const expoBin = path.join(repoRoot, "node_modules/.bin/expo.cmd");
-const electronBin = require("electron") as string;
+const electronBin = require("electron") as unknown as string;
 
 function waitForTcp(port: number, timeoutMs: number): Promise<void> {
   const deadline = Date.now() + timeoutMs;
