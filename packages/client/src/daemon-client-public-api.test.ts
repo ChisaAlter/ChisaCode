@@ -122,6 +122,7 @@ describe("ChisaCodeClient type-level API shape", () => {
       "opencode",
       "pi",
       "kimi",
+      "grokbuild",
       "config",
     ]);
     // Provider RPC methods
