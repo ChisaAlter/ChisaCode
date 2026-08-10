@@ -1,6 +1,18 @@
-import { createHmac, randomBytes } from "node:crypto";
+import { hmacSha256Base64Url, randomBase64UrlChallenge, randomHex } from "./sha256-hmac.js";
 
 const RELAY_DEVICE_AUTH_VERSION = 1 as const;
+
+function utf8Bytes(input: string): Uint8Array {
+  if (typeof TextEncoder !== "undefined") {
+    return new TextEncoder().encode(input);
+  }
+  const encoded = unescape(encodeURIComponent(input));
+  const bytes = new Uint8Array(encoded.length);
+  for (let i = 0; i < encoded.length; i += 1) {
+    bytes[i] = encoded.charCodeAt(i);
+  }
+  return bytes;
+}
 
 function buildRelayDeviceAuthTranscript(input: {
   version: number;
@@ -103,7 +115,7 @@ export class RelayDeviceCredentialClient {
     challenge: string;
     proof: string;
   } {
-    const challenge = input.challenge ?? randomBytes(32).toString("base64url");
+    const challenge = input.challenge ?? randomBase64UrlChallenge();
     const proof = computeClientRelayDeviceAuthProof(input.credential.deviceSecret, {
       serverId: input.credential.serverId,
       daemonPublicKeyB64: input.credential.daemonPublicKeyB64,
@@ -144,7 +156,7 @@ export class RelayDeviceCredentialClient {
  * Create a new random device id.
  */
 export function createRelayDeviceId(): string {
-  return `dev_${randomBytes(16).toString("hex")}`;
+  return `dev_${randomHex(16)}`;
 }
 
 /**
@@ -169,5 +181,5 @@ export function computeClientRelayDeviceAuthProof(
     deviceId: transcriptFields.deviceId,
     challenge: transcriptFields.challenge,
   });
-  return createHmac("sha256", deviceSecret).update(transcript).digest("base64url");
+  return hmacSha256Base64Url(utf8Bytes(deviceSecret), utf8Bytes(transcript));
 }

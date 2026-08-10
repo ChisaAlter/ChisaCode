@@ -51,3 +51,28 @@ describe("RelayDeviceCredentialClient", () => {
     expect(auth.deviceId).toBe("dev_pair_1");
   });
 });
+
+test("pure-JS HMAC matches node:crypto for transcript proofs", async () => {
+  const { createHmac } = await import("node:crypto");
+  const { computeClientRelayDeviceAuthProof: computePureProof } =
+    await import("./relay-device-credentials.js");
+  const fields = {
+    serverId: "srv_parity",
+    daemonPublicKeyB64: "daemon-pub-key-b64",
+    clientPublicKeyB64: "client-pub-key-b64",
+    deviceId: "dev_parity_1",
+    challenge: "challenge_parity_1234567890",
+  };
+  const secret = "device-secret-parity-value-1234567890";
+  const pure = computePureProof(secret, fields);
+  const transcript = [
+    `v=1`,
+    `serverId=${fields.serverId}`,
+    `daemonPublicKeyB64=${fields.daemonPublicKeyB64}`,
+    `clientPublicKeyB64=${fields.clientPublicKeyB64}`,
+    `deviceId=${fields.deviceId}`,
+    `challenge=${fields.challenge}`,
+  ].join("\n");
+  const expected = createHmac("sha256", secret).update(transcript).digest("base64url");
+  expect(pure).toBe(expected);
+});
