@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "generatedAt": "2026-08-10T06:57:20.393Z",
+  "generatedAt": "2026-08-10T08:52:01.112Z",
   "generator": "scripts/generate-modular-knowledge-graphs.mjs",
   "module": {
     "id": "app",
@@ -156,7 +156,7 @@
       "zod",
       "zustand"
     ],
-    "unresolvedInternalImports": 1
+    "unresolvedInternalImports": 0
   },
   "nodes": [
     {
@@ -9425,7 +9425,6 @@
       "path": "packages/app/src/runtime/host-runtime.ts",
       "lines": 2366,
       "imports": [
-        "../../../../client/src/relay-device-credentials",
         "@/desktop/daemon/desktop-daemon",
         "@/desktop/daemon/desktop-daemon-transport",
         "@/stores/session-store",
@@ -9437,6 +9436,7 @@
         "@/utils/daemon-endpoints",
         "@/utils/test-daemon-connection",
         "@chisacode/client/internal/daemon-client",
+        "@chisacode/client/relay-device-credentials",
         "@chisacode/protocol/connection-offer",
         "@react-native-async-storage/async-storage",
         "fast-deep-equal/es6",
@@ -29844,6 +29844,12 @@
     },
     {
       "source": "module:app",
+      "target": "module:client",
+      "type": "depends_on",
+      "specifier": "@chisacode/client/relay-device-credentials"
+    },
+    {
+      "source": "module:app",
       "target": "module:protocol",
       "type": "depends_on",
       "specifier": "@chisacode/protocol/connection-offer"
@@ -36899,10 +36905,5 @@
       "specifier": "@/utils/workspace-execution"
     }
   ],
-  "unresolvedInternalImports": [
-    {
-      "from": "packages/app/src/runtime/host-runtime.ts",
-      "specifier": "../../../../client/src/relay-device-credentials"
-    }
-  ]
+  "unresolvedInternalImports": []
 }

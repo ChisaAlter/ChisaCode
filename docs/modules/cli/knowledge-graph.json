@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "generatedAt": "2026-08-10T06:57:20.514Z",
+  "generatedAt": "2026-08-10T08:52:01.232Z",
   "generator": "scripts/generate-modular-knowledge-graphs.mjs",
   "module": {
     "id": "cli",
@@ -1314,7 +1314,7 @@
       "id": "file:packages/cli/src/output/table.ts",
       "type": "source",
       "path": "packages/cli/src/output/table.ts",
-      "lines": 181,
+      "lines": 183,
       "imports": ["./types.js", "chalk"]
     },
     {

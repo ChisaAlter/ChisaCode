@@ -124,6 +124,7 @@
     "@vitest/browser": "^4.1.10",
     "@vitest/browser-playwright": "^4.1.10",
     "@xterm/headless": "^6.1.0-beta.213",
+    "babel-preset-expo": "57.0.2",
     "dotenv": "^17.2.3",
     "esbuild": "^0.27.7",
     "eslint": "^9.25.0",

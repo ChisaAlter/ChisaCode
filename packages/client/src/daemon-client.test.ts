@@ -258,6 +258,7 @@ test("advertises client capabilities in hello", async () => {
       custom_mode_icons: true,
       generative_ui: true,
       reasoning_merge_enum: true,
+      cindy_modules: true,
     },
   });
 });

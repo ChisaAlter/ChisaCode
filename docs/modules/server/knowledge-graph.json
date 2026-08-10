@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "generatedAt": "2026-08-10T06:57:21.418Z",
+  "generatedAt": "2026-08-10T08:52:02.160Z",
   "generator": "scripts/generate-modular-knowledge-graphs.mjs",
   "module": {
     "id": "server",
@@ -66,7 +66,7 @@
       "test": 357,
       "source": 446
     },
-    "internalImportEdges": 2714,
+    "internalImportEdges": 2712,
     "workspaceDependencies": ["client", "highlight", "protocol", "relay"],
     "externalDependencies": [
       "@agentclientprotocol/sdk",
@@ -5074,7 +5074,7 @@
       "id": "file:packages/server/src/server/chisacode-worktree-archive-service.ts",
       "type": "source",
       "path": "packages/server/src/server/chisacode-worktree-archive-service.ts",
-      "lines": 272,
+      "lines": 280,
       "imports": [
         "../services/github-service.js",
         "../terminal/terminal-manager.js",
@@ -6857,9 +6857,8 @@
       "id": "file:packages/server/src/server/relay-device-auth.test.ts",
       "type": "test",
       "path": "packages/server/src/server/relay-device-auth.test.ts",
-      "lines": 122,
+      "lines": 120,
       "imports": [
-        "../../../protocol/src/relay-device-auth.js",
         "./relay-device-auth.js",
         "./relay-device-credential-store.js",
         "node:fs",
@@ -6872,8 +6871,8 @@
       "id": "file:packages/server/src/server/relay-device-auth.ts",
       "type": "source",
       "path": "packages/server/src/server/relay-device-auth.ts",
-      "lines": 57,
-      "imports": ["../../../protocol/src/relay-device-auth.js", "node:crypto"]
+      "lines": 72,
+      "imports": ["node:crypto"]
     },
     {
       "id": "file:packages/server/src/server/relay-device-credential-store.ts",
@@ -10395,7 +10394,7 @@
       "id": "file:packages/server/src/utils/worktree.ts",
       "type": "source",
       "path": "packages/server/src/utils/worktree.ts",
-      "lines": 1456,
+      "lines": 1457,
       "imports": [
         "../server/chisacode-env.js",
         "../server/chisacode-home.js",
@@ -21690,12 +21689,6 @@
     },
     {
       "source": "file:packages/server/src/server/relay-device-auth.test.ts",
-      "target": "file:packages/protocol/src/relay-device-auth.ts",
-      "type": "imports",
-      "specifier": "../../../protocol/src/relay-device-auth.js"
-    },
-    {
-      "source": "file:packages/server/src/server/relay-device-auth.test.ts",
       "target": "file:packages/server/src/server/relay-device-auth.ts",
       "type": "imports",
       "specifier": "./relay-device-auth.js"
@@ -21705,12 +21698,6 @@
       "target": "file:packages/server/src/server/relay-device-credential-store.ts",
       "type": "imports",
       "specifier": "./relay-device-credential-store.js"
-    },
-    {
-      "source": "file:packages/server/src/server/relay-device-auth.ts",
-      "target": "file:packages/protocol/src/relay-device-auth.ts",
-      "type": "imports",
-      "specifier": "../../../protocol/src/relay-device-auth.js"
     },
     {
       "source": "file:packages/server/src/server/relay-device-credential-store.ts",

@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "generatedAt": "2026-08-10T06:57:21.426Z",
+  "generatedAt": "2026-08-10T08:52:02.168Z",
   "generator": "scripts/generate-modular-knowledge-graphs.mjs",
   "project": {
     "name": "chisacode",
@@ -72,12 +72,12 @@
       "handoffPath": "docs/modules/client/README.md",
       "dependsOn": ["protocol", "relay"],
       "dependedOnBy": ["app", "cli", "server"],
-      "fileCount": 57,
+      "fileCount": 58,
       "categories": {
         "support": 4,
         "docs": 2,
         "config": 4,
-        "source": 29,
+        "source": 30,
         "test": 18
       }
     },

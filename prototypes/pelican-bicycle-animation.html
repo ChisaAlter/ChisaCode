@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
@@ -368,7 +368,13 @@
               <stop offset="100%" stop-color="#f57c00" />
             </linearGradient>
             <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
-              <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#000" flood-opacity="0.18" />
+              <feDropShadow
+                dx="0"
+                dy="4"
+                stdDeviation="4"
+                flood-color="#000"
+                flood-opacity="0.18"
+              />
             </filter>
           </defs>
 
@@ -396,8 +402,16 @@
           <!-- Distant hills (looping) -->
           <g opacity="0.9">
             <g class="hill">
-              <path d="M-40 320 Q60 250 160 320 T360 320 T560 320 T760 320 T960 320 T1160 320 V360 H-40 Z" fill="url(#hillGrad)" />
-              <path d="M-40 320 Q60 250 160 320 T360 320 T560 320 T760 320 T960 320 T1160 320 V360 H-40 Z" fill="url(#hillGrad)" transform="translate(200 8)" opacity="0.65" />
+              <path
+                d="M-40 320 Q60 250 160 320 T360 320 T560 320 T760 320 T960 320 T1160 320 V360 H-40 Z"
+                fill="url(#hillGrad)"
+              />
+              <path
+                d="M-40 320 Q60 250 160 320 T360 320 T560 320 T760 320 T960 320 T1160 320 V360 H-40 Z"
+                fill="url(#hillGrad)"
+                transform="translate(200 8)"
+                opacity="0.65"
+              />
             </g>
           </g>
 
@@ -488,7 +502,13 @@
             <ellipse cx="150" cy="198" rx="120" ry="10" fill="#000" opacity="0.12" />
 
             <!-- bicycle frame -->
-            <g stroke="#263238" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" fill="none">
+            <g
+              stroke="#263238"
+              stroke-width="6"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              fill="none"
+            >
               <!-- rear triangle -->
               <path d="M70 170 L130 110 L180 170 Z" />
               <!-- front tube -->
@@ -534,15 +554,37 @@
 
             <!-- crank / pedals -->
             <g class="pedal-crank" transform="translate(180 170)">
-              <line x1="0" y1="0" x2="0" y2="28" stroke="#455a64" stroke-width="5" stroke-linecap="round" />
+              <line
+                x1="0"
+                y1="0"
+                x2="0"
+                y2="28"
+                stroke="#455a64"
+                stroke-width="5"
+                stroke-linecap="round"
+              />
               <rect x="-10" y="26" width="20" height="7" rx="2" fill="#78909c" />
-              <line x1="0" y1="0" x2="0" y2="-28" stroke="#455a64" stroke-width="5" stroke-linecap="round" />
+              <line
+                x1="0"
+                y1="0"
+                x2="0"
+                y2="-28"
+                stroke="#455a64"
+                stroke-width="5"
+                stroke-linecap="round"
+              />
               <rect x="-10" y="-33" width="20" height="7" rx="2" fill="#78909c" />
               <circle r="6" fill="#263238" />
             </g>
 
             <!-- legs (pedaling) -->
-            <g transform="translate(150 95)" stroke="#f5deb3" stroke-width="10" stroke-linecap="round" fill="none">
+            <g
+              transform="translate(150 95)"
+              stroke="#f5deb3"
+              stroke-width="10"
+              stroke-linecap="round"
+              fill="none"
+            >
               <!-- left leg -->
               <g class="leg-left-upper" transform="translate(10 20)">
                 <line x1="0" y1="0" x2="8" y2="34" />
@@ -566,12 +608,25 @@
             <g transform="translate(40 20)">
               <!-- tail -->
               <g class="tail">
-                <path d="M40 95 Q20 105 8 125 Q30 115 48 108 Z" fill="#eceff1" stroke="#cfd8dc" stroke-width="2" />
+                <path
+                  d="M40 95 Q20 105 8 125 Q30 115 48 108 Z"
+                  fill="#eceff1"
+                  stroke="#cfd8dc"
+                  stroke-width="2"
+                />
                 <path d="M42 100 Q28 112 18 128" fill="none" stroke="#b0bec5" stroke-width="2" />
               </g>
 
               <!-- body -->
-              <ellipse cx="95" cy="90" rx="58" ry="42" fill="url(#bodyGrad)" stroke="#cfd8dc" stroke-width="2" />
+              <ellipse
+                cx="95"
+                cy="90"
+                rx="58"
+                ry="42"
+                fill="url(#bodyGrad)"
+                stroke="#cfd8dc"
+                stroke-width="2"
+              />
               <ellipse cx="95" cy="100" rx="42" ry="28" fill="#f7fafc" opacity="0.9" />
 
               <!-- wing -->
@@ -605,7 +660,15 @@
 
               <!-- head -->
               <g transform="translate(170 0)">
-                <ellipse cx="22" cy="14" rx="24" ry="20" fill="#fafafa" stroke="#cfd8dc" stroke-width="2" />
+                <ellipse
+                  cx="22"
+                  cy="14"
+                  rx="24"
+                  ry="20"
+                  fill="#fafafa"
+                  stroke="#cfd8dc"
+                  stroke-width="2"
+                />
                 <!-- eye -->
                 <circle cx="28" cy="10" r="5.5" fill="#fff" stroke="#455a64" stroke-width="1.5" />
                 <circle cx="29.5" cy="10" r="2.6" fill="#212121" />
@@ -627,13 +690,31 @@
                     stroke="#ef6c00"
                     stroke-width="1.5"
                   />
-                  <path d="M48 16 C78 12 105 14 124 20" fill="none" stroke="#ff8f00" stroke-width="1.2" opacity="0.7" />
+                  <path
+                    d="M48 16 C78 12 105 14 124 20"
+                    fill="none"
+                    stroke="#ff8f00"
+                    stroke-width="1.2"
+                    opacity="0.7"
+                  />
                 </g>
               </g>
 
               <!-- tiny crest feathers -->
-              <path d="M182 -4 Q176 -18 170 -8" fill="none" stroke="#cfd8dc" stroke-width="3" stroke-linecap="round" />
-              <path d="M188 -2 Q186 -16 178 -6" fill="none" stroke="#b0bec5" stroke-width="3" stroke-linecap="round" />
+              <path
+                d="M182 -4 Q176 -18 170 -8"
+                fill="none"
+                stroke="#cfd8dc"
+                stroke-width="3"
+                stroke-linecap="round"
+              />
+              <path
+                d="M188 -2 Q186 -16 178 -6"
+                fill="none"
+                stroke="#b0bec5"
+                stroke-width="3"
+                stroke-linecap="round"
+              />
             </g>
 
             <!-- wing on handle feeler / left wing tip near bar -->

@@ -3,7 +3,8 @@
   "workspaces": {
     ".": {
       "entry": ["scripts/**/*.{js,mjs,cjs,ts}"],
-      "project": ["scripts/**/*.{js,mjs,cjs,ts}"]
+      "project": ["scripts/**/*.{js,mjs,cjs,ts}"],
+      "ignoreDependencies": ["@babel/core", "@babel/core"]
     },
     "packages/server": {
       "entry": [
@@ -40,7 +41,7 @@
       "paths": {
         "@server/*": ["../server/src/*"]
       },
-      "ignoreDependencies": ["react-test-renderer"],
+      "ignoreDependencies": ["react-test-renderer", "electron", "electron"],
       "ignore": ["android/**", "ios/**", ".expo/**", "dist/**", "scripts/reset-project.js"]
     },
     "packages/cli": {

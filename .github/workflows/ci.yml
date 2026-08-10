@@ -513,6 +513,8 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci
+      - name: Build server dependencies
+        run: npm run build:server-deps
       - name: Server coverage report
         run: npm run test:unit --workspace=@chisacode/server -- --coverage --bail=1
       - name: Upload coverage artifact

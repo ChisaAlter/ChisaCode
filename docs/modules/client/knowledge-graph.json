@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "generatedAt": "2026-08-10T06:57:20.544Z",
+  "generatedAt": "2026-08-10T08:52:01.260Z",
   "generator": "scripts/generate-modular-knowledge-graphs.mjs",
   "module": {
     "id": "client",
@@ -29,6 +29,10 @@
       "./internal/daemon-client-transport-types": {
         "types": "./dist/daemon-client-transport-types.d.ts",
         "default": "./dist/daemon-client-transport-types.js"
+      },
+      "./relay-device-credentials": {
+        "types": "./dist/relay-device-credentials.d.ts",
+        "default": "./dist/relay-device-credentials.js"
       }
     },
     "scripts": {
@@ -40,15 +44,15 @@
     }
   },
   "stats": {
-    "files": 57,
+    "files": 58,
     "categories": {
       "support": 4,
       "docs": 2,
       "config": 4,
-      "source": 29,
+      "source": 30,
       "test": 18
     },
-    "internalImportEdges": 80,
+    "internalImportEdges": 79,
     "workspaceDependencies": ["protocol", "relay"],
     "externalDependencies": [
       "@chisacode/client",
@@ -100,7 +104,7 @@
       "id": "file:packages/client/package.json",
       "type": "config",
       "path": "packages/client/package.json",
-      "lines": 46,
+      "lines": 50,
       "imports": ["node:fs"]
     },
     {
@@ -282,7 +286,7 @@
       "id": "file:packages/client/src/daemon-client-inbound-controller.ts",
       "type": "source",
       "path": "packages/client/src/daemon-client-inbound-controller.ts",
-      "lines": 369,
+      "lines": 385,
       "imports": [
         "./daemon-client-connection-controller.js",
         "./daemon-client-file-transfer.js",
@@ -542,19 +546,22 @@
       "id": "file:packages/client/src/relay-device-credentials.test.ts",
       "type": "test",
       "path": "packages/client/src/relay-device-credentials.test.ts",
-      "lines": 64,
-      "imports": [
-        "../../server/src/server/relay-device-auth.js",
-        "./relay-device-credentials.js",
-        "vitest"
-      ]
+      "lines": 79,
+      "imports": ["./relay-device-credentials.js", "node:crypto", "vitest"]
     },
     {
       "id": "file:packages/client/src/relay-device-credentials.ts",
       "type": "source",
       "path": "packages/client/src/relay-device-credentials.ts",
-      "lines": 149,
-      "imports": ["../../protocol/src/relay-device-auth.js", "node:crypto"]
+      "lines": 186,
+      "imports": ["./sha256-hmac.js"]
+    },
+    {
+      "id": "file:packages/client/src/sha256-hmac.ts",
+      "type": "source",
+      "path": "packages/client/src/sha256-hmac.ts",
+      "lines": 172,
+      "imports": []
     },
     {
       "id": "file:packages/client/src/terminal-stream-router.test.ts",
@@ -1318,21 +1325,15 @@
     },
     {
       "source": "file:packages/client/src/relay-device-credentials.test.ts",
-      "target": "file:packages/server/src/server/relay-device-auth.ts",
-      "type": "imports",
-      "specifier": "../../server/src/server/relay-device-auth.js"
-    },
-    {
-      "source": "file:packages/client/src/relay-device-credentials.test.ts",
       "target": "file:packages/client/src/relay-device-credentials.ts",
       "type": "imports",
       "specifier": "./relay-device-credentials.js"
     },
     {
       "source": "file:packages/client/src/relay-device-credentials.ts",
-      "target": "file:packages/protocol/src/relay-device-auth.ts",
+      "target": "file:packages/client/src/sha256-hmac.ts",
       "type": "imports",
-      "specifier": "../../protocol/src/relay-device-auth.js"
+      "specifier": "./sha256-hmac.js"
     },
     {
       "source": "file:packages/client/src/terminal-stream-router.test.ts",
