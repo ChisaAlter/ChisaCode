@@ -623,7 +623,8 @@
 
 ### Production Hardening Plan（2026-08-10 登记）
 
-- **进度（2026-08-10）** Phase7 residual unverified: real packaged Electron CI green run, real-surface merge-archive/mobile/win-unpacked QA, formal release dry-run, full pixel QA. G004 HTML prototype landed at prototypes/relay-device-auth-pairing.html (awaiting approval). G008 packaged Electron CI job desktop-packaged-electron wired on windows-latest. 阶段 5 audit 已升级为 fingerprint 基线（scripts/test-audit-baseline.json v2）并恢复绿色；CI 增加 push/PR 与 coverage-server job；release exact-SHA gate 已接线。：阶段 0/1A/1B 完成；阶段 2 非 UI 基础+hello/offer 接线完成（strict HMAC/client secret/UI 未完）；阶段 3 lanes 完成；阶段 4A/4B 核心完成；阶段 5 部分（CI 自动触发、exact-SHA gate、checkout_ref 收敛、audit === 误报修复）完成，audit 总量仍有历史债务超基线；阶段 6 安全声明部分修正。
+- **进度（2026-08-10 收尾）** 阶段 0–6 全部落地：archive 安全门（coordinator+force 二次校验+teardown gating）、git-snapshot leaf/HEAD 基线、relay device-auth v2（protocol/server/client/app+原型已批准）、WS message lanes、文件传输分块/超时、终端重连订阅恢复、audit fingerprint 基线 v2 绿、CI push/PR+coverage-server+desktop-packaged-electron job、release exact-SHA gate、docs/图校准。G004 原型已获用户批准并实现 App UI。本地验证：定向单元矩阵、archive temp-repo drill、`test:desktop-packaged` ALL PACKAGED SLICES PASSED、typecheck/lint/audit 绿；renderer `node:crypto` 崩溃已修（纯 JS HMAC）。
+- **收尾处置（2026-08-10）** 用户要求简化：停止 CI 全绿追逐与预存测试修复。G010 保持 review_blocked；计划 §9 未声称完成。未验证残项（Actions packaged job 对 hardening SHA、正式 draft release、mobile pairing、人工 merge→archive、全表面 pixel QA、device-list revoke UI、`clientPublicKeyB64` stand-in）正式接受为执行窗口残项，见 `.omo/evidence/production-hardening-simplify-closeout-2026-08-10T10-47-25Z.md` 与 `production-hardening-g011-residual-acceptance-*`。分支最终 HEAD `49b5c18a5` 已 push（PR #32）。
 
 - **状态**：in-progress
 - **分支**：`codex/production-hardening-2026-08-10`（worktree: `C:/Ai/ChisaCode-worktrees/production-hardening-2026-08-10`）
@@ -730,3 +731,7 @@ _最后更新 2026-06-28 · 版本 v2.0 — 已归档_
 ## Production hardening execution note (2026-08-10T07-16-19Z)
 
 Worktree `production-hardening-2026-08-10` landed Phases 1–6 + local packaged Electron gate. **G011 residual acceptance** freezes authorization-bound items (Actions green on unpushed hardening SHA, formal draft release, mobile pairing, full pixel QA) as UNVERIFIED — see `.omo/evidence/production-hardening-g011-residual-acceptance-2026-08-10T07-16-19Z.md`. Do not treat plan section 9 as complete.
+
+## Production hardening closeout (2026-08-10T10-47-25Z)
+
+User asked to simplify everything; all CI-green chasing and pre-existing test fixes stopped. Branch `codex/production-hardening-2026-08-10` landed phases 0–6 @ 49b5c18a5 (PR #32). G010 `review_blocked`; plan section 9 not claimed complete; residual items recorded in `.omo/evidence/production-hardening-simplify-closeout-2026-08-10T10-47-25Z.md`.
