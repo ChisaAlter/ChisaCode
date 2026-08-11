@@ -305,8 +305,9 @@ async function main(): Promise<void> {
       await threadRow.click({ button: "right" });
       await pollUntil(
         async () => {
-          const rename = await page.getByTestId("sidebar-v2-menu-rename").count();
-          const settle = await page
+          const p = page!;
+          const rename = await p.getByTestId("sidebar-v2-menu-rename").count();
+          const settle = await p
             .getByTestId(new RegExp(`sidebar-session-settle-.*-${agent.id}$`))
             .count();
           return rename > 0 || settle > 0;
@@ -329,7 +330,7 @@ async function main(): Promise<void> {
         .first()
         .isVisible()
         .catch(async () => {
-          return page
+          return page!
             .getByText(/In 1 hour|1 小时后|1小时后|Snooze|稍后提醒/i)
             .first()
             .isVisible()
