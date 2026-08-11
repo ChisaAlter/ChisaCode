@@ -30,7 +30,7 @@
 
 ## Invariants
 
-- Relay is zero-knowledge by design.
+- Relay is payload-confidential (metadata still visible) by design.
 - Encryption and pairing changes need security review.
 - Direct and relay transports should preserve client-facing API parity.
 - Remote access must not weaken local-first guarantees.
@@ -39,6 +39,8 @@
 
 - `docs/cross-cutting/relay-security-boundaries.md`
 - `SECURITY.md`
+- `docs/security/relay-auth-handshake-v2-threat-model.md`
+- `docs/security/production-hardening-current-state-2026-08-10.md`
 - `docs/cross-cutting/websocket-rpc-protocol.md`
 
 ## Verification

@@ -15,6 +15,7 @@ import {
   type DaemonTransportFactory,
   type WebSocketFactory,
 } from "./daemon-client-transport.js";
+import { computeClientRelayDeviceAuthProof } from "./relay-device-credentials.js";
 
 const DEFAULT_RECONNECT_BASE_DELAY_MS = 1_500;
 const DEFAULT_RECONNECT_MAX_DELAY_MS = 30_000;
@@ -61,6 +62,24 @@ export interface DaemonClientConfig {
     enabled?: boolean;
     daemonPublicKeyB64?: string;
   };
+  /** Relay device credential material; proof fields are derived from the live E2EE channel. */
+  relayDeviceAuth?: {
+    version: 1;
+    serverId: string;
+    deviceId: string;
+    deviceSecret?: string;
+    pairingToken?: string;
+  };
+  /**
+   * Called when daemon issues a device secret after first pairing.
+   */
+  onRelayDeviceAuthResult?: (result: {
+    ok: boolean;
+    deviceId?: string;
+    deviceSecret?: string;
+    reason?: string;
+    securityLevel?: "v2" | "legacy";
+  }) => void;
   reconnect?: {
     enabled?: boolean;
     baseDelayMs?: number;
@@ -460,7 +479,44 @@ export class DaemonConnectionController {
         .catch(() => undefined);
       return;
     }
+    if (typeof rawData === "string") {
+      try {
+        const parsed = JSON.parse(rawData) as unknown;
+        if (this.handleRelayDeviceAuthResultMessage(parsed)) {
+          return;
+        }
+      } catch {
+        // fall through to normal message handling
+      }
+    }
     this.callbacks.onMessage(rawData);
+  }
+
+  private handleRelayDeviceAuthResultMessage(raw: unknown): boolean {
+    if (!raw || typeof raw !== "object") {
+      return false;
+    }
+    const message = raw as {
+      type?: unknown;
+      ok?: unknown;
+      deviceId?: unknown;
+      deviceSecret?: unknown;
+      reason?: unknown;
+      securityLevel?: unknown;
+    };
+    if (message.type !== "relay_device_auth_result") {
+      return false;
+    }
+    this.config.onRelayDeviceAuthResult?.({
+      ok: message.ok === true,
+      ...(typeof message.deviceId === "string" ? { deviceId: message.deviceId } : {}),
+      ...(typeof message.deviceSecret === "string" ? { deviceSecret: message.deviceSecret } : {}),
+      ...(typeof message.reason === "string" ? { reason: message.reason } : {}),
+      ...(message.securityLevel === "v2" || message.securityLevel === "legacy"
+        ? { securityLevel: message.securityLevel }
+        : {}),
+    });
+    return true;
   }
 
   private sendHelloMessage(): void {
@@ -473,6 +529,7 @@ export class DaemonConnectionController {
       return;
     }
     try {
+      const relayDeviceAuth = this.buildRelayDeviceAuth();
       this.transport.send(
         JSON.stringify({
           type: "hello",
@@ -487,6 +544,7 @@ export class DaemonConnectionController {
             [CLIENT_CAPS.cindyModules]: true,
           },
           ...(this.config.appVersion ? { appVersion: this.config.appVersion } : {}),
+          ...(relayDeviceAuth ? { relayDeviceAuth } : {}),
         }),
       );
     } catch (error) {
@@ -498,6 +556,50 @@ export class DaemonConnectionController {
         reasonCode: "transport_error",
       });
     }
+  }
+
+  private buildRelayDeviceAuth(): {
+    version: 1;
+    deviceId: string;
+    proof?: string;
+    pairingToken?: string;
+    clientPublicKeyB64: string;
+    challenge: string;
+  } | null {
+    const credential = this.config.relayDeviceAuth;
+    const context = this.transport?.getRelaySecurityContext?.();
+    if (!credential || !context?.authChallenge) {
+      // COMPAT(relayDeviceAuthChallenge): old daemons do not send a challenge and
+      // continue to receive a legacy hello from new clients.
+      return null;
+    }
+    const channelBinding = {
+      clientPublicKeyB64: context.clientPublicKeyB64,
+      challenge: context.authChallenge,
+    };
+    if (credential.deviceSecret) {
+      return {
+        version: 1,
+        deviceId: credential.deviceId,
+        proof: computeClientRelayDeviceAuthProof(credential.deviceSecret, {
+          serverId: credential.serverId,
+          daemonPublicKeyB64: this.config.e2ee?.daemonPublicKeyB64 ?? "",
+          clientPublicKeyB64: channelBinding.clientPublicKeyB64,
+          deviceId: credential.deviceId,
+          challenge: channelBinding.challenge,
+        }),
+        ...channelBinding,
+      };
+    }
+    if (credential.pairingToken) {
+      return {
+        version: 1,
+        deviceId: credential.deviceId,
+        pairingToken: credential.pairingToken,
+        ...channelBinding,
+      };
+    }
+    return null;
   }
 
   private scheduleReconnect(input?: ReconnectInput): void {

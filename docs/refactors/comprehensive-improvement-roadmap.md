@@ -623,14 +623,20 @@
 
 ### Production Hardening Plan（2026-08-10 登记）
 
-- **进度（2026-08-10 收尾）** 阶段 0–6 全部落地：archive 安全门（coordinator+force 二次校验+teardown gating）、git-snapshot leaf/HEAD 基线、relay device-auth v2（protocol/server/client/app+原型已批准）、WS message lanes、文件传输分块/超时、终端重连订阅恢复、audit fingerprint 基线 v2 绿、CI push/PR+coverage-server+desktop-packaged-electron job、release exact-SHA gate、docs/图校准。G004 原型已获用户批准并实现 App UI。本地验证：定向单元矩阵、archive temp-repo drill、`test:desktop-packaged` ALL PACKAGED SLICES PASSED、typecheck/lint/audit 绿；renderer `node:crypto` 崩溃已修（纯 JS HMAC）。
-- **收尾处置（2026-08-10）** 用户要求简化：停止 CI 全绿追逐与预存测试修复。G010 保持 review_blocked；计划 §9 未声称完成。未验证残项（Actions packaged job 对 hardening SHA、正式 draft release、mobile pairing、人工 merge→archive、全表面 pixel QA、device-list revoke UI、`clientPublicKeyB64` stand-in）正式接受为执行窗口残项，见 `.omo/evidence/production-hardening-simplify-closeout-2026-08-10T10-47-25Z.md` 与 `production-hardening-g011-residual-acceptance-*`。分支最终 HEAD `49b5c18a5` 已 push（PR #32）。
+> 当前实现与发布边界以 [Production Hardening Current State](../security/production-hardening-current-state-2026-08-10.md) 为准；本节及下方历史 evidence 记录保留决策和执行时间线，不覆盖未提交 follow-up 的现状。
+
+- **进度（2026-08-10 安全复核）** 阶段 0–6 的基线实现已进入 hardening 分支；后续安全复核改动仍在隔离工作区、尚未提交/推送，因此不构成 release-ready 声明。follow-up 关闭的降级包括：archive 主路径与 setup 失败恢复均禁止 force/通用递归删除，并以 process-wide coordinator 完成 quiescing、写租约 drain 与删除后 finalize 状态隔离；relay device-auth 改为 daemon 随机挑战并绑定真实 E2EE client public key，新 daemon 默认强制认证，仅保留显式高危告警的 emergency recovery override；设备 secret 从主机注册表剥离，native 使用 Keystore/Keychain、Electron 使用 safeStorage（拒绝 Linux basic_text）、Web 仅会话内存。
+- **收尾处置（2026-08-10）** 用户要求简化并严禁过度测试：停止 CI 全绿追逐、预存测试修复、测试矩阵扩张和已绿用例重跑。G010 保持 review_blocked；计划 §9 未声称完成。未验证残项（Actions packaged job 对 hardening SHA、正式 draft release、mobile pairing、人工 merge→archive、全表面 pixel QA、device-list revoke UI）继续保留；`clientPublicKeyB64` stand-in 已由真实 E2EE channel binding 取代。
+
+- **合并（2026-08-11）** 分支 `codex/production-hardening-2026-08-10` 全部 10 个提交已并入 cn-main（merge commit 2026-08-11），隔离约束解除；Gateway streaming/backpressure 与 hardening 侧改动同时合入，交集文件（roadmap 登记、i18n、bootstrap）冲突已按安全复核后版本解决。
+
+- **状态**：已合并（分支已删除）
 
 - **状态**：in-progress
-- **分支**：`codex/production-hardening-2026-08-10`（worktree: `C:/Ai/ChisaCode-worktrees/production-hardening-2026-08-10`）
+- **分支**：`codex/production-hardening-2026-08-10`（已于 2026-08-11 合并后删除，worktree 一并清理）
 - **基线 SHA**：`e9534e8df762bd95eead83e5562346c13b38b7a3`
 - **计划**：`.omc/plans/chisacode-production-hardening-plan.md`
-- **隔离约束**：cn-main 上的 Model Gateway streaming/backpressure 在途改动不并入本分支；Gateway 独立闭环后再合，hardening 以合并后 SHA 或本基线继续。
+- **隔离约束**：cn-main 上的 Model Gateway streaming/backpressure 在途改动不并入本分支；Gateway 独立闭环后再合，hardening 以合并后 SHA 或本基线继续。（已于 2026-08-11 合并时解除）
 - **覆盖既有 backlog 并升为可执行交付**：
   - 自动归档过期脏检查 + 未经 quiescing 的 `--force` 删除
   - git 快照未跟踪目录塌缩 / 敏感 leaf 边界
@@ -648,9 +654,9 @@
 全仓遍历审查（13 域并行，覆盖约 35 万行非测试源码）后，P0 与多数 P1 已在本次会话修复并测试；以下系统性项需独立排期或产品决策，登记为跟踪项：
 
 - **流式 markdown 增量渲染**（app，P1 性能）：`types/stream.ts:splitMarkdownBlocks` + `markdown/renderer.tsx` 对活跃消息每 token 全量重解析（O(token×text)），长回答卡顿根因。方案：增量分割（仅尾部新增）、解析结果前缀缓存；需 careful 回归流式渲染与 useDeferredValue 语义
-- **E2EE 握手缺客户端密钥认证**（relay，P1 安全）：`encrypted-channel.ts` 初始 hello 无条件接受任意客户端公钥，恶意中继可密钥替换 MITM。需产品决策威胁模型（防被动中继 vs 防密钥替换）；若防替换，将配对码/QR 共享秘密纳入 hello 认证
+- **E2EE 握手客户端密钥认证**（relay，P1 安全，done 2026-08-10）：daemon 在 E2EE ready 生成逐连接随机挑战；client 的 pairing/proof hello 绑定挑战与本次真实 ephemeral public key；server 对照 channel metadata 后才消费 token/验证 HMAC。新 daemon 默认拒绝匿名与不完整认证，显式 recovery override 只允许 legacy 未认证连接且启动时高等级告警。
 - **git 快照未跟踪目录塌缩**（server，P1 安全/数据）：`git-snapshot.ts` 默认 untracked 模式把整个未忽略目录递归入库，敏感文件（.env/credentials）与 node_modules 可进入快照对象。方案：`--untracked-files=all` 逐文件过 `detectSensitivePath`
-- **自动归档过期脏检查 + `--force` 删除**（server，P1 数据）：`auto-archive-on-merge/archive-if-safe.ts` 基于最多滞后 60s 的快照判定干净后 `git worktree remove --force`，可销毁用户未提交工作。方案：删除前紧邻二次 `git status --porcelain` 校验，force 仅作重试兜底
+- **自动归档过期脏检查 + `--force` 删除**（server，P1 数据，done 2026-08-10）：归档统一进入 process-wide workspace mutation coordinator，先 quiesce 并 drain 已登记写租约，再做强制本地状态复核与 awaited teardown；正常归档只允许非 force `git worktree remove`，失败即保留路径。setup 失败若存在未知输出进入 `setup_failed_recovery`，同样禁止 force 与通用递归删除。
 - **WS 同连接消息 FIFO 串行化**（server，P1 并发）：`websocket-server.ts` 消息并发处理无顺序保证，dictation/voice start→chunk 链路存在竞态。方案：每连接 promise FIFO 链
 - **网关流式转发**（server，P1 性能）：`bootstrap.ts:775` 整响应缓冲后发送，架空 SSE 流式转换。方案：`response.body` 经 TransformStream 逐块转发
 - **client readFile 传输与 10s RPC 超时耦合**（client，P1）：64MB 传输必须在 10s 内完成，慢链路必失败。方案：按 FileBegin 大小动态放大超时或独立传输超时

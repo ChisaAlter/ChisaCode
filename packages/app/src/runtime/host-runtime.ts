@@ -15,6 +15,7 @@ import {
   type HostConnection,
   type HostProfile,
 } from "@/types/host-connection";
+import { createRelayDeviceId } from "@chisacode/client/relay-device-credentials";
 import {
   buildDaemonWebSocketUrl,
   buildRelayWebSocketUrl,
@@ -38,6 +39,7 @@ import {
 } from "@/desktop/daemon/desktop-daemon-transport";
 import { replaceFetchedAgentDirectory } from "@/utils/agent-directory-sync";
 import { useSessionStore } from "@/stores/session-store";
+import { relayDeviceSecretStore } from "@/security/relay-device-secret-store";
 
 export type HostRuntimeConnectionStatus = "idle" | "connecting" | "online" | "offline" | "error";
 
@@ -493,6 +495,33 @@ function createDefaultDeps(): HostRuntimeControllerDeps {
           ...(connection.password ? { password: connection.password } : {}),
         });
       }
+      const pairingToken = pendingRelayPairingTokens.get(host.serverId);
+      const deviceId = connection.deviceId ?? createRelayDeviceId();
+      let relayDeviceAuth:
+        | {
+            version: 1;
+            serverId: string;
+            deviceId: string;
+            deviceSecret?: string;
+            pairingToken?: string;
+          }
+        | undefined;
+      if (connection.deviceSecret && connection.deviceId) {
+        relayDeviceAuth = {
+          version: 1,
+          serverId: host.serverId,
+          deviceId: connection.deviceId,
+          deviceSecret: connection.deviceSecret,
+        };
+      } else if (pairingToken) {
+        relayDeviceAuth = {
+          version: 1,
+          serverId: host.serverId,
+          deviceId,
+          pairingToken,
+        };
+      }
+
       return new DaemonClient({
         ...base,
         url: buildRelayWebSocketUrl({
@@ -503,6 +532,19 @@ function createDefaultDeps(): HostRuntimeControllerDeps {
         e2ee: {
           enabled: true,
           daemonPublicKeyB64: connection.daemonPublicKeyB64,
+        },
+        ...(relayDeviceAuth ? { relayDeviceAuth } : {}),
+        onRelayDeviceAuthResult: (result) => {
+          if (!result.ok || !result.deviceId || !result.deviceSecret) {
+            return;
+          }
+          pendingRelayPairingTokens.delete(host.serverId);
+          emitRelayDeviceCredential({
+            serverId: host.serverId,
+            connectionId: connection.id,
+            deviceId: result.deviceId,
+            deviceSecret: result.deviceSecret,
+          });
         },
       });
     },
@@ -1218,11 +1260,47 @@ export class HostRuntimeController {
 }
 
 const REGISTRY_STORAGE_KEY = "@chisacode:daemon-registry";
+
+/** One-time offer pairing tokens keyed by serverId (memory only). */
+const pendingRelayPairingTokens = new Map<string, string>();
+
+type RelayDeviceCredentialListener = (input: {
+  serverId: string;
+  connectionId: string;
+  deviceId: string;
+  deviceSecret: string;
+}) => void;
+const relayDeviceCredentialListeners = new Set<RelayDeviceCredentialListener>();
+
+function emitRelayDeviceCredential(input: {
+  serverId: string;
+  connectionId: string;
+  deviceId: string;
+  deviceSecret: string;
+}): void {
+  for (const listener of relayDeviceCredentialListeners) {
+    listener(input);
+  }
+}
+
 const LEGACY_REGISTRY_STORAGE_KEY = "@chisacode:daemon-registry";
 const LOCALHOST_FALLBACK_ENDPOINT = "localhost:6767";
 const DEFAULT_LOCALHOST_BOOTSTRAP_TIMEOUT_MS = 2500;
 const E2E_STORAGE_KEY = "@chisacode:e2e";
 const LEGACY_E2E_STORAGE_KEY = "@chisacode:e2e";
+
+function withoutRelayDeviceSecrets(profiles: HostProfile[]): HostProfile[] {
+  return profiles.map((host) => ({
+    ...host,
+    connections: host.connections.map((connection) => {
+      if (connection.type !== "relay" || !connection.deviceSecret) {
+        return connection;
+      }
+      const { deviceSecret: _deviceSecret, ...safeConnection } = connection;
+      return safeConnection;
+    }),
+  }));
+}
 
 function readConfiguredLocalDaemonOverride(): string | null {
   const value = process.env.EXPO_PUBLIC_LOCAL_DAEMON?.trim();
@@ -1301,6 +1379,12 @@ export class HostRuntimeStore {
       return;
     }
     this.bootStarted = true;
+    const onRelayCredential: RelayDeviceCredentialListener = (input) => {
+      void this.persistRelayDeviceCredential(input).catch((error) => {
+        console.error("[HostRuntime] Failed to persist relay device credential", error);
+      });
+    };
+    relayDeviceCredentialListeners.add(onRelayCredential);
     void this.runBoot();
   }
 
@@ -1347,8 +1431,9 @@ export class HostRuntimeStore {
         .map((entry) => normalizeStoredHostProfile(entry))
         .filter((entry): entry is HostProfile => entry !== null);
       const profiles = normalizedProfiles.filter((entry) => !isPlaceholderServerId(entry.serverId));
-      this.hosts = profiles;
-      this.syncHosts(profiles);
+      const hydratedProfiles = await this.hydrateRelayDeviceSecrets(profiles);
+      this.hosts = hydratedProfiles;
+      this.syncHosts(hydratedProfiles);
       this.emitHostList();
       if (profiles.length !== normalizedProfiles.length || stored) {
         void this.persistHosts();
@@ -1356,6 +1441,32 @@ export class HostRuntimeStore {
     } catch (error) {
       console.error("[HostRuntime] Failed to load host registry from storage", error);
     }
+  }
+
+  private async hydrateRelayDeviceSecrets(profiles: HostProfile[]): Promise<HostProfile[]> {
+    return await Promise.all(
+      profiles.map(async (host) => ({
+        ...host,
+        connections: await Promise.all(
+          host.connections.map(async (connection) => {
+            if (connection.type !== "relay" || !connection.deviceId) {
+              return connection;
+            }
+            try {
+              if (connection.deviceSecret) {
+                await relayDeviceSecretStore.set(connection.deviceId, connection.deviceSecret);
+                return connection;
+              }
+              const deviceSecret = await relayDeviceSecretStore.get(connection.deviceId);
+              return deviceSecret ? { ...connection, deviceSecret } : connection;
+            } catch (error) {
+              console.error("[HostRuntime] Failed to load relay device credential", error);
+              return connection;
+            }
+          }),
+        ),
+      })),
+    );
   }
 
   private async bootstrapDefaultLocalhost(): Promise<void> {
@@ -1575,6 +1686,9 @@ export class HostRuntimeStore {
   async upsertConnectionFromOffer(offer: ConnectionOffer, label?: string): Promise<HostProfile> {
     // COMPAT(oldRelayOfferTls): added in v0.1.73, remove after 2026-11-10.
     const useTls = offer.relay.useTls ?? shouldUseTlsForDefaultHostedRelay(offer.relay.endpoint);
+    if (offer.authBootstrap?.pairingToken) {
+      pendingRelayPairingTokens.set(offer.serverId, offer.authBootstrap.pairingToken);
+    }
     return this.upsertRelayConnection({
       serverId: offer.serverId,
       relayEndpoint: offer.relay.endpoint,
@@ -1631,13 +1745,68 @@ export class HostRuntimeStore {
     await this.persistHosts();
   }
 
+  async clearRelayDeviceCredentials(serverId: string, connectionId?: string): Promise<void> {
+    const deviceIds = this.hosts
+      .filter((host) => host.serverId === serverId)
+      .flatMap((host) =>
+        host.connections.flatMap((connection) =>
+          connection.type === "relay" &&
+          (!connectionId || connection.id === connectionId) &&
+          connection.deviceId
+            ? [connection.deviceId]
+            : [],
+        ),
+      );
+    await Promise.all(deviceIds.map((deviceId) => relayDeviceSecretStore.remove(deviceId)));
+    const now = new Date().toISOString();
+    const next = this.hosts.map((host) => {
+      if (host.serverId !== serverId) {
+        return host;
+      }
+      return {
+        ...host,
+        connections: host.connections.map((connection) => {
+          if (connection.type !== "relay") {
+            return connection;
+          }
+          if (connectionId && connection.id !== connectionId) {
+            return connection;
+          }
+          const { deviceId: _deviceId, deviceSecret: _deviceSecret, ...rest } = connection;
+          return { ...rest };
+        }),
+        updatedAt: now,
+      } satisfies HostProfile;
+    });
+    this.setHostsAndSync(next);
+    pendingRelayPairingTokens.delete(serverId);
+    await this.persistHosts();
+  }
+
   async removeHost(serverId: string): Promise<void> {
+    const deviceIds = this.hosts
+      .filter((host) => host.serverId === serverId)
+      .flatMap((host) =>
+        host.connections
+          .filter(
+            (connection): connection is Extract<HostConnection, { type: "relay" }> =>
+              connection.type === "relay" && Boolean(connection.deviceId),
+          )
+          .map((connection) => connection.deviceId as string),
+      );
+    await Promise.all(deviceIds.map((deviceId) => relayDeviceSecretStore.remove(deviceId)));
     const remaining = this.hosts.filter((daemon) => daemon.serverId !== serverId);
     this.setHostsAndSync(remaining);
     await this.persistHosts();
   }
 
   async removeConnection(serverId: string, connectionId: string): Promise<void> {
+    const connection = this.hosts
+      .find((host) => host.serverId === serverId)
+      ?.connections.find((candidate) => candidate.id === connectionId);
+    if (connection?.type === "relay" && connection.deviceId) {
+      await relayDeviceSecretStore.remove(connection.deviceId);
+    }
     const now = new Date().toISOString();
     const next = this.hosts
       .map((daemon) => {
@@ -1707,9 +1876,42 @@ export class HostRuntimeStore {
     this.emitHostList();
   }
 
+  async persistRelayDeviceCredential(input: {
+    serverId: string;
+    connectionId: string;
+    deviceId: string;
+    deviceSecret: string;
+  }): Promise<void> {
+    await relayDeviceSecretStore.set(input.deviceId, input.deviceSecret);
+    const next = this.hosts.map((host) => {
+      if (host.serverId !== input.serverId) {
+        return host;
+      }
+      return {
+        ...host,
+        connections: host.connections.map((connection) => {
+          if (connection.type !== "relay" || connection.id !== input.connectionId) {
+            return connection;
+          }
+          return {
+            ...connection,
+            deviceId: input.deviceId,
+            deviceSecret: input.deviceSecret,
+          };
+        }),
+        updatedAt: new Date().toISOString(),
+      };
+    });
+    this.setHostsAndSync(next);
+    await this.persistHosts();
+  }
+
   private async persistHosts(): Promise<void> {
     try {
-      await AsyncStorage.setItem(REGISTRY_STORAGE_KEY, JSON.stringify(this.hosts));
+      await AsyncStorage.setItem(
+        REGISTRY_STORAGE_KEY,
+        JSON.stringify(withoutRelayDeviceSecrets(this.hosts)),
+      );
     } catch (error) {
       console.error("[HostRuntime] Failed to persist host registry", error);
     }
@@ -2202,6 +2404,7 @@ export interface HostMutations {
   renameHost: (serverId: string, label: string) => Promise<void>;
   removeHost: (serverId: string) => Promise<void>;
   removeConnection: (serverId: string, connectionId: string) => Promise<void>;
+  clearRelayDeviceCredentials: (serverId: string, connectionId?: string) => Promise<void>;
 }
 
 export function useHostMutations(): HostMutations {
@@ -2216,6 +2419,8 @@ export function useHostMutations(): HostMutations {
       renameHost: (serverId, label) => store.renameHost(serverId, label),
       removeHost: (serverId) => store.removeHost(serverId),
       removeConnection: (serverId, connectionId) => store.removeConnection(serverId, connectionId),
+      clearRelayDeviceCredentials: (serverId, connectionId) =>
+        store.clearRelayDeviceCredentials(serverId, connectionId),
     }),
     [store],
   );

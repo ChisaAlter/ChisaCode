@@ -36,6 +36,12 @@ interface TerminalClientTransport extends DaemonCommandTransport {
 export class TerminalClient {
   private readonly directorySubscriptions = new Set<string>();
   private readonly streams = new TerminalStreamRouter();
+  /** Intentional stream subscriptions restored on reconnect (not transient slots). */
+  private readonly streamSubscriptionIntents = new Map<
+    string,
+    { restore?: SubscribeTerminalRequest["restore"]; generation: number }
+  >();
+  private reconnectGeneration = 0;
 
   constructor(private readonly transport: TerminalClientTransport) {}
 
@@ -70,6 +76,50 @@ export class TerminalClient {
         type: "subscribe_terminals_request",
         cwd,
       });
+    }
+  }
+
+  /**
+   * Re-subscribe intentional terminal streams after reconnect.
+   * Failures are isolated per terminal and do not block directory resubscribe.
+   */
+  async resubscribeStreams(): Promise<void> {
+    if (!this.transport.isConnected()) {
+      return;
+    }
+    this.reconnectGeneration += 1;
+    const generation = this.reconnectGeneration;
+    const intents = [...this.streamSubscriptionIntents.entries()];
+    for (const [terminalId, intent] of intents) {
+      if (generation !== this.reconnectGeneration) {
+        return;
+      }
+      if (!this.streamSubscriptionIntents.has(terminalId)) {
+        continue;
+      }
+      try {
+        const payload = await this.transport.request({
+          message: {
+            type: "subscribe_terminal_request",
+            terminalId,
+            ...(intent.restore ? { restore: intent.restore } : {}),
+          },
+          responseType: "subscribe_terminal_response",
+          timeout: 10_000,
+        });
+        if (generation !== this.reconnectGeneration) {
+          return;
+        }
+        if (payload.error === null) {
+          this.streams.setSlot(terminalId, payload.slot);
+          const current = this.streamSubscriptionIntents.get(terminalId);
+          if (current) {
+            current.generation = generation;
+          }
+        }
+      } catch {
+        // Isolate single-terminal restore failure.
+      }
     }
   }
 
@@ -140,11 +190,16 @@ export class TerminalClient {
     });
     if (payload.error === null) {
       this.streams.setSlot(terminalId, payload.slot);
+      this.streamSubscriptionIntents.set(terminalId, {
+        restore,
+        generation: this.reconnectGeneration,
+      });
     }
     return payload;
   }
 
   unsubscribeTerminal(terminalId: string): void {
+    this.streamSubscriptionIntents.delete(terminalId);
     this.streams.removeTerminal(terminalId);
     this.transport.sendMessage({
       type: "unsubscribe_terminal_request",
@@ -223,10 +278,17 @@ export class TerminalClient {
   }
 
   handleStreamExit(terminalId: string): void {
+    this.streamSubscriptionIntents.delete(terminalId);
     this.streams.removeTerminal(terminalId);
   }
 
   clearStreamSlots(): void {
+    // Clear transient transport slots only; intents remain for reconnect restore.
+    this.streams.clearSlots();
+  }
+
+  clearAllSubscriptions(): void {
+    this.streamSubscriptionIntents.clear();
     this.streams.clearSlots();
   }
 }

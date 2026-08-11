@@ -174,6 +174,7 @@ export function createEncryptedTransport(
       errorHandlers.add(handler);
       return () => errorHandlers.delete(handler);
     },
+    getRelaySecurityContext: () => channel?.getSecurityContext() ?? null,
   };
 }
 

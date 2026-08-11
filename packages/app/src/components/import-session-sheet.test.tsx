@@ -739,7 +739,7 @@ describe("ImportSessionSheet", () => {
     expect(screen.getByTestId("import-session-sheet").getAttribute("data-scrollable")).toBe(
       "false",
     );
-    expect(screen.getByTestId("import-session-results-scroll")).toBeTruthy();
+    expect(screen.getByTestId("import-session-results-scroll")).not.toBeNull();
   });
 
   it("uses the bottom-sheet scroll container on compact devices so long agent lists can scroll", async () => {

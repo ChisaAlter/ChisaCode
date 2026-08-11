@@ -44,9 +44,13 @@ const checks = [
   {
     id: "processEnvMutation",
     description: "direct process.env mutations",
-    pattern: /(?:delete\s+process\.env\.[A-Z0-9_]+|process\.env\.[A-Z0-9_]+\s*=)/g,
+    pattern: /(?:delete\s+process\.env\.[A-Z0-9_]+|process\.env\.[A-Z0-9_]+\s*=(?!=))/g,
   },
 ];
+
+function findingKey(checkId, filePath, line) {
+  return `${checkId}::${filePath.replaceAll("\\", "/")}:${line}`;
+}
 
 const ignoredDirs = new Set([
   "node_modules",
@@ -95,7 +99,12 @@ function scanFile(file) {
       const match = check.pattern.exec(text);
       if (!match) break;
       const line = upperBound(lineStarts, match.index);
-      findings.push({ check: check.id, file: relativePath, line });
+      findings.push({
+        check: check.id,
+        file: relativePath,
+        line,
+        key: findingKey(check.id, relativePath, line),
+      });
     }
   }
   return findings;
@@ -127,16 +136,18 @@ function formatSummary(summary) {
 const files = await collectFiles(repoRoot);
 const findings = files.flatMap(scanFile);
 const summary = summarize(findings);
+const fingerprints = [...new Set(findings.map((finding) => finding.key))].sort();
 
 if (shouldUpdate) {
   writeFileSync(
     baselinePath,
     JSON.stringify(
       {
-        version: 1,
+        version: 2,
         description:
-          "Baseline for test debt audit. CI fails only when counts rise above this file.",
+          "Baseline for test debt audit. CI fails on new finding fingerprints or when totals rise above counts. Fingerprints prevent debt migration between files.",
         counts: summary,
+        fingerprints,
       },
       null,
       2,
@@ -144,6 +155,7 @@ if (shouldUpdate) {
   );
   console.log(`Updated ${path.relative(repoRoot, baselinePath)}`);
   console.log(formatSummary(summary));
+  console.log(`fingerprints: ${fingerprints.length}`);
   process.exit(0);
 }
 
@@ -153,12 +165,36 @@ for (const check of checks) {
   const actual = summary[check.id] ?? 0;
   const allowed = baseline.counts?.[check.id] ?? 0;
   if (actual > allowed) {
-    failures.push({ check, actual, allowed });
+    failures.push({
+      kind: "count",
+      check,
+      actual,
+      allowed,
+    });
   }
+}
+
+const baselineFingerprints = new Set(
+  Array.isArray(baseline.fingerprints) ? baseline.fingerprints : [],
+);
+const newFingerprints = fingerprints.filter((key) => !baselineFingerprints.has(key));
+// If baseline has no fingerprints yet (v1), seed is required via --update.
+if (!Array.isArray(baseline.fingerprints)) {
+  failures.push({
+    kind: "fingerprint-missing",
+    message:
+      "Baseline lacks fingerprints (v1). Run `npm run test:audit -- --update` once to seed fingerprint set after review.",
+  });
+} else if (newFingerprints.length > 0) {
+  failures.push({
+    kind: "fingerprint",
+    newFingerprints,
+  });
 }
 
 console.log("Test audit summary:");
 console.log(formatSummary(summary));
+console.log(`fingerprints: ${fingerprints.length}`);
 
 if (failures.length === 0) {
   process.exit(0);
@@ -166,14 +202,26 @@ if (failures.length === 0) {
 
 console.error("\nTest audit found new debt above baseline:");
 for (const failure of failures) {
-  console.error(
-    `- ${failure.check.id}: ${failure.actual} > ${failure.allowed} (${failure.check.description})`,
-  );
-  const examples = findings
-    .filter((finding) => finding.check === failure.check.id)
-    .slice(0, 10)
-    .map((finding) => `  ${finding.file}:${finding.line}`);
-  console.error(examples.join("\n"));
+  if (failure.kind === "count") {
+    console.error(
+      `- ${failure.check.id}: ${failure.actual} > ${failure.allowed} (${failure.check.description})`,
+    );
+    const examples = findings
+      .filter((finding) => finding.check === failure.check.id)
+      .slice(0, 10)
+      .map((finding) => `  ${finding.file}:${finding.line}`);
+    console.error(examples.join("\n"));
+  } else if (failure.kind === "fingerprint") {
+    console.error(`- new finding fingerprints: ${failure.newFingerprints.length}`);
+    console.error(
+      failure.newFingerprints
+        .slice(0, 20)
+        .map((key) => `  ${key}`)
+        .join("\n"),
+    );
+  } else {
+    console.error(`- ${failure.message}`);
+  }
 }
 console.error("\nIf this is an intentional migration step, run: npm run test:audit -- --update");
 process.exit(1);

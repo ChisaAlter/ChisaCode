@@ -66,6 +66,10 @@ interface TerminalWorkerProcess {
 interface WorkerTerminalManagerOptions {
   requestTimeoutMs?: number;
   forkWorker?: () => TerminalWorkerProcess;
+  workspaceWriteCoordinator?: {
+    assertAcceptingWrites(path: string, operation: string): void;
+    runWithWriteLease<T>(path: string, operation: string, fn: () => Promise<T>): Promise<T>;
+  };
 }
 
 function resolveWorkerUrl(): URL {
@@ -191,6 +195,12 @@ export function createWorkerTerminalManager(
         return record.info.cwd;
       },
       send(message: ClientMessage): void {
+        if (message.type !== "resize") {
+          managerOptions.workspaceWriteCoordinator?.assertAcceptingWrites(
+            record.info.cwd,
+            "write terminal input",
+          );
+        }
         if (message.type === "resize") {
           record.state = {
             ...record.state,
@@ -535,11 +545,21 @@ export function createWorkerTerminalManager(
     },
 
     async createTerminal(options: WorkerCreateTerminalOptions): Promise<TerminalSession> {
-      const result = (await sendRequest({ type: "createTerminal", options })) as {
-        terminal: WorkerTerminalInfo;
-        state: TerminalState;
+      const create = async (): Promise<TerminalSession> => {
+        const result = (await sendRequest({ type: "createTerminal", options })) as {
+          terminal: WorkerTerminalInfo;
+          state: TerminalState;
+        };
+        return registerRecord({ info: result.terminal, state: result.state });
       };
-      return registerRecord({ info: result.terminal, state: result.state });
+      if (!managerOptions.workspaceWriteCoordinator) {
+        return await create();
+      }
+      return await managerOptions.workspaceWriteCoordinator.runWithWriteLease(
+        options.cwd,
+        "create terminal",
+        create,
+      );
     },
 
     registerCwdEnv(options: { cwd: string; env: Record<string, string> }): void {

@@ -18,6 +18,7 @@ const V1_0_2_PUBLIC_SUBPATHS = [
   "./chisacode-config-schema",
   "./client-capabilities",
   "./connection-offer",
+  "./relay-device-auth",
   "./daemon-endpoints",
   "./error-utils",
   "./git-remote",

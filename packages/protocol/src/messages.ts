@@ -542,6 +542,20 @@ export const WSHelloMessageSchema = z.object({
     })
     .passthrough()
     .optional(),
+  /**
+   * Optional relay device-auth material. Append-only: old daemons ignore this field.
+   * New daemons require it for transport=relay unless legacy offer-only mode is enabled.
+   */
+  relayDeviceAuth: z
+    .object({
+      version: z.literal(1),
+      deviceId: z.string().min(8).max(128),
+      proof: z.string().min(16).max(256).optional(),
+      pairingToken: z.string().min(16).max(256).optional(),
+      clientPublicKeyB64: z.string().min(1).optional(),
+      challenge: z.string().min(16).max(256).optional(),
+    })
+    .optional(),
 });
 
 export const WSRecordingStateMessageSchema = z.object({
@@ -574,8 +588,19 @@ export const WSInboundMessageSchema = z.discriminatedUnion("type", [
   WSSessionInboundSchema,
 ]);
 
+export const WSRelayDeviceAuthResultMessageSchema = z.object({
+  type: z.literal("relay_device_auth_result"),
+  version: z.literal(1),
+  ok: z.boolean(),
+  deviceId: z.string().min(8).max(128).optional(),
+  deviceSecret: z.string().min(32).max(256).optional(),
+  reason: z.string().max(200).optional(),
+  securityLevel: z.enum(["v2", "legacy"]).optional(),
+});
+
 export const WSOutboundMessageSchema = z.discriminatedUnion("type", [
   WSPongMessageSchema,
+  WSRelayDeviceAuthResultMessageSchema,
   WSSessionOutboundSchema,
 ]);
 

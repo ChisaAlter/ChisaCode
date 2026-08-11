@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "generatedAt": "2026-06-27T10:03:06.719Z",
+  "generatedAt": "2026-08-10T08:52:01.315Z",
   "generator": "scripts/generate-modular-knowledge-graphs.mjs",
   "module": {
     "id": "expo-two-way-audio",
@@ -22,7 +22,9 @@
       "clean": "expo-module clean",
       "dev": "expo-module build",
       "lint": "expo-module lint",
-      "test": "expo-module test",
+      "test": "npm run test:unit",
+      "test:unit": "vitest run --config ../../vitest.config.ts",
+      "test:watch": "vitest --config ../../vitest.config.ts",
       "format": "oxfmt --check .",
       "format:fix": "oxfmt .",
       "typecheck": "tsgo --noEmit",
@@ -32,14 +34,15 @@
     }
   },
   "stats": {
-    "files": 33,
+    "files": 35,
     "categories": {
       "support": 5,
       "config": 18,
       "docs": 5,
+      "test": 2,
       "source": 5
     },
-    "internalImportEdges": 9,
+    "internalImportEdges": 13,
     "workspaceDependencies": [],
     "externalDependencies": [
       "@expo/webpack-config",
@@ -53,7 +56,8 @@
       "path",
       "react",
       "react-native",
-      "react-native-reanimated"
+      "react-native-reanimated",
+      "vitest"
     ],
     "unresolvedInternalImports": 0
   },
@@ -246,7 +250,7 @@
       "id": "file:packages/expo-two-way-audio/package.json",
       "type": "config",
       "path": "packages/expo-two-way-audio/package.json",
-      "lines": 48,
+      "lines": 51,
       "imports": []
     },
     {
@@ -257,11 +261,25 @@
       "imports": ["@speechmatics/expo-two-way-audio", "buffer"]
     },
     {
+      "id": "file:packages/expo-two-way-audio/src/core.test.ts",
+      "type": "test",
+      "path": "packages/expo-two-way-audio/src/core.test.ts",
+      "lines": 202,
+      "imports": ["./ExpoTwoWayAudioModule", "./core", "vitest"]
+    },
+    {
       "id": "file:packages/expo-two-way-audio/src/core.ts",
       "type": "source",
       "path": "packages/expo-two-way-audio/src/core.ts",
       "lines": 63,
       "imports": ["./ExpoTwoWayAudioModule", "expo-modules-core"]
+    },
+    {
+      "id": "file:packages/expo-two-way-audio/src/events.test.ts",
+      "type": "test",
+      "path": "packages/expo-two-way-audio/src/events.test.ts",
+      "lines": 135,
+      "imports": ["./ExpoTwoWayAudioModule", "./events", "expo-modules-core", "vitest"]
     },
     {
       "id": "file:packages/expo-two-way-audio/src/events.ts",
@@ -313,10 +331,34 @@
       "specifier": "./volume-display"
     },
     {
+      "source": "file:packages/expo-two-way-audio/src/core.test.ts",
+      "target": "file:packages/expo-two-way-audio/src/ExpoTwoWayAudioModule.ts",
+      "type": "imports",
+      "specifier": "./ExpoTwoWayAudioModule"
+    },
+    {
+      "source": "file:packages/expo-two-way-audio/src/core.test.ts",
+      "target": "file:packages/expo-two-way-audio/src/core.ts",
+      "type": "imports",
+      "specifier": "./core"
+    },
+    {
       "source": "file:packages/expo-two-way-audio/src/core.ts",
       "target": "file:packages/expo-two-way-audio/src/ExpoTwoWayAudioModule.ts",
       "type": "imports",
       "specifier": "./ExpoTwoWayAudioModule"
+    },
+    {
+      "source": "file:packages/expo-two-way-audio/src/events.test.ts",
+      "target": "file:packages/expo-two-way-audio/src/ExpoTwoWayAudioModule.ts",
+      "type": "imports",
+      "specifier": "./ExpoTwoWayAudioModule"
+    },
+    {
+      "source": "file:packages/expo-two-way-audio/src/events.test.ts",
+      "target": "file:packages/expo-two-way-audio/src/events.ts",
+      "type": "imports",
+      "specifier": "./events"
     },
     {
       "source": "file:packages/expo-two-way-audio/src/events.ts",

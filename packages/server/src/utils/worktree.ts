@@ -1,7 +1,7 @@
 import { execFile } from "child_process";
 import { promisify } from "util";
-import { existsSync, mkdirSync, realpathSync, rmSync, statSync } from "fs";
-import { copyFile, rm, stat } from "fs/promises";
+import { existsSync, mkdirSync, realpathSync, statSync } from "fs";
+import { copyFile, stat } from "fs/promises";
 import { join, basename, dirname, resolve, sep } from "path";
 import net from "node:net";
 import { createHash } from "node:crypto";
@@ -571,6 +571,37 @@ async function inferRepoRootPathFromWorktreePath(worktreePath: string): Promise<
   }
 }
 
+async function cleanupFailedWorktreeSetup(worktreePath: string): Promise<boolean> {
+  // Route setup-failure cleanup through the same exclusive delete path as
+  // archive/delete so concurrent mutations cannot race this worktree.
+  try {
+    const { workspaceMutationCoordinator } =
+      await import("../server/workspace-mutation-coordinator.js");
+    return await workspaceMutationCoordinator.runExclusive(
+      worktreePath,
+      "setup-failure-cleanup",
+      async ({ setState }) => {
+        setState("quiescing", "setup_failure_cleanup_begin");
+        await workspaceMutationCoordinator.waitForWritesToDrain(worktreePath);
+        try {
+          await runGitCommand(["worktree", "remove", worktreePath], {
+            cwd: worktreePath,
+            timeout: 120_000,
+          });
+        } catch {
+          setState("setup_failed_recovery", "setup_failure_cleanup_preserved_unknown_output");
+          return false;
+        }
+        setState("archived", "setup_failure_cleanup_complete");
+        return true;
+      },
+    );
+  } catch {
+    // Lock/import uncertainty is never authorization for destructive cleanup.
+    return false;
+  }
+}
+
 export async function runWorktreeSetupCommands(options: {
   worktreePath: string;
   branchName: string;
@@ -612,18 +643,15 @@ export async function runWorktreeSetupCommands(options: {
     results.push(result);
 
     if (result.exitCode !== 0) {
+      let cleanupNote = "";
       if (options.cleanupOnFailure) {
-        try {
-          await runGitCommand(["worktree", "remove", options.worktreePath, "--force"], {
-            cwd: options.worktreePath,
-            timeout: 120_000,
-          });
-        } catch {
-          rmSync(options.worktreePath, { recursive: true, force: true });
+        const removed = await cleanupFailedWorktreeSetup(options.worktreePath);
+        if (!removed) {
+          cleanupNote = `\nWorktree preserved for recovery: ${options.worktreePath}`;
         }
       }
       throw new WorktreeSetupError(
-        `Worktree setup command failed: ${cmd}\n${result.stderr}`.trim(),
+        `Worktree setup command failed: ${cmd}\n${result.stderr}${cleanupNote}`.trim(),
         results,
       );
     }
@@ -1014,12 +1042,27 @@ export async function deleteChisaCodeWorktree({
   worktreeSlug,
   worktreesRoot,
   chisacodeHome,
+  alreadyHoldingMutationLock,
+  mutationCoordinator,
 }: {
   cwd: string | null;
   worktreePath?: string;
   worktreeSlug?: string;
   worktreesRoot?: string;
   chisacodeHome?: string;
+  /**
+   * When true, the caller (archive service) already holds the mutation lock.
+   */
+  alreadyHoldingMutationLock?: boolean;
+  mutationCoordinator?: {
+    runExclusive: <T>(
+      path: string,
+      reason: string,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      fn: (ctx: any) => Promise<T>,
+    ) => Promise<T>;
+    waitForWritesToDrain?: (path: string) => Promise<void>;
+  };
 }): Promise<void> {
   if (!worktreePath && !worktreeSlug) {
     throw new Error("worktreePath or worktreeSlug is required");
@@ -1048,35 +1091,65 @@ export async function deleteChisaCodeWorktree({
     throw new Error("Refusing to delete non-ChisaCode worktree");
   }
 
-  if (await pathExists(resolvedWorktree)) {
+  const runDelete = async (): Promise<void> => {
+    if (!(await pathExists(resolvedWorktree))) {
+      if (cwd) {
+        await runGitCommand(["worktree", "prune"], { cwd, timeout: 30_000 });
+      }
+      return;
+    }
+
     await runWorktreeTeardownCommands({
       worktreePath: resolvedWorktree,
     });
-  }
 
-  if (cwd) {
-    try {
-      await runGitCommand(["worktree", "remove", resolvedWorktree, "--force"], {
-        cwd,
-        timeout: 120_000,
-      });
-    } catch {
-      // `git worktree remove` fails if the admin dir is already gone (e.g. a
-      // prior archive attempt removed it before the working tree could be
-      // fully cleaned up), or if the repo root has moved. Fall through to the
-      // rm retry loop below so the operation stays idempotent.
+    if (!cwd) {
+      if (await pathExists(resolvedWorktree)) {
+        throw new Error(
+          `Worktree is no longer registered with Git; preserved for recovery: ${resolvedWorktree}`,
+        );
+      }
+      return;
     }
-  }
 
-  await removeDirectoryWithRetries(resolvedWorktree);
+    // This command is the final safety gate. Git refuses dirty, untracked, ignored,
+    // or concurrently modified worktrees. Never escalate a refusal to --force or
+    // recursive deletion: external editors are outside the process-wide lock.
+    await runGitCommand(["worktree", "remove", resolvedWorktree], {
+      cwd,
+      timeout: 120_000,
+    });
 
-  if (cwd) {
-    try {
-      await runGitCommand(["worktree", "prune"], { cwd, timeout: 30_000 });
-    } catch {
-      // not critical; git will prune lazily
+    if (await pathExists(resolvedWorktree)) {
+      throw new Error(
+        `Git removed the worktree record but residual files remain: ${resolvedWorktree}`,
+      );
     }
+
+    if (cwd) {
+      try {
+        await runGitCommand(["worktree", "prune"], { cwd, timeout: 30_000 });
+      } catch {
+        // not critical; git will prune lazily
+      }
+    }
+  };
+
+  if (alreadyHoldingMutationLock) {
+    await runDelete();
+    return;
   }
+
+  const coordinator =
+    mutationCoordinator ??
+    (await import("../server/workspace-mutation-coordinator.js")).workspaceMutationCoordinator;
+  await coordinator.runExclusive(resolvedWorktree, "delete-worktree", async ({ setState }) => {
+    setState("quiescing", "delete_begin");
+    await coordinator.waitForWritesToDrain?.(resolvedWorktree);
+    setState("deleting", "delete_fs");
+    await runDelete();
+    setState("archived", "delete_complete");
+  });
 }
 
 async function pathExists(path: string): Promise<boolean> {
@@ -1088,35 +1161,6 @@ async function pathExists(path: string): Promise<boolean> {
       return false;
     }
     throw error;
-  }
-}
-
-async function removeDirectoryWithRetries(path: string): Promise<void> {
-  if (!(await pathExists(path))) {
-    return;
-  }
-
-  const delaysMs = [0, 100, 300, 700, 1500];
-  let lastError: unknown = null;
-  for (const delay of delaysMs) {
-    if (delay > 0) {
-      await new Promise((resolvePromise) => setTimeout(resolvePromise, delay));
-    }
-    try {
-      await rm(path, { recursive: true, force: true });
-      if (!(await pathExists(path))) {
-        return;
-      }
-      lastError = new Error(`Directory still present after rm: ${path}`);
-    } catch (error) {
-      lastError = error;
-    }
-  }
-
-  if (await pathExists(path)) {
-    throw lastError instanceof Error
-      ? lastError
-      : new Error(`Failed to remove worktree directory: ${path}`);
   }
 }
 

@@ -298,7 +298,9 @@ import { setupAutoArchiveOnMerge } from "./auto-archive-on-merge/index.js";
 import { wrapSessionMessage, type SessionOutboundMessage } from "./messages.js";
 import type { TerminalManager } from "../terminal/terminal-manager.js";
 import { createConfiguredTerminalManager } from "../terminal/terminal-manager-factory.js";
+import { workspaceMutationCoordinator } from "./workspace-mutation-coordinator.js";
 import { createConnectionOfferV2, encodeOfferToFragmentUrl } from "./connection-offer.js";
+import { RelayDeviceCredentialStore } from "./relay-device-credential-store.js";
 import { loadOrCreateDaemonKeyPair } from "./daemon-keypair.js";
 import { startRelayTransport, type RelayTransportController } from "./relay-transport.js";
 import type { PushNotificationSender } from "./push/notifications.js";
@@ -1002,7 +1004,7 @@ export async function createChisaCodeDaemon(
     chisacodeHome: config.chisacodeHome,
     logger,
   });
-  const terminalManager = createConfiguredTerminalManager();
+  const terminalManager = createConfiguredTerminalManager(workspaceMutationCoordinator);
   const github = createGitHubService();
   const workspaceGitService = new WorkspaceGitServiceImpl({
     logger,
@@ -1044,6 +1046,7 @@ export async function createChisaCodeDaemon(
       resolveAgentSkillPolicy(daemonConfigStore.get(), agentId, sessionConfig.provider),
     resolveMcpServers: (agentId, sessionConfig) =>
       resolveEffectiveManagedMcpServers(agentId, sessionConfig, daemonConfigStore.get()),
+    workspaceWriteCoordinator: workspaceMutationCoordinator,
     logger,
   });
   const agentSessionReaper = new AgentSessionReaper({
@@ -1534,10 +1537,17 @@ export async function createChisaCodeDaemon(
           );
 
           if (relayEnabled) {
+            const deviceStore = new RelayDeviceCredentialStore(config.chisacodeHome);
+            const pairingBootstrap = deviceStore.issuePairingToken(10 * 60_000);
             const offer = await createConnectionOfferV2({
               serverId,
               daemonPublicKeyB64: daemonKeyPair.publicKeyB64,
               relayAuthPublicKeyB64: daemonKeyPair.relayAuthPublicKeyB64,
+              authBootstrap: {
+                version: 1,
+                pairingToken: pairingBootstrap.token,
+                expiresAtMs: pairingBootstrap.expiresAtMs,
+              },
               relay: {
                 endpoint: relayPublicEndpoint,
                 useTls: relayPublicUseTls,
@@ -1547,6 +1557,14 @@ export async function createChisaCodeDaemon(
             encodeOfferToFragmentUrl({ offer, appBaseUrl });
 
             relayTransport?.stop().catch(() => undefined);
+            const allowUnauthenticatedRelayRecovery =
+              process.env.CHISACODE_RELAY_ALLOW_UNAUTHENTICATED_RECOVERY === "1";
+            if (allowUnauthenticatedRelayRecovery) {
+              logger.error(
+                { securityLevel: "legacy", env: "CHISACODE_RELAY_ALLOW_UNAUTHENTICATED_RECOVERY" },
+                "Relay device authentication disabled by emergency recovery override",
+              );
+            }
             relayTransport = startRelayTransport({
               logger,
               attachSocket: (ws, metadata) => {
@@ -1560,6 +1578,10 @@ export async function createChisaCodeDaemon(
               serverId,
               daemonKeyPair: daemonKeyPair.keyPair,
               daemonRelayAuthKeyPair: daemonKeyPair.relayAuthKeyPair,
+              chisacodeHome: config.chisacodeHome,
+              daemonPublicKeyB64: daemonKeyPair.publicKeyB64,
+              // COMPAT(relayUnauthenticatedRecovery): emergency downgrade; remove after 2026-11-10.
+              requireDeviceAuth: !allowUnauthenticatedRelayRecovery,
             });
           }
         };

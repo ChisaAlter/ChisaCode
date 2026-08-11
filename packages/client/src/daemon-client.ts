@@ -572,6 +572,7 @@ export class DaemonClient {
       onConnected: () => {
         this.checkoutSubscriptions.resubscribe();
         this.terminalClient.resubscribeDirectories();
+        void this.terminalClient.resubscribeStreams();
         this.requests.flushPendingSends();
       },
       onReset: (error, terminal) => this.handleConnectionReset(error, terminal),
@@ -1339,6 +1340,11 @@ export class DaemonClient {
     requestId?: string,
     acceptBinary = false,
   ): Promise<FileExplorerPayload> {
+    // Metadata list/file JSON stays on the short RPC timeout. Binary transfers
+    // only need the request waiter open for begin/progress/end; use a generous
+    // upper bound so slow-but-progressing 64MB reads are not killed at 10s.
+    // Restart/shutdown keep their own 10s timeouts elsewhere.
+    const timeout = acceptBinary ? 15 * 60_000 : 10_000;
     return this.requests.requestSession({
       requestId,
       message: {
@@ -1349,7 +1355,7 @@ export class DaemonClient {
         ...(acceptBinary ? { acceptBinary: true } : {}),
       },
       responseType: "file_explorer_response",
-      timeout: 10000,
+      timeout,
     });
   }
 

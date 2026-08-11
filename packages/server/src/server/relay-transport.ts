@@ -25,6 +25,12 @@ interface RelayTransportOptions {
   daemonKeyPair?: KeyPair;
   daemonRelayAuthKeyPair?: RelayAuthKeyPair;
   createWebSocket?: RelayWebSocketFactory;
+  chisacodeHome?: string;
+  daemonPublicKeyB64?: string;
+  /**
+   * When true, reject relay hellos without device auth. Defaults true.
+   */
+  requireDeviceAuth?: boolean;
 }
 
 export interface RelayTransportController {
@@ -202,6 +208,9 @@ export function startRelayTransport({
   daemonKeyPair,
   daemonRelayAuthKeyPair,
   createWebSocket = createDefaultRelayWebSocket,
+  chisacodeHome,
+  daemonPublicKeyB64,
+  requireDeviceAuth = true,
 }: RelayTransportOptions): RelayTransportController {
   const relayLogger = logger.child({ module: "relay-transport" });
 
@@ -498,6 +507,10 @@ export function startRelayTransport({
       const externalMetadata: ExternalSocketMetadata = {
         transport: "relay",
         externalSessionKey: `session:${connectionId}`,
+        requireDeviceAuth,
+        chisacodeHome,
+        daemonPublicKeyB64,
+        serverId,
       };
       if (daemonKeyPair) {
         void attachEncryptedSocket(
@@ -589,7 +602,19 @@ async function attachEncryptedSocket(
       },
     });
     const encryptedSocket = createEncryptedSocket(channel, emitter);
-    await attachSocket(encryptedSocket, metadata);
+    const securityContext = channel.getSecurityContext();
+    const boundMetadata = metadata
+      ? {
+          ...metadata,
+          ...(securityContext
+            ? {
+                relayClientPublicKeyB64: securityContext.clientPublicKeyB64,
+                relayAuthChallenge: securityContext.authChallenge,
+              }
+            : {}),
+        }
+      : undefined;
+    await attachSocket(encryptedSocket, boundMetadata);
     attached = true;
     for (const message of pendingMessages) {
       emitter.emit("message", message);

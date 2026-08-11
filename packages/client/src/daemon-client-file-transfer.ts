@@ -47,6 +47,14 @@ export class BinaryFileTransferManager {
   private readonly pendingReads = new Map<string, PendingBinaryFileRead>();
   private readonly activeTransfers = new Map<string, BinaryFileTransferState>();
   private readonly completedReads = new Map<string, FileReadResult>();
+  private readonly idleTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private readonly idleTimeoutMs: number;
+  private readonly onIdleTimeout?: (requestId: string) => void;
+
+  constructor(options?: { idleTimeoutMs?: number; onIdleTimeout?: (requestId: string) => void }) {
+    this.idleTimeoutMs = options?.idleTimeoutMs ?? 60_000;
+    this.onIdleTimeout = options?.onIdleTimeout;
+  }
 
   startRead(requestId: string, cwd: string, path: string): void {
     this.pendingReads.set(requestId, { cwd, path });
@@ -59,6 +67,7 @@ export class BinaryFileTransferManager {
   }
 
   cleanupRead(requestId: string): void {
+    this.clearIdleTimer(requestId);
     this.pendingReads.delete(requestId);
     this.activeTransfers.delete(requestId);
     this.completedReads.delete(requestId);
@@ -88,6 +97,7 @@ export class BinaryFileTransferManager {
         receivedBytes: 0,
         chunks: [],
       });
+      this.armIdleTimer(frame.requestId);
       return null;
     }
 
@@ -109,6 +119,7 @@ export class BinaryFileTransferManager {
       }
       transfer.receivedBytes = nextReceivedBytes;
       transfer.chunks.push(new Uint8Array(frame.payload));
+      this.armIdleTimer(frame.requestId);
       return null;
     }
 
@@ -119,6 +130,7 @@ export class BinaryFileTransferManager {
       );
     }
 
+    this.clearIdleTimer(frame.requestId);
     this.activeTransfers.delete(frame.requestId);
     this.completedReads.set(frame.requestId, {
       bytes: concatByteChunks(transfer.chunks, transfer.size),
@@ -136,8 +148,27 @@ export class BinaryFileTransferManager {
     };
   }
 
+  private armIdleTimer(requestId: string): void {
+    this.clearIdleTimer(requestId);
+    const handle = setTimeout(() => {
+      this.idleTimers.delete(requestId);
+      this.onIdleTimeout?.(requestId);
+      this.fail(requestId, "File transfer idle timeout");
+    }, this.idleTimeoutMs);
+    this.idleTimers.set(requestId, handle);
+  }
+
+  private clearIdleTimer(requestId: string): void {
+    const handle = this.idleTimers.get(requestId);
+    if (handle) {
+      clearTimeout(handle);
+      this.idleTimers.delete(requestId);
+    }
+  }
+
   private fail(requestId: string, error: string): BinaryFileTransferOutcome | null {
     const pending = this.pendingReads.get(requestId);
+    this.clearIdleTimer(requestId);
     this.activeTransfers.delete(requestId);
     if (!pending) {
       return null;

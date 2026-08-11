@@ -1,5 +1,7 @@
 import { z } from "zod/v3";
 
+import { RelayAuthBootstrapSchema } from "./relay-device-auth.js";
+
 /**
  * Relay-only pairing offer.
  *
@@ -11,6 +13,11 @@ export const ConnectionOfferV2Schema = z.object({
   serverId: z.string().min(1),
   daemonPublicKeyB64: z.string().min(1),
   relayAuthPublicKeyB64: z.string().min(1).optional(),
+  /**
+   * Optional client-auth bootstrap for handshake v2. Old parsers ignore this
+   * field (optional missing keys remain valid; unknown keys are stripped).
+   */
+  authBootstrap: RelayAuthBootstrapSchema.optional(),
   relay: z.object({
     endpoint: z.string().min(1),
     useTls: z.boolean().optional(),

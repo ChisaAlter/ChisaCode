@@ -1,6 +1,6 @@
 import { expect, test, vi } from "vitest";
 import { spawn } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -32,6 +32,7 @@ import type {
 import type { ProviderDefinition } from "./provider-registry.js";
 import { InMemoryAgentTimelineStore } from "./agent-timeline-store.js";
 import type { AgentTimelineRow, AgentTimelineStore } from "./agent-timeline-store-types.js";
+import { WorkspaceMutationCoordinator } from "../workspace-mutation-coordinator.js";
 
 interface Deferred<T> {
   promise: Promise<T>;
@@ -562,6 +563,40 @@ test("normalizeConfig injects the provider default model when omitted", async ()
 
   expect(snapshot.config.model).toBe("gpt-5.4");
   expect(snapshot.config.modeId).toBe("auto");
+});
+
+test("rejects agent creation and run starts while an ancestor workspace is quiescing", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-quiesce-test-"));
+  const childCwd = join(workdir, "packages", "app");
+  mkdirSync(childCwd, { recursive: true });
+  const client = new TestAgentClient();
+  const coordinator = new WorkspaceMutationCoordinator();
+  const manager = new AgentManager({
+    clients: { codex: client },
+    workspaceWriteCoordinator: coordinator,
+    logger,
+  });
+  const agent = await manager.createAgent({ provider: "codex", cwd: childCwd });
+  let releaseArchive!: () => void;
+  const archiveGate = new Promise<void>((resolve) => {
+    releaseArchive = resolve;
+  });
+  const archive = coordinator.runExclusive(workdir, "archive-worktree", async ({ setState }) => {
+    setState("quiescing", "test_quiescing");
+    await archiveGate;
+    setState("active", "test_complete");
+  });
+
+  await vi.waitFor(() => expect(coordinator.isAcceptingWrites(childCwd)).toBe(false));
+  await expect(manager.createAgent({ provider: "codex", cwd: childCwd })).rejects.toThrow(
+    "Workspace is quiescing",
+  );
+  expect(() => manager.streamAgent(agent.id, "unsafe run")).toThrow("Workspace is quiescing");
+
+  releaseArchive();
+  await archive;
+  await manager.closeAgent(agent.id);
+  rmSync(workdir, { recursive: true, force: true });
 });
 
 test("createAgent uses runtimeProvider for launch while keeping the base provider identity", async () => {

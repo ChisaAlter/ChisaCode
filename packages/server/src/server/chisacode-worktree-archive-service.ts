@@ -7,6 +7,11 @@ import { normalizeWorkspaceId as normalizePersistedWorkspaceId } from "./workspa
 import type { GitHubService } from "../services/github-service.js";
 import { deleteChisaCodeWorktree, resolveChisaCodeWorktreeRootForCwd } from "../utils/worktree.js";
 import type { TerminalManager } from "../terminal/terminal-manager.js";
+import {
+  workspaceMutationCoordinator,
+  type WorkspaceMutationCoordinator,
+  type WorkspaceMutationState,
+} from "./workspace-mutation-coordinator.js";
 
 export interface ArchiveChisaCodeWorktreeDependencies {
   chisacodeHome?: string;
@@ -21,6 +26,13 @@ export interface ArchiveChisaCodeWorktreeDependencies {
   isPathWithinRoot: (rootPath: string, candidatePath: string) => boolean;
   killTerminalsUnderPath: (rootPath: string) => Promise<void>;
   sessionLogger?: Logger;
+  mutationCoordinator?: WorkspaceMutationCoordinator;
+  /**
+   * When true, the caller already holds the mutation lock for targetPath
+   * (e.g. archiveIfSafe) and this function must not re-enter runExclusive.
+   */
+  alreadyHoldingMutationLock?: boolean;
+  onMutationState?: (state: WorkspaceMutationState, reason: string) => void;
 }
 
 export interface KillTerminalsUnderPathDependencies {
@@ -31,7 +43,7 @@ export interface KillTerminalsUnderPathDependencies {
   terminalManager: TerminalManager | null;
 }
 
-export async function archiveChisaCodeWorktree(
+async function archiveChisaCodeWorktreeBody(
   dependencies: ArchiveChisaCodeWorktreeDependencies,
   options: {
     targetPath: string;
@@ -39,6 +51,7 @@ export async function archiveChisaCodeWorktree(
     worktreesRoot?: string;
     requestId: string;
   },
+  setState: (state: WorkspaceMutationState, reason: string) => void,
 ): Promise<string[]> {
   let targetPath = options.targetPath;
   const resolvedWorktree = await resolveChisaCodeWorktreeRootForCwd(targetPath, {
@@ -47,6 +60,11 @@ export async function archiveChisaCodeWorktree(
   if (resolvedWorktree) {
     targetPath = resolvedWorktree.worktreePath;
   }
+
+  const coordinator = dependencies.mutationCoordinator ?? workspaceMutationCoordinator;
+  setState("quiescing", "archive_mark_quiescing");
+  await coordinator.waitForWritesToDrain(targetPath);
+  let filesystemDeleted = false;
 
   const archivedAgents = new Set<string>();
   const affectedWorkspaceCwds = new Set<string>([targetPath]);
@@ -87,29 +105,45 @@ export async function archiveChisaCodeWorktree(
     await dependencies.emitWorkspaceUpdatesForWorkspaceIds(affectedWorkspaceIdList);
 
     const archivedAt = new Date().toISOString();
-    const archiveResults = await Promise.allSettled([
+    // Concurrent teardown for latency, but awaited + gating: any failure aborts
+    // before delete (no fire-and-forget continue-on-error).
+    const teardownResults = await Promise.allSettled([
       ...liveAgents.map((agent) => dependencies.agentManager.archiveAgent(agent.id)),
       ...matchingStoredRecords
         .filter((record) => !liveAgentIds.has(record.id) && !record.archivedAt)
         .map((record) => dependencies.agentManager.archiveSnapshot(record.id, archivedAt)),
       dependencies.killTerminalsUnderPath(targetPath),
     ]);
-
-    for (const result of archiveResults) {
-      if (result.status === "rejected") {
-        dependencies.sessionLogger?.warn(
-          { err: result.reason, targetPath },
-          "Worktree archive teardown step failed; continuing",
-        );
+    const teardownFailures = teardownResults.filter((result) => result.status === "rejected");
+    if (teardownFailures.length > 0) {
+      const first = teardownFailures[0];
+      let reason = "unknown teardown failure";
+      if (first && first.status === "rejected") {
+        reason = first.reason instanceof Error ? first.reason.message : String(first.reason);
       }
+      throw new Error(`Teardown failed before worktree delete: ${reason}`);
     }
+
+    setState("deleting", "teardown_complete_begin_delete");
 
     await deleteChisaCodeWorktree({
       cwd: options.repoRoot,
       worktreePath: targetPath,
       worktreesRoot: options.worktreesRoot,
       chisacodeHome: dependencies.chisacodeHome,
+      // Caller already holds the mutation lock.
+      alreadyHoldingMutationLock: true,
+      mutationCoordinator: dependencies.mutationCoordinator as
+        | {
+            runExclusive: <T>(
+              path: string,
+              reason: string,
+              fn: (ctx: { setState: (state: string, reason: string) => void }) => Promise<T>,
+            ) => Promise<T>;
+          }
+        | undefined,
     });
+    filesystemDeleted = true;
 
     if (options.repoRoot) {
       try {
@@ -129,11 +163,13 @@ export async function archiveChisaCodeWorktree(
       dependencies.github.invalidate({ cwd });
     }
 
+    let finalizeFailed = false;
     await Promise.all(
       affectedWorkspaceIdList.map(async (workspaceId) => {
         try {
           await dependencies.archiveWorkspaceRecord(workspaceId);
         } catch (error) {
+          finalizeFailed = true;
           dependencies.sessionLogger?.warn(
             { err: error, workspaceId },
             "Failed to archive workspace record; worktree FS already removed",
@@ -141,12 +177,62 @@ export async function archiveChisaCodeWorktree(
         }
       }),
     );
+
+    if (finalizeFailed) {
+      setState("delete_complete_pending_finalize", "fs_deleted_metadata_pending");
+    } else {
+      setState("archived", "archive_complete");
+    }
+  } catch (error) {
+    if (filesystemDeleted) {
+      setState("delete_complete_pending_finalize", "post_delete_finalize_failed");
+    } else {
+      setState("active", "archive_aborted_before_delete");
+    }
+    throw error;
   } finally {
     dependencies.clearWorkspaceArchiving(affectedWorkspaceIdList);
     await dependencies.emitWorkspaceUpdatesForWorkspaceIds(affectedWorkspaceIdList);
   }
 
   return Array.from(archivedAgents);
+}
+
+export async function archiveChisaCodeWorktree(
+  dependencies: ArchiveChisaCodeWorktreeDependencies,
+  options: {
+    targetPath: string;
+    repoRoot: string | null;
+    worktreesRoot?: string;
+    requestId: string;
+  },
+): Promise<string[]> {
+  const coordinator = dependencies.mutationCoordinator ?? workspaceMutationCoordinator;
+  const setStateExternal = dependencies.onMutationState;
+
+  if (dependencies.alreadyHoldingMutationLock) {
+    return archiveChisaCodeWorktreeBody(dependencies, options, (state, reason) => {
+      setStateExternal?.(state, reason);
+    });
+  }
+
+  const resolvedWorktree = await resolveChisaCodeWorktreeRootForCwd(options.targetPath, {
+    chisacodeHome: dependencies.chisacodeHome,
+  });
+  const resolvedOptions = resolvedWorktree
+    ? { ...options, targetPath: resolvedWorktree.worktreePath }
+    : options;
+
+  return coordinator.runExclusive(
+    resolvedOptions.targetPath,
+    "archive-worktree",
+    async ({ setState }) => {
+      return archiveChisaCodeWorktreeBody(dependencies, resolvedOptions, (state, reason) => {
+        setState(state, reason);
+        setStateExternal?.(state, reason);
+      });
+    },
+  );
 }
 
 export async function killTerminalsUnderPath(
@@ -185,20 +271,26 @@ export async function killTerminalsUnderPath(
     return;
   }
 
-  await Promise.allSettled(
+  const results = await Promise.allSettled(
     terminalIds.map(async (terminalId) => {
-      try {
-        dependencies.detachTerminalStream?.(terminalId, { emitExit: true });
-        await terminalManager.killTerminalAndWait(terminalId, {
-          gracefulTimeoutMs: 2000,
-          forceTimeoutMs: 1500,
-        });
-      } catch (error) {
-        dependencies.sessionLogger.warn(
-          { err: error, terminalId },
-          "Terminal kill escalation failed during archive; proceeding anyway",
-        );
-      }
+      dependencies.detachTerminalStream?.(terminalId, { emitExit: true });
+      await terminalManager.killTerminalAndWait(terminalId, {
+        gracefulTimeoutMs: 2000,
+        forceTimeoutMs: 1500,
+      });
     }),
   );
+
+  const failures = results.filter((result) => result.status === "rejected");
+  if (failures.length > 0) {
+    for (const failure of failures) {
+      if (failure.status === "rejected") {
+        dependencies.sessionLogger.warn(
+          { err: failure.reason },
+          "Terminal kill escalation failed during archive",
+        );
+      }
+    }
+    throw new Error(`Failed to stop ${failures.length} terminal(s) under worktree before delete`);
+  }
 }

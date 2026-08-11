@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "generatedAt": "2026-06-27T10:03:06.661Z",
+  "generatedAt": "2026-08-10T08:52:01.260Z",
   "generator": "scripts/generate-modular-knowledge-graphs.mjs",
   "module": {
     "id": "client",
@@ -29,6 +29,10 @@
       "./internal/daemon-client-transport-types": {
         "types": "./dist/daemon-client-transport-types.d.ts",
         "default": "./dist/daemon-client-transport-types.js"
+      },
+      "./relay-device-credentials": {
+        "types": "./dist/relay-device-credentials.d.ts",
+        "default": "./dist/relay-device-credentials.js"
       }
     },
     "scripts": {
@@ -40,17 +44,24 @@
     }
   },
   "stats": {
-    "files": 22,
+    "files": 58,
     "categories": {
       "support": 4,
       "docs": 2,
-      "config": 3,
-      "source": 9,
-      "test": 4
+      "config": 4,
+      "source": 30,
+      "test": 18
     },
-    "internalImportEdges": 15,
+    "internalImportEdges": 79,
     "workspaceDependencies": ["protocol", "relay"],
-    "externalDependencies": ["@chisacode/client", "node:events", "node:fs", "vitest", "zod"],
+    "externalDependencies": [
+      "@chisacode/client",
+      "node:crypto",
+      "node:events",
+      "node:fs",
+      "vitest",
+      "zod"
+    ],
     "unresolvedInternalImports": 0
   },
   "nodes": [
@@ -93,7 +104,7 @@
       "id": "file:packages/client/package.json",
       "type": "config",
       "path": "packages/client/package.json",
-      "lines": 46,
+      "lines": 50,
       "imports": ["node:fs"]
     },
     {
@@ -104,10 +115,246 @@
       "imports": []
     },
     {
+      "id": "file:packages/client/src/daemon-client-agent-extension-commands.ts",
+      "type": "source",
+      "path": "packages/client/src/daemon-client-agent-extension-commands.ts",
+      "lines": 161,
+      "imports": [
+        "./daemon-client-command-transport.js",
+        "@chisacode/protocol/agent-types",
+        "@chisacode/protocol/messages"
+      ]
+    },
+    {
+      "id": "file:packages/client/src/daemon-client-agent-interaction.test.ts",
+      "type": "test",
+      "path": "packages/client/src/daemon-client-agent-interaction.test.ts",
+      "lines": 197,
+      "imports": ["./daemon-client-agent-interaction.js", "./daemon-client-rpc-error.js", "vitest"]
+    },
+    {
+      "id": "file:packages/client/src/daemon-client-agent-interaction.ts",
+      "type": "source",
+      "path": "packages/client/src/daemon-client-agent-interaction.ts",
+      "lines": 145,
+      "imports": [
+        "./daemon-client-command-transport.js",
+        "./daemon-client-rpc-error.js",
+        "@chisacode/protocol/messages"
+      ]
+    },
+    {
+      "id": "file:packages/client/src/daemon-client-agent-lifecycle.test.ts",
+      "type": "test",
+      "path": "packages/client/src/daemon-client-agent-lifecycle.test.ts",
+      "lines": 206,
+      "imports": ["./daemon-client-agent-lifecycle.js", "@chisacode/protocol/messages", "vitest"]
+    },
+    {
+      "id": "file:packages/client/src/daemon-client-agent-lifecycle.ts",
+      "type": "source",
+      "path": "packages/client/src/daemon-client-agent-lifecycle.ts",
+      "lines": 410,
+      "imports": [
+        "./daemon-client-command-transport.js",
+        "@chisacode/protocol/agent-types",
+        "@chisacode/protocol/messages"
+      ]
+    },
+    {
+      "id": "file:packages/client/src/daemon-client-agent-waits.test.ts",
+      "type": "test",
+      "path": "packages/client/src/daemon-client-agent-waits.test.ts",
+      "lines": 149,
+      "imports": [
+        "./daemon-client-agent-waits.js",
+        "./daemon-client-request-coordinator.js",
+        "@chisacode/protocol/messages",
+        "vitest"
+      ]
+    },
+    {
+      "id": "file:packages/client/src/daemon-client-agent-waits.ts",
+      "type": "source",
+      "path": "packages/client/src/daemon-client-agent-waits.ts",
+      "lines": 210,
+      "imports": [
+        "./daemon-client-agent-lifecycle.js",
+        "./daemon-client-request-coordinator.js",
+        "@chisacode/protocol/agent-types",
+        "@chisacode/protocol/messages"
+      ]
+    },
+    {
+      "id": "file:packages/client/src/daemon-client-automation-commands.test.ts",
+      "type": "test",
+      "path": "packages/client/src/daemon-client-automation-commands.test.ts",
+      "lines": 81,
+      "imports": [
+        "./daemon-client-automation-commands.js",
+        "./daemon-client-command-transport.js",
+        "vitest"
+      ]
+    },
+    {
+      "id": "file:packages/client/src/daemon-client-automation-commands.ts",
+      "type": "source",
+      "path": "packages/client/src/daemon-client-automation-commands.ts",
+      "lines": 363,
+      "imports": ["./daemon-client-command-transport.js", "@chisacode/protocol/messages"]
+    },
+    {
+      "id": "file:packages/client/src/daemon-client-binary-frames.test.ts",
+      "type": "test",
+      "path": "packages/client/src/daemon-client-binary-frames.test.ts",
+      "lines": 731,
+      "imports": [
+        "./daemon-client-transport-types.js",
+        "./daemon-client-transport.js",
+        "./daemon-client.js",
+        "@chisacode/protocol/binary-frames/index",
+        "@chisacode/protocol/terminal-stream-protocol",
+        "vitest"
+      ]
+    },
+    {
+      "id": "file:packages/client/src/daemon-client-checkout-commands.ts",
+      "type": "source",
+      "path": "packages/client/src/daemon-client-checkout-commands.ts",
+      "lines": 401,
+      "imports": ["./daemon-client-command-transport.js", "@chisacode/protocol/messages"]
+    },
+    {
+      "id": "file:packages/client/src/daemon-client-checkout-subscriptions.ts",
+      "type": "source",
+      "path": "packages/client/src/daemon-client-checkout-subscriptions.ts",
+      "lines": 200,
+      "imports": ["@chisacode/protocol/messages"]
+    },
+    {
+      "id": "file:packages/client/src/daemon-client-cindy-commands.ts",
+      "type": "source",
+      "path": "packages/client/src/daemon-client-cindy-commands.ts",
+      "lines": 461,
+      "imports": ["./daemon-client-command-transport.js", "@chisacode/protocol/messages"]
+    },
+    {
+      "id": "file:packages/client/src/daemon-client-command-transport.ts",
+      "type": "source",
+      "path": "packages/client/src/daemon-client-command-transport.ts",
+      "lines": 26,
+      "imports": ["@chisacode/protocol/messages"]
+    },
+    {
+      "id": "file:packages/client/src/daemon-client-config-commands.ts",
+      "type": "config",
+      "path": "packages/client/src/daemon-client-config-commands.ts",
+      "lines": 92,
+      "imports": ["./daemon-client-command-transport.js", "@chisacode/protocol/messages"]
+    },
+    {
+      "id": "file:packages/client/src/daemon-client-connection-controller.test.ts",
+      "type": "test",
+      "path": "packages/client/src/daemon-client-connection-controller.test.ts",
+      "lines": 139,
+      "imports": [
+        "./daemon-client-connection-controller.js",
+        "./daemon-client-transport.js",
+        "vitest"
+      ]
+    },
+    {
+      "id": "file:packages/client/src/daemon-client-connection-controller.ts",
+      "type": "source",
+      "path": "packages/client/src/daemon-client-connection-controller.ts",
+      "lines": 749,
+      "imports": [
+        "./daemon-client-transport.js",
+        "@chisacode/protocol/client-capabilities",
+        "@chisacode/protocol/daemon-endpoints",
+        "@chisacode/protocol/messages"
+      ]
+    },
+    {
+      "id": "file:packages/client/src/daemon-client-file-transfer.ts",
+      "type": "source",
+      "path": "packages/client/src/daemon-client-file-transfer.ts",
+      "lines": 228,
+      "imports": ["@chisacode/protocol/binary-frames/index", "@chisacode/protocol/messages"]
+    },
+    {
+      "id": "file:packages/client/src/daemon-client-inbound-controller.ts",
+      "type": "source",
+      "path": "packages/client/src/daemon-client-inbound-controller.ts",
+      "lines": 385,
+      "imports": [
+        "./daemon-client-connection-controller.js",
+        "./daemon-client-file-transfer.js",
+        "./daemon-client-transport.js",
+        "@chisacode/protocol/agent-types",
+        "@chisacode/protocol/binary-frames/index",
+        "@chisacode/protocol/messages"
+      ]
+    },
+    {
+      "id": "file:packages/client/src/daemon-client-provider-commands.test.ts",
+      "type": "test",
+      "path": "packages/client/src/daemon-client-provider-commands.test.ts",
+      "lines": 201,
+      "imports": [
+        "./daemon-client-command-transport.js",
+        "./daemon-client-provider-commands.js",
+        "vitest"
+      ]
+    },
+    {
+      "id": "file:packages/client/src/daemon-client-provider-commands.ts",
+      "type": "source",
+      "path": "packages/client/src/daemon-client-provider-commands.ts",
+      "lines": 187,
+      "imports": [
+        "./daemon-client-command-transport.js",
+        "@chisacode/protocol/agent-types",
+        "@chisacode/protocol/provider-config"
+      ]
+    },
+    {
+      "id": "file:packages/client/src/daemon-client-public-api.test.ts",
+      "type": "test",
+      "path": "packages/client/src/daemon-client-public-api.test.ts",
+      "lines": 296,
+      "imports": ["./index.js", "vitest"]
+    },
+    {
+      "id": "file:packages/client/src/daemon-client-query-commands.test.ts",
+      "type": "test",
+      "path": "packages/client/src/daemon-client-query-commands.test.ts",
+      "lines": 93,
+      "imports": [
+        "./daemon-client-command-transport.js",
+        "./daemon-client-query-commands.js",
+        "vitest"
+      ]
+    },
+    {
+      "id": "file:packages/client/src/daemon-client-query-commands.ts",
+      "type": "source",
+      "path": "packages/client/src/daemon-client-query-commands.ts",
+      "lines": 157,
+      "imports": ["./daemon-client-command-transport.js", "@chisacode/protocol/messages"]
+    },
+    {
+      "id": "file:packages/client/src/daemon-client-reconnect.test.ts",
+      "type": "test",
+      "path": "packages/client/src/daemon-client-reconnect.test.ts",
+      "lines": 610,
+      "imports": ["./daemon-client-transport-types.js", "./daemon-client.js", "vitest"]
+    },
+    {
       "id": "file:packages/client/src/daemon-client-relay-e2ee-transport.ts",
       "type": "source",
       "path": "packages/client/src/daemon-client-relay-e2ee-transport.ts",
-      "lines": 200,
+      "lines": 207,
       "imports": [
         "./daemon-client-transport-types.js",
         "./daemon-client-transport-utils.js",
@@ -115,11 +362,65 @@
       ]
     },
     {
+      "id": "file:packages/client/src/daemon-client-request-coordinator.test.ts",
+      "type": "test",
+      "path": "packages/client/src/daemon-client-request-coordinator.test.ts",
+      "lines": 118,
+      "imports": [
+        "./daemon-client-request-coordinator.js",
+        "./daemon-client-rpc-error.js",
+        "@chisacode/protocol/messages",
+        "vitest"
+      ]
+    },
+    {
+      "id": "file:packages/client/src/daemon-client-request-coordinator.ts",
+      "type": "source",
+      "path": "packages/client/src/daemon-client-request-coordinator.ts",
+      "lines": 278,
+      "imports": [
+        "./daemon-client-command-transport.js",
+        "./daemon-client-rpc-error.js",
+        "@chisacode/protocol/messages"
+      ]
+    },
+    {
+      "id": "file:packages/client/src/daemon-client-rpc-error.ts",
+      "type": "source",
+      "path": "packages/client/src/daemon-client-rpc-error.ts",
+      "lines": 18,
+      "imports": []
+    },
+    {
       "id": "file:packages/client/src/daemon-client-runtime-metrics.ts",
       "type": "source",
       "path": "packages/client/src/daemon-client-runtime-metrics.ts",
       "lines": 259,
       "imports": ["@chisacode/protocol/messages"]
+    },
+    {
+      "id": "file:packages/client/src/daemon-client-terminal-client.test.ts",
+      "type": "test",
+      "path": "packages/client/src/daemon-client-terminal-client.test.ts",
+      "lines": 182,
+      "imports": [
+        "./daemon-client-terminal-client.js",
+        "@chisacode/protocol/binary-frames/index",
+        "@chisacode/protocol/messages",
+        "vitest"
+      ]
+    },
+    {
+      "id": "file:packages/client/src/daemon-client-terminal-client.ts",
+      "type": "source",
+      "path": "packages/client/src/daemon-client-terminal-client.ts",
+      "lines": 295,
+      "imports": [
+        "./daemon-client-command-transport.js",
+        "./terminal-stream-router.js",
+        "@chisacode/protocol/binary-frames/index",
+        "@chisacode/protocol/messages"
+      ]
     },
     {
       "id": "file:packages/client/src/daemon-client-transport-types.ts",
@@ -155,6 +456,20 @@
       ]
     },
     {
+      "id": "file:packages/client/src/daemon-client-voice-client.test.ts",
+      "type": "test",
+      "path": "packages/client/src/daemon-client-voice-client.test.ts",
+      "lines": 195,
+      "imports": ["./daemon-client-voice-client.js", "@chisacode/protocol/messages", "vitest"]
+    },
+    {
+      "id": "file:packages/client/src/daemon-client-voice-client.ts",
+      "type": "source",
+      "path": "packages/client/src/daemon-client-voice-client.ts",
+      "lines": 252,
+      "imports": ["./daemon-client-command-transport.js", "@chisacode/protocol/messages"]
+    },
+    {
       "id": "file:packages/client/src/daemon-client-websocket-transport.ts",
       "type": "source",
       "path": "packages/client/src/daemon-client-websocket-transport.ts",
@@ -162,49 +477,91 @@
       "imports": ["./daemon-client-transport-types.js"]
     },
     {
+      "id": "file:packages/client/src/daemon-client-workspace-commands.ts",
+      "type": "source",
+      "path": "packages/client/src/daemon-client-workspace-commands.ts",
+      "lines": 132,
+      "imports": ["./daemon-client-command-transport.js", "@chisacode/protocol/messages"]
+    },
+    {
       "id": "file:packages/client/src/daemon-client.test.ts",
       "type": "test",
       "path": "packages/client/src/daemon-client.test.ts",
-      "lines": 4044,
+      "lines": 4267,
       "imports": [
         "./daemon-client",
         "@chisacode/protocol/binary-frames/index",
         "@chisacode/protocol/terminal-stream-protocol",
         "vitest",
-        "zod"
+        "zod/v3"
       ]
     },
     {
       "id": "file:packages/client/src/daemon-client.ts",
       "type": "source",
       "path": "packages/client/src/daemon-client.ts",
-      "lines": 5130,
+      "lines": 1835,
       "imports": [
+        "./daemon-client-agent-extension-commands.js",
+        "./daemon-client-agent-interaction.js",
+        "./daemon-client-agent-lifecycle.js",
+        "./daemon-client-agent-waits.js",
+        "./daemon-client-automation-commands.js",
+        "./daemon-client-checkout-commands.js",
+        "./daemon-client-checkout-subscriptions.js",
+        "./daemon-client-cindy-commands.js",
+        "./daemon-client-config-commands.js",
+        "./daemon-client-connection-controller.js",
+        "./daemon-client-file-transfer.js",
+        "./daemon-client-inbound-controller.js",
+        "./daemon-client-provider-commands.js",
+        "./daemon-client-query-commands.js",
+        "./daemon-client-request-coordinator.js",
         "./daemon-client-runtime-metrics.js",
+        "./daemon-client-terminal-client.js",
         "./daemon-client-transport.js",
-        "./terminal-stream-router.js",
+        "./daemon-client-voice-client.js",
+        "./daemon-client-workspace-commands.js",
         "@chisacode/protocol/agent-types",
-        "@chisacode/protocol/binary-frames/index",
-        "@chisacode/protocol/client-capabilities",
-        "@chisacode/protocol/daemon-endpoints",
         "@chisacode/protocol/messages",
         "@chisacode/protocol/provider-config",
-        "zod"
+        "zod/v3"
       ]
     },
     {
       "id": "file:packages/client/src/index.test.ts",
       "type": "test",
       "path": "packages/client/src/index.test.ts",
-      "lines": 807,
+      "lines": 858,
       "imports": ["./index.js", "vitest"]
     },
     {
       "id": "file:packages/client/src/index.ts",
       "type": "source",
       "path": "packages/client/src/index.ts",
-      "lines": 574,
+      "lines": 590,
       "imports": ["./daemon-client.js", "@chisacode/protocol/messages"]
+    },
+    {
+      "id": "file:packages/client/src/relay-device-credentials.test.ts",
+      "type": "test",
+      "path": "packages/client/src/relay-device-credentials.test.ts",
+      "lines": 79,
+      "imports": ["./relay-device-credentials.js", "node:crypto", "vitest"]
+    },
+    {
+      "id": "file:packages/client/src/relay-device-credentials.ts",
+      "type": "source",
+      "path": "packages/client/src/relay-device-credentials.ts",
+      "lines": 186,
+      "imports": ["./sha256-hmac.js"]
+    },
+    {
+      "id": "file:packages/client/src/sha256-hmac.ts",
+      "type": "source",
+      "path": "packages/client/src/sha256-hmac.ts",
+      "lines": 172,
+      "imports": []
     },
     {
       "id": "file:packages/client/src/terminal-stream-router.test.ts",
@@ -241,6 +598,384 @@
   ],
   "edges": [
     {
+      "source": "file:packages/client/src/daemon-client-agent-extension-commands.ts",
+      "target": "file:packages/client/src/daemon-client-command-transport.ts",
+      "type": "imports",
+      "specifier": "./daemon-client-command-transport.js"
+    },
+    {
+      "source": "module:client",
+      "target": "module:protocol",
+      "type": "depends_on",
+      "specifier": "@chisacode/protocol/agent-types"
+    },
+    {
+      "source": "module:client",
+      "target": "module:protocol",
+      "type": "depends_on",
+      "specifier": "@chisacode/protocol/messages"
+    },
+    {
+      "source": "file:packages/client/src/daemon-client-agent-interaction.test.ts",
+      "target": "file:packages/client/src/daemon-client-agent-interaction.ts",
+      "type": "imports",
+      "specifier": "./daemon-client-agent-interaction.js"
+    },
+    {
+      "source": "file:packages/client/src/daemon-client-agent-interaction.test.ts",
+      "target": "file:packages/client/src/daemon-client-rpc-error.ts",
+      "type": "imports",
+      "specifier": "./daemon-client-rpc-error.js"
+    },
+    {
+      "source": "file:packages/client/src/daemon-client-agent-interaction.ts",
+      "target": "file:packages/client/src/daemon-client-command-transport.ts",
+      "type": "imports",
+      "specifier": "./daemon-client-command-transport.js"
+    },
+    {
+      "source": "file:packages/client/src/daemon-client-agent-interaction.ts",
+      "target": "file:packages/client/src/daemon-client-rpc-error.ts",
+      "type": "imports",
+      "specifier": "./daemon-client-rpc-error.js"
+    },
+    {
+      "source": "module:client",
+      "target": "module:protocol",
+      "type": "depends_on",
+      "specifier": "@chisacode/protocol/messages"
+    },
+    {
+      "source": "file:packages/client/src/daemon-client-agent-lifecycle.test.ts",
+      "target": "file:packages/client/src/daemon-client-agent-lifecycle.ts",
+      "type": "imports",
+      "specifier": "./daemon-client-agent-lifecycle.js"
+    },
+    {
+      "source": "module:client",
+      "target": "module:protocol",
+      "type": "depends_on",
+      "specifier": "@chisacode/protocol/messages"
+    },
+    {
+      "source": "file:packages/client/src/daemon-client-agent-lifecycle.ts",
+      "target": "file:packages/client/src/daemon-client-command-transport.ts",
+      "type": "imports",
+      "specifier": "./daemon-client-command-transport.js"
+    },
+    {
+      "source": "module:client",
+      "target": "module:protocol",
+      "type": "depends_on",
+      "specifier": "@chisacode/protocol/agent-types"
+    },
+    {
+      "source": "module:client",
+      "target": "module:protocol",
+      "type": "depends_on",
+      "specifier": "@chisacode/protocol/messages"
+    },
+    {
+      "source": "file:packages/client/src/daemon-client-agent-waits.test.ts",
+      "target": "file:packages/client/src/daemon-client-agent-waits.ts",
+      "type": "imports",
+      "specifier": "./daemon-client-agent-waits.js"
+    },
+    {
+      "source": "file:packages/client/src/daemon-client-agent-waits.test.ts",
+      "target": "file:packages/client/src/daemon-client-request-coordinator.ts",
+      "type": "imports",
+      "specifier": "./daemon-client-request-coordinator.js"
+    },
+    {
+      "source": "module:client",
+      "target": "module:protocol",
+      "type": "depends_on",
+      "specifier": "@chisacode/protocol/messages"
+    },
+    {
+      "source": "file:packages/client/src/daemon-client-agent-waits.ts",
+      "target": "file:packages/client/src/daemon-client-agent-lifecycle.ts",
+      "type": "imports",
+      "specifier": "./daemon-client-agent-lifecycle.js"
+    },
+    {
+      "source": "file:packages/client/src/daemon-client-agent-waits.ts",
+      "target": "file:packages/client/src/daemon-client-request-coordinator.ts",
+      "type": "imports",
+      "specifier": "./daemon-client-request-coordinator.js"
+    },
+    {
+      "source": "module:client",
+      "target": "module:protocol",
+      "type": "depends_on",
+      "specifier": "@chisacode/protocol/agent-types"
+    },
+    {
+      "source": "module:client",
+      "target": "module:protocol",
+      "type": "depends_on",
+      "specifier": "@chisacode/protocol/messages"
+    },
+    {
+      "source": "file:packages/client/src/daemon-client-automation-commands.test.ts",
+      "target": "file:packages/client/src/daemon-client-automation-commands.ts",
+      "type": "imports",
+      "specifier": "./daemon-client-automation-commands.js"
+    },
+    {
+      "source": "file:packages/client/src/daemon-client-automation-commands.test.ts",
+      "target": "file:packages/client/src/daemon-client-command-transport.ts",
+      "type": "imports",
+      "specifier": "./daemon-client-command-transport.js"
+    },
+    {
+      "source": "file:packages/client/src/daemon-client-automation-commands.ts",
+      "target": "file:packages/client/src/daemon-client-command-transport.ts",
+      "type": "imports",
+      "specifier": "./daemon-client-command-transport.js"
+    },
+    {
+      "source": "module:client",
+      "target": "module:protocol",
+      "type": "depends_on",
+      "specifier": "@chisacode/protocol/messages"
+    },
+    {
+      "source": "file:packages/client/src/daemon-client-binary-frames.test.ts",
+      "target": "file:packages/client/src/daemon-client-transport-types.ts",
+      "type": "imports",
+      "specifier": "./daemon-client-transport-types.js"
+    },
+    {
+      "source": "file:packages/client/src/daemon-client-binary-frames.test.ts",
+      "target": "file:packages/client/src/daemon-client-transport.ts",
+      "type": "imports",
+      "specifier": "./daemon-client-transport.js"
+    },
+    {
+      "source": "file:packages/client/src/daemon-client-binary-frames.test.ts",
+      "target": "file:packages/client/src/daemon-client.ts",
+      "type": "imports",
+      "specifier": "./daemon-client.js"
+    },
+    {
+      "source": "module:client",
+      "target": "module:protocol",
+      "type": "depends_on",
+      "specifier": "@chisacode/protocol/binary-frames/index"
+    },
+    {
+      "source": "module:client",
+      "target": "module:protocol",
+      "type": "depends_on",
+      "specifier": "@chisacode/protocol/terminal-stream-protocol"
+    },
+    {
+      "source": "file:packages/client/src/daemon-client-checkout-commands.ts",
+      "target": "file:packages/client/src/daemon-client-command-transport.ts",
+      "type": "imports",
+      "specifier": "./daemon-client-command-transport.js"
+    },
+    {
+      "source": "module:client",
+      "target": "module:protocol",
+      "type": "depends_on",
+      "specifier": "@chisacode/protocol/messages"
+    },
+    {
+      "source": "module:client",
+      "target": "module:protocol",
+      "type": "depends_on",
+      "specifier": "@chisacode/protocol/messages"
+    },
+    {
+      "source": "file:packages/client/src/daemon-client-cindy-commands.ts",
+      "target": "file:packages/client/src/daemon-client-command-transport.ts",
+      "type": "imports",
+      "specifier": "./daemon-client-command-transport.js"
+    },
+    {
+      "source": "module:client",
+      "target": "module:protocol",
+      "type": "depends_on",
+      "specifier": "@chisacode/protocol/messages"
+    },
+    {
+      "source": "module:client",
+      "target": "module:protocol",
+      "type": "depends_on",
+      "specifier": "@chisacode/protocol/messages"
+    },
+    {
+      "source": "file:packages/client/src/daemon-client-config-commands.ts",
+      "target": "file:packages/client/src/daemon-client-command-transport.ts",
+      "type": "imports",
+      "specifier": "./daemon-client-command-transport.js"
+    },
+    {
+      "source": "module:client",
+      "target": "module:protocol",
+      "type": "depends_on",
+      "specifier": "@chisacode/protocol/messages"
+    },
+    {
+      "source": "file:packages/client/src/daemon-client-connection-controller.test.ts",
+      "target": "file:packages/client/src/daemon-client-connection-controller.ts",
+      "type": "imports",
+      "specifier": "./daemon-client-connection-controller.js"
+    },
+    {
+      "source": "file:packages/client/src/daemon-client-connection-controller.test.ts",
+      "target": "file:packages/client/src/daemon-client-transport.ts",
+      "type": "imports",
+      "specifier": "./daemon-client-transport.js"
+    },
+    {
+      "source": "file:packages/client/src/daemon-client-connection-controller.ts",
+      "target": "file:packages/client/src/daemon-client-transport.ts",
+      "type": "imports",
+      "specifier": "./daemon-client-transport.js"
+    },
+    {
+      "source": "module:client",
+      "target": "module:protocol",
+      "type": "depends_on",
+      "specifier": "@chisacode/protocol/client-capabilities"
+    },
+    {
+      "source": "module:client",
+      "target": "module:protocol",
+      "type": "depends_on",
+      "specifier": "@chisacode/protocol/daemon-endpoints"
+    },
+    {
+      "source": "module:client",
+      "target": "module:protocol",
+      "type": "depends_on",
+      "specifier": "@chisacode/protocol/messages"
+    },
+    {
+      "source": "module:client",
+      "target": "module:protocol",
+      "type": "depends_on",
+      "specifier": "@chisacode/protocol/binary-frames/index"
+    },
+    {
+      "source": "module:client",
+      "target": "module:protocol",
+      "type": "depends_on",
+      "specifier": "@chisacode/protocol/messages"
+    },
+    {
+      "source": "file:packages/client/src/daemon-client-inbound-controller.ts",
+      "target": "file:packages/client/src/daemon-client-connection-controller.ts",
+      "type": "imports",
+      "specifier": "./daemon-client-connection-controller.js"
+    },
+    {
+      "source": "file:packages/client/src/daemon-client-inbound-controller.ts",
+      "target": "file:packages/client/src/daemon-client-file-transfer.ts",
+      "type": "imports",
+      "specifier": "./daemon-client-file-transfer.js"
+    },
+    {
+      "source": "file:packages/client/src/daemon-client-inbound-controller.ts",
+      "target": "file:packages/client/src/daemon-client-transport.ts",
+      "type": "imports",
+      "specifier": "./daemon-client-transport.js"
+    },
+    {
+      "source": "module:client",
+      "target": "module:protocol",
+      "type": "depends_on",
+      "specifier": "@chisacode/protocol/agent-types"
+    },
+    {
+      "source": "module:client",
+      "target": "module:protocol",
+      "type": "depends_on",
+      "specifier": "@chisacode/protocol/binary-frames/index"
+    },
+    {
+      "source": "module:client",
+      "target": "module:protocol",
+      "type": "depends_on",
+      "specifier": "@chisacode/protocol/messages"
+    },
+    {
+      "source": "file:packages/client/src/daemon-client-provider-commands.test.ts",
+      "target": "file:packages/client/src/daemon-client-command-transport.ts",
+      "type": "imports",
+      "specifier": "./daemon-client-command-transport.js"
+    },
+    {
+      "source": "file:packages/client/src/daemon-client-provider-commands.test.ts",
+      "target": "file:packages/client/src/daemon-client-provider-commands.ts",
+      "type": "imports",
+      "specifier": "./daemon-client-provider-commands.js"
+    },
+    {
+      "source": "file:packages/client/src/daemon-client-provider-commands.ts",
+      "target": "file:packages/client/src/daemon-client-command-transport.ts",
+      "type": "imports",
+      "specifier": "./daemon-client-command-transport.js"
+    },
+    {
+      "source": "module:client",
+      "target": "module:protocol",
+      "type": "depends_on",
+      "specifier": "@chisacode/protocol/agent-types"
+    },
+    {
+      "source": "module:client",
+      "target": "module:protocol",
+      "type": "depends_on",
+      "specifier": "@chisacode/protocol/provider-config"
+    },
+    {
+      "source": "file:packages/client/src/daemon-client-public-api.test.ts",
+      "target": "file:packages/client/src/index.ts",
+      "type": "imports",
+      "specifier": "./index.js"
+    },
+    {
+      "source": "file:packages/client/src/daemon-client-query-commands.test.ts",
+      "target": "file:packages/client/src/daemon-client-command-transport.ts",
+      "type": "imports",
+      "specifier": "./daemon-client-command-transport.js"
+    },
+    {
+      "source": "file:packages/client/src/daemon-client-query-commands.test.ts",
+      "target": "file:packages/client/src/daemon-client-query-commands.ts",
+      "type": "imports",
+      "specifier": "./daemon-client-query-commands.js"
+    },
+    {
+      "source": "file:packages/client/src/daemon-client-query-commands.ts",
+      "target": "file:packages/client/src/daemon-client-command-transport.ts",
+      "type": "imports",
+      "specifier": "./daemon-client-command-transport.js"
+    },
+    {
+      "source": "module:client",
+      "target": "module:protocol",
+      "type": "depends_on",
+      "specifier": "@chisacode/protocol/messages"
+    },
+    {
+      "source": "file:packages/client/src/daemon-client-reconnect.test.ts",
+      "target": "file:packages/client/src/daemon-client-transport-types.ts",
+      "type": "imports",
+      "specifier": "./daemon-client-transport-types.js"
+    },
+    {
+      "source": "file:packages/client/src/daemon-client-reconnect.test.ts",
+      "target": "file:packages/client/src/daemon-client.ts",
+      "type": "imports",
+      "specifier": "./daemon-client.js"
+    },
+    {
       "source": "file:packages/client/src/daemon-client-relay-e2ee-transport.ts",
       "target": "file:packages/client/src/daemon-client-transport-types.ts",
       "type": "imports",
@@ -257,6 +992,84 @@
       "target": "module:relay",
       "type": "depends_on",
       "specifier": "@chisacode/relay/e2ee"
+    },
+    {
+      "source": "file:packages/client/src/daemon-client-request-coordinator.test.ts",
+      "target": "file:packages/client/src/daemon-client-request-coordinator.ts",
+      "type": "imports",
+      "specifier": "./daemon-client-request-coordinator.js"
+    },
+    {
+      "source": "file:packages/client/src/daemon-client-request-coordinator.test.ts",
+      "target": "file:packages/client/src/daemon-client-rpc-error.ts",
+      "type": "imports",
+      "specifier": "./daemon-client-rpc-error.js"
+    },
+    {
+      "source": "module:client",
+      "target": "module:protocol",
+      "type": "depends_on",
+      "specifier": "@chisacode/protocol/messages"
+    },
+    {
+      "source": "file:packages/client/src/daemon-client-request-coordinator.ts",
+      "target": "file:packages/client/src/daemon-client-command-transport.ts",
+      "type": "imports",
+      "specifier": "./daemon-client-command-transport.js"
+    },
+    {
+      "source": "file:packages/client/src/daemon-client-request-coordinator.ts",
+      "target": "file:packages/client/src/daemon-client-rpc-error.ts",
+      "type": "imports",
+      "specifier": "./daemon-client-rpc-error.js"
+    },
+    {
+      "source": "module:client",
+      "target": "module:protocol",
+      "type": "depends_on",
+      "specifier": "@chisacode/protocol/messages"
+    },
+    {
+      "source": "module:client",
+      "target": "module:protocol",
+      "type": "depends_on",
+      "specifier": "@chisacode/protocol/messages"
+    },
+    {
+      "source": "file:packages/client/src/daemon-client-terminal-client.test.ts",
+      "target": "file:packages/client/src/daemon-client-terminal-client.ts",
+      "type": "imports",
+      "specifier": "./daemon-client-terminal-client.js"
+    },
+    {
+      "source": "module:client",
+      "target": "module:protocol",
+      "type": "depends_on",
+      "specifier": "@chisacode/protocol/binary-frames/index"
+    },
+    {
+      "source": "module:client",
+      "target": "module:protocol",
+      "type": "depends_on",
+      "specifier": "@chisacode/protocol/messages"
+    },
+    {
+      "source": "file:packages/client/src/daemon-client-terminal-client.ts",
+      "target": "file:packages/client/src/daemon-client-command-transport.ts",
+      "type": "imports",
+      "specifier": "./daemon-client-command-transport.js"
+    },
+    {
+      "source": "file:packages/client/src/daemon-client-terminal-client.ts",
+      "target": "file:packages/client/src/terminal-stream-router.ts",
+      "type": "imports",
+      "specifier": "./terminal-stream-router.js"
+    },
+    {
+      "source": "module:client",
+      "target": "module:protocol",
+      "type": "depends_on",
+      "specifier": "@chisacode/protocol/binary-frames/index"
     },
     {
       "source": "module:client",
@@ -295,10 +1108,46 @@
       "specifier": "./daemon-client-websocket-transport.js"
     },
     {
+      "source": "file:packages/client/src/daemon-client-voice-client.test.ts",
+      "target": "file:packages/client/src/daemon-client-voice-client.ts",
+      "type": "imports",
+      "specifier": "./daemon-client-voice-client.js"
+    },
+    {
+      "source": "module:client",
+      "target": "module:protocol",
+      "type": "depends_on",
+      "specifier": "@chisacode/protocol/messages"
+    },
+    {
+      "source": "file:packages/client/src/daemon-client-voice-client.ts",
+      "target": "file:packages/client/src/daemon-client-command-transport.ts",
+      "type": "imports",
+      "specifier": "./daemon-client-command-transport.js"
+    },
+    {
+      "source": "module:client",
+      "target": "module:protocol",
+      "type": "depends_on",
+      "specifier": "@chisacode/protocol/messages"
+    },
+    {
       "source": "file:packages/client/src/daemon-client-websocket-transport.ts",
       "target": "file:packages/client/src/daemon-client-transport-types.ts",
       "type": "imports",
       "specifier": "./daemon-client-transport-types.js"
+    },
+    {
+      "source": "file:packages/client/src/daemon-client-workspace-commands.ts",
+      "target": "file:packages/client/src/daemon-client-command-transport.ts",
+      "type": "imports",
+      "specifier": "./daemon-client-command-transport.js"
+    },
+    {
+      "source": "module:client",
+      "target": "module:protocol",
+      "type": "depends_on",
+      "specifier": "@chisacode/protocol/messages"
     },
     {
       "source": "file:packages/client/src/daemon-client.test.ts",
@@ -320,9 +1169,105 @@
     },
     {
       "source": "file:packages/client/src/daemon-client.ts",
+      "target": "file:packages/client/src/daemon-client-agent-extension-commands.ts",
+      "type": "imports",
+      "specifier": "./daemon-client-agent-extension-commands.js"
+    },
+    {
+      "source": "file:packages/client/src/daemon-client.ts",
+      "target": "file:packages/client/src/daemon-client-agent-interaction.ts",
+      "type": "imports",
+      "specifier": "./daemon-client-agent-interaction.js"
+    },
+    {
+      "source": "file:packages/client/src/daemon-client.ts",
+      "target": "file:packages/client/src/daemon-client-agent-lifecycle.ts",
+      "type": "imports",
+      "specifier": "./daemon-client-agent-lifecycle.js"
+    },
+    {
+      "source": "file:packages/client/src/daemon-client.ts",
+      "target": "file:packages/client/src/daemon-client-agent-waits.ts",
+      "type": "imports",
+      "specifier": "./daemon-client-agent-waits.js"
+    },
+    {
+      "source": "file:packages/client/src/daemon-client.ts",
+      "target": "file:packages/client/src/daemon-client-automation-commands.ts",
+      "type": "imports",
+      "specifier": "./daemon-client-automation-commands.js"
+    },
+    {
+      "source": "file:packages/client/src/daemon-client.ts",
+      "target": "file:packages/client/src/daemon-client-checkout-commands.ts",
+      "type": "imports",
+      "specifier": "./daemon-client-checkout-commands.js"
+    },
+    {
+      "source": "file:packages/client/src/daemon-client.ts",
+      "target": "file:packages/client/src/daemon-client-checkout-subscriptions.ts",
+      "type": "imports",
+      "specifier": "./daemon-client-checkout-subscriptions.js"
+    },
+    {
+      "source": "file:packages/client/src/daemon-client.ts",
+      "target": "file:packages/client/src/daemon-client-cindy-commands.ts",
+      "type": "imports",
+      "specifier": "./daemon-client-cindy-commands.js"
+    },
+    {
+      "source": "file:packages/client/src/daemon-client.ts",
+      "target": "file:packages/client/src/daemon-client-config-commands.ts",
+      "type": "imports",
+      "specifier": "./daemon-client-config-commands.js"
+    },
+    {
+      "source": "file:packages/client/src/daemon-client.ts",
+      "target": "file:packages/client/src/daemon-client-connection-controller.ts",
+      "type": "imports",
+      "specifier": "./daemon-client-connection-controller.js"
+    },
+    {
+      "source": "file:packages/client/src/daemon-client.ts",
+      "target": "file:packages/client/src/daemon-client-file-transfer.ts",
+      "type": "imports",
+      "specifier": "./daemon-client-file-transfer.js"
+    },
+    {
+      "source": "file:packages/client/src/daemon-client.ts",
+      "target": "file:packages/client/src/daemon-client-inbound-controller.ts",
+      "type": "imports",
+      "specifier": "./daemon-client-inbound-controller.js"
+    },
+    {
+      "source": "file:packages/client/src/daemon-client.ts",
+      "target": "file:packages/client/src/daemon-client-provider-commands.ts",
+      "type": "imports",
+      "specifier": "./daemon-client-provider-commands.js"
+    },
+    {
+      "source": "file:packages/client/src/daemon-client.ts",
+      "target": "file:packages/client/src/daemon-client-query-commands.ts",
+      "type": "imports",
+      "specifier": "./daemon-client-query-commands.js"
+    },
+    {
+      "source": "file:packages/client/src/daemon-client.ts",
+      "target": "file:packages/client/src/daemon-client-request-coordinator.ts",
+      "type": "imports",
+      "specifier": "./daemon-client-request-coordinator.js"
+    },
+    {
+      "source": "file:packages/client/src/daemon-client.ts",
       "target": "file:packages/client/src/daemon-client-runtime-metrics.ts",
       "type": "imports",
       "specifier": "./daemon-client-runtime-metrics.js"
+    },
+    {
+      "source": "file:packages/client/src/daemon-client.ts",
+      "target": "file:packages/client/src/daemon-client-terminal-client.ts",
+      "type": "imports",
+      "specifier": "./daemon-client-terminal-client.js"
     },
     {
       "source": "file:packages/client/src/daemon-client.ts",
@@ -332,33 +1277,21 @@
     },
     {
       "source": "file:packages/client/src/daemon-client.ts",
-      "target": "file:packages/client/src/terminal-stream-router.ts",
+      "target": "file:packages/client/src/daemon-client-voice-client.ts",
       "type": "imports",
-      "specifier": "./terminal-stream-router.js"
+      "specifier": "./daemon-client-voice-client.js"
+    },
+    {
+      "source": "file:packages/client/src/daemon-client.ts",
+      "target": "file:packages/client/src/daemon-client-workspace-commands.ts",
+      "type": "imports",
+      "specifier": "./daemon-client-workspace-commands.js"
     },
     {
       "source": "module:client",
       "target": "module:protocol",
       "type": "depends_on",
       "specifier": "@chisacode/protocol/agent-types"
-    },
-    {
-      "source": "module:client",
-      "target": "module:protocol",
-      "type": "depends_on",
-      "specifier": "@chisacode/protocol/binary-frames/index"
-    },
-    {
-      "source": "module:client",
-      "target": "module:protocol",
-      "type": "depends_on",
-      "specifier": "@chisacode/protocol/client-capabilities"
-    },
-    {
-      "source": "module:client",
-      "target": "module:protocol",
-      "type": "depends_on",
-      "specifier": "@chisacode/protocol/daemon-endpoints"
     },
     {
       "source": "module:client",
@@ -389,6 +1322,18 @@
       "target": "module:protocol",
       "type": "depends_on",
       "specifier": "@chisacode/protocol/messages"
+    },
+    {
+      "source": "file:packages/client/src/relay-device-credentials.test.ts",
+      "target": "file:packages/client/src/relay-device-credentials.ts",
+      "type": "imports",
+      "specifier": "./relay-device-credentials.js"
+    },
+    {
+      "source": "file:packages/client/src/relay-device-credentials.ts",
+      "target": "file:packages/client/src/sha256-hmac.ts",
+      "type": "imports",
+      "specifier": "./sha256-hmac.js"
     },
     {
       "source": "file:packages/client/src/terminal-stream-router.test.ts",

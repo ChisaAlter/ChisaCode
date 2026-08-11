@@ -3,6 +3,7 @@ import type { Logger } from "pino";
 import { createConnectionOfferV2, encodeOfferToFragmentUrl } from "./connection-offer.js";
 import { loadOrCreateDaemonKeyPair } from "./daemon-keypair.js";
 import { renderPairingQr } from "./pairing-qr.js";
+import { RelayDeviceCredentialStore } from "./relay-device-credential-store.js";
 import { getOrCreateServerId } from "./server-id.js";
 
 export interface LocalPairingOffer {
@@ -38,10 +39,19 @@ export async function generateLocalPairingOffer(args: {
   const appBaseUrl = args.appBaseUrl ?? "https://app.chisacode.sh";
   const serverId = getOrCreateServerId(args.chisacodeHome, { logger: args.logger });
   const daemonKeyPair = await loadOrCreateDaemonKeyPair(args.chisacodeHome, args.logger);
+  // Issue a short-lived one-time pairing bootstrap token for handshake v2.
+  // Old clients ignore authBootstrap; new clients use it for first device bind.
+  const deviceStore = new RelayDeviceCredentialStore(args.chisacodeHome);
+  const pairing = deviceStore.issuePairingToken(10 * 60_000);
   const offer = await createConnectionOfferV2({
     serverId,
     daemonPublicKeyB64: daemonKeyPair.publicKeyB64,
     relayAuthPublicKeyB64: daemonKeyPair.relayAuthPublicKeyB64,
+    authBootstrap: {
+      version: 1,
+      pairingToken: pairing.token,
+      expiresAtMs: pairing.expiresAtMs,
+    },
     relay: { endpoint: relayPublicEndpoint, useTls: relayPublicUseTls },
   });
   const url = encodeOfferToFragmentUrl({ offer, appBaseUrl });

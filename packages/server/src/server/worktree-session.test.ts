@@ -33,6 +33,7 @@ import {
 import type { TerminalManager } from "../terminal/terminal-manager.js";
 import type { TerminalSession } from "../terminal/terminal.js";
 import type { ManagedAgent } from "./agent/agent-manager.js";
+import { WorkspaceMutationCoordinator } from "./workspace-mutation-coordinator.js";
 import type { AgentStorage, StoredAgentRecord } from "./agent/agent-storage.js";
 import type { PersistedProjectRecord, PersistedWorkspaceRecord } from "./workspace-registry.js";
 import type { GitHubService } from "../services/github-service.js";
@@ -2036,7 +2037,7 @@ describe("archiveChisaCodeWorktree", () => {
     });
   });
 
-  test("proceeds to FS delete even when terminal teardown rejects", async () => {
+  test("fails closed and preserves the worktree when terminal teardown rejects", async () => {
     const { tempDir, repoDir } = createGitRepo();
     cleanupPaths.push(tempDir);
 
@@ -2054,33 +2055,35 @@ describe("archiveChisaCodeWorktree", () => {
       throw new Error("simulated terminal teardown failure");
     });
 
-    await archiveChisaCodeWorktree(
-      {
-        chisacodeHome,
-        github: createGitHubServiceStub(),
-        agentManager: {
-          listAgents: () => [],
-          archiveAgent: vi.fn(async () => ({ archivedAt: new Date().toISOString() })),
-          archiveSnapshot: vi.fn(async () => {
-            throw new Error("not expected for empty agent list");
-          }),
+    await expect(
+      archiveChisaCodeWorktree(
+        {
+          chisacodeHome,
+          github: createGitHubServiceStub(),
+          agentManager: {
+            listAgents: () => [],
+            archiveAgent: vi.fn(async () => ({ archivedAt: new Date().toISOString() })),
+            archiveSnapshot: vi.fn(async () => {
+              throw new Error("not expected for empty agent list");
+            }),
+          },
+          agentStorage: createAgentStorageStub(),
+          archiveWorkspaceRecord: vi.fn(async () => {}),
+          ...createWorkspaceArchivingDeps(),
+          isPathWithinRoot: createIsPathWithinRoot(),
+          killTerminalsUnderPath,
+          sessionLogger: createLogger(),
         },
-        agentStorage: createAgentStorageStub(),
-        archiveWorkspaceRecord: vi.fn(async () => {}),
-        ...createWorkspaceArchivingDeps(),
-        isPathWithinRoot: createIsPathWithinRoot(),
-        killTerminalsUnderPath,
-        sessionLogger: createLogger(),
-      },
-      {
-        targetPath: created.worktreePath,
-        repoRoot: repoDir,
-        requestId: "req-archive-terminal-throws",
-      },
-    );
+        {
+          targetPath: created.worktreePath,
+          repoRoot: repoDir,
+          requestId: "req-archive-terminal-throws",
+        },
+      ),
+    ).rejects.toThrow("Teardown failed before worktree delete");
 
     expect(killTerminalsUnderPath).toHaveBeenCalledTimes(1);
-    expect(existsSync(created.worktreePath)).toBe(false);
+    expect(existsSync(created.worktreePath)).toBe(true);
   });
 
   test("forces a workspace git snapshot refresh after archive deletes a worktree", async () => {
@@ -2132,7 +2135,62 @@ describe("archiveChisaCodeWorktree", () => {
     });
   });
 
-  test("succeeds when git has forgotten about the worktree (no repoRoot)", async () => {
+  test("keeps writes blocked when post-delete finalization throws", async () => {
+    const { tempDir, repoDir } = createGitRepo();
+    cleanupPaths.push(tempDir);
+
+    const chisacodeHome = path.join(tempDir, ".chisacode");
+    const created = await createLegacyWorktreeForTest({
+      branchName: "archive-finalize-throws",
+      cwd: repoDir,
+      baseBranch: "main",
+      worktreeSlug: "archive-finalize-throws",
+      runSetup: false,
+      chisacodeHome,
+    });
+    const mutationCoordinator = new WorkspaceMutationCoordinator();
+    const github = createGitHubServiceStub();
+    github.invalidate = () => {
+      throw new Error("simulated post-delete invalidation failure");
+    };
+
+    await expect(
+      archiveChisaCodeWorktree(
+        {
+          chisacodeHome,
+          github,
+          workspaceGitService: { getSnapshot: vi.fn(async () => null) },
+          agentManager: {
+            listAgents: () => [],
+            archiveAgent: vi.fn(async () => ({ archivedAt: new Date().toISOString() })),
+            archiveSnapshot: vi.fn(async () => {
+              throw new Error("not expected for empty agent list");
+            }),
+          },
+          agentStorage: createAgentStorageStub(),
+          archiveWorkspaceRecord: vi.fn(async () => {}),
+          ...createWorkspaceArchivingDeps(),
+          isPathWithinRoot: createIsPathWithinRoot(),
+          killTerminalsUnderPath: vi.fn(async () => {}),
+          mutationCoordinator,
+          sessionLogger: createLogger(),
+        },
+        {
+          targetPath: created.worktreePath,
+          repoRoot: repoDir,
+          requestId: "req-archive-finalize-throws",
+        },
+      ),
+    ).rejects.toThrow("simulated post-delete invalidation failure");
+
+    expect(existsSync(created.worktreePath)).toBe(false);
+    expect(mutationCoordinator.getState(created.worktreePath)).toBe(
+      "delete_complete_pending_finalize",
+    );
+    expect(mutationCoordinator.isAcceptingWrites(created.worktreePath)).toBe(false);
+  });
+
+  test("preserves the worktree when git has forgotten it and repoRoot is unavailable", async () => {
     const { tempDir, repoDir } = createGitRepo();
     cleanupPaths.push(tempDir);
 
@@ -2152,6 +2210,8 @@ describe("archiveChisaCodeWorktree", () => {
       force: true,
     });
     expect(existsSync(created.worktreePath)).toBe(true);
+    const recoveryPath = path.join(created.worktreePath, "recovery.txt");
+    writeFileSync(recoveryPath, "preserve me\n");
 
     const emitted: SessionOutboundMessage[] = [];
     await handleChisaCodeWorktreeArchiveRequest(
@@ -2188,8 +2248,8 @@ describe("archiveChisaCodeWorktree", () => {
         { type: "chisacode_worktree_archive_response" }
       > => message.type === "chisacode_worktree_archive_response",
     );
-    expect(response?.payload.success).toBe(true);
-    expect(response?.payload.error).toBeNull();
-    expect(existsSync(created.worktreePath)).toBe(false);
+    expect(response?.payload.success).toBe(false);
+    expect(response?.payload.error?.message).toContain("preserved for recovery");
+    expect(readFileSync(recoveryPath, "utf8")).toBe("preserve me\n");
   });
 });

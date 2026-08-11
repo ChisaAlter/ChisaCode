@@ -2,6 +2,7 @@ import { constants, promises as fs } from "fs";
 import type { FileHandle } from "fs/promises";
 import path from "path";
 import { expandUserPath, resolvePathFromBase } from "../path-utils.js";
+import { MAX_FILE_TRANSFER_BYTES } from "@chisacode/protocol/binary-frames/file-transfer";
 
 export type ExplorerEntryKind = "file" | "directory";
 export type ExplorerFileKind = "text" | "image" | "binary";
@@ -188,6 +189,9 @@ export async function readExplorerFileBytes({
 
     if (!stats.isFile()) {
       throw new Error("Requested path is not a file");
+    }
+    if (stats.size > MAX_FILE_TRANSFER_BYTES) {
+      throw new Error(`File exceeds maximum transfer size (${MAX_FILE_TRANSFER_BYTES} bytes)`);
     }
 
     const ext = path.extname(filePath.resolvedPath).toLowerCase();

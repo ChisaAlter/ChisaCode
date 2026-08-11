@@ -35,12 +35,18 @@ export async function createConnectionOfferV2(args: {
   daemonPublicKeyB64: string;
   relayAuthPublicKeyB64?: string;
   relay: { endpoint: string; useTls?: boolean };
+  authBootstrap?: {
+    version: 1;
+    pairingToken: string;
+    expiresAtMs: number;
+  };
 }): Promise<ConnectionOffer> {
   return ConnectionOfferV2Schema.parse({
     v: 2,
     serverId: args.serverId,
     daemonPublicKeyB64: args.daemonPublicKeyB64,
     relayAuthPublicKeyB64: args.relayAuthPublicKeyB64,
+    ...(args.authBootstrap ? { authBootstrap: args.authBootstrap } : {}),
     relay: args.relay,
   });
 }

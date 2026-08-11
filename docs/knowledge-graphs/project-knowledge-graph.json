@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "generatedAt": "2026-06-27T10:03:07.453Z",
+  "generatedAt": "2026-08-10T08:52:02.168Z",
   "generator": "scripts/generate-modular-knowledge-graphs.mjs",
   "project": {
     "name": "chisacode",
@@ -24,13 +24,13 @@
       "handoffPath": "docs/modules/app/README.md",
       "dependsOn": ["client", "expo-two-way-audio", "highlight", "protocol"],
       "dependedOnBy": [],
-      "fileCount": 1128,
+      "fileCount": 1286,
       "categories": {
-        "config": 39,
-        "test": 355,
-        "support": 52,
+        "config": 41,
+        "test": 397,
+        "support": 62,
         "docs": 2,
-        "source": 680
+        "source": 784
       }
     },
     {
@@ -48,13 +48,13 @@
       "handoffPath": "docs/modules/cli/README.md",
       "dependsOn": ["client", "protocol", "server"],
       "dependedOnBy": [],
-      "fileCount": 161,
+      "fileCount": 179,
       "categories": {
         "config": 2,
         "docs": 1,
-        "test": 52,
-        "source": 99,
-        "support": 7
+        "test": 60,
+        "source": 108,
+        "support": 8
       }
     },
     {
@@ -72,13 +72,13 @@
       "handoffPath": "docs/modules/client/README.md",
       "dependsOn": ["protocol", "relay"],
       "dependedOnBy": ["app", "cli", "server"],
-      "fileCount": 22,
+      "fileCount": 58,
       "categories": {
         "support": 4,
         "docs": 2,
-        "config": 3,
-        "source": 9,
-        "test": 4
+        "config": 4,
+        "source": 30,
+        "test": 18
       }
     },
     {
@@ -96,13 +96,13 @@
       "handoffPath": "docs/modules/desktop/README.md",
       "dependsOn": ["server"],
       "dependedOnBy": [],
-      "fileCount": 70,
+      "fileCount": 75,
       "categories": {
         "config": 3,
         "docs": 1,
-        "support": 6,
-        "source": 40,
-        "test": 20
+        "support": 7,
+        "test": 23,
+        "source": 41
       }
     },
     {
@@ -119,11 +119,12 @@
       "handoffPath": "docs/modules/expo-two-way-audio/README.md",
       "dependsOn": [],
       "dependedOnBy": ["app"],
-      "fileCount": 33,
+      "fileCount": 35,
       "categories": {
         "support": 5,
         "config": 18,
         "docs": 5,
+        "test": 2,
         "source": 5
       }
     },
@@ -141,12 +142,12 @@
       "handoffPath": "docs/modules/highlight/README.md",
       "dependsOn": [],
       "dependedOnBy": ["app", "server"],
-      "fileCount": 11,
+      "fileCount": 13,
       "categories": {
         "config": 2,
         "docs": 1,
-        "test": 3,
-        "source": 5
+        "test": 4,
+        "source": 6
       }
     },
     {
@@ -164,12 +165,12 @@
       "handoffPath": "docs/modules/protocol/README.md",
       "dependsOn": [],
       "dependedOnBy": ["app", "cli", "client", "server"],
-      "fileCount": 65,
+      "fileCount": 109,
       "categories": {
         "config": 4,
         "docs": 1,
-        "test": 27,
-        "source": 33
+        "test": 48,
+        "source": 56
       }
     },
     {
@@ -187,9 +188,8 @@
       "handoffPath": "docs/modules/relay/README.md",
       "dependsOn": [],
       "dependedOnBy": ["client", "server"],
-      "fileCount": 185,
+      "fileCount": 17,
       "categories": {
-        "support": 168,
         "config": 3,
         "docs": 1,
         "source": 7,
@@ -211,13 +211,13 @@
       "handoffPath": "docs/modules/server/README.md",
       "dependsOn": ["client", "highlight", "protocol", "relay"],
       "dependedOnBy": ["cli", "desktop"],
-      "fileCount": 597,
+      "fileCount": 849,
       "categories": {
         "docs": 4,
-        "config": 20,
+        "config": 27,
         "support": 15,
-        "test": 289,
-        "source": 269
+        "test": 357,
+        "source": 446
       }
     }
   ],

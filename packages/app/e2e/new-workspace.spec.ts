@@ -290,7 +290,7 @@ test.describe("New workspace flow", () => {
       const branchInfo = await readWorktreeBranchInfo({
         worktreePath: createdWorkspace.workspaceId,
       });
-      expect(branchInfo.currentBranch).toBeTruthy();
+      expect(branchInfo.currentBranch).not.toBeNull();
     } finally {
       await tempRepo.cleanup();
     }

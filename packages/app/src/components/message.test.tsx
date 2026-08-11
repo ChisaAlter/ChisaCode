@@ -152,8 +152,8 @@ describe("ThoughtMessage", () => {
       />,
     );
 
-    expect(screen.getByText("推理过程")).toBeTruthy();
-    expect(screen.getByTestId("thought-pixel-dot")).toBeTruthy();
+    expect(screen.getByText("推理过程")).not.toBeNull();
+    expect(screen.getByTestId("thought-pixel-dot")).not.toBeNull();
     expect(screen.queryByTestId("brain-icon")).toBeNull();
     expect(screen.queryByTestId("thought-message-preview")).toBeNull();
     expect(screen.getByTestId("thought-message-content").textContent).toBe(
@@ -162,7 +162,7 @@ describe("ThoughtMessage", () => {
 
     fireEvent.click(screen.getByTestId("thought-message-toggle"));
 
-    expect(screen.getByTestId("thought-message-preview")).toBeTruthy();
+    expect(screen.getByTestId("thought-message-preview")).not.toBeNull();
     expect(screen.queryByTestId("thought-message-content")).toBeNull();
   });
 
@@ -176,8 +176,8 @@ describe("ThoughtMessage", () => {
       />,
     );
 
-    expect(screen.getByText("推理过程")).toBeTruthy();
-    expect(screen.getByTestId("thought-message-preview")).toBeTruthy();
+    expect(screen.getByText("推理过程")).not.toBeNull();
+    expect(screen.getByTestId("thought-message-preview")).not.toBeNull();
     expect(screen.queryByTestId("thought-message-content")).toBeNull();
 
     fireEvent.click(screen.getByTestId("thought-message-toggle"));
@@ -190,7 +190,7 @@ describe("ThoughtMessage", () => {
   it("uses the running label and expands reasoning while streaming", () => {
     render(<ThoughtMessage text="Still streaming" status="loading" isLastInSequence />);
 
-    expect(screen.getByText("正在推理")).toBeTruthy();
+    expect(screen.getByText("正在推理")).not.toBeNull();
     expect(screen.getByTestId("synced-loader").getAttribute("data-color")).toBe("#b45309");
     expect(screen.queryByTestId("thought-message-preview")).toBeNull();
     expect(screen.getByTestId("thought-message-content").textContent).toBe("Still streaming");
