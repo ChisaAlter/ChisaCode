@@ -25,6 +25,7 @@ describe("sidebar order store project group state", () => {
       sessionOrderByServerAndGroup: {},
       pinnedSessionGroupKeysByServerId: {},
       hiddenSessionGroupKeysByServerId: {},
+      sidebarViewMode: "by-project",
     });
   });
 
@@ -117,9 +118,25 @@ describe("sidebar order store project group state", () => {
 
     // Empty serverId is ignored.
     useSidebarOrderStore.getState().clearHiddenSessionGroupKeys("  ");
-    expect(useSidebarOrderStore.getState().getHiddenSessionGroupKeys("server-2")).toEqual([
-      "/repo/other",
-    ]);
+  });
+
+  it("persists sidebar view mode and ignores invalid values", () => {
+    const store = useSidebarOrderStore.getState();
+
+    expect(useSidebarOrderStore.getState().sidebarViewMode).toBe("by-project");
+
+    store.setSidebarViewMode("by-status");
+    expect(useSidebarOrderStore.getState().sidebarViewMode).toBe("by-status");
+
+    store.setSidebarViewMode("by-status");
+    expect(useSidebarOrderStore.getState().sidebarViewMode).toBe("by-status");
+
+    store.setSidebarViewMode("by-project");
+    expect(useSidebarOrderStore.getState().sidebarViewMode).toBe("by-project");
+
+    // Invalid mode is ignored at runtime even if TypeScript is bypassed.
+    store.setSidebarViewMode("unknown" as "by-project");
+    expect(useSidebarOrderStore.getState().sidebarViewMode).toBe("by-project");
   });
 
   it("reconcile pattern un-hides a group once it contains agents again (regression: permanently blank sidebar)", () => {

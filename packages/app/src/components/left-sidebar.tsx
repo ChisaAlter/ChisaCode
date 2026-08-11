@@ -3,6 +3,7 @@ import {
   FolderOpen,
   GitCompare,
   House,
+  ListFilter,
   MessageSquareText,
   MessagesSquare,
   PanelLeftClose,
@@ -27,6 +28,7 @@ import {
   Pressable,
   StyleSheet as RNStyleSheet,
   Text,
+  TextInput,
   useWindowDimensions,
   View,
   type PressableStateCallbackType,
@@ -87,6 +89,7 @@ import {
   getDesktopSidebarResizeState,
   getMobileSidebarWidth,
 } from "@/utils/sidebar-animation-state";
+import { resolveSidebarViewSwitcherLayout } from "@/utils/sidebar-view-switcher-layout";
 import {
   buildHostSessionsRoute,
   buildSettingsRoute,
@@ -99,6 +102,8 @@ import {
 import { useLastDraftDirectory } from "@/stores/last-draft-directory-store";
 import { navigateToAgent } from "@/utils/navigate-to-agent";
 import { buildSidebarLiveAgents, mergeSidebarSessionSources } from "@/utils/sidebar-session-source";
+import { useSidebarOrderStore, type SidebarViewMode } from "@/stores/sidebar-order-store";
+import { useSidebarV2Store } from "@/sidebar-v2/store";
 import { SidebarAgentListSkeleton } from "./sidebar-agent-list-skeleton";
 import { SidebarSessionList } from "./sidebar-session-list";
 
@@ -134,6 +139,11 @@ interface SidebarSharedProps {
   handleHome: () => void;
   handleSearch: () => void;
   handleSettings: () => void;
+  sidebarViewMode: SidebarViewMode;
+  setSidebarViewMode: (mode: SidebarViewMode) => void;
+  searchQuery: string;
+  setSearchQuery: (query: string) => void;
+  clearSearch: () => void;
   renderHostOption: (input: {
     option: ComboboxOption;
     selected: boolean;
@@ -315,7 +325,15 @@ export const LeftSidebar = memo(function LeftSidebar({ selectedAgentId }: LeftSi
     void openProjectPicker();
   }, [openNewConversationStart, openProjectPicker]);
 
+  const sidebarViewMode = useSidebarOrderStore((state) => state.sidebarViewMode);
+  const setSidebarViewMode = useSidebarOrderStore((state) => state.setSidebarViewMode);
+  const searchQuery = useSidebarV2Store((state) => state.searchQuery);
+  const setSearchQuery = useSidebarV2Store((state) => state.setSearchQuery);
+  const clearSearch = useSidebarV2Store((state) => state.clearSearch);
+
   const handleSearch = useCallback(() => {
+    // Desktop command center remains available as a power-user path; the
+    // in-sidebar search box is the primary filter for the session list.
     void import("@/desktop/electron/command-center-window-controls").then(({ openCommandCenter }) =>
       openCommandCenter(),
     );
@@ -386,6 +404,11 @@ export const LeftSidebar = memo(function LeftSidebar({ selectedAgentId }: LeftSi
     handleHostSelect,
     renderHostOption,
     handleSearch,
+    sidebarViewMode,
+    setSidebarViewMode,
+    searchQuery,
+    setSearchQuery,
+    clearSearch,
   };
 
   if (isCompactLayout) {
@@ -540,12 +563,25 @@ function SidebarTopActions({
   onCloseSidebar,
   onNewConversation,
   onSearch,
+  sidebarViewMode,
+  setSidebarViewMode,
+  searchQuery,
+  setSearchQuery,
+  clearSearch,
   variant = "mobile",
+  railWidth,
 }: {
   onCloseSidebar: () => void;
   onNewConversation: () => void;
   onSearch: () => void;
+  sidebarViewMode: SidebarViewMode;
+  setSidebarViewMode: (mode: SidebarViewMode) => void;
+  searchQuery: string;
+  setSearchQuery: (query: string) => void;
+  clearSearch: () => void;
   variant?: "mobile" | "desktop";
+  /** Painted rail width used for switcher density (minWidth + abbreviate). */
+  railWidth: number;
 }) {
   const { t } = useTranslation();
   // Desktop open rail: shell control is fixed over the empty left of the top row only.
@@ -561,9 +597,79 @@ function SidebarTopActions({
     ],
     [variant],
   );
+  // Switcher sits on its own row under search — full rail width minus padding.
+  const switcherLayout = useMemo(
+    () =>
+      resolveSidebarViewSwitcherLayout({
+        sidebarWidth: railWidth,
+        placement: "full-width",
+        variant,
+      }),
+    [railWidth, variant],
+  );
+  const viewSwitcherStyle = useMemo(
+    () => [styles.viewSwitcher, { minWidth: switcherLayout.switcherMinWidth }],
+    [switcherLayout.switcherMinWidth],
+  );
+  const handleSelectByProject = useCallback(
+    () => setSidebarViewMode("by-project"),
+    [setSidebarViewMode],
+  );
+  const handleSelectByStatus = useCallback(
+    () => setSidebarViewMode("by-status"),
+    [setSidebarViewMode],
+  );
+  const byProjectSelected = sidebarViewMode === "by-project";
+  const byStatusSelected = sidebarViewMode === "by-status";
+  const byProjectAccessibilityState = useMemo(
+    () => ({ selected: byProjectSelected }),
+    [byProjectSelected],
+  );
+  const byStatusAccessibilityState = useMemo(
+    () => ({ selected: byStatusSelected }),
+    [byStatusSelected],
+  );
+  const byProjectTabStyle = useMemo(
+    () => [
+      styles.viewTab,
+      switcherLayout.density === "icon" && styles.viewTabIconOnly,
+      byProjectSelected && styles.viewTabActive,
+    ],
+    [byProjectSelected, switcherLayout.density],
+  );
+  const byStatusTabStyle = useMemo(
+    () => [
+      styles.viewTab,
+      switcherLayout.density === "icon" && styles.viewTabIconOnly,
+      byStatusSelected && styles.viewTabActive,
+    ],
+    [byStatusSelected, switcherLayout.density],
+  );
+  const byProjectTextStyle = useMemo(
+    () => [styles.viewTabText, byProjectSelected && styles.viewTabTextActive],
+    [byProjectSelected],
+  );
+  const byStatusTextStyle = useMemo(
+    () => [styles.viewTabText, byStatusSelected && styles.viewTabTextActive],
+    [byStatusSelected],
+  );
+  const byProjectIconColor = byProjectSelected
+    ? foregroundColorMapping
+    : foregroundMutedColorMapping;
+  const byStatusIconColor = byStatusSelected ? foregroundColorMapping : foregroundMutedColorMapping;
+  const byProjectLabel = switcherLayout.useShortLabels
+    ? t("sidebar.byProjectShort")
+    : t("sidebar.byProject");
+  const byStatusLabel = switcherLayout.useShortLabels
+    ? t("sidebar.byStatusShort")
+    : t("sidebar.byStatus");
+  // Full names stay on accessibility even when the chrome is short/icon-only.
+  const byProjectA11yLabel = t("sidebar.byProject");
+  const byStatusA11yLabel = t("sidebar.byStatus");
 
   // Desktop: shell DesktopSidebarControl owns open/close (T3 SidebarTrigger).
   // Keep the close tile only on compact so the mobile drawer can still dismiss.
+  // Order: top chrome (shell + search icon) → 新对话 → 搜索会话 → 按项目/按状态.
   return (
     <View style={topAreaStyle}>
       <View style={styles.sidebarTopActions}>
@@ -593,6 +699,65 @@ function SidebarTopActions({
           onPress={onNewConversation}
           testID="sidebar-new-conversation"
         />
+      </View>
+      <View style={styles.searchRow} testID="sidebar-search-row">
+        <ThemedIconHost Icon={Search} size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
+        <TextInput
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          placeholder={t("sidebar.searchSessions")}
+          style={styles.searchInput}
+          placeholderTextColor={undefined}
+          accessibilityRole="search"
+          testID="sidebar-search-input"
+        />
+        {searchQuery.length > 0 ? (
+          <Pressable onPress={clearSearch} hitSlop={8} testID="sidebar-search-clear">
+            <Text style={styles.searchClear}>×</Text>
+          </Pressable>
+        ) : null}
+      </View>
+      <View
+        style={viewSwitcherStyle}
+        testID="sidebar-view-switcher"
+        nativeID={`sidebar-view-switcher-${switcherLayout.density}`}
+      >
+        <View testID="sidebar-v2-scope-trigger" collapsable={false} style={styles.scopeTriggerShim}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={byProjectA11yLabel}
+            accessibilityState={byProjectAccessibilityState}
+            onPress={handleSelectByProject}
+            style={byProjectTabStyle}
+            testID="sidebar-view-by-project"
+          >
+            {switcherLayout.showIcons ? (
+              <ThemedIconHost Icon={FolderOpen} size={ICON_SIZE.xs} uniProps={byProjectIconColor} />
+            ) : null}
+            {switcherLayout.showLabels ? (
+              <Text style={byProjectTextStyle} numberOfLines={1} ellipsizeMode="clip">
+                {byProjectLabel}
+              </Text>
+            ) : null}
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={byStatusA11yLabel}
+            accessibilityState={byStatusAccessibilityState}
+            onPress={handleSelectByStatus}
+            style={byStatusTabStyle}
+            testID="sidebar-view-by-status"
+          >
+            {switcherLayout.showIcons ? (
+              <ThemedIconHost Icon={ListFilter} size={ICON_SIZE.xs} uniProps={byStatusIconColor} />
+            ) : null}
+            {switcherLayout.showLabels ? (
+              <Text style={byStatusTextStyle} numberOfLines={1} ellipsizeMode="clip">
+                {byStatusLabel}
+              </Text>
+            ) : null}
+          </Pressable>
+        </View>
       </View>
     </View>
   );
@@ -663,9 +828,12 @@ function SidebarPrimaryAction({
       style={actionStyle}
       testID={testID}
     >
-      <Text style={styles.sidebarPrimaryActionText} numberOfLines={1}>
-        {label}
-      </Text>
+      {/* Dual testids: production new-conversation + legacy SidebarV2 e2e hydration gate. */}
+      <View testID="sidebar-v2-new-project" collapsable={false}>
+        <Text style={styles.sidebarPrimaryActionText} numberOfLines={1}>
+          {label}
+        </Text>
+      </View>
     </Pressable>
   );
 }
@@ -951,6 +1119,11 @@ function MobileSidebar({
   handleHome,
   handleSearch,
   handleSettings,
+  sidebarViewMode,
+  setSidebarViewMode,
+  searchQuery,
+  setSearchQuery,
+  clearSearch,
   insetsTop,
   insetsBottom,
   isOpen,
@@ -1218,6 +1391,12 @@ function MobileSidebar({
               onCloseSidebar={closeToAgent}
               onNewConversation={handleOpenProject}
               onSearch={handleSearch}
+              sidebarViewMode={sidebarViewMode}
+              setSidebarViewMode={setSidebarViewMode}
+              searchQuery={searchQuery}
+              setSearchQuery={setSearchQuery}
+              clearSearch={clearSearch}
+              railWidth={mobileSidebarWidth}
             />
 
             <MobileSidebarQuickActions
@@ -1244,6 +1423,8 @@ function MobileSidebar({
                 onLoadMore={handleLoadMore}
                 onAgentPress={handleAgentPress}
                 onAddProject={handleOpenProject}
+                viewMode={sidebarViewMode}
+                searchQuery={searchQuery}
               />
             )}
 
@@ -1291,6 +1472,11 @@ function DesktopSidebar({
   handleHome,
   handleSearch,
   handleSettings,
+  sidebarViewMode,
+  setSidebarViewMode,
+  searchQuery,
+  setSearchQuery,
+  clearSearch,
   isOpen,
 }: DesktopSidebarProps) {
   const sidebarWidth = usePanelStore((state) => state.sidebarWidth);
@@ -1386,7 +1572,13 @@ function DesktopSidebar({
             onCloseSidebar={closeDesktopAgentList}
             onNewConversation={handleOpenProject}
             onSearch={handleSearch}
+            sidebarViewMode={sidebarViewMode}
+            setSidebarViewMode={setSidebarViewMode}
+            searchQuery={searchQuery}
+            setSearchQuery={setSearchQuery}
+            clearSearch={clearSearch}
             variant="desktop"
+            railWidth={sidebarWidth}
           />
         </View>
 
@@ -1403,6 +1595,8 @@ function DesktopSidebar({
             isLoadingMore={isLoadingMore}
             onLoadMore={handleLoadMore}
             onAddProject={handleOpenProject}
+            viewMode={sidebarViewMode}
+            searchQuery={searchQuery}
           />
         )}
 
@@ -1605,6 +1799,89 @@ const styles = StyleSheet.create((theme) => ({
   sidebarTopHeadingSpacer: {
     flex: 1,
     minWidth: 0,
+  },
+  viewSwitcher: {
+    // Full-width row under search — does not share the shell/search top strip.
+    alignSelf: "stretch",
+    // minWidth is set inline from resolveSidebarViewSwitcherLayout.
+    minWidth: 72,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+    backgroundColor: theme.colors.surface1,
+    borderRadius: 8,
+    padding: 2,
+    overflow: "hidden",
+  },
+  scopeTriggerShim: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: "row",
+    alignItems: "stretch",
+  },
+  viewTab: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 28,
+    maxHeight: 28,
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    backgroundColor: "transparent",
+    overflow: "hidden",
+  },
+  viewTabIconOnly: {
+    paddingHorizontal: 4,
+  },
+  viewTabActive: {
+    backgroundColor: theme.colors.surface0,
+    ...(isWeb
+      ? ({
+          boxShadow: "inset 0 0 0 1px rgba(20, 23, 31, 0.04)",
+        } as object)
+      : {}),
+  },
+  viewTabText: {
+    flexShrink: 1,
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: theme.fontWeight.medium,
+    color: theme.colors.foregroundMuted,
+    ...(isWeb
+      ? ({
+          whiteSpace: "nowrap",
+        } as object)
+      : {}),
+  },
+  viewTabTextActive: {
+    color: theme.colors.foreground,
+  },
+  searchRow: {
+    minHeight: 34,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    paddingHorizontal: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: theme.colors.surfaceSidebar,
+  },
+  searchInput: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: 13,
+    color: theme.colors.foreground,
+    paddingVertical: 0,
+  },
+  searchClear: {
+    fontSize: 18,
+    lineHeight: 18,
+    color: theme.colors.foregroundFaint,
+    paddingHorizontal: 4,
   },
   sidebarTopIconCluster: {
     flexDirection: "row",

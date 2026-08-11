@@ -740,10 +740,12 @@ describe("model gateway", () => {
   test("returns converted streaming responses before the upstream stream completes", async () => {
     const encoder = new TextEncoder();
     let releaseUpstream!: () => void;
+    let upstreamReleased = false;
     const stream = new ReadableStream({
       start(controller) {
         controller.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"hi"}}]}\n\n'));
         releaseUpstream = () => {
+          upstreamReleased = true;
           controller.enqueue(
             encoder.encode('data: {"choices":[{"delta":{"content":" there"}}]}\n\n'),
           );
@@ -767,20 +769,93 @@ describe("model gateway", () => {
         }),
     });
 
-    await expect(
-      Promise.race([
-        responsePromise.then(() => "resolved"),
-        new Promise((resolve) => setTimeout(() => resolve("pending"), 20)),
-      ]),
-    ).resolves.toBe("resolved");
+    let responseResolved = false;
+    const settledResponsePromise = responsePromise.then((response) => {
+      responseResolved = true;
+      return response;
+    });
+    try {
+      await vi.waitFor(() => expect(responseResolved).toBe(true));
+      expect(upstreamReleased).toBe(false);
+    } finally {
+      releaseUpstream();
+    }
 
-    const response = await responsePromise;
-    const textPromise = response.text();
-    releaseUpstream();
-    const text = await textPromise;
+    const response = await settledResponsePromise;
+    const text = await response.text();
     expect(text).toContain('"text":"hi"');
     expect(text).toContain('"text":" there"');
     expect(text).toContain("event: message_stop");
+  });
+
+  test("forwards the request abort signal to a direct upstream fetch", async () => {
+    const abortController = new AbortController();
+    let observedSignal: AbortSignal | null = null;
+    const response = await handleModelGatewayRequest({
+      gateway: makeGateway(),
+      targetFormat: "chatCompletions",
+      requestBody: {
+        model: "glm-5",
+        messages: [{ role: "user", content: "hello" }],
+      },
+      signal: abortController.signal,
+      fetchImpl: async (_url, init) => {
+        observedSignal = init?.signal ?? null;
+        return Response.json({ choices: [{ message: { content: "ok" } }] });
+      },
+    });
+
+    expect(observedSignal).toBe(abortController.signal);
+    await response.arrayBuffer();
+  });
+
+  test("propagates abort through synthetic nodes without running the aggregator", async () => {
+    const abortController = new AbortController();
+    let fetchStarted = false;
+    let fetchCalls = 0;
+    let observedSignal: AbortSignal | null = null;
+    const responsePromise = handleModelGatewayRequest({
+      gateway: makeGateway({
+        models: [
+          { id: "glm-5", label: "GLM 5", isDefault: true },
+          { id: "glm-5-air", label: "GLM 5 Air" },
+        ],
+        syntheticModels: [
+          {
+            id: "moa-coder",
+            label: "MoA Coder",
+            references: [{ model: "glm-5-air" }],
+            aggregatorModel: "glm-5",
+            rounds: 1,
+          },
+        ],
+      }),
+      targetFormat: "chatCompletions",
+      requestBody: {
+        model: "moa-coder",
+        messages: [{ role: "user", content: "hello" }],
+      },
+      signal: abortController.signal,
+      fetchImpl: async (_url, init) => {
+        fetchCalls += 1;
+        fetchStarted = true;
+        observedSignal = init?.signal ?? null;
+        return await new Promise<Response>((_resolve, reject) => {
+          const signal = init?.signal;
+          if (!signal) {
+            reject(new Error("synthetic fetch did not receive an AbortSignal"));
+            return;
+          }
+          signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+        });
+      },
+    });
+
+    await vi.waitFor(() => expect(fetchStarted).toBe(true));
+    expect(observedSignal).toBe(abortController.signal);
+    abortController.abort();
+    await expect(responsePromise).rejects.toMatchObject({ name: "AbortError" });
+    expect(fetchCalls).toBe(1);
   });
 
   test("converts a chat completions request to Anthropic Messages when only Anthropic upstream exists", async () => {

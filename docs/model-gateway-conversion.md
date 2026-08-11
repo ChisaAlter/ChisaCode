@@ -41,6 +41,13 @@
 - **目标 responses**：`response.output_item.added/done` 携带完整 `function_call` item，`id` 与 `call_id` 同源（缺 id 时由 `newToolCallId()` 生成，跨 item 稳定）。
 - 所有方向的工具调用都在 finish 事件前输出，文本保持实时流式。
 
+### HTTP 出口与取消语义
+
+- 请求体 `stream: true` 时，daemon HTTP route 以背压感知的管道逐块转发 `Response.body`；同格式、跨格式转换和非 2xx 响应都不做整响应缓冲。
+- route 保留响应状态码与 `content-type`，不复制可能失效的 `content-length`；`stream: false` 保持完整响应发送语义。
+- 客户端在响应自然结束前断开时，route 会取消上游 fetch；该信号也贯穿 synthetic/MoA 节点和聚合请求，取消不会被吞成普通节点错误或继续启动聚合器。
+- synthetic/MoA 当前仍先完成节点与聚合计算，再生成 SSE 形状的响应；上述 HTTP 转发不会把它变成增量生成。
+
 ## 3. 工具参数清洗
 
 - `sanitizeToolCallArguments`：JSON 解析成功后树遍历（任意深度）截断 `timeout_ms` / `timeoutMs` / `timeout` / `command_timeout_ms` 为整数（`Math.trunc`，负数归 0）；无变化时返回原始文本（不重序列化）；解析失败回退原文本。

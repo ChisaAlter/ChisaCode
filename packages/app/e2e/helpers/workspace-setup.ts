@@ -77,9 +77,14 @@ function createWorkspaceButton(page: Page, repoPath: string) {
 }
 
 async function revealWorkspaceButton(page: Page): Promise<void> {
-  const newProject = page.getByTestId("sidebar-v2-new-project");
+  const newProject = page
+    .getByTestId("sidebar-v2-new-project")
+    .or(page.getByTestId("sidebar-new-conversation"));
   if (await newProject.count()) {
-    await newProject.hover().catch(() => undefined);
+    await newProject
+      .first()
+      .hover()
+      .catch(() => undefined);
   }
 }
 
@@ -91,9 +96,11 @@ export async function createWorkspaceFromSidebar(page: Page, repoPath: string): 
     await expect(button).toBeEnabled({ timeout: 30_000 });
     await button.click();
   } else {
-    const newProject = page.getByTestId("sidebar-v2-new-project");
-    await expect(newProject).toBeVisible({ timeout: 30_000 });
-    await newProject.click();
+    const newProject = page
+      .getByTestId("sidebar-v2-new-project")
+      .or(page.getByTestId("sidebar-new-conversation"));
+    await expect(newProject.first()).toBeVisible({ timeout: 30_000 });
+    await newProject.first().click();
   }
   await expect(page).toHaveURL(/\/new\?/, { timeout: 30_000 });
   await expect(composerInput(page)).toBeVisible({

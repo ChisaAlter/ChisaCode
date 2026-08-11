@@ -23,10 +23,19 @@ test.describe("Sidebar thread rename", () => {
       await row.click({ button: "right" });
       await page.getByTestId("sidebar-v2-menu-rename").click();
 
-      const input = row.getByRole("textbox");
+      // Soft Workbench renames via AdaptiveRenameModal, not an inline row textbox.
+      const modal = page.getByTestId(new RegExp(`^sidebar-session-rename-modal-.*-${agent.id}$`));
+      await expect(modal).toBeVisible({ timeout: 10_000 });
+      const input = page.getByTestId(
+        new RegExp(`^sidebar-session-rename-modal-.*-${agent.id}-input$`),
+      );
       await expect(input).toBeVisible({ timeout: 10_000 });
       await input.fill("Feature Rename 2");
-      await input.press("Enter");
+      const submit = page.getByTestId(
+        new RegExp(`^sidebar-session-rename-modal-.*-${agent.id}-submit$`),
+      );
+      await expect(submit).toBeEnabled({ timeout: 10_000 });
+      await submit.click();
 
       await expect(row).toContainText("Feature Rename 2", { timeout: 30_000 });
     } finally {

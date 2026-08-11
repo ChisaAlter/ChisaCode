@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } 
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import * as Clipboard from "expo-clipboard";
+import { useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight, Plus } from "lucide-react-native";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { ThemedIconHost } from "@/components/themed-icon-host";
@@ -11,6 +12,11 @@ import { useSessionStore } from "@/stores/session-store";
 import { useWorkspaceLayoutStore } from "@/stores/workspace-layout-store";
 import { navigateToAgent } from "@/utils/navigate-to-agent";
 import { confirmDialog } from "@/utils/confirm-dialog";
+import {
+  getSidebarAgentLabelCacheSnapshot,
+  patchAgentLabelsInSidebarCaches,
+  restoreSidebarAgentLabelCacheSnapshot,
+} from "@/utils/sidebar-agent-label-cache";
 import { SidebarV2Row } from "./SidebarV2Row";
 import { SidebarV2Search, SidebarV2NewThreadButton } from "./SidebarV2Search";
 import { SidebarV2ScopeMenu, SidebarV2ProjectSettingsDialog } from "./SidebarV2ScopeMenu";
@@ -91,6 +97,7 @@ export function SidebarV2({
 }: SidebarV2Props) {
   const { t } = useTranslation();
   const toast = useToast();
+  const queryClient = useQueryClient();
   const [projectSettingsProject, setProjectSettingsProject] =
     useState<SidebarV2ProjectSnapshot | null>(null);
   const [nowMinute, setNowMinute] = useState(() => quantizeToMinute(new Date()));
@@ -320,8 +327,16 @@ export function SidebarV2({
         next.set(thread.id, { ...existing, labels: { ...existing.labels, ...labels } });
         return next;
       });
+      // Keep React Query caches in parity with the session store so other
+      // surfaces that read sidebarAgentsList / allAgents / agentHistory still
+      // see the optimistic pin / snooze / settle labels.
+      patchAgentLabelsInSidebarCaches(queryClient, {
+        serverId: activeServerId,
+        agentId: thread.id,
+        labels,
+      });
     },
-    [activeServerId],
+    [activeServerId, queryClient],
   );
 
   const handleUpdateLabels = useCallback(
@@ -339,17 +354,23 @@ export function SidebarV2({
           for (const key of Object.keys(labels)) previousLabels[key] = live.labels[key] ?? "";
         }
       }
+      const cacheSnapshot = activeServerId
+        ? getSidebarAgentLabelCacheSnapshot(queryClient, activeServerId)
+        : null;
       patchAgentLabelsLocally(thread, labels);
       try {
         await client.updateAgent(thread.id, { labels });
         return true;
       } catch (error) {
         patchAgentLabelsLocally(thread, previousLabels);
+        if (activeServerId && cacheSnapshot) {
+          restoreSidebarAgentLabelCacheSnapshot(queryClient, activeServerId, cacheSnapshot);
+        }
         toast.error(error instanceof Error ? error.message : t("sidebarV2.actionFailed"));
         return false;
       }
     },
-    [activeServerId, getClient, patchAgentLabelsLocally, t, toast],
+    [activeServerId, getClient, patchAgentLabelsLocally, queryClient, t, toast],
   );
 
   const navigateToThreadId = useCallback(

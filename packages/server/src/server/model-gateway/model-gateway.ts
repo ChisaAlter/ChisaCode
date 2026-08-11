@@ -110,6 +110,7 @@ interface HandleModelGatewayRequestOptions {
   targetFormat: ModelGatewayTargetFormat;
   requestBody: JsonRecord;
   fetchImpl?: typeof fetch;
+  signal?: AbortSignal;
 }
 
 interface UpstreamSelection {
@@ -2396,8 +2397,9 @@ async function fetchGatewayChatCompletion(input: {
   selection: UpstreamSelection;
   chatBody: JsonRecord;
   fetchImpl: typeof fetch;
+  signal?: AbortSignal;
 }): Promise<JsonRecord> {
-  const { selection, chatBody, fetchImpl } = input;
+  const { selection, chatBody, fetchImpl, signal } = input;
   const upstreamBody = applyUpstreamCompatibility(
     selection.format,
     selection.upstream,
@@ -2407,6 +2409,7 @@ async function fetchGatewayChatCompletion(input: {
     method: "POST",
     headers: buildUpstreamHeaders(selection.format, selection.upstream.apiKey),
     body: JSON.stringify(upstreamBody),
+    signal,
   });
   if (!response.ok) {
     throw new Error(`Synthetic model upstream request failed with HTTP ${response.status}`);
@@ -2452,12 +2455,14 @@ async function runSyntheticNode(input: {
   model: string;
   parameters?: SyntheticModelParameters;
   id?: string;
+  signal?: AbortSignal;
 }): Promise<MoaTestNodeTrace> {
   const startedAt = performance.now();
   try {
     const chatResponse = await fetchGatewayChatCompletion({
       selection: input.selection,
       fetchImpl: input.fetchImpl,
+      signal: input.signal,
       chatBody: buildSyntheticChatBody({
         requestBody: input.requestBody,
         messages: input.messages,
@@ -2474,6 +2479,9 @@ async function runSyntheticNode(input: {
       durationMs: Math.round(performance.now() - startedAt),
     };
   } catch (error) {
+    if (input.signal?.aborted) {
+      input.signal.throwIfAborted();
+    }
     return {
       id: input.id ?? null,
       model: input.model,
@@ -2491,8 +2499,10 @@ async function runSyntheticModelWithTrace(input: {
   targetFormat: ModelGatewayTargetFormat;
   requestBody: JsonRecord;
   fetchImpl: typeof fetch;
+  signal?: AbortSignal;
 }): Promise<MoaTestResult> {
-  const { gateway, syntheticModel, targetFormat, requestBody, fetchImpl } = input;
+  const { gateway, syntheticModel, targetFormat, requestBody, fetchImpl, signal } = input;
+  signal?.throwIfAborted();
   const startedAt = performance.now();
   const messages = getChatMessages(targetFormat, requestBody);
   const selection = selectUpstream(gateway, "chatCompletions");
@@ -2501,6 +2511,7 @@ async function runSyntheticModelWithTrace(input: {
   let references: string[] = [];
 
   for (const layer of plan.layers) {
+    signal?.throwIfAborted();
     const layerParameters = mergeSyntheticParameters(plan.defaults, layer.parameters);
     const layerMessages = withReferenceSystemMessage(
       messages,
@@ -2520,6 +2531,7 @@ async function runSyntheticModelWithTrace(input: {
         runSyntheticNode({
           selection,
           fetchImpl,
+          signal,
           requestBody,
           messages: layerMessages,
           model: node.model,
@@ -2543,10 +2555,12 @@ async function runSyntheticModelWithTrace(input: {
 
   const aggregatorStartedAt = performance.now();
   const aggregatorParameters = mergeSyntheticParameters(plan.defaults, plan.aggregator.parameters);
+  signal?.throwIfAborted();
   try {
     const aggregateResponse = await fetchGatewayChatCompletion({
       selection,
       fetchImpl,
+      signal,
       chatBody: buildSyntheticChatBody({
         requestBody,
         messages: withReferenceSystemMessage(
@@ -2572,6 +2586,9 @@ async function runSyntheticModelWithTrace(input: {
       },
     };
   } catch (error) {
+    if (signal?.aborted) {
+      signal.throwIfAborted();
+    }
     const message = error instanceof Error ? error.message : String(error);
     return {
       finalText: "",
@@ -2594,6 +2611,7 @@ async function runSyntheticModel(input: {
   targetFormat: ModelGatewayTargetFormat;
   requestBody: JsonRecord;
   fetchImpl: typeof fetch;
+  signal?: AbortSignal;
 }): Promise<string> {
   const result = await runSyntheticModelWithTrace(input);
   if (result.aggregator.status === "error") {
@@ -2732,11 +2750,18 @@ function syntheticResponseForTarget(input: {
   return Response.json(body, { status: 200 });
 }
 
+/**
+ * Sends a model gateway request and converts the upstream response when formats differ.
+ * @param options Gateway selection, request payload, fetch implementation, and cancellation signal
+ * @returns The upstream or converted response without consuming its streaming body
+ * @throws If selection, upstream transport, conversion, or synthetic generation fails
+ */
 export async function handleModelGatewayRequest({
   gateway,
   targetFormat,
   requestBody,
   fetchImpl = fetch,
+  signal,
 }: HandleModelGatewayRequestOptions): Promise<Response> {
   const syntheticModel = findSyntheticModel(gateway, requestBody.model);
   if (syntheticModel) {
@@ -2746,6 +2771,7 @@ export async function handleModelGatewayRequest({
       targetFormat,
       requestBody,
       fetchImpl,
+      signal,
     });
     return syntheticResponseForTarget({ targetFormat, requestBody, text });
   }
@@ -2760,6 +2786,7 @@ export async function handleModelGatewayRequest({
     method: "POST",
     headers: buildUpstreamHeaders(selection.format, selection.upstream.apiKey),
     body: JSON.stringify(upstreamBody),
+    signal,
   });
   return convertUpstreamResponse(targetFormat, selection.format, requestBody, response);
 }

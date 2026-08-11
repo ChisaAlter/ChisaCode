@@ -2,6 +2,9 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
+/** Sidebar list presentation: project groups vs lifecycle shelves. */
+export type SidebarViewMode = "by-project" | "by-status";
+
 interface SidebarOrderStoreState {
   projectOrderByServerId: Record<string, string[]>;
   workspaceOrderByServerAndProject: Record<string, string[]>;
@@ -9,6 +12,8 @@ interface SidebarOrderStoreState {
   sessionOrderByServerAndGroup: Record<string, string[]>;
   pinnedSessionGroupKeysByServerId: Record<string, string[]>;
   hiddenSessionGroupKeysByServerId: Record<string, string[]>;
+  /** Persisted list presentation mode; defaults to project groups. */
+  sidebarViewMode: SidebarViewMode;
   getProjectOrder: (serverId: string) => string[];
   setProjectOrder: (serverId: string, keys: string[]) => void;
   getWorkspaceOrder: (serverId: string, projectKey: string) => string[];
@@ -35,6 +40,11 @@ interface SidebarOrderStoreState {
    * @param serverId The host server id
    */
   clearHiddenSessionGroupKeys: (serverId: string) => void;
+  /**
+   * Sets the sidebar list presentation mode.
+   * @param mode Project-grouped list or lifecycle shelves
+   */
+  setSidebarViewMode: (mode: SidebarViewMode) => void;
 }
 
 function normalizeKeys(keys: string[]): string[] {
@@ -66,6 +76,7 @@ export const useSidebarOrderStore = create<SidebarOrderStoreState>()(
       sessionOrderByServerAndGroup: {},
       pinnedSessionGroupKeysByServerId: {},
       hiddenSessionGroupKeysByServerId: {},
+      sidebarViewMode: "by-project",
       getProjectOrder: (serverId) => {
         const key = serverId.trim();
         if (!key) {
@@ -243,6 +254,17 @@ export const useSidebarOrderStore = create<SidebarOrderStoreState>()(
           };
         });
       },
+      setSidebarViewMode: (mode) => {
+        if (mode !== "by-project" && mode !== "by-status") {
+          return;
+        }
+        set((state) => {
+          if (state.sidebarViewMode === mode) {
+            return state;
+          }
+          return { sidebarViewMode: mode };
+        });
+      },
     }),
     {
       name: "sidebar-project-workspace-order",
@@ -254,6 +276,7 @@ export const useSidebarOrderStore = create<SidebarOrderStoreState>()(
         sessionOrderByServerAndGroup: state.sessionOrderByServerAndGroup,
         pinnedSessionGroupKeysByServerId: state.pinnedSessionGroupKeysByServerId,
         hiddenSessionGroupKeysByServerId: state.hiddenSessionGroupKeysByServerId,
+        sidebarViewMode: state.sidebarViewMode,
       }),
     },
   ),

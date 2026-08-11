@@ -5,6 +5,9 @@ import { open } from "fs/promises";
 import { randomUUID } from "node:crypto";
 import { hostname as getHostname } from "node:os";
 import path from "node:path";
+import { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
+import type { ReadableStream as NodeReadableStream } from "node:stream/web";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import type { Logger } from "pino";
@@ -49,6 +52,10 @@ const WINDOWS_DRIVE_RE = /^[A-Za-z]:\\/;
 // settings, chat) never need more than 1mb.
 const DEFAULT_JSON_LIMIT = "1mb";
 const MODEL_GATEWAY_JSON_LIMIT = "50mb";
+
+function isHttpExchangeClosed(req: express.Request, res: express.Response): boolean {
+  return req.aborted || res.destroyed;
+}
 
 // Lightweight per-IP fixed-window rate limiter (no new dependency). Bounds the
 // request rate from any single source so a compromised or runaway client
@@ -737,6 +744,34 @@ export async function createChisaCodeDaemon(
     });
   });
 
+  const sendModelGatewayResponse = async (
+    response: Response,
+    res: express.Response,
+    stream: boolean,
+    signal: AbortSignal,
+  ): Promise<void> => {
+    res.status(response.status);
+    const contentType = response.headers.get("content-type");
+    if (contentType) {
+      res.setHeader("content-type", contentType);
+    }
+
+    if (!stream) {
+      res.send(Buffer.from(await response.arrayBuffer()));
+      return;
+    }
+
+    if (!response.body) {
+      res.end();
+      return;
+    }
+
+    res.flushHeaders();
+    // Node and DOM currently declare different BYOB view bounds for the same WHATWG stream.
+    const body = response.body as unknown as NodeReadableStream;
+    await pipeline(Readable.fromWeb(body), res, { signal });
+  };
+
   const runModelGatewayRequest = async (
     req: express.Request,
     res: express.Response,
@@ -756,28 +791,54 @@ export async function createChisaCodeDaemon(
       return;
     }
 
+    const baseRequestBody =
+      req.body && typeof req.body === "object" && !Array.isArray(req.body) ? req.body : {};
+    const modelOverride =
+      typeof req.params.modelOverride === "string" && req.params.modelOverride.trim().length > 0
+        ? req.params.modelOverride.trim()
+        : null;
+    const requestBody = modelOverride
+      ? { ...baseRequestBody, model: modelOverride }
+      : baseRequestBody;
+    const abortController = new AbortController();
+    const abortUpstream = (): void => {
+      if (!res.writableEnded && !abortController.signal.aborted) {
+        abortController.abort();
+      }
+    };
+    req.once("aborted", abortUpstream);
+    res.once("close", abortUpstream);
+    if (isHttpExchangeClosed(req, res)) {
+      abortUpstream();
+    }
+
     try {
-      const baseRequestBody =
-        req.body && typeof req.body === "object" && !Array.isArray(req.body) ? req.body : {};
-      const modelOverride =
-        typeof req.params.modelOverride === "string" && req.params.modelOverride.trim().length > 0
-          ? req.params.modelOverride.trim()
-          : null;
       const response = await handleModelGatewayRequest({
         gateway,
         targetFormat,
-        requestBody: modelOverride ? { ...baseRequestBody, model: modelOverride } : baseRequestBody,
+        requestBody,
+        signal: abortController.signal,
       });
-      res.status(response.status);
-      const contentType = response.headers.get("content-type");
-      if (contentType) {
-        res.setHeader("content-type", contentType);
-      }
-      res.send(Buffer.from(await response.arrayBuffer()));
+      await sendModelGatewayResponse(
+        response,
+        res,
+        requestBody.stream === true,
+        abortController.signal,
+      );
     } catch (error) {
+      if (abortController.signal.aborted) {
+        return;
+      }
       logger.warn({ err: error, gatewayId, targetFormat }, "Model gateway request failed");
+      if (res.headersSent) {
+        res.destroy(error instanceof Error ? error : new Error(String(error)));
+        return;
+      }
       const message = error instanceof Error ? error.message : String(error);
       res.status(502).json({ error: message });
+    } finally {
+      req.off("aborted", abortUpstream);
+      res.off("close", abortUpstream);
     }
   };
 

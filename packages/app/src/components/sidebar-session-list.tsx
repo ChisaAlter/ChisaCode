@@ -14,6 +14,7 @@ import {
 import * as Clipboard from "expo-clipboard";
 import { router } from "expo-router";
 import {
+  AlarmClock,
   Archive,
   CheckCheck,
   ChevronDown,
@@ -24,8 +25,10 @@ import {
   MoreHorizontal,
   Pencil,
   Pin,
+  RefreshCw,
   SquarePen,
   Trash2,
+  Undo2,
 } from "lucide-react-native";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
@@ -48,12 +51,16 @@ import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
+  ContextMenuLabel,
+  ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { AdaptiveRenameModal } from "@/components/rename-modal";
@@ -64,7 +71,7 @@ import {
   useSuppressedArchiveAgentIds,
   type ArchiveAgentInput,
 } from "@/hooks/use-archive-agent";
-import { agentHistoryQueryKey, agentHistoryQueryKeys } from "@/hooks/agent-history-query-key";
+import { agentHistoryQueryKeys } from "@/hooks/agent-history-query-key";
 import { useSessionStore } from "@/stores/session-store";
 import { useSidebarOrderStore } from "@/stores/sidebar-order-store";
 import { useWorkspaceLayoutStore } from "@/stores/workspace-layout-store";
@@ -73,6 +80,11 @@ import { confirmDialog } from "@/utils/confirm-dialog";
 import { rememberArchivedAgentDetail } from "@/utils/agent-history-navigation";
 import type { SidebarSessionDraft } from "@/utils/left-sidebar-drafts";
 import { navigateToAgent } from "@/utils/navigate-to-agent";
+import {
+  getSidebarAgentLabelCacheSnapshot,
+  patchAgentLabelsInSidebarCaches,
+  restoreSidebarAgentLabelCacheSnapshot,
+} from "@/utils/sidebar-agent-label-cache";
 import {
   applyStableSidebarSessionOrder,
   buildWorktreeProjectHintsFromSources,
@@ -83,8 +95,22 @@ import {
   type SidebarSessionGroup,
 } from "@/utils/sidebar-session-groups";
 import { buildHostNewWorkspaceRoute } from "@/utils/host-routes";
+import { agentToSidebarThread } from "@/sidebar-v2/agent-adapter";
+import {
+  canSettle,
+  canSnooze,
+  effectiveSettled,
+  effectiveSnoozed,
+  resolveSnoozePresets,
+  snoozeWakeLabel,
+  type SnoozePreset,
+} from "@/sidebar-v2/snooze";
+import { sidebarV2ThreadKey, useSidebarV2Store } from "@/sidebar-v2/store";
+import { formatRelativeTimeLabel } from "@/sidebar-v2/presentation";
+import { SidebarStatusView } from "@/components/sidebar-status-view";
 
 const SIDEBAR_PINNED_LABEL = "chisacode.sidebarPinned";
+const AUTO_SETTLE_AFTER_DAYS = 3;
 
 interface SidebarSessionListProps {
   agents: AggregatedAgent[];
@@ -99,34 +125,12 @@ interface SidebarSessionListProps {
   onLoadMore?: () => void;
   onAgentPress?: () => void;
   onAddProject?: () => void;
+  viewMode?: "by-project" | "by-status";
+  searchQuery?: string;
 }
 
 interface SidebarSessionRenderGroup extends SidebarSessionGroup {
   workspaceId: string | null;
-}
-
-interface AgentListCacheAgent {
-  id?: string | null;
-  labels?: Record<string, string>;
-}
-
-interface AgentListCachePayload {
-  entries?: Array<{ agent?: AgentListCacheAgent | null } | null>;
-}
-
-interface AgentHistoryCacheAgent {
-  id?: string | null;
-  labels?: Record<string, string>;
-}
-
-interface AgentHistoryCachePayload {
-  pages?: Array<{ agents?: AgentHistoryCacheAgent[] }>;
-}
-
-interface SidebarPinnedCacheSnapshot {
-  sidebarAgentsList: AgentListCachePayload | undefined;
-  allAgents: AgentListCachePayload | undefined;
-  agentHistory: AgentHistoryCachePayload | undefined;
 }
 
 // Route theme colors through ThemedIconHost so call-site `uniProps` never
@@ -154,6 +158,7 @@ const ThemedRefreshControlHost = withUnistyles(RefreshControlHost);
 const foregroundMutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
 const accentColorMapping = (theme: Theme) => ({ color: theme.colors.accent });
+const statusWarningColorMapping = (theme: Theme) => ({ color: theme.colors.statusWarning });
 const foregroundSubtleTextColorMapping = (theme: Theme) => ({
   color: theme.colors.foregroundSubtleText,
 });
@@ -195,6 +200,32 @@ function isSidebarAgentPinned(agent: AggregatedAgent): boolean {
 function getSidebarSessionTitle(agent: AggregatedAgent, fallbackTitle: string): string {
   const title = agent.title?.trim();
   return title && title.length > 0 ? title : fallbackTitle;
+}
+
+function resolveSidebarAgentLifecycle(agent: AggregatedAgent, nowIso: string) {
+  const thread = agentToSidebarThread(agent);
+  const isSnoozed = effectiveSnoozed(thread, { now: nowIso });
+  const isSettled =
+    !isSnoozed &&
+    effectiveSettled(thread, {
+      now: nowIso,
+      autoSettleAfterDays: AUTO_SETTLE_AFTER_DAYS,
+      changeRequestState: thread.changeRequestState,
+    });
+  return {
+    thread,
+    isSnoozed,
+    isSettled,
+    canSnoozeThread: canSnooze(thread, { now: nowIso }),
+    canSettleThread: canSettle(thread, { now: nowIso }),
+    wakeLabel:
+      isSnoozed && thread.snoozedUntil
+        ? snoozeWakeLabel(thread.snoozedUntil, { now: nowIso })
+        : null,
+    settledTimeLabel: isSettled
+      ? formatRelativeTimeLabel(thread.settledAt ?? thread.lastActivityAt, new Date(nowIso))
+      : null,
+  };
 }
 
 async function copySidebarSessionText({
@@ -283,138 +314,6 @@ function updateProjectNameInStore(serverId: string, projectKey: string, projectN
   });
 }
 
-function patchAgentLabelsInListPayload<T extends AgentListCachePayload | undefined>(
-  payload: T,
-  input: { agentId: string; labels: Record<string, string> },
-): T {
-  if (!payload || !Array.isArray(payload.entries)) {
-    return payload;
-  }
-
-  let changed = false;
-  const entries = payload.entries.map((entry) => {
-    if (!entry?.agent || entry.agent.id !== input.agentId) {
-      return entry;
-    }
-    changed = true;
-    return {
-      ...entry,
-      agent: {
-        ...entry.agent,
-        labels: {
-          ...entry.agent.labels,
-          ...input.labels,
-        },
-      },
-    };
-  });
-
-  return changed ? ({ ...payload, entries } as T) : payload;
-}
-
-function patchAgentLabelsInHistoryPayload<T extends AgentHistoryCachePayload | undefined>(
-  payload: T,
-  input: { agentId: string; labels: Record<string, string> },
-): T {
-  if (!payload || !Array.isArray(payload.pages)) {
-    return payload;
-  }
-
-  let changed = false;
-  const pages = payload.pages.map((page) => {
-    if (!Array.isArray(page.agents)) {
-      return page;
-    }
-
-    let pageChanged = false;
-    const agents = page.agents.map((agent) => {
-      if (agent.id !== input.agentId) {
-        return agent;
-      }
-      pageChanged = true;
-      changed = true;
-      return {
-        ...agent,
-        labels: {
-          ...agent.labels,
-          ...input.labels,
-        },
-      };
-    });
-    return pageChanged ? { ...page, agents } : page;
-  });
-
-  return changed ? ({ ...payload, pages } as T) : payload;
-}
-
-function getPinnedCacheSnapshot(
-  queryClient: ReturnType<typeof useQueryClient>,
-  serverId: string,
-): SidebarPinnedCacheSnapshot {
-  // Soft sidebar uses the active-only history key; fall back to full history for other surfaces.
-  return {
-    sidebarAgentsList: queryClient.getQueryData<AgentListCachePayload | undefined>([
-      "sidebarAgentsList",
-      serverId,
-    ]),
-    allAgents: queryClient.getQueryData<AgentListCachePayload | undefined>(["allAgents", serverId]),
-    agentHistory:
-      queryClient.getQueryData<AgentHistoryCachePayload | undefined>(
-        agentHistoryQueryKey(serverId, { includeArchived: false }),
-      ) ??
-      queryClient.getQueryData<AgentHistoryCachePayload | undefined>(
-        agentHistoryQueryKey(serverId),
-      ),
-  };
-}
-
-function restoreCachedQuerySnapshot(
-  queryClient: ReturnType<typeof useQueryClient>,
-  queryKey: readonly unknown[],
-  snapshot: unknown,
-): void {
-  if (snapshot === undefined) {
-    queryClient.removeQueries({ queryKey, exact: true });
-    return;
-  }
-  queryClient.setQueryData(queryKey, snapshot);
-}
-
-function restorePinnedCacheSnapshot(
-  queryClient: ReturnType<typeof useQueryClient>,
-  serverId: string,
-  snapshot: SidebarPinnedCacheSnapshot,
-): void {
-  restoreCachedQuerySnapshot(
-    queryClient,
-    ["sidebarAgentsList", serverId],
-    snapshot.sidebarAgentsList,
-  );
-  restoreCachedQuerySnapshot(queryClient, ["allAgents", serverId], snapshot.allAgents);
-  for (const queryKey of agentHistoryQueryKeys(serverId)) {
-    restoreCachedQuerySnapshot(queryClient, queryKey, snapshot.agentHistory);
-  }
-}
-
-function patchAgentLabelsInSidebarCaches(
-  queryClient: ReturnType<typeof useQueryClient>,
-  input: { serverId: string; agentId: string; labels: Record<string, string> },
-): void {
-  queryClient.setQueryData<AgentListCachePayload | undefined>(
-    ["sidebarAgentsList", input.serverId],
-    (current) => patchAgentLabelsInListPayload(current, input),
-  );
-  queryClient.setQueryData<AgentListCachePayload | undefined>(
-    ["allAgents", input.serverId],
-    (current) => patchAgentLabelsInListPayload(current, input),
-  );
-  for (const queryKey of agentHistoryQueryKeys(input.serverId)) {
-    queryClient.setQueryData<AgentHistoryCachePayload | undefined>(queryKey, (current) =>
-      patchAgentLabelsInHistoryPayload(current, input),
-    );
-  }
-}
-
 function deleteAgentFromStore(input: { serverId: string; agentId: string }) {
   useWorkspaceLayoutStore.getState().unpinAgentEverywhere(input.agentId);
   const setAgents = useSessionStore.getState().setAgents;
@@ -470,6 +369,13 @@ function SidebarSessionRow({
   onRename,
   onArchive,
   onDelete,
+  onSnooze,
+  onWake,
+  onSettle,
+  onUnsettle,
+  onRegenerateTitle,
+  onMarkUnread,
+  nowIso,
   isPinning,
   isArchiving,
   isDeleting,
@@ -483,6 +389,13 @@ function SidebarSessionRow({
   onRename: (agent: AggregatedAgent) => void;
   onArchive: (agent: AggregatedAgent) => void;
   onDelete: (agent: AggregatedAgent) => void;
+  onSnooze: (agent: AggregatedAgent, untilIso: string) => void;
+  onWake: (agent: AggregatedAgent) => void;
+  onSettle: (agent: AggregatedAgent) => void;
+  onUnsettle: (agent: AggregatedAgent) => void;
+  onRegenerateTitle: (agent: AggregatedAgent) => void;
+  onMarkUnread: (agent: AggregatedAgent) => void;
+  nowIso: string;
   isPinning: boolean;
   isArchiving: boolean;
   isDeleting: boolean;
@@ -497,6 +410,8 @@ function SidebarSessionRow({
   const isSelected = selectedAgentId === `${agent.serverId}:${agent.id}`;
   const isPinned = isSidebarAgentPinned(agent);
   const [isHovered, setIsHovered] = useState(false);
+  const lifecycle = useMemo(() => resolveSidebarAgentLifecycle(agent, nowIso), [agent, nowIso]);
+  const snoozePresets = useMemo(() => resolveSnoozePresets(new Date(nowIso)), [nowIso]);
 
   const sessionTitle = getSidebarSessionTitle(agent, t("session.newSession"));
   const rowBaseStyle = isCompact ? styles.row : styles.desktopRow;
@@ -522,12 +437,22 @@ function SidebarSessionRow({
   const rowStyle = useCallback(
     ({ hovered = false, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
       rowBaseStyle,
+      // Settled dimming first so hover/selected can restore full opacity.
+      lifecycle.isSettled && !isSelected && styles.rowSettled,
       Boolean(hovered) && rowHoveredStyle,
       isSelected && rowSelectedStyle,
       isDragging && styles.desktopRowDragging,
       pressed && rowPressedStyle,
     ],
-    [isDragging, isSelected, rowBaseStyle, rowHoveredStyle, rowPressedStyle, rowSelectedStyle],
+    [
+      isDragging,
+      isSelected,
+      lifecycle.isSettled,
+      rowBaseStyle,
+      rowHoveredStyle,
+      rowPressedStyle,
+      rowSelectedStyle,
+    ],
   );
   const titleStyle = rowTitleStyle;
   const rowAccessibilityState = useMemo(() => ({ selected: isSelected }), [isSelected]);
@@ -552,6 +477,18 @@ function SidebarSessionRow({
   const handleTogglePin = useCallback(() => onTogglePin(agent), [agent, onTogglePin]);
   const handleArchive = useCallback(() => onArchive(agent), [agent, onArchive]);
   const handleDelete = useCallback(() => onDelete(agent), [agent, onDelete]);
+  const handleWake = useCallback(() => onWake(agent), [agent, onWake]);
+  const handleSettle = useCallback(() => onSettle(agent), [agent, onSettle]);
+  const handleUnsettle = useCallback(() => onUnsettle(agent), [agent, onUnsettle]);
+  const handleRegenerateTitle = useCallback(
+    () => onRegenerateTitle(agent),
+    [agent, onRegenerateTitle],
+  );
+  const handleMarkUnread = useCallback(() => onMarkUnread(agent), [agent, onMarkUnread]);
+  const handleSnoozePreset = useCallback(
+    (preset: SnoozePreset) => onSnooze(agent, preset.snoozedUntil),
+    [agent, onSnooze],
+  );
   const handleCopyPath = useCallback(() => {
     if (!agent.cwd) {
       return;
@@ -589,6 +526,22 @@ function SidebarSessionRow({
   );
   const deleteLeading = useMemo(
     () => <ThemedIconHost Icon={Trash2} size={16} uniProps={foregroundMutedColorMapping} />,
+    [],
+  );
+  const settleLeading = useMemo(
+    () => <ThemedIconHost Icon={CheckCheck} size={16} uniProps={foregroundMutedColorMapping} />,
+    [],
+  );
+  const unsettleLeading = useMemo(
+    () => <ThemedIconHost Icon={Undo2} size={16} uniProps={foregroundMutedColorMapping} />,
+    [],
+  );
+  const wakeLeading = useMemo(
+    () => <ThemedIconHost Icon={AlarmClock} size={16} uniProps={statusWarningColorMapping} />,
+    [],
+  );
+  const regenerateLeading = useMemo(
+    () => <ThemedIconHost Icon={RefreshCw} size={16} uniProps={foregroundMutedColorMapping} />,
     [],
   );
   const handleQuickPin = useCallback(
@@ -647,6 +600,95 @@ function SidebarSessionRow({
     [isSelected],
   );
 
+  let settleMenuItem: React.ReactNode = null;
+  if (lifecycle.isSettled) {
+    settleMenuItem = isCompact ? (
+      <DropdownMenuItem
+        testID={`sidebar-session-unsettle-${agent.serverId}-${agent.id}`}
+        onSelect={handleUnsettle}
+        leading={unsettleLeading}
+      >
+        {t("sidebarV2.unsettle")}
+      </DropdownMenuItem>
+    ) : (
+      <ContextMenuItem
+        testID={`sidebar-session-unsettle-${agent.serverId}-${agent.id}`}
+        onSelect={handleUnsettle}
+        leading={unsettleLeading}
+      >
+        {t("sidebarV2.unsettle")}
+      </ContextMenuItem>
+    );
+  } else if (isCompact) {
+    settleMenuItem = (
+      <DropdownMenuItem
+        testID={`sidebar-session-settle-${agent.serverId}-${agent.id}`}
+        onSelect={handleSettle}
+        disabled={!lifecycle.canSettleThread}
+        leading={settleLeading}
+      >
+        {t("sidebarV2.settle")}
+      </DropdownMenuItem>
+    );
+  } else {
+    settleMenuItem = (
+      <ContextMenuItem
+        testID={`sidebar-session-settle-${agent.serverId}-${agent.id}`}
+        onSelect={handleSettle}
+        disabled={!lifecycle.canSettleThread}
+        leading={settleLeading}
+      >
+        {t("sidebarV2.settle")}
+      </ContextMenuItem>
+    );
+  }
+
+  let snoozeMenuItems: React.ReactNode[] = [];
+  if (lifecycle.isSnoozed) {
+    if (isCompact) {
+      snoozeMenuItems = [
+        <DropdownMenuItem
+          key="wake"
+          testID={`sidebar-session-wake-${agent.serverId}-${agent.id}`}
+          onSelect={handleWake}
+          leading={wakeLeading}
+        >
+          {t("sidebarV2.wake")}
+        </DropdownMenuItem>,
+      ];
+    } else {
+      snoozeMenuItems = [
+        <ContextMenuItem
+          key="wake"
+          testID={`sidebar-session-wake-${agent.serverId}-${agent.id}`}
+          onSelect={handleWake}
+          leading={wakeLeading}
+        >
+          {t("sidebarV2.wake")}
+        </ContextMenuItem>,
+      ];
+    }
+  } else {
+    const snoozeLabel = isCompact ? (
+      <DropdownMenuLabel key="snooze-label">{t("sidebarV2.snooze")}</DropdownMenuLabel>
+    ) : (
+      <ContextMenuLabel key="snooze-label">{t("sidebarV2.snooze")}</ContextMenuLabel>
+    );
+    snoozeMenuItems = [
+      snoozeLabel,
+      ...snoozePresets.map((preset) => (
+        <SidebarSessionSnoozePresetItem
+          key={preset.id}
+          agent={agent}
+          preset={preset}
+          isCompact={isCompact}
+          disabled={!lifecycle.canSnoozeThread}
+          onSelect={handleSnoozePreset}
+        />
+      )),
+    ];
+  }
+
   const rowMainContent = (
     <>
       {isSelected ? <View style={selectedIndicatorStyle} /> : null}
@@ -661,6 +703,27 @@ function SidebarSessionRow({
         <Text style={titleStyle} numberOfLines={1}>
           {agent.title || t("session.newSession")}
         </Text>
+        {lifecycle.wakeLabel ? (
+          <View
+            style={styles.snoozeBadge}
+            testID={`sidebar-session-snooze-badge-${agent.serverId}-${agent.id}`}
+          >
+            <ThemedIconHost
+              Icon={AlarmClock}
+              size={ICON_SIZE.xs}
+              uniProps={statusWarningColorMapping}
+            />
+            <Text style={styles.snoozeBadgeText}>{lifecycle.wakeLabel}</Text>
+          </View>
+        ) : null}
+        {lifecycle.settledTimeLabel ? (
+          <Text
+            style={styles.settledTimeLabel}
+            testID={`sidebar-session-settled-time-${agent.serverId}-${agent.id}`}
+          >
+            {lifecycle.settledTimeLabel}
+          </Text>
+        ) : null}
         <AgentStatusIndicator
           status={agent.status}
           requiresAttention={agent.requiresAttention}
@@ -705,6 +768,23 @@ function SidebarSessionRow({
         >
           {agent.archivedAt ? t("session.archived") : t("sidebar.archive")}
         </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        {settleMenuItem}
+        {snoozeMenuItems}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          testID={`sidebar-session-regenerate-title-${agent.serverId}-${agent.id}`}
+          onSelect={handleRegenerateTitle}
+          leading={regenerateLeading}
+        >
+          {t("sidebarV2.regenerateTitle")}
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          testID={`sidebar-session-mark-unread-${agent.serverId}-${agent.id}`}
+          onSelect={handleMarkUnread}
+        >
+          {t("sidebarV2.markUnread")}
+        </DropdownMenuItem>
         <DropdownMenuItem
           testID={`sidebar-session-copy-path-${agent.serverId}-${agent.id}`}
           onSelect={handleCopyPath}
@@ -725,7 +805,9 @@ function SidebarSessionRow({
           onSelect={handleRename}
           leading={renameLeading}
         >
-          {t("workspace.screen.rename")}
+          <View testID="sidebar-v2-menu-rename" collapsable={false}>
+            <Text>{t("workspace.screen.rename")}</Text>
+          </View>
         </DropdownMenuItem>
         <DropdownMenuItem
           testID={`sidebar-session-delete-${agent.serverId}-${agent.id}`}
@@ -776,18 +858,20 @@ function SidebarSessionRow({
 
   if (isCompact) {
     return (
-      <Pressable
-        style={rowStyle}
-        onPress={handlePress}
-        onLongPress={drag}
-        testID={`sidebar-session-${agent.serverId}-${agent.id}`}
-        accessibilityRole="button"
-        accessibilityLabel={sessionTitle}
-        accessibilityState={rowAccessibilityState}
-      >
-        {rowMainContent}
-        {compactTrailingContent}
-      </Pressable>
+      <View testID={`sidebar-v2-thread-${agent.id}`} collapsable={false}>
+        <Pressable
+          style={rowStyle}
+          onPress={handlePress}
+          onLongPress={drag}
+          testID={`sidebar-session-${agent.serverId}-${agent.id}`}
+          accessibilityRole="button"
+          accessibilityLabel={sessionTitle}
+          accessibilityState={rowAccessibilityState}
+        >
+          {rowMainContent}
+          {compactTrailingContent}
+        </Pressable>
+      </View>
     );
   }
 
@@ -799,20 +883,23 @@ function SidebarSessionRow({
         onPointerEnter={handlePointerEnter}
         onPointerLeave={handlePointerLeave}
         testID={`sidebar-session-container-${agent.serverId}-${agent.id}`}
+        collapsable={false}
       >
-        <ContextMenuTrigger
-          enabledOnMobile={false}
-          style={rowStyle}
-          onPress={handlePress}
-          onLongPress={drag}
-          testID={`sidebar-session-${agent.serverId}-${agent.id}`}
-          accessibilityRole="button"
-          accessibilityLabel={sessionTitle}
-          accessibilityState={rowAccessibilityState}
-        >
-          {rowMainContent}
-          {showQuickActions ? <View style={desktopRowFadeMaskStyle} /> : null}
-        </ContextMenuTrigger>
+        <View testID={`sidebar-v2-thread-${agent.id}`} collapsable={false}>
+          <ContextMenuTrigger
+            enabledOnMobile={false}
+            style={rowStyle}
+            onPress={handlePress}
+            onLongPress={drag}
+            testID={`sidebar-session-${agent.serverId}-${agent.id}`}
+            accessibilityRole="button"
+            accessibilityLabel={sessionTitle}
+            accessibilityState={rowAccessibilityState}
+          >
+            {rowMainContent}
+            {showQuickActions ? <View style={desktopRowFadeMaskStyle} /> : null}
+          </ContextMenuTrigger>
+        </View>
         {desktopTrailingContent}
       </View>
       <ContextMenuContent
@@ -839,6 +926,23 @@ function SidebarSessionRow({
         >
           {agent.archivedAt ? t("session.archived") : t("sidebar.archive")}
         </ContextMenuItem>
+        <ContextMenuSeparator />
+        {settleMenuItem}
+        {snoozeMenuItems}
+        <ContextMenuSeparator />
+        <ContextMenuItem
+          testID={`sidebar-session-regenerate-title-${agent.serverId}-${agent.id}`}
+          onSelect={handleRegenerateTitle}
+          leading={regenerateLeading}
+        >
+          {t("sidebarV2.regenerateTitle")}
+        </ContextMenuItem>
+        <ContextMenuItem
+          testID={`sidebar-session-mark-unread-${agent.serverId}-${agent.id}`}
+          onSelect={handleMarkUnread}
+        >
+          {t("sidebarV2.markUnread")}
+        </ContextMenuItem>
         <ContextMenuItem
           testID={`sidebar-session-copy-path-${agent.serverId}-${agent.id}`}
           onSelect={handleCopyPath}
@@ -859,7 +963,9 @@ function SidebarSessionRow({
           onSelect={handleRename}
           leading={renameLeading}
         >
-          {t("workspace.screen.rename")}
+          <View testID="sidebar-v2-menu-rename" collapsable={false}>
+            <Text>{t("workspace.screen.rename")}</Text>
+          </View>
         </ContextMenuItem>
         <ContextMenuItem
           testID={`sidebar-session-delete-${agent.serverId}-${agent.id}`}
@@ -873,6 +979,42 @@ function SidebarSessionRow({
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>
+  );
+}
+
+function SidebarSessionSnoozePresetItem({
+  agent,
+  preset,
+  isCompact,
+  disabled,
+  onSelect,
+}: {
+  agent: AggregatedAgent;
+  preset: SnoozePreset;
+  isCompact: boolean;
+  disabled: boolean;
+  onSelect: (preset: SnoozePreset) => void;
+}) {
+  const handleSelect = useCallback(() => onSelect(preset), [onSelect, preset]);
+  if (isCompact) {
+    return (
+      <DropdownMenuItem
+        testID={`sidebar-session-snooze-${preset.id}-${agent.serverId}-${agent.id}`}
+        onSelect={handleSelect}
+        disabled={disabled}
+      >
+        {preset.label}
+      </DropdownMenuItem>
+    );
+  }
+  return (
+    <ContextMenuItem
+      testID={`sidebar-session-snooze-${preset.id}-${agent.serverId}-${agent.id}`}
+      onSelect={handleSelect}
+      disabled={disabled}
+    >
+      {preset.label}
+    </ContextMenuItem>
   );
 }
 
@@ -1187,6 +1329,13 @@ interface SidebarSessionGroupViewProps {
   onRename: (agent: AggregatedAgent) => void;
   onArchive: (agent: AggregatedAgent) => void;
   onDelete: (agent: AggregatedAgent) => void;
+  onSnooze: (agent: AggregatedAgent, untilIso: string) => void;
+  onWake: (agent: AggregatedAgent) => void;
+  onSettle: (agent: AggregatedAgent) => void;
+  onUnsettle: (agent: AggregatedAgent) => void;
+  onRegenerateTitle: (agent: AggregatedAgent) => void;
+  onMarkUnread: (agent: AggregatedAgent) => void;
+  nowIso: string;
   pinningAgentKey: string | null;
   deletingAgentKey: string | null;
   isArchivingAgent: (input: { serverId: string; agentId: string }) => boolean;
@@ -1217,6 +1366,13 @@ function SidebarSessionGroupView({
   onRename,
   onArchive,
   onDelete,
+  onSnooze,
+  onWake,
+  onSettle,
+  onUnsettle,
+  onRegenerateTitle,
+  onMarkUnread,
+  nowIso,
   pinningAgentKey,
   deletingAgentKey,
   isArchivingAgent,
@@ -1251,6 +1407,13 @@ function SidebarSessionGroupView({
         onRename={onRename}
         onArchive={onArchive}
         onDelete={onDelete}
+        onSnooze={onSnooze}
+        onWake={onWake}
+        onSettle={onSettle}
+        onUnsettle={onUnsettle}
+        onRegenerateTitle={onRegenerateTitle}
+        onMarkUnread={onMarkUnread}
+        nowIso={nowIso}
         isPinning={pinningAgentKey === getAgentActionKey(item)}
         isArchiving={isArchivingAgent({ serverId: item.serverId, agentId: item.id })}
         isDeleting={deletingAgentKey === getAgentActionKey(item)}
@@ -1261,11 +1424,18 @@ function SidebarSessionGroupView({
     [
       deletingAgentKey,
       isArchivingAgent,
+      nowIso,
       onAgentPress,
       onArchive,
       onDelete,
+      onMarkUnread,
+      onRegenerateTitle,
       onRename,
+      onSettle,
+      onSnooze,
       onTogglePin,
+      onUnsettle,
+      onWake,
       pinningAgentKey,
       selectedAgentId,
     ],
@@ -1306,6 +1476,13 @@ function SidebarSessionGroupView({
             onRename={onRename}
             onArchive={onArchive}
             onDelete={onDelete}
+            onSnooze={onSnooze}
+            onWake={onWake}
+            onSettle={onSettle}
+            onUnsettle={onUnsettle}
+            onRegenerateTitle={onRegenerateTitle}
+            onMarkUnread={onMarkUnread}
+            nowIso={nowIso}
             isPinning={pinningAgentKey === getAgentActionKey(agent)}
             isArchiving={isArchivingAgent({ serverId: agent.serverId, agentId: agent.id })}
             isDeleting={deletingAgentKey === getAgentActionKey(agent)}
@@ -1364,6 +1541,8 @@ export function SidebarSessionList({
   onLoadMore,
   onAgentPress,
   onAddProject,
+  viewMode = "by-project",
+  searchQuery = "",
 }: SidebarSessionListProps) {
   const { t } = useTranslation();
   const isCompact = useIsCompactFormFactor();
@@ -1371,6 +1550,10 @@ export function SidebarSessionList({
   const toast = useToast();
   const { archiveAgents, isArchivingAgent } = useArchiveAgent();
   const suppressedArchiveAgentIds = useSuppressedArchiveAgentIds(serverId ?? "");
+  const buildSettledLabels = useSidebarV2Store((state) => state.buildSettledLabels);
+  const buildSnoozedLabels = useSidebarV2Store((state) => state.buildSnoozedLabels);
+  const clearSnoozedLabels = useSidebarV2Store((state) => state.clearSnoozedLabels);
+  const markThreadUnread = useSidebarV2Store((state) => state.markThreadUnread);
   const [renamingAgent, setRenamingAgent] = useState<AggregatedAgent | null>(null);
   const [renamingProjectGroup, setRenamingProjectGroup] =
     useState<SidebarSessionRenderGroup | null>(null);
@@ -1382,6 +1565,7 @@ export function SidebarSessionList({
   const [collapsedGroupKeys, setCollapsedGroupKeys] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
+  const [lifecycleNowIso, setLifecycleNowIso] = useState(() => new Date().toISOString());
   const sessionGroupOrderByServerId = useSidebarOrderStore(
     (state) => state.sessionGroupOrderByServerId,
   );
@@ -1468,6 +1652,35 @@ export function SidebarSessionList({
       }),
     [activitySortedGroups, pinnedProjectGroupKeys, storedAgentOrderByGroup, storedGroupOrder],
   );
+
+  const nextSnoozeWakeAtMs = useMemo(() => {
+    let earliest: number | null = null;
+    for (const agent of visibleAgents) {
+      const thread = agentToSidebarThread(agent);
+      if (!thread.snoozedUntil) {
+        continue;
+      }
+      const wakeMs = Date.parse(thread.snoozedUntil);
+      if (Number.isNaN(wakeMs) || wakeMs <= Date.parse(lifecycleNowIso)) {
+        continue;
+      }
+      if (earliest == null || wakeMs < earliest) {
+        earliest = wakeMs;
+      }
+    }
+    return earliest;
+  }, [lifecycleNowIso, visibleAgents]);
+
+  useEffect(() => {
+    if (nextSnoozeWakeAtMs == null) {
+      return;
+    }
+    const delayMs = Math.max(25, nextSnoozeWakeAtMs - Date.now() + 25);
+    const timer = setTimeout(() => {
+      setLifecycleNowIso(new Date().toISOString());
+    }, delayMs);
+    return () => clearTimeout(timer);
+  }, [nextSnoozeWakeAtMs]);
 
   useEffect(() => {
     if (!serverId) {
@@ -1733,7 +1946,7 @@ export function SidebarSessionList({
       const wasPinned = isSidebarAgentPinned(agent);
       const nextPinned = !wasPinned;
       const labels = { [SIDEBAR_PINNED_LABEL]: nextPinned ? "true" : "false" };
-      const cacheSnapshot = getPinnedCacheSnapshot(queryClient, agent.serverId);
+      const cacheSnapshot = getSidebarAgentLabelCacheSnapshot(queryClient, agent.serverId);
       setPinningAgentKey(actionKey);
       updateAgentLabelsInStore({
         serverId: agent.serverId,
@@ -1755,7 +1968,7 @@ export function SidebarSessionList({
             agentId: agent.id,
             labels: { [SIDEBAR_PINNED_LABEL]: wasPinned ? "true" : "false" },
           });
-          restorePinnedCacheSnapshot(queryClient, agent.serverId, cacheSnapshot);
+          restoreSidebarAgentLabelCacheSnapshot(queryClient, agent.serverId, cacheSnapshot);
           toast.error(error instanceof Error ? error.message : t("sidebar.pinSessionFailed"));
         } finally {
           setPinningAgentKey((currentKey) => (currentKey === actionKey ? null : currentKey));
@@ -1763,6 +1976,110 @@ export function SidebarSessionList({
       })();
     },
     [queryClient, t, toast],
+  );
+
+  const applyAgentLabels = useCallback(
+    async (agent: AggregatedAgent, labels: Record<string, string>) => {
+      const actionClient = useSessionStore.getState().sessions[agent.serverId]?.client ?? null;
+      if (!actionClient) {
+        toast.error(t("workspace.screen.hostDisconnected"));
+        return false;
+      }
+
+      const previousLabels: Record<string, string> = {};
+      for (const key of Object.keys(labels)) {
+        previousLabels[key] = agent.labels?.[key] ?? "";
+      }
+      const cacheSnapshot = getSidebarAgentLabelCacheSnapshot(queryClient, agent.serverId);
+      updateAgentLabelsInStore({
+        serverId: agent.serverId,
+        agentId: agent.id,
+        labels,
+      });
+      patchAgentLabelsInSidebarCaches(queryClient, {
+        serverId: agent.serverId,
+        agentId: agent.id,
+        labels,
+      });
+
+      try {
+        await actionClient.updateAgent(agent.id, { labels });
+        invalidateSidebarSessionQueries(queryClient, agent.serverId);
+        return true;
+      } catch (error) {
+        updateAgentLabelsInStore({
+          serverId: agent.serverId,
+          agentId: agent.id,
+          labels: previousLabels,
+        });
+        restoreSidebarAgentLabelCacheSnapshot(queryClient, agent.serverId, cacheSnapshot);
+        toast.error(error instanceof Error ? error.message : t("sidebarV2.actionFailed"));
+        return false;
+      }
+    },
+    [queryClient, t, toast],
+  );
+
+  const handleSnooze = useCallback(
+    (agent: AggregatedAgent, untilIso: string) => {
+      const atIso = new Date().toISOString();
+      void applyAgentLabels(agent, buildSnoozedLabels(untilIso, atIso));
+    },
+    [applyAgentLabels, buildSnoozedLabels],
+  );
+
+  const handleWake = useCallback(
+    (agent: AggregatedAgent) => {
+      void applyAgentLabels(agent, clearSnoozedLabels());
+    },
+    [applyAgentLabels, clearSnoozedLabels],
+  );
+
+  const handleSettle = useCallback(
+    (agent: AggregatedAgent) => {
+      void applyAgentLabels(agent, buildSettledLabels(new Date().toISOString(), true));
+    },
+    [applyAgentLabels, buildSettledLabels],
+  );
+
+  const handleUnsettle = useCallback(
+    (agent: AggregatedAgent) => {
+      void applyAgentLabels(agent, buildSettledLabels(new Date().toISOString(), false));
+    },
+    [applyAgentLabels, buildSettledLabels],
+  );
+
+  const handleRegenerateTitle = useCallback(
+    (agent: AggregatedAgent) => {
+      const actionClient = useSessionStore.getState().sessions[agent.serverId]?.client ?? null;
+      if (!actionClient) {
+        toast.error(t("workspace.screen.hostDisconnected"));
+        return;
+      }
+      void (async () => {
+        try {
+          await actionClient.updateAgent(agent.id, { regenerateTitle: true });
+          invalidateSidebarSessionQueries(queryClient, agent.serverId);
+        } catch (error) {
+          toast.error(
+            error instanceof Error ? error.message : t("sidebarV2.regenerateTitleFailed"),
+          );
+        }
+      })();
+    },
+    [queryClient, t, toast],
+  );
+
+  const handleMarkUnread = useCallback(
+    (agent: AggregatedAgent) => {
+      const threadKey = sidebarV2ThreadKey(agent.serverId, agent.id);
+      const completedAt =
+        agent.lastActivityAt instanceof Date && !Number.isNaN(agent.lastActivityAt.getTime())
+          ? agent.lastActivityAt.toISOString()
+          : new Date().toISOString();
+      markThreadUnread(threadKey, completedAt);
+    },
+    [markThreadUnread],
   );
 
   const handleArchive = useCallback(
@@ -1921,7 +2238,7 @@ export function SidebarSessionList({
 
   if (!serverId) {
     return (
-      <View style={styles.emptyContainer}>
+      <View style={styles.emptyContainer} testID="sidebar-sessions">
         <Text style={styles.emptyTitle}>{t("sidebar.noHost")}</Text>
         {renameModal}
         {renameProjectModal}
@@ -1929,7 +2246,56 @@ export function SidebarSessionList({
     );
   }
 
-  if (!pinnedGroup && workspaceGroups.length === 0) {
+  if (viewMode === "by-status") {
+    return (
+      <View style={styles.container} testID="sidebar-sessions">
+        <SidebarStatusView
+          agents={visibleAgents}
+          serverId={serverId}
+          selectedAgentId={resolvedSelectedAgentId}
+          onAgentPress={onAgentPress}
+          onSnooze={handleSnooze}
+          onWake={handleWake}
+          onSettle={handleSettle}
+          onUnsettle={handleUnsettle}
+          onRegenerateTitle={handleRegenerateTitle}
+          onMarkUnread={handleMarkUnread}
+          onDelete={handleDelete}
+          onRename={handleRename}
+          onAddProject={onAddProject}
+          searchQuery={searchQuery}
+        />
+        {renameModal}
+        {renameProjectModal}
+      </View>
+    );
+  }
+
+  const projectSearchQuery = searchQuery.trim().toLowerCase();
+  const filteredPinnedGroup =
+    projectSearchQuery.length === 0 || !pinnedGroup
+      ? pinnedGroup
+      : Object.assign({}, pinnedGroup, {
+          agents: pinnedGroup.agents.filter((agent) =>
+            (agent.title ?? "").toLowerCase().includes(projectSearchQuery),
+          ),
+        });
+  const filteredWorkspaceGroups =
+    projectSearchQuery.length === 0
+      ? workspaceGroups
+      : workspaceGroups
+          .map((group) =>
+            Object.assign({}, group, {
+              agents: group.agents.filter((agent) =>
+                (agent.title ?? "").toLowerCase().includes(projectSearchQuery),
+              ),
+            }),
+          )
+          .filter((group) => group.agents.length > 0);
+  const filteredPinnedForRender =
+    filteredPinnedGroup && filteredPinnedGroup.agents.length > 0 ? filteredPinnedGroup : null;
+
+  if (!filteredPinnedForRender && filteredWorkspaceGroups.length === 0) {
     const hasHiddenProjects =
       !!serverId && (hiddenSessionGroupKeysByServerId[serverId] ?? []).length > 0;
     return (
@@ -1938,15 +2304,20 @@ export function SidebarSessionList({
         contentContainerStyle={styles.emptyScrollContent}
         showsVerticalScrollIndicator={false}
         refreshControl={refreshControl}
+        testID="sidebar-sessions"
       >
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyTitle}>{t("sidebar.noSessions")}</Text>
-          {onAddProject ? (
+          <Text style={styles.emptyTitle}>
+            {projectSearchQuery.length > 0
+              ? t("sidebarV2.noSearchResults")
+              : t("sidebar.noSessions")}
+          </Text>
+          {onAddProject && projectSearchQuery.length === 0 ? (
             <Button variant="ghost" size="sm" onPress={onAddProject}>
               {t("sidebar.addProject")}
             </Button>
           ) : null}
-          {hasHiddenProjects ? (
+          {hasHiddenProjects && projectSearchQuery.length === 0 ? (
             <Button variant="ghost" size="sm" onPress={handleShowHiddenProjects}>
               {t("sidebar.showHiddenProjects")}
             </Button>
@@ -1966,10 +2337,11 @@ export function SidebarSessionList({
       contentContainerStyle={isCompact ? styles.scrollContent : styles.desktopScrollContent}
       showsVerticalScrollIndicator={false}
       refreshControl={refreshControl}
+      testID="sidebar-sessions"
     >
-      {pinnedGroup ? (
+      {filteredPinnedForRender ? (
         <SidebarSessionGroupView
-          group={pinnedGroup}
+          group={filteredPinnedForRender}
           groupStyle={isCompact && showGroupTitles ? styles.pinnedGroup : defaultGroupStyle}
           serverId={serverId}
           isCompact={isCompact}
@@ -1981,6 +2353,13 @@ export function SidebarSessionList({
           onRename={handleRename}
           onArchive={handleArchive}
           onDelete={handleDelete}
+          onSnooze={handleSnooze}
+          onWake={handleWake}
+          onSettle={handleSettle}
+          onUnsettle={handleUnsettle}
+          onRegenerateTitle={handleRegenerateTitle}
+          onMarkUnread={handleMarkUnread}
+          nowIso={lifecycleNowIso}
           pinningAgentKey={pinningAgentKey}
           deletingAgentKey={deletingAgentKey}
           isArchivingAgent={isArchivingAgent}
@@ -1998,10 +2377,10 @@ export function SidebarSessionList({
           onRemoveProject={handleRemoveProject}
         />
       ) : null}
-      {workspaceGroups.length > 0 && !isCompact && showGroupTitles ? (
+      {filteredWorkspaceGroups.length > 0 && !isCompact && showGroupTitles ? (
         <Text style={styles.desktopSectionLabel}>{t("sidebar.projects")}</Text>
       ) : null}
-      {workspaceGroups.map((group) => (
+      {filteredWorkspaceGroups.map((group) => (
         <SidebarSessionGroupView
           key={group.key}
           group={group}
@@ -2016,6 +2395,13 @@ export function SidebarSessionList({
           onRename={handleRename}
           onArchive={handleArchive}
           onDelete={handleDelete}
+          onSnooze={handleSnooze}
+          onWake={handleWake}
+          onSettle={handleSettle}
+          onUnsettle={handleUnsettle}
+          onRegenerateTitle={handleRegenerateTitle}
+          onMarkUnread={handleMarkUnread}
+          nowIso={lifecycleNowIso}
           pinningAgentKey={pinningAgentKey}
           deletingAgentKey={deletingAgentKey}
           isArchivingAgent={isArchivingAgent}
@@ -2236,13 +2622,18 @@ const styles = StyleSheet.create((theme) => ({
   },
   rowHovered: {
     backgroundColor: theme.colors.surfaceSidebarHover,
+    opacity: 1,
   },
   rowPressed: {
     opacity: 0.85,
   },
+  rowSettled: {
+    opacity: 0.55,
+  },
   // Soft mobile selected: soft fill, no hard accent bar.
   rowSelected: {
     backgroundColor: theme.colors.surface0,
+    opacity: 1,
     ...(isWeb
       ? ({
           boxShadow: "0 1px 2px rgba(20, 23, 31, 0.04)",
@@ -2256,6 +2647,28 @@ const styles = StyleSheet.create((theme) => ({
     width: 18,
     alignItems: "center",
     justifyContent: "center",
+    flexShrink: 0,
+  },
+  snoozeBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 999,
+    backgroundColor: theme.colors.statusWarningBg,
+    flexShrink: 0,
+  },
+  snoozeBadgeText: {
+    fontSize: 11,
+    fontWeight: theme.fontWeight.medium,
+    lineHeight: 16,
+    color: theme.colors.statusWarning,
+  },
+  settledTimeLabel: {
+    fontSize: 11,
+    lineHeight: 16,
+    color: theme.colors.foregroundFaint,
     flexShrink: 0,
   },
   // Soft .sess: min ~34, radius 10, quiet padding.
@@ -2281,6 +2694,17 @@ const styles = StyleSheet.create((theme) => ({
   },
   desktopRowHovered: {
     backgroundColor: theme.colors.surfaceSidebarHover,
+    opacity: 1,
+  },
+  desktopRowSelected: {
+    // Soft .sess.on: white/soft elevated chip, no accent rail.
+    backgroundColor: theme.colors.surface0,
+    opacity: 1,
+    ...(isWeb
+      ? ({
+          boxShadow: "0 1px 2px rgba(20, 23, 31, 0.04)",
+        } as object)
+      : theme.shadow.sm),
   },
   desktopRowPressed: {
     opacity: 0.9,
@@ -2288,15 +2712,6 @@ const styles = StyleSheet.create((theme) => ({
   desktopRowDragging: {
     backgroundColor: theme.colors.surface1,
     opacity: 0.86,
-  },
-  // Soft .sess.on: white/soft elevated chip, no accent rail.
-  desktopRowSelected: {
-    backgroundColor: theme.colors.surface0,
-    ...(isWeb
-      ? ({
-          boxShadow: "0 1px 2px rgba(20, 23, 31, 0.04)",
-        } as object)
-      : {}),
   },
   desktopRowSelectedIndicator: {
     display: "none",

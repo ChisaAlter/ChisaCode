@@ -123,7 +123,10 @@ export async function openNewWorkspaceComposer(
   page: Page,
   input: { workspaceDirectory: string },
 ): Promise<void> {
-  await page.getByTestId("sidebar-v2-new-project").click();
+  const newConversation = page
+    .getByTestId("sidebar-v2-new-project")
+    .or(page.getByTestId("sidebar-new-conversation"));
+  await newConversation.first().click();
 
   await expect(page).toHaveURL(/\/h\/[^/]+\/new(?:\?.*)?$/, {
     timeout: 30_000,

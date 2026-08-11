@@ -47,6 +47,7 @@ const {
     colors: {
       foreground: "#fff",
       foregroundMuted: "#aaa",
+      foregroundFaint: "#888",
       accent: "#22c55e",
       border: "#555",
       surface0: "#222",
@@ -54,6 +55,8 @@ const {
       surface2: "#444",
       surface3: "#444",
       surfaceSidebarHover: "#333",
+      statusWarning: "#d97706",
+      statusWarningBg: "rgba(217, 119, 6, 0.12)",
       palette: {
         amber: { 500: "#f59e0b" },
         red: { 300: "#fca5a5" },
@@ -183,6 +186,14 @@ vi.mock("react-i18next", () => ({
         "workspace.screen.rename": "Rename",
         "workspace.screen.renameAgent": "Rename agent",
         "workspace.screen.hostDisconnected": "Host is not connected",
+        "sidebarV2.settle": "Settle thread",
+        "sidebarV2.unsettle": "Un-settle thread",
+        "sidebarV2.wake": "Wake thread now",
+        "sidebarV2.snooze": "Snooze",
+        "sidebarV2.regenerateTitle": "Regenerate title",
+        "sidebarV2.markUnread": "Mark unread",
+        "sidebarV2.actionFailed": "Action failed",
+        "sidebarV2.regenerateTitleFailed": "Failed to regenerate title",
       };
       return labels[key] ?? key;
     },
@@ -250,6 +261,8 @@ vi.mock("@/components/ui/dropdown-menu", () => ({
     </div>
   ),
   DropdownMenuContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  DropdownMenuLabel: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  DropdownMenuSeparator: () => <div role="separator" />,
   DropdownMenuItem: ({
     children,
     onSelect,
@@ -293,8 +306,9 @@ vi.mock("@/components/ui/context-menu", () => ({
     const handleClick = React.useCallback(() => {
       onPress?.({ stopPropagation: vi.fn() });
     }, [onPress]);
+    // Resolve the resting style for assertions; hover is exercised separately via pointer events.
     const resolvedStyle =
-      typeof style === "function" ? style({ hovered: true, pressed: false }) : style;
+      typeof style === "function" ? style({ hovered: false, pressed: false }) : style;
     return (
       <button
         type="button"
@@ -309,6 +323,8 @@ vi.mock("@/components/ui/context-menu", () => ({
     );
   },
   ContextMenuContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  ContextMenuLabel: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  ContextMenuSeparator: () => <div role="separator" />,
   ContextMenuItem: ({
     children,
     onSelect,
@@ -460,6 +476,7 @@ vi.mock("@/utils/agent-history-navigation", () => ({
 }));
 
 vi.mock("lucide-react-native", () => ({
+  AlarmClock: () => <span data-testid="alarm-clock-icon" />,
   Archive: () => <span data-testid="archive-icon" />,
   Bot: () => <span data-testid="bot-icon" />,
   CheckCheck: () => <span data-testid="check-check-icon" />,
@@ -471,8 +488,56 @@ vi.mock("lucide-react-native", () => ({
   MoreHorizontal: () => <span data-testid="more-icon" />,
   Pencil: () => <span data-testid="pencil-icon" />,
   Pin: () => <span data-testid="pin-icon" />,
+  RefreshCw: () => <span data-testid="refresh-icon" />,
   SquarePen: () => <span data-testid="square-pen-icon" />,
   Trash2: () => <span data-testid="trash-icon" />,
+  Undo2: () => <span data-testid="undo-icon" />,
+}));
+
+const {
+  buildSettledLabelsMock,
+  buildSnoozedLabelsMock,
+  clearSnoozedLabelsMock,
+  markThreadUnreadMock,
+} = vi.hoisted(() => ({
+  buildSettledLabelsMock: vi.fn((nowIso: string, pinned: boolean) =>
+    pinned
+      ? {
+          "chisacode.sidebarSettledAt": nowIso,
+          "chisacode.sidebarSettledOverride": "settled",
+        }
+      : {
+          "chisacode.sidebarSettledAt": "",
+          "chisacode.sidebarSettledOverride": "",
+        },
+  ),
+  buildSnoozedLabelsMock: vi.fn((untilIso: string, atIso: string) => ({
+    "chisacode.sidebarSnoozedUntil": untilIso,
+    "chisacode.sidebarSnoozedAt": atIso,
+  })),
+  clearSnoozedLabelsMock: vi.fn(() => ({
+    "chisacode.sidebarSnoozedUntil": "",
+    "chisacode.sidebarSnoozedAt": "",
+  })),
+  markThreadUnreadMock: vi.fn(),
+}));
+
+vi.mock("@/sidebar-v2/store", () => ({
+  sidebarV2ThreadKey: (serverId: string, threadId: string) => `${serverId}:${threadId}`,
+  useSidebarV2Store: (
+    selector: (state: {
+      buildSettledLabels: typeof buildSettledLabelsMock;
+      buildSnoozedLabels: typeof buildSnoozedLabelsMock;
+      clearSnoozedLabels: typeof clearSnoozedLabelsMock;
+      markThreadUnread: typeof markThreadUnreadMock;
+    }) => unknown,
+  ) =>
+    selector({
+      buildSettledLabels: buildSettledLabelsMock,
+      buildSnoozedLabels: buildSnoozedLabelsMock,
+      clearSnoozedLabels: clearSnoozedLabelsMock,
+      markThreadUnread: markThreadUnreadMock,
+    }),
 }));
 
 function agent(input: Partial<AggregatedAgent> & { id: string; cwd: string }): AggregatedAgent {
@@ -518,6 +583,10 @@ describe("SidebarSessionList", () => {
     });
     updateAgentMock.mockReset();
     updateAgentMock.mockResolvedValue(undefined);
+    buildSettledLabelsMock.mockClear();
+    buildSnoozedLabelsMock.mockClear();
+    clearSnoozedLabelsMock.mockClear();
+    markThreadUnreadMock.mockReset();
     clearAgentAttentionMock.mockReset();
     clearAgentAttentionMock.mockResolvedValue(undefined);
     renameProjectMock.mockReset();
@@ -1103,6 +1172,95 @@ describe("SidebarSessionList", () => {
       });
     });
     expect(setAgentsMock).toHaveBeenCalled();
+  });
+
+  it("renders settle and snooze menu actions and applies settle labels", async () => {
+    const recent = new Date();
+    const agents = [
+      agent({
+        id: "agent-1",
+        cwd: "/repo/project",
+        lastActivityAt: recent,
+        createdAt: recent,
+      }),
+    ];
+    renderSidebarSessionList({ serverId: "server-1", agents });
+
+    expect(screen.getByTestId("sidebar-session-settle-server-1-agent-1")).toBeTruthy();
+    expect(screen.getByTestId("sidebar-session-snooze-hour-server-1-agent-1")).toBeTruthy();
+    expect(screen.getByTestId("sidebar-session-regenerate-title-server-1-agent-1")).toBeTruthy();
+    expect(screen.getByTestId("sidebar-session-mark-unread-server-1-agent-1")).toBeTruthy();
+
+    fireEvent.click(screen.getByTestId("sidebar-session-settle-server-1-agent-1"));
+
+    await vi.waitFor(() => {
+      expect(updateAgentMock).toHaveBeenCalledWith(
+        "agent-1",
+        expect.objectContaining({
+          labels: expect.objectContaining({
+            "chisacode.sidebarSettledOverride": "settled",
+          }),
+        }),
+      );
+    });
+  });
+
+  it("shows a snooze wake badge and can wake a snoozed session", async () => {
+    const recent = new Date();
+    const wakeAt = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
+    const agents = [
+      agent({
+        id: "agent-1",
+        cwd: "/repo/project",
+        lastActivityAt: recent,
+        createdAt: recent,
+        labels: {
+          "chisacode.sidebarSnoozedUntil": wakeAt,
+          "chisacode.sidebarSnoozedAt": recent.toISOString(),
+        },
+      }),
+    ];
+    renderSidebarSessionList({ serverId: "server-1", agents });
+
+    expect(screen.getByTestId("sidebar-session-snooze-badge-server-1-agent-1")).toBeTruthy();
+    expect(screen.getByTestId("sidebar-session-wake-server-1-agent-1")).toBeTruthy();
+
+    fireEvent.click(screen.getByTestId("sidebar-session-wake-server-1-agent-1"));
+
+    await vi.waitFor(() => {
+      expect(updateAgentMock).toHaveBeenCalledWith("agent-1", {
+        labels: {
+          "chisacode.sidebarSnoozedUntil": "",
+          "chisacode.sidebarSnoozedAt": "",
+        },
+      });
+    });
+  });
+
+  it("dims settled rows and marks them unread locally", () => {
+    const settledAt = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+    const agents = [
+      agent({
+        id: "agent-1",
+        cwd: "/repo/project",
+        lastActivityAt: settledAt,
+        createdAt: settledAt,
+        labels: {
+          "chisacode.sidebarSettledAt": settledAt.toISOString(),
+          "chisacode.sidebarSettledOverride": "settled",
+        },
+      }),
+    ];
+    renderSidebarSessionList({ serverId: "server-1", agents });
+
+    const row = screen.getByTestId("sidebar-session-server-1-agent-1");
+    const rowStyle = JSON.parse(row.getAttribute("data-style") ?? "[]") as unknown[];
+    expect(rowStyle).toEqual(expect.arrayContaining([expect.objectContaining({ opacity: 0.55 })]));
+    expect(screen.getByTestId("sidebar-session-settled-time-server-1-agent-1")).toBeTruthy();
+    expect(screen.getByTestId("sidebar-session-unsettle-server-1-agent-1")).toBeTruthy();
+
+    fireEvent.click(screen.getByTestId("sidebar-session-mark-unread-server-1-agent-1"));
+    expect(markThreadUnreadMock).toHaveBeenCalledWith("server-1:agent-1", expect.any(String));
   });
 
   it("unpins sessions from the pinned section row action", async () => {

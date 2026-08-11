@@ -11,7 +11,11 @@ export async function openNewAgentComposer(page: Page): Promise<void> {
  * indicating the WebSocket is up and workspace hydration has completed.
  */
 export async function waitForSidebarHydration(page: Page, timeout = 60_000): Promise<void> {
-  await page.getByTestId("sidebar-v2-new-project").waitFor({ state: "visible", timeout });
+  const hydrationTarget = page
+    .getByTestId("sidebar-v2-new-project")
+    .or(page.getByTestId("sidebar-new-conversation"))
+    .or(page.getByTestId("sidebar-sessions"));
+  await hydrationTarget.first().waitFor({ state: "visible", timeout });
 }
 
 /** Wait for the workspace deck to render its content slot (surface ready). */

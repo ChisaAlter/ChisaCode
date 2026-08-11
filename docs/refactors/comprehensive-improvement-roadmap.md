@@ -621,6 +621,28 @@
 
 以下为已归档的执行记录摘要，详细见 [archive/comprehensive-improvement-roadmap-2026-06-28.md](archive/comprehensive-improvement-roadmap-2026-06-28.md)。
 
+### Production Hardening Plan（2026-08-10 登记）
+
+- **进度（2026-08-10 收尾）** 阶段 0–6 全部落地：archive 安全门（coordinator+force 二次校验+teardown gating）、git-snapshot leaf/HEAD 基线、relay device-auth v2（protocol/server/client/app+原型已批准）、WS message lanes、文件传输分块/超时、终端重连订阅恢复、audit fingerprint 基线 v2 绿、CI push/PR+coverage-server+desktop-packaged-electron job、release exact-SHA gate、docs/图校准。G004 原型已获用户批准并实现 App UI。本地验证：定向单元矩阵、archive temp-repo drill、`test:desktop-packaged` ALL PACKAGED SLICES PASSED、typecheck/lint/audit 绿；renderer `node:crypto` 崩溃已修（纯 JS HMAC）。
+- **收尾处置（2026-08-10）** 用户要求简化：停止 CI 全绿追逐与预存测试修复。G010 保持 review_blocked；计划 §9 未声称完成。未验证残项（Actions packaged job 对 hardening SHA、正式 draft release、mobile pairing、人工 merge→archive、全表面 pixel QA、device-list revoke UI、`clientPublicKeyB64` stand-in）正式接受为执行窗口残项，见 `.omo/evidence/production-hardening-simplify-closeout-2026-08-10T10-47-25Z.md` 与 `production-hardening-g011-residual-acceptance-*`。分支最终 HEAD `49b5c18a5` 已 push（PR #32）。
+
+- **状态**：in-progress
+- **分支**：`codex/production-hardening-2026-08-10`（worktree: `C:/Ai/ChisaCode-worktrees/production-hardening-2026-08-10`）
+- **基线 SHA**：`e9534e8df762bd95eead83e5562346c13b38b7a3`
+- **计划**：`.omc/plans/chisacode-production-hardening-plan.md`
+- **隔离约束**：cn-main 上的 Model Gateway streaming/backpressure 在途改动不并入本分支；Gateway 独立闭环后再合，hardening 以合并后 SHA 或本基线继续。
+- **覆盖既有 backlog 并升为可执行交付**：
+  - 自动归档过期脏检查 + 未经 quiescing 的 `--force` 删除
+  - git 快照未跟踪目录塌缩 / 敏感 leaf 边界
+  - relay E2EE 缺客户端身份认证 + 配对迁移
+  - WS 顺序敏感消息并发竞态
+  - 64MB 文件传输与 10s RPC 超时耦合
+  - 重连后终端流订阅不恢复
+  - test audit 聚合基线可迁移债务、CI 仅手动、release 无 exact-SHA 门禁
+  - SECURITY/docs/roadmap 事实漂移
+- **阶段顺序**：0 隔离 → 1A 归档安全 → 1B snapshot → 2 relay auth → 3 WS lanes → 4A file transfer → 4B terminal reconnect → 5 CI/release → 6 docs → 7 集成 QA
+- **证据目录**：`.omo/evidence/production-hardening-*`
+
 ### 全仓生产级审查（2026-08-06 登记）：延迟修复项与决策项
 
 全仓遍历审查（13 域并行，覆盖约 35 万行非测试源码）后，P0 与多数 P1 已在本次会话修复并测试；以下系统性项需独立排期或产品决策，登记为跟踪项：
@@ -698,10 +720,18 @@
 
 ## 后续维护
 
-新改进点通过 Issue 或 PR 跟踪，不再维护统一路线图。
+历史归档说明保留；自 2026-07-04 重启后，系统性改进与 Production Hardening 计划继续在此登记。
 
 归档后完成的独立改进（例如 Android 端专项优化）不回填为路线图任务，也不重新打开本路线图；相关背景、验收结果与后续事项以对应 Issue、PR 或提交记录为准。
 
 ---
 
 _最后更新 2026-06-28 · 版本 v2.0 — 已归档_
+
+## Production hardening execution note (2026-08-10T07-16-19Z)
+
+Worktree `production-hardening-2026-08-10` landed Phases 1–6 + local packaged Electron gate. **G011 residual acceptance** freezes authorization-bound items (Actions green on unpushed hardening SHA, formal draft release, mobile pairing, full pixel QA) as UNVERIFIED — see `.omo/evidence/production-hardening-g011-residual-acceptance-2026-08-10T07-16-19Z.md`. Do not treat plan section 9 as complete.
+
+## Production hardening closeout (2026-08-10T10-47-25Z)
+
+User asked to simplify everything; all CI-green chasing and pre-existing test fixes stopped. Branch `codex/production-hardening-2026-08-10` landed phases 0–6 @ 49b5c18a5 (PR #32). G010 `review_blocked`; plan section 9 not claimed complete; residual items recorded in `.omo/evidence/production-hardening-simplify-closeout-2026-08-10T10-47-25Z.md`.
