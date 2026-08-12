@@ -323,13 +323,14 @@ export function SidebarV2Row({
       } else if (isSelected) {
         styleList.push(styles.rowSelected);
       }
-      if (isHovered || hovered) {
+      // Active/selected fill is stable chrome — hover must not recolor the row.
+      if (!(isActive || isSelected) && (isHovered || hovered)) {
         styleList.push(styles.rowHovered);
       }
       if (shouldRecede) {
         styleList.push(styles.rowReceded);
       }
-      if (pressed) {
+      if (!(isActive || isSelected) && pressed) {
         styleList.push(styles.rowPressed);
       }
       return styleList;

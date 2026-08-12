@@ -62,6 +62,22 @@ describe("small text contrast", () => {
     expect(aemeathTheme.colors.foregroundSubtleText).toBe(aemeathTheme.colors.foregroundMuted);
     expect(liquidNeonTheme.colors.foregroundSubtleText).toBe("#9fb5d3");
   });
+
+  it("exposes a foregroundSoft token (foreground @ 80% alpha) on every theme", () => {
+    // T3 alignment: AI assistant prose uses text-foreground/80. This token is a
+    // color (not container opacity) so code blocks/tables with their own color
+    // stay full-strength. Every product theme must define it.
+    expect(lightTheme.colors.foregroundSoft).toBe("rgba(20, 23, 31, 0.8)");
+    expect(darkTheme.colors.foregroundSoft).toBe("rgba(233, 237, 246, 0.8)");
+    expect(liquidNeonTheme.colors.foregroundSoft).toBe("rgba(247, 251, 255, 0.8)");
+    expect(chisakiTheme.colors.foregroundSoft).toBe("rgba(248, 238, 242, 0.8)");
+    expect(aemeathTheme.colors.foregroundSoft).toBe("rgba(43, 32, 40, 0.8)");
+    // Token must be distinct from full foreground (the whole point is 80% alpha).
+    for (const theme of [lightTheme, darkTheme, liquidNeonTheme, chisakiTheme, aemeathTheme]) {
+      expect(theme.colors.foregroundSoft).not.toBe(theme.colors.foreground);
+      expect(theme.colors.foregroundSoft).toContain("0.8");
+    }
+  });
 });
 
 describe("liquid neon theme surfaces", () => {

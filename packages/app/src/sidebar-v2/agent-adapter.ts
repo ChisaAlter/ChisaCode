@@ -5,6 +5,7 @@
  * and the label-backed snooze/settled fields.
  */
 import type { AggregatedAgent } from "@/hooks/use-aggregated-agents";
+import { extractManagedWorktreeParts } from "@/utils/sidebar-session-groups";
 import {
   SIDEBAR_LABEL_SETTLED_AT,
   SIDEBAR_LABEL_SETTLED_OVERRIDE,
@@ -72,21 +73,39 @@ function labelOrNull(labels: Record<string, string> | undefined, key: string): s
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
 }
 
-function resolveProjectKey(agent: AggregatedAgent): string | null {
+function resolveProjectKey(
+  agent: AggregatedAgent,
+  worktreeProjectHints?: ReadonlyMap<string, { projectKey: string | null }>,
+): string | null {
   const projectKey = agent.projectPlacement?.projectKey?.trim();
   if (projectKey) {
+    // A managed-worktree cwd whose placement key was cwd-derived (e.g. the
+    // stripped home dir of a CHISACODE_HOME worktree when the renderer cannot
+    // detect the home dir) must resolve to the real project via the worktree
+    // hash index, mirroring the by-project grouping fallback.
+    const worktreeParts = extractManagedWorktreeParts(agent.cwd);
+    if (worktreeParts) {
+      const known = worktreeProjectHints?.get(worktreeParts.hash);
+      const hintKey = known?.projectKey?.trim();
+      if (hintKey) {
+        return hintKey;
+      }
+    }
     return projectKey;
   }
   const cwd = agent.cwd?.trim();
   return cwd ? cwd : null;
 }
 
-function resolveProjectName(agent: AggregatedAgent): string | null {
+function resolveProjectName(
+  agent: AggregatedAgent,
+  worktreeProjectHints?: ReadonlyMap<string, { projectKey: string | null }>,
+): string | null {
   const projectName = agent.projectPlacement?.projectName?.trim();
   if (projectName) {
     return projectName;
   }
-  const projectKey = resolveProjectKey(agent);
+  const projectKey = resolveProjectKey(agent, worktreeProjectHints);
   if (!projectKey) {
     return null;
   }
@@ -164,6 +183,7 @@ export function agentToSidebarThread(
   agent: AggregatedAgent,
   workspace?: SidebarV2WorkspaceHint | null,
   extras?: { lastError?: string | null; model?: string | null },
+  worktreeProjectHints?: ReadonlyMap<string, { projectKey: string | null }>,
 ): SidebarV2Thread {
   const labels = agent.labels ?? {};
   const hasPendingApprovals = (agent.pendingPermissionCount ?? 0) > 0;
@@ -195,8 +215,8 @@ export function agentToSidebarThread(
     snoozedAt: labelOrNull(labels, SIDEBAR_LABEL_SNOOZED_AT),
     settledAt: labelOrNull(labels, SIDEBAR_LABEL_SETTLED_AT),
     settledOverride,
-    projectKey: resolveProjectKey(agent),
-    projectName: resolveProjectName(agent),
+    projectKey: resolveProjectKey(agent, worktreeProjectHints),
+    projectName: resolveProjectName(agent, worktreeProjectHints),
     branch: resolveBranch(agent, workspace),
     cwd,
     worktreePath: resolveWorktreePath(agent) ?? cwd,

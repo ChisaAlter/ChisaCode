@@ -85,4 +85,55 @@ describe("task-notification-tool-call", () => {
 
     expect(item).toBeNull();
   });
+
+  it("ignores bare queue-operation markers without task notification payload", () => {
+    expect(
+      mapTaskNotificationSystemRecordToToolCall({
+        type: "queue-operation",
+        operation: "enqueue",
+        timestamp: "2026-08-11T06:48:26.299Z",
+        sessionId: "04dba7d2-8049-4d36-a873-8116b424eebd",
+      }),
+    ).toBeNull();
+
+    expect(
+      mapTaskNotificationSystemRecordToToolCall({
+        type: "queue-operation",
+        operation: "dequeue",
+        timestamp: "2026-08-11T06:48:26.301Z",
+        sessionId: "04dba7d2-8049-4d36-a873-8116b424eebd",
+      }),
+    ).toBeNull();
+  });
+
+  it("still maps queue-operation records that carry task notification content", () => {
+    const content = [
+      "<task-notification>",
+      "<task-id>bg-queue-1</task-id>",
+      "<status>completed</status>",
+      "<summary>Background task completed</summary>",
+      "</task-notification>",
+    ].join("\n");
+    const item = mapTaskNotificationSystemRecordToToolCall({
+      type: "queue-operation",
+      operation: "enqueue",
+      uuid: "task-note-queue-1",
+      content,
+    });
+
+    expect(item).toMatchObject({
+      type: "tool_call",
+      name: "task_notification",
+      status: "completed",
+      detail: {
+        type: "plain_text",
+        label: "Background task completed",
+      },
+      metadata: {
+        source: "claude_task_notification",
+        taskId: "bg-queue-1",
+        status: "completed",
+      },
+    });
+  });
 });

@@ -25,6 +25,13 @@ export interface DraftRecord {
   lifecycle: DraftLifecycleState;
   updatedAt: number;
   version: number;
+  /**
+   * Client-minted agent id reserved for this draft. Stable for the draft's
+   * lifetime (across retries and tab remounts) so the optimistic sidebar row
+   * and the daemon-created agent share one key. Optional for drafts persisted
+   * before this field existed.
+   */
+  agentId?: string;
 }
 
 export interface DraftStoreState {
@@ -126,6 +133,26 @@ export function toDraftInputIfReady(
     text: record.input.text,
     attachments: record.input.attachments.map(normalizeComposerAttachment),
   };
+}
+
+/**
+ * Resolves the reserved agent id for a draft, minting one when absent.
+ *
+ * The id is stable for the draft's lifetime so the optimistic sidebar row and
+ * the daemon-created agent share one key. When a draft already reserved one
+ * (e.g. across retries or tab remounts) the existing id is returned unchanged.
+ * @param existing The draft's currently reserved agent id, if any
+ * @param mint Mint callback used when no id is reserved yet
+ * @returns The resolved agent id and whether a new id was minted
+ */
+export function resolveReservedDraftAgentId(
+  existing: string | undefined,
+  mint: () => string,
+): { agentId: string; minted: boolean } {
+  if (existing) {
+    return { agentId: existing, minted: false };
+  }
+  return { agentId: mint(), minted: true };
 }
 
 export function collectReferencedAttachmentIdsFromState(state: DraftStoreState): Set<string> {

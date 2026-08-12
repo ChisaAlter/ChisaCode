@@ -21,6 +21,7 @@ const {
     spacing: { 0.5: 2, 1: 4, 2: 8, 3: 12, 4: 16, 8: 32 },
     borderRadius: { sm: 8, md: 6 },
     fontWeight: { medium: "500" },
+    borderWidth: { 1: 1 },
     colors: {
       foreground: "#111",
       foregroundMuted: "#666",
@@ -56,6 +57,7 @@ vi.mock("react-native-unistyles", () => ({
   StyleSheet: {
     create: (factory: unknown) => (typeof factory === "function" ? factory(theme) : factory),
   },
+  useUnistyles: () => ({ rt: { breakpoint: "lg" } }),
 }));
 
 vi.mock("react-i18next", () => ({
@@ -129,6 +131,32 @@ vi.mock("@/components/ui/context-menu", () => ({
   ),
 }));
 
+vi.mock("@/components/ui/dropdown-menu", () => ({
+  DropdownMenu: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  DropdownMenuTrigger: ({ children, testID }: { children: React.ReactNode; testID?: string }) => (
+    <div data-testid={testID}>{children}</div>
+  ),
+  DropdownMenuContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  DropdownMenuItem: ({
+    children,
+    onSelect,
+    testID,
+  }: {
+    children: React.ReactNode;
+    onSelect?: () => void;
+    testID?: string;
+  }) => (
+    <button type="button" data-testid={testID} onClick={onSelect}>
+      {children}
+    </button>
+  ),
+  DropdownMenuSeparator: () => <div role="separator" />,
+}));
+
+vi.mock("@/components/provider-icons", () => ({
+  getProviderIcon: () => () => null,
+}));
+
 vi.mock("@/sidebar-v2/store", () => ({
   sidebarV2ThreadKey: (serverId: string, threadId: string) => `${serverId}:${threadId}`,
   useSidebarV2Store: (
@@ -172,9 +200,8 @@ vi.mock("lucide-react-native", () => ({
   Check: () => null,
   ChevronDown: () => null,
   ChevronRight: () => null,
-  Circle: () => null,
   Folder: () => null,
-  GitBranch: () => null,
+  FolderPlus: () => null,
   Plus: () => null,
   Undo2: () => null,
 }));
@@ -197,6 +224,7 @@ function agent(input: Partial<AggregatedAgent> & { id: string; cwd: string }): A
     archivedAt: input.archivedAt ?? null,
     createdAt: input.createdAt ?? updatedAt,
     labels: input.labels ?? {},
+    projectPlacement: input.projectPlacement ?? null,
   };
 }
 
@@ -310,5 +338,51 @@ describe("SidebarStatusView", () => {
 
     expect(screen.getByText("Gateway rewrite")).toBeTruthy();
     expect(screen.queryByText("Sidebar shelves")).toBeNull();
+  });
+
+  it("shows the repo basename (not owner/repo) in the project scope dropdown", () => {
+    const recent = new Date();
+    const agents = [
+      agent({
+        id: "agent-owner",
+        cwd: "/repo/ChisaTerminal",
+        title: "Owner repo thread",
+        lastActivityAt: recent,
+        createdAt: recent,
+        projectPlacement: {
+          projectKey: "remote:github.com/ayasealter/ChisaTerminal",
+          projectName: "ayasealter/ChisaTerminal",
+          checkout: {
+            cwd: "/repo/ChisaTerminal",
+            isGit: false,
+            currentBranch: null,
+            remoteUrl: null,
+            worktreeRoot: null,
+            isChisaCodeOwnedWorktree: false,
+            mainRepoRoot: null,
+          },
+        },
+      }),
+    ];
+
+    render(
+      <SidebarStatusView
+        agents={agents}
+        serverId="server-1"
+        onSnooze={vi.fn()}
+        onWake={vi.fn()}
+        onSettle={vi.fn()}
+        onUnsettle={vi.fn()}
+        onRegenerateTitle={vi.fn()}
+        onMarkUnread={vi.fn()}
+        onDelete={vi.fn()}
+        onRename={vi.fn()}
+      />,
+    );
+
+    // Scope dropdown label + option use the short basename (card also shows it).
+    const shortLabels = screen.getAllByText("ChisaTerminal");
+    expect(shortLabels.length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByText("ayasealter/ChisaTerminal")).toBeNull();
   });
 });

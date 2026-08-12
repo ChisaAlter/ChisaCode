@@ -371,6 +371,32 @@ describe("convertClaudeHistoryEntry", () => {
     ]);
   });
 
+  test("ignores bare queue-operation enqueue/dequeue history markers", () => {
+    expect(
+      convertClaudeHistoryEntry(
+        {
+          type: "queue-operation",
+          operation: "enqueue",
+          timestamp: "2026-08-11T06:48:26.299Z",
+          sessionId: "04dba7d2-8049-4d36-a873-8116b424eebd",
+        },
+        () => [],
+      ),
+    ).toEqual([]);
+
+    expect(
+      convertClaudeHistoryEntry(
+        {
+          type: "queue-operation",
+          operation: "dequeue",
+          timestamp: "2026-08-11T06:48:26.301Z",
+          sessionId: "04dba7d2-8049-4d36-a873-8116b424eebd",
+        },
+        () => [],
+      ),
+    ).toEqual([]);
+  });
+
   test("passes assistant content blocks through to the mapper", () => {
     const entry = {
       type: "assistant",

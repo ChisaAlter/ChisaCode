@@ -25,6 +25,13 @@ export function ConversationAspectColumn({ children }: { children: ReactNode }) 
 
   const handleLayout = useCallback((event: LayoutChangeEvent) => {
     const { height } = event.nativeEvent.layout;
+    // Ignore non-positive heights. When the keyed agent panel remounts inside
+    // this shell, React/RNW can emit a transient 0-height layout pass; writing
+    // that back would drop maxWidth to the 800 fallback and flash the column
+    // horizontally (the exact switch flash this shell exists to prevent).
+    if (!(height > 0)) {
+      return;
+    }
     setPaneHeight((current) => (current === height ? current : height));
   }, []);
 

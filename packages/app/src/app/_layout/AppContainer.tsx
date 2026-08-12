@@ -42,7 +42,15 @@ export interface AppContainerProps {
 
 export const THEME_CYCLE_ORDER: readonly ThemeName[] = ACTIVE_THEME_NAMES;
 
-const DESKTOP_WORKBENCH_FONT_CSS = `[data-testid="app-surface"] * {
+// Reference system font for the desktop workspace content only. Scoped to
+// app-content (the routed workspace subtree) so shell surfaces — the sidebar,
+// sidebar control, command center — keep their own font stack. The previous
+// whole-app-surface selector also overrode the sidebar: on Windows
+// `system-ui` resolves to Segoe UI Variable, whose glyph metrics differ from
+// Segoe UI, so selecting a session (entering /workspace/) made the entire
+// session list re-render wider. See roadmap entry
+// 「侧栏 项目/状态 视图字体校准 + 切换丝滑化」.
+const DESKTOP_WORKBENCH_FONT_CSS = `[data-testid="app-content"] * {
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
 }`;
 
@@ -128,7 +136,9 @@ function AppContainer({
       {!isCompactLayout && chromeEnabled && !isFocusModeEnabled && (
         <LeftSidebar selectedAgentId={selectedAgentId} />
       )}
-      <View style={layoutStyles.appContent}>{children}</View>
+      <View style={layoutStyles.appContent} testID="app-content">
+        {children}
+      </View>
     </>
   );
 

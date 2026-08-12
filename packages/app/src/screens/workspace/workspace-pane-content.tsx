@@ -13,6 +13,9 @@ import type { WorkspaceFileOpenRequest } from "@/workspace/file-open";
 
 export interface WorkspacePaneContentModel {
   key: string;
+  /** Active target kind — lets the center column host decide layout shells
+   *  (e.g. the centered conversation column) without re-deriving the target. */
+  kind: WorkspaceTabTarget["kind"];
   Component: ComponentType;
   paneContextValue: PaneContextValue;
 }
@@ -37,6 +40,7 @@ export function buildWorkspacePaneContentModel({
   invariant(registration, `No panel registration for kind: ${target.kind}`);
   return {
     key: `${normalizedServerId}:${normalizedWorkspaceId}:${target.kind}:${describeTargetId(target)}`,
+    kind: target.kind,
     Component: registration.component,
     paneContextValue: {
       serverId: normalizedServerId,

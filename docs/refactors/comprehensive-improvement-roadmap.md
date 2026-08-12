@@ -9,6 +9,20 @@
 
 ## 进行中
 
+### 草稿发送双硬门槛：不卡草稿页 + 侧栏即时出现且选中（2026-08-12 完成）
+
+- **问题**（用户硬门槛，连改一周未决）：① 发送消息后卡在草稿页——draft create 无客户端超时（ack 丢失时机器永久 `creating`、输入框锁定，传输层 60s 最坏永久）、ack 无 id 时静默跳过 lifecycle 更新永久卡死、`/new` 自动发送门禁不满足时消息凭空消失（提交文本只在发送时才写入输入框）且失败不重试；② 发送后侧栏行不立即选中——乐观行发送即投影（~170ms），但选中态只在 `convertDraftToAgent`（create 完成，实测最长 ~9.5s）后翻转，创建期间整窗未选中
+- **影响范围**：`packages/app/src/composer/draft/create-flow.ts`（客户端 60s deadline 对齐传输层 + ack 无 id 抛错 + 旧 daemon id 失配清幽灵行 + `setFormError` 暴露）、`workspace-tab.tsx`（自动发送改为成功后消费 + 10s 门禁看门狗恢复文本报错 + `onCreateSuccess` 持久化键守卫）、`workspace-tab-core.ts`（`shouldRestorePendingAutoSubmit` 纯函数）、`utils/selected-sidebar-agent.ts`（draft+pending agentId 即时选中 hook）、`app/_layout/AppShell.tsx`（接入新 hook）、`server/.../agent-lifecycle-handler.ts`（per-agentId in-flight 去重类 `AgentCreateInFlightDedupe`，并发重试不双建）、`i18n`（createTimeout/createMissingAgentId/createMissingWorkspaceKey/autoSubmitRestored en+zh）、e2e（`draft-send-regression.spec.ts` 2 新用例、`workspace-navigation-regression` 选中用例改显式 by-status 视图、`desktop-draft-send-gate.script.ts` 10× 实机门槛脚本）
+- **方案**：① create-flow 加固——deadline 超时走既有失败路径（错误文案+消息保留+可重试，重试同 reserved id 命中服务端幂等）；② /new 看门狗——门禁 10s 不满足即恢复文本+报错+消费 pending，消息不再消失；③ 侧栏选中——AppShell 经新 hook 订阅 layout + create-flow 双 store，draft target 且有 pending agentId 时立即返回该 id（与乐观行同帧出现），转换后同 id 原位替换无闪烁；④ 服务端幂等收尾——同 id 并发 create 去重（串行幂等检查已由 WIP 提供，本次补并发竞态）
+- **强制门禁**：只跑改动 Vitest 文件；typecheck/lint/format 全绿；web Playwright 新增 2 用例 + 既有选中回归；**实机 10× 连续门槛**（用户指定）：打包 win-unpacked GUI 模拟人工（点新对话→输入→发送→观察），7 次现有工作区草稿 + 3 次 /new 自动发送，连续 10 次全过才算完成
+- **状态**：完成（2026-08-12）。35 单测绿（create-flow 7 含 deadline/无 id/失配、workspace-tab-core 15、selected-sidebar-agent 8、server dedupe 5）；typecheck/lint 0 错误；web Playwright `draft-send-regression.spec.ts` 2/2（ack 延迟窗口内行出现+选中）、`workspace-navigation-regression` 选中回归 1/1；**实机 10× 连续 PASS**——行出现 5.3-6.4s（现有工作区）/ 5.2-5.9s（/new）→ 选中 → 转换 → 流开始（`turn-working-indicator`），全部 <7.7s，证据 `.omo/evidence/desktop-draft-send-gate-2026-08-12T17-14-28-096Z.md` + 20 张截图，独立视觉抽检（run-5 creating/converted）确认侧栏选中白底与对话流式视图、无错误文案。**环境备注**：实机门槛使用隔离 CHISACODE_HOME + dev mock provider（`CHISACODE_ENABLE_DEV_PROVIDERS=1`）+ 隔离配置禁用真实 provider/网关——真实网关 provider 的可用性探测（运行时加载机器级 MCP servers，见下条）在用户真实 daemon 当日亦有 48 次超时记录，属既有环境问题；本任务两门槛与 provider 无关，由 mock 流式载体验证（与项目既有 desktop-slices 门禁同模式）
+
+### Provider 可用性探测在 MCP server spawn 挂起时 30s 超时（2026-08-12 登记，待立项）
+
+- **问题**：`provider-snapshot-manager` 的 `isAvailable()` 探测会 spawn provider 运行时并完成 initialize，而运行时 initialize 等待全部已配置 MCP server（机器级安装：cua-driver、taptap-maker(npx)、maker-lua-lsp(python venv) 等 stdio spawn）连接；任一 spawn 挂起即整批探测 30s 超时（`withTimeout(refreshTimeoutMs)`），快照标记 error，模型选择器显示"Timed out checking X availability"且模型列表不可用。**用户真实 daemon 今日 48 次、08-07 3 次失败记录**——模型已持久化的既有会话不受影响，但新建会话/换模型的选择器不可用
+- **建议方向**：探测与 MCP 连接解耦（initialize 不等待 MCP 就绪即返回）、探测结果缓存/并行上限、或按 provider 缩短探测超时；运行时侧给 MCP 连接独立超时
+- **状态**：已登记（复现证据：`provider-snapshot-manager.ts:766` 超时文案 + 真实 daemon 日志 `Failed to check provider availability` 批量超时 + `_x.ai/mcp/init_progress {total:5,connected:0}`）
+
 ### Desktop 内置 Daemon 强绑定启动（2026-08-09 完成）
 
 - **问题**：桌面 Electron 冷启动不是强绑定内置 daemon——`manageBuiltInDaemon=false` 时 renderer 不调 `start_desktop_daemon`，main process `startDaemon()` 也 assert 拒绝；5s give-up + 8s hard-escape 超时后桌面掉 `/welcome`（远程配对页），而非留在可重试的启动 splash。根因链：① `shouldStartBuiltInDaemon()` 读 `manageBuiltInDaemon` 开关，false 则跳过启动；② main `startDaemon()` 调 `assertBuiltInDaemonManagementEnabled` throw；③ `resolveStartupRedirectRoute` 无桌面分支，give-up 后返回 `WELCOME_ROUTE`；④ `DaemonStartService.start()` 成功后无 connecting 超时观察，daemon 在跑但 client 连不上时纯 logo splash 永久卡死；⑤ `storeReady` 仅靠 give-up 解锁，桌面去掉 give-up 后 settings/welcome 全不可达；⑥ retry 调 start 在 daemon 已 running 时是 no-op（main 直接返回不重启）
@@ -52,7 +66,23 @@
 - **问题**：桌面 Chrome 以 390x844 视口打开 app 即触发错误边界——`[Reanimated] Invalid value for "unistyles_*": an empty object is not a valid style value.`，`AnimatedComponent.componentDidMount` → `CSSManager.update` 抛错，整屏替换为错误边界（"出错了"）。桌面 1280x720 视口正常。已确认与 e2e 迁移无关（stash 全部迁移改动后仍复现，hash 随 bundle 变化）
 - **影响范围**：`packages/app` 移动/紧凑路径下的 Animated 组件 + unistyles 空样式规则；疑似 compact 分支某个 `Animated.*` 的 style 数组含空 unistyles 规则（`unistyles_*` className 值为 `{}`）
 - **方案**：按 390px 视口最小复现（错误边界截图 + trace 已有），定位传入 Animated 组件的空 unistyles 样式（遍历 compact 分支的 `Animated.View`/`AnimatedPressable` style 数组），修复后跑 `sidebar-workspace.spec.ts` 的 mobile panelState 测试与真实 Android 验证
-- **状态**：已登记（有复现证据：e2e trace `test-results/sidebar-workspace-Mobile-*`、错误边界截图）
+- **状态**：已登记（有复现证据：e2e trace `test-results/sidebar-workspace-Mobile-*`、错误边界截图）。**2026-08-11 追加同类触发**：`left-sidebar.tsx` 的 项目/状态 切换器曾用 `Animated.View` + `useAnimatedStyle` 承载 unistyles 动态样式 `styles.viewTabThumb`（打包 Electron 全窗口即崩，非仅 390px）——修复：thumb 改为普通 `View`（unistyles 安全）+ web 用 RNW `transition*` CSS 属性做滑片过渡、native 静态切换 transform；内容区淡入动画同样用注入 keyframes 的 CSS 动画而非 Reanimated。经验：**任何 Animated 节点的 style 数组都不得含 unistyles 注册样式或空 unistyles 规则**
+
+### 侧栏 项目/状态 视图字体校准 + 切换丝滑化（2026-08-11 启动）
+
+- **问题**：按状态视图（`SidebarStatusView`）字体体系与按项目视图差距大——卡片标题 15px semibold、项目名/分支/时间 13px，而按项目行是 12.5px 体系（`.cc-row` 12.5/`.cc-group` 12.5 medium）；切换器全宽显示「按项目/按状态」长文本、切换无过渡；shelf 标题 12px 600 与按项目组标题 12.5 medium 不一致
+- **影响范围**：`packages/app/src/components/sidebar-status-view.tsx`（shelfHeaderLabel 12→12.5 medium、cardProjectName 13→12.5、cardTitle 15/600→13/medium、cardBranchText/cardTime/status 13→12、slimTitle 14→12.5）、`packages/app/src/components/left-sidebar.tsx`（切换器 thumb 滑片 + 短文本）、`packages/app/src/components/sidebar-session-list.tsx`（视图切换淡入动画 + keyframes 注入）、`packages/app/src/i18n/index.ts`（byProject/byStatus → 「项目/状态」）
+- **方案**：字体以按项目为准校准（12.5 主行 / 13 卡片标题 medium / 12 次要行）；切换器文本统一「项目/状态」；切换动画两层——内容区淡入上移（注入 CSS keyframes 的 `animation`，仅 web；原生静态）＋ 切换器 thumb 滑片（普通 View + RNW `transition*`，原生静态 transform）；原型 `prototypes/sidebar-status-font-alignment.html`
+- **验证**：App typecheck 0 错误、改动文件 lint 0 错误、50 个侧栏单测通过（sidebar-status-view 2 + sidebar-session-list 48）、`sidebar-view-switcher-layout` 8 测试通过；打包 Electron 实机验证 `e2e/desktop-packaged-sidebar-shelf.script.ts`
+- **状态**：完成（2026-08-11）。字体校准收尾：shelfHeaderLabel 12→12.5 medium、cardProjectName→12.5、cardTitle 14→13 medium（第二轮已从 15/600 降到 14/medium）、slimTitle 14→12.5（次要行 12 不变）。**新增根因（用户实机反馈「选中会话后整个列表字体和间距都变化」）**：选中会话进入 `/workspace/` 路由时，`AppContainer` 注入 `[data-testid="app-surface"] * { font-family: system-ui, ... !important }`，作用域覆盖整个 app 表面（含侧边栏）；Windows 上 `system-ui` 解析为 Segoe UI Variable，字形度量与 Segoe UI 不同，导致整个会话列表文字变宽、flex 标签互相挤压（卡片项目名 174.83→172.83、"now" 时间戳 22.5→24.5px）——直接违反「选中态不改变 typography」长期不变量。修复：字体 CSS 作用域收窄为 `[data-testid="app-content"] *`（路由内容槽），侧边栏/壳层保持自身字体栈；`app-content` 补 `testID`；fidelity 测试同步断言新作用域。切换淡入动画按 `sidebar-session-list.tsx:112` 注释放弃（CSS animation 在每次重渲染重触发、重新栅格化所有标题）。验证：typecheck/lint 0 错误、侧栏+fidelity 单测 61 通过；打包 Electron 实机 `e2e/desktop-selection-typography.script.ts` ALL GATES PASSED（新增 fontFamily/宽度/字重/字号稳定性门禁，覆盖 by-project 与 by-status 两个视图 + 校准值 13px/500、12.5px/500 断言），证据 `.omo/evidence/desktop-selection-typography-2026-08-11T09-39-35-841Z.md`
+
+### 会话切换横向闪 + AI 输出对齐 T3code（2026-08-12）
+
+- **问题**：同工作区切换对话时，对话记录 + 输入框一起横向闪一下。根因：`WorkspacePaneContent` 用 `key` 含 agentId 整树 remount；`ConversationAspectColumn` 原先挂在 panel 内，首帧 `paneHeight=0` → 走 `maxWidth:800`，onLayout 后改成 `height×1` → 居中列左右跳变。AI 正文亦落后 T3：`14.5/24/100% foreground`，T3 为 `text-sm/leading-relaxed/text-foreground/80`
+- **影响范围**：`packages/app/src/screens/workspace/workspace-center-column.tsx`、`workspace-pane-content.tsx`、`panels/agent-panel.tsx`、`composer/draft/workspace-tab.tsx`、`components/conversation-aspect-column.tsx`、`styles/theme.ts`、`styles/markdown-styles.ts`、`components/message.tsx`；门禁 `workbench-fidelity-style-boundaries.test.ts`、`markdown-styles.test.ts`、`theme.test.ts`；e2e `workspace-navigation-regression.spec.ts` + `helpers/workspace-ui.ts`；桌面脚本 `e2e/desktop-conversation-switch-width.script.ts`
+- **方案（照 T3 架构）**：① 列移到 center-column 外壳，**仅 agent/draft kind 包列**（terminal/browser/file/setup 全宽直通）；panel key remount 契约保留，但列宽状态跨切换保持。② AI 正文对齐 T3：新增 `foregroundSoft`（foreground@80% alpha，颜色 token 而非容器 opacity）；workbench body `14 / Math.round(14*1.625) / foregroundSoft`；段落/block 间距 10；标题阶梯 20/18/16/14。原型 `prototypes/conversation-switch-t3-alignment.html`
+- **验证**：聚焦 vitest（pane-content / fidelity / theme / markdown-styles）+ lint；web e2e 同 workspace 切换列宽 ≤0.5px + terminal 全宽；打包 Electron `desktop-conversation-switch-width.script.ts`（列宽稳定性 + AI computed style 14/23/80%）
+- **状态**：实现完成 + 自动化真机门禁通过（2026-08-12）。M1 原型 `prototypes/conversation-switch-t3-alignment.html`；M2 列移外壳 kind-gated（center-column 宿主，agent-panel/workspace-tab 移除）+ 忽略瞬时 `height<=0` 的 onLayout（防止切换回退 800）；M3 `foregroundSoft` + workbench body/text 14/23/rgba@0.8 + 标题阶梯 + 间距 10；M4 web e2e 同 workspace 切换/terminal 全宽 2/2 通过；M5 roadmap 本条目；M6 打包 Electron `desktop-conversation-switch-width.script.ts` ALL GATES PASSED（Δw=0/Δx=0；AI prose 文本叶 `14px/23px/rgba(20,23,31,0.8)`，门禁改为**统计全部文本叶节点**而非挑最好样本），证据 `.omo/evidence/desktop-conversation-switch-width-2026-08-12T01-49-40-123Z.md` + `conversation-switch-width-shots/`。**2026-08-12 对抗审查后修复**：① 移除 T3 AI 标题条的死代码（`showAssistantTurnHeader`/`AssistantTurnHeader` 导出/过时断言）并去掉 footer "Worked for" 文案（只留复制按钮）；② AI 正文门禁改为全叶断言（诊断确认 16px 黑为 RNW 容器 div 非文本）；③ 侧栏选中行 hover 背景不变 + T3 行内 Settle/Snooze 按钮（hover 露出、compact 常显、snooze 内联预设），`desktop-selected-hover-stable.script.ts` ALL GATES PASSED（选中 hover 前后 backgroundColor/opacity 不变、未选中 hover 正常变灰）；④ 状态卡片项目名改用 `shortProjectName`（`ayasealter/ChisaTerminal` → `ChisaTerminal`）。证据 `.omo/evidence/desktop-selected-hover-stable-2026-08-12T01-48-48-963Z.md` + `selected-hover-shots/`。**2026-08-12 用户实机反馈后再次修复**：③ 的 T3 行内 Settle/Snooze 按钮**整体删除**——hover 时按钮替换状态/时间标签使状态列表行内容横向跳动，用户判定纯多余；Settle/Snooze 回到右键菜单，hover 只允许背景反馈、**禁止改变行内容/布局**（长期不变量，代码注释 + 门禁脚本注释已落实）。**同日追加：项目名统一去 owner 前缀**——"所有项目" scope 下拉与 by-project 组标题仍显示 `ayasealter/ChisaTerminal` 完整 owner/repo，根源是 `deriveProjectName`/`deriveProjectDisplayName` 对 GitHub remote 返回 `owner/repo`（注释原写 "GitHub remotes show owner/repo"）；已改为统一短名（repo basename），scope 下拉（status-view `projectOptions`）与组标题共用 `shortProjectName`/短化后的 `deriveProjectName`，测试断言同步更新（agent-grouping 14 tests）。**人工肉眼验收仍需用户在已刷新快捷方式的 win-unpacked 上确认**
 
 ### Web-only markdown 表现力（表格/details/外链 favicon）（2026-08-04 登记，待产品决策）
 
@@ -741,3 +771,39 @@ Worktree `production-hardening-2026-08-10` landed Phases 1–6 + local packaged 
 ## Production hardening closeout (2026-08-10T10-47-25Z)
 
 User asked to simplify everything; all CI-green chasing and pre-existing test fixes stopped. Branch `codex/production-hardening-2026-08-10` landed phases 0–6 @ 49b5c18a5 (PR #32). G010 `review_blocked`; plan section 9 not claimed complete; residual items recorded in `.omo/evidence/production-hardening-simplify-closeout-2026-08-10T10-47-25Z.md`.
+
+## 侧栏新建对话单行/同 key 修复（2026-08-12 登记，2026-08-12 完成）
+
+- **问题**：新建对话（draft create）时乐观行 keyed by `draftId`（客户端 `draft_msg_...`），server 真实 agent keyed by `randomUUID()`——两个不同 key 同时存在于 agents Map，侧栏短暂出现两行；且乐观行/`handleCreated` 用 cwd fallback 计算 `projectPlacement`（`remote:...` 缺失），而 server 用 git remote projectKey，导致 cwd 目录与 remote 目录并存，出现"新建绝对路径目录→半天后合并"（用户报告：Pi 新对话首条消息延迟出现+跳动；Claude Code 已有目录下新建对话出现重复目录）。放大因素：`mergeLocalAgentsIntoFetchedDirectory` 会复活不在 fetch 里的 draft 行（幽灵行）
+- **影响范围**：`packages/protocol/src/agent/messages.ts`（`CreateAgentRequestMessageSchema.agentId` 可选 UUID + `AgentCreatedStatusPayloadSchema.project` 可选）、`packages/client/src/daemon-client-agent-lifecycle.ts`（发送 agentId、返回 `CreateAgentResult` 携带 project）、`packages/server/src/server/session-handlers/agent-lifecycle-handler.ts`（采纳 agentId + 幂等返回已有 agent + agent_created 携带 project）、`packages/server/src/server/agent/create-agent/create.ts`（agentId 贯穿）、`packages/server/src/server/session-handlers/session-context.ts`（context 类型）、`packages/app/src/stores/draft-store/`（`DraftRecord.agentId` + `reserveDraftAgentId` + 纯函数）、`packages/app/src/composer/draft/workspace-tab.tsx`（乐观行 id=agentId、发送 agentId、placement 用 workspace descriptor project）、`packages/app/src/composer/draft/create-flow.ts`（预分配 agentId、失败清理按 agentId、continueCreateFromAttempt 投影乐观行）、`packages/app/src/panels/agent-panel.tsx`（handleCreated 同 key 覆盖 + project 优先级）
+- **方案**：T3 Code 式"客户端授权 id"（调研 `t3-oss/t3code`：客户端 mint 规范 UUID，server 原样采纳，`requireThreadAbsent` 幂等，draft 独立槽位，createdAt 客户端 mint）——客户端 draft store 持久化 `agentId`（draft 生命周期内稳定），乐观行 keyed by 同一 id，server 采纳 verbatim，`agent_update` 同 key 直接覆盖；server 幂等（agentId 已存在返回已有 agent，不建第二行）；projectPlacement 统一用 workspace descriptor / agent_created 携带的 server 真相，不再 cwd fallback
+- **验证**：server e2e 3 测试（client-minted agentId 原样采纳 / 同 id 重试返回同一 agent 且仅 1 行 / 无 agentId 时 server mint UUID）全绿；protocol schema 测试（agentId 字段接受/拒绝非 UUID、agent_created project 字段）全绿；draft-store `resolveReservedDraftAgentId` 纯函数测试全绿；typecheck/lint 干净。**桌面真机**：打包 win-unpacked + 真实 home 验证——seed agent 后打开已有对话发送，`sidebar-v2-thread-<id>` 38 次采样全为 1（行唯一），目录组 3→3 不变（无新目录）；**如实记录**：Soft Home draft-create 的 UI 发送验证被环境 provider 模型发现阻塞（Pi CLI `_x.ai/models/update` RPC Method not found、codex 30s 超时、kimi 认证失败——与本次修复无关的既有环境问题），该路径的核心机制由 server e2e + 协议/draft-store 单测覆盖
+- **状态**：完成。保留边界：`AgentCreatedStatusPayloadSchema.project` 为可选字段（老 daemon 不发时 client fallback workspace descriptor/cwd）；Pi CLI 模型发现 RPC 不匹配为独立环境问题，另立条目跟踪（见下）
+
+## Pi provider 模型发现 RPC 不匹配（2026-08-12 登记，未完成）
+
+- **问题**：daemon 的 provider snapshot 中 Pi 的模型发现挂起（`_x.ai/models/update` RPC 返回 `Method not found`），导致 UI 模型选择器一直 loading、Soft Home draft-create 无法选择模型发送（2026-08-12 桌面验证时发现）。kimi 认证失败、codex 模型刷新 30s 超时同属 provider 发现环境问题
+- **影响范围**：`packages/server/src/server/agent/providers/pi/`（模型发现 RPC 协议）、`packages/server/src/server/agent/provider-snapshot-manager.ts`
+- **方案**：核对 Pi CLI 安装版本与 server 期望的 RPC 协议（`_x.ai/models/update` 是旧协议还是 Pi CLI 版本问题）；必要时在 server 侧降级/兼容
+- **状态**：登记，未开始。不阻塞本次侧栏修复（draft-create UI 验证依赖它，核心机制已由 e2e/单测覆盖）
+
+## 侧栏 worktree 对话误归入主目录组修复（2026-08-12 登记，2026-08-12 完成）
+
+- **问题**：用户在 pi-desktop 发消息（创建 worktree，agent.cwd = `C:\Users\48818\.chisacode\worktrees\<hash>\<slug>` 正斜杠形式），侧栏对话先出现在"48818"（主目录）组，半天后才迁移到 pi-desktop 组（期间两处并存）。根因：`deriveProjectKey`（agent-grouping.ts）用正斜杠匹配 `.chisacode/worktrees/` 并把前缀剥离为"项目根"——但对 CHISACODE_HOME 的 worktree（`<home>/.chisacode/worktrees/`），剥离结果是**用户主目录**（不是项目）。client 的 cwd fallback（workspace descriptor 未 hydrate 时的乐观行 / handleCreated）走 `deriveProjectPlacementFromCwd` → placement.projectKey = 主目录 → 组 "48818"；workspace/placement 就绪后 server 的正确 placement（remote key + mainRepoRoot）到达 → 迁移到 pi-agent-desktop。server 端数据全程正确（已用 fetchAgent 实测 projectKey=remote:...、mainRepoRoot=pi-desktop）
+- **影响范围**：`packages/app/src/utils/agent-grouping.ts`（deriveProjectKey 增加主目录识别，CHISACODE_HOME worktree 不剥离）、`packages/app/src/utils/sidebar-session-groups.ts`（resolveSidebarSessionGroupIdentity：placement 的 projectKey 是 managed worktree 路径时走 worktree-hash hints 归入主项目，兜底 server fallback 场景）
+- **验证**：新增 `sidebar-worktree-home-grouping.test.ts` 5 测试（hints 正确解析 / 正确 placement 归主项目 / **deriveProjectKey 不再剥离主目录 worktree** / 项目内 worktree 仍正确剥离 / 双组并存复现）；相关套件 37 测试全绿；typecheck/lint 干净；打包 win-unpacked + 重启
+- **状态**：完成。用户可在新包中复测：pi-desktop 新建对话（worktree）应直接出现在 pi-agent-desktop 组
+
+## 侧栏 worktree 主目录误归组：by-status 视图兜底（2026-08-12 登记，2026-08-12 完成）
+
+- **问题**：by-project 分组修复（deriveProjectKey + cwd-hash 兜底）后，by-status 视图仍可能显示 "48818" 主目录组：`agent-adapter.ts` 的 `resolveProjectKey`（`projectPlacement?.projectKey ?? cwd`）没有 worktree-hash 兜底。Electron sandboxed 渲染进程拿不到 `process.env.USERPROFILE`，`deriveProjectKey` 无法识别主目录 → CHISACODE_HOME worktree 路径被剥离成主目录 → by-status 的 project scope（"All projects" 下拉 + 过滤）按主目录 key 分组
+- **影响范围**：`packages/app/src/sidebar-v2/agent-adapter.ts`（resolveProjectKey/resolveProjectName 增加 worktree-hash hints 兜底，agentToSidebarThread 第 4 参数）、`packages/app/src/components/sidebar-status-view.tsx`（props 增加 worktreeProjectHints）、`packages/app/src/components/sidebar-session-list.tsx`（渲染时传入已构建的 hints）。审查确认其余 projectKey 消费点安全：SidebarV2（旧实现）经 agentToSidebarThread 已覆盖；workspace 列表的 projectKey 来自 server（正确）；重命名 project 的匹配逻辑为边缘场景
+- **验证**：agent-adapter.test.ts 新增 3 测试（剥离 home placement → hints 归主项目 / 正确 remote placement 不变 / hints 缺失时保持原 key）；25 个相关测试全绿；typecheck/lint 干净；打包 win-unpacked + 重启
+- **状态**：完成。用户复测路径：pi-desktop（worktree 上下文）新建对话 → 项目视图 + 状态视图均应显示 pi-agent-desktop，无 48818 主目录组
+
+## 侧栏重复行：reserveDraftAgentId 未持久化 mint id（2026-08-12 登记，2026-08-12 完成）
+
+- **问题**：发送后侧栏出现两条同标题记录（乐观行 + 真实行），且真实行延迟出现。根因：`reserveDraftAgentId` 在 draft record **不存在**时（auto-submit 路径，用户输入未触碰 draft store）mint 了 id A 但 `set` 里 `if (!current) return state` **未写入**；下一次调用（createRequest）再次 mint id B → 乐观行 keyed by A（server 无此 id，打开时报 "Agent not found"），发送的 agentId 是 B（server 采纳 B）→ 两条记录。同 key 架构（server 采纳 agentId）本身正常（daemon.log 确认 "Creating agent" 的 agentId = 最终创建 id）
+- **影响范围**：`packages/app/src/stores/draft-store/index.ts`（reserveDraftAgentId：record 不存在时创建空 record 并写入 agentId，保证跨调用幂等）
+- **验证**：新增 `reserve-store.test.ts` 3 测试（无 record 时两次调用同值 / 已有 id 稳定 / 写入空 record）；27 个相关测试全绿；typecheck/lint 干净；打包 win-unpacked + 重启
+- **状态**：完成。用户复测：发送后侧栏应立即出现**一条**记录（乐观行与 server 同 key）

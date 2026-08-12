@@ -352,9 +352,8 @@ describe("layoutStream", () => {
       timingIds: [firstBlock.id, secondBlock.id],
     });
 
-    expect(findLayoutItem(layout, firstBlock.id).showAssistantTurnHeader).toBe(true);
     expect(findLayoutItem(layout, firstBlock.id).turnTiming?.durationMs).toBe(8000);
-    expect(findLayoutItem(layout, secondBlock.id).showAssistantTurnHeader).toBe(false);
+    expect(findLayoutItem(layout, secondBlock.id).turnTiming?.durationMs).toBe(8000);
   });
 
   it("groups contiguous tool and todo rows under the first sequence item", () => {

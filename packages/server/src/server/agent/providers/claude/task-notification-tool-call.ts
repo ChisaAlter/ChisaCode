@@ -177,6 +177,12 @@ function parseTaskNotificationFromSystemRecord(record: unknown): TaskNotificatio
     return null;
   }
   const rawText = toNonEmptyString(systemRecord.content);
+  // Claude JSONL also emits bare queue-operation enqueue/dequeue markers for the
+  // prompt queue. Those are not background-task notifications and must not become
+  // synthetic tool chips such as "Task Notification Background...".
+  if (isQueueOperation && !queueOperationCarriesTaskNotification(systemRecord, rawText)) {
+    return null;
+  }
 
   return TaskNotificationEnvelopeSchema.parse({
     messageId: toNonEmptyString(systemRecord.uuid) ?? toNonEmptyString(systemRecord.message_id),
@@ -197,6 +203,25 @@ function parseTaskNotificationFromSystemRecord(record: unknown): TaskNotificatio
         : null),
     rawText,
   });
+}
+
+function queueOperationCarriesTaskNotification(
+  systemRecord: TaskNotificationHistoryRecord,
+  rawText: string | null,
+): boolean {
+  if (toNonEmptyString(systemRecord.task_id)) {
+    return true;
+  }
+  if (toNonEmptyString(systemRecord.status)) {
+    return true;
+  }
+  if (toNonEmptyString(systemRecord.summary)) {
+    return true;
+  }
+  if (toNonEmptyString(systemRecord.output_file)) {
+    return true;
+  }
+  return Boolean(rawText && rawText.includes(TASK_NOTIFICATION_MARKER));
 }
 
 function normalizeTaskNotificationCallIdSegment(segment: string): string | null {

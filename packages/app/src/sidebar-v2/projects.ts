@@ -145,7 +145,13 @@ function deriveDisplayName(members: readonly SidebarV2ProjectMember[]): string {
   return shortProjectName(representative.projectName);
 }
 
-function shortProjectName(projectName: string): string {
+/**
+ * Extracts the basename of a project label ("owner/repo" → "repo", "a/b/c" → "c").
+ * Used by the sidebar status cards to match T3's short project label.
+ * @param projectName Full project label (may contain "/" separators)
+ * @returns The last path segment, or the trimmed input when no separator exists
+ */
+export function shortProjectName(projectName: string): string {
   const trimmed = projectName.trim();
   const slash = trimmed.lastIndexOf("/");
   if (slash >= 0 && slash < trimmed.length - 1) {

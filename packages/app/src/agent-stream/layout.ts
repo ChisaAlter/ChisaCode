@@ -22,7 +22,6 @@ export interface StreamLayoutItem {
   assistantSpacing: "default" | "compactTop" | "compactBottom" | "compactBoth";
   completedFooter: TurnFooterHost | null;
   turnTiming?: TurnTiming;
-  showAssistantTurnHeader: boolean;
   toolSequence: StreamToolSequence;
   toolSequenceGroup: StreamLayoutItem[] | null;
   toolSequenceGroupGapBelow: number;
@@ -275,8 +274,6 @@ function layoutSegment(input: LayoutSegmentInput): StreamLayoutItem[] {
       completedFooter,
       turnTiming:
         item.kind === "assistant_message" ? input.timingByAssistantId.get(item.id) : undefined,
-      showAssistantTurnHeader:
-        item.kind === "assistant_message" && aboveItem?.kind !== "assistant_message",
       toolSequence: getToolSequence({ item, aboveItem, belowItem }),
       toolSequenceGroup: null,
       toolSequenceGroupGapBelow: 0,

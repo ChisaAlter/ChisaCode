@@ -621,6 +621,23 @@ function SidebarTopActions({
   );
   const byProjectSelected = sidebarViewMode === "by-project";
   const byStatusSelected = sidebarViewMode === "by-status";
+  // Sliding highlight under the active 项目/状态 tab. Plain View (not
+  // Animated) so Unistyles theme colors are safe; web eases the transform
+  // via RNW CSS transitions, native swaps the transform statically.
+  const thumbStyle = useMemo(() => {
+    if (!isWeb) {
+      return [styles.viewTabThumb, byStatusSelected ? styles.viewTabThumbShiftedNative : null];
+    }
+    return [
+      styles.viewTabThumb,
+      {
+        transform: [{ translateX: byStatusSelected ? "100%" : "0%" }],
+        transitionProperty: "transform",
+        transitionDuration: "180ms",
+        transitionTimingFunction: "cubic-bezier(0.33, 1, 0.68, 1)",
+      } as object,
+    ];
+  }, [byStatusSelected]);
   const byProjectAccessibilityState = useMemo(
     () => ({ selected: byProjectSelected }),
     [byProjectSelected],
@@ -669,7 +686,7 @@ function SidebarTopActions({
 
   // Desktop: shell DesktopSidebarControl owns open/close (T3 SidebarTrigger).
   // Keep the close tile only on compact so the mobile drawer can still dismiss.
-  // Order: top chrome (shell + search icon) → 新对话 → 搜索会话 → 按项目/按状态.
+  // Order: top chrome (shell + search icon) → 新对话 → 搜索会话 → 项目/状态.
   return (
     <View style={topAreaStyle}>
       <View style={styles.sidebarTopActions}>
@@ -722,6 +739,7 @@ function SidebarTopActions({
         testID="sidebar-view-switcher"
         nativeID={`sidebar-view-switcher-${switcherLayout.density}`}
       >
+        <View style={thumbStyle} pointerEvents="none" />
         <View testID="sidebar-v2-scope-trigger" collapsable={false} style={styles.scopeTriggerShim}>
           <Pressable
             accessibilityRole="button"
@@ -1812,6 +1830,28 @@ const styles = StyleSheet.create((theme) => ({
     borderRadius: 8,
     padding: 2,
     overflow: "hidden",
+    position: "relative",
+  },
+  // Sliding highlight under the active 项目/状态 tab (plain View — safe for
+  // Unistyles theme colors; see thumbStyle for the web CSS transition).
+  viewTabThumb: {
+    position: "absolute",
+    top: 2,
+    left: 2,
+    bottom: 2,
+    width: "50%",
+    marginRight: 2,
+    borderRadius: 6,
+    backgroundColor: theme.colors.surface0,
+    ...(isWeb
+      ? ({
+          boxShadow: "inset 0 0 0 1px rgba(20, 23, 31, 0.04)",
+        } as object)
+      : theme.shadow.sm),
+  },
+  // Native fallback for the switched thumb.
+  viewTabThumbShiftedNative: {
+    transform: [{ translateX: "100%" }],
   },
   scopeTriggerShim: {
     flex: 1,
@@ -1837,12 +1877,7 @@ const styles = StyleSheet.create((theme) => ({
     paddingHorizontal: 4,
   },
   viewTabActive: {
-    backgroundColor: theme.colors.surface0,
-    ...(isWeb
-      ? ({
-          boxShadow: "inset 0 0 0 1px rgba(20, 23, 31, 0.04)",
-        } as object)
-      : {}),
+    backgroundColor: "transparent",
   },
   viewTabText: {
     flexShrink: 1,

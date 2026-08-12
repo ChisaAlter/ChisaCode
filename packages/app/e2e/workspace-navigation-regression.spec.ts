@@ -12,26 +12,28 @@ import { expectComposerVisible } from "./helpers/composer";
 import { daemonWsRoutePattern } from "./helpers/daemon-port";
 import { seedWorkspace } from "./helpers/seed-client";
 import {
+  expectConversationColumnWidthStable,
   expectOnlyWorkspaceAgentSurfacesVisible,
-  getVisibleWorkspaceAgentSurfaceIds,
-  waitForWorkspaceTabsVisible,
-  expectWorkspaceTabsAbsent,
-} from "./helpers/workspace-ui";
-import {
   expectSidebarThreadActive,
+  expectTerminalSurfaceFullWidth,
+  expectWorkspaceDeckEntryCount,
   expectWorkspaceHeader,
   expectWorkspaceHeaderAbsent,
   expectMenuButtonVisible,
   expectHostConnectingOrOffline,
   expectReconnectingToastVisible,
   expectReconnectingToastGone,
+  getVisibleWorkspaceAgentSurfaceIds,
+  measureConversationAspectColumn,
   switchAgentViaSidebar,
   waitForSidebarHydration,
+  waitForWorkspaceTabsVisible,
+  expectWorkspaceTabsAbsent,
   workspaceDeckEntryLocator,
-  expectWorkspaceDeckEntryCount,
 } from "./helpers/workspace-ui";
 import { clickSettingsBackToWorkspace } from "./helpers/settings";
 import { getServerId } from "./helpers/server-id";
+import { TerminalE2EHarness, withTerminalInApp } from "./helpers/terminal-dsl";
 
 const LOADING_WORKSPACE_TEXT_PATTERN = /Loading workspace/i;
 
@@ -269,6 +271,11 @@ test.describe("Workspace navigation regression", () => {
 
       await gotoAppShell(page);
       await waitForSidebarHydration(page);
+      // The default sidebar view is by-project, whose rows expose selection as
+      // a row fill rather than aria-selected. Switch to by-status so the
+      // selection assertions below have a deterministic DOM signal (and the
+      // view mode persists through the reload below).
+      await page.getByTestId("sidebar-view-by-status").click();
       await openWorkspaceWithAgents(page, [firstAgent, secondAgent]);
 
       const firstDeckEntry = workspaceDeckEntryLocator(page, serverId, firstWorkspace.workspaceId);
@@ -372,6 +379,66 @@ test.describe("Workspace navigation regression", () => {
     } finally {
       await secondWorkspace.cleanup();
       await firstWorkspace.cleanup();
+    }
+  });
+
+  test("same-workspace agent switches keep conversation column width stable", async ({ page }) => {
+    // Gates the T3-style shell-hosted ConversationAspectColumn fix: the column
+    // mounts once on the center-column shell and must not re-measure (800→paneH)
+    // when the keyed agent panel remounts on switch.
+    const workspace = await seedWorkspace({ repoPrefix: "conv-col-stable-" });
+
+    try {
+      const firstAgent = await createIdleAgent(workspace.client, {
+        cwd: workspace.repoPath,
+        title: `conv-col-a-${Date.now()}`,
+      });
+      const secondAgent = await createIdleAgent(workspace.client, {
+        cwd: workspace.repoPath,
+        title: `conv-col-b-${Date.now()}`,
+      });
+
+      await openWorkspaceWithAgents(page, [firstAgent, secondAgent]);
+      await waitForWorkspaceTabsVisible(page);
+      await switchAgentViaSidebar(page, firstAgent.id);
+      await expectWorkspaceTabVisible(page, firstAgent.id);
+      await expectComposerVisible(page);
+
+      // Wait for first measure to settle, then capture baseline.
+      await expect
+        .poll(
+          async () => {
+            const box = await measureConversationAspectColumn(page);
+            return box && box.width > 0 ? box.width : 0;
+          },
+          { timeout: 15_000 },
+        )
+        .toBeGreaterThan(0);
+      const baseline = await measureConversationAspectColumn(page);
+      expect(baseline).not.toBeNull();
+
+      await switchAgentViaSidebar(page, secondAgent.id);
+      await expectWorkspaceTabVisible(page, secondAgent.id);
+      await expectConversationColumnWidthStable(page, { baseline });
+
+      await switchAgentViaSidebar(page, firstAgent.id);
+      await expectWorkspaceTabVisible(page, firstAgent.id);
+      await expectConversationColumnWidthStable(page, { baseline });
+    } finally {
+      await workspace.cleanup();
+    }
+  });
+
+  test("terminal surface stays full-width of the main panel", async ({ page }) => {
+    // ConversationAspectColumn is kind-gated to agent/draft only — terminal must
+    // not inherit the 800-centered reading column.
+    const harness = await TerminalE2EHarness.create({ tempPrefix: "term-fullwidth-" });
+    try {
+      await withTerminalInApp(page, harness, { name: "fullwidth-check" }, async () => {
+        await expectTerminalSurfaceFullWidth(page);
+      });
+    } finally {
+      await harness.cleanup();
     }
   });
 });

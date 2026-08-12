@@ -275,6 +275,11 @@ Home 允许大标题；工作态仍靠 **foreground / muted / faint**，不靠�
 | File / tool | 同 soft 卡片语法，可折叠             |
 | 消息操作    | ghost 图标，低对比                   |
 
+**2026-08-12 决策增补（对抗审查 + 用户实机确认）**：
+
+- **AI 回复上方无标题条**：不渲染 `AI ⚙ 时长` 式 turn header；完成回合 footer 只保留复制按钮，**不显示时长文案**。时长信息属于 T3 风格冗余，用户判定多余。
+- **AI 正文排版对齐 T3 阅读 token**：正文 `14 / Math.round(14*1.625) / foreground@80%`（`foregroundSoft` 颜色 token，非容器 opacity），标题阶梯 20/18/16/14，段落与 block 间距 10。门禁：`markdown-styles.test.ts` + 桌面门禁全文本叶断言（禁止 16px 默认黑误报）。
+
 ### 6.5 Composer（悬浮输入卡 · 两态共用）
 
 **同一组件**，Home 居中、Session 钉底；结构完整、不可裁切：
@@ -314,6 +319,13 @@ Home 允许大标题；工作态仍靠 **foreground / muted / faint**，不靠�
 | 连接断开     | footer 文案 + 可选 banner；不重绘整个壳 |
 | Hover        | 120–160ms 级背景过渡即可                |
 | 面板开关     | 宽度或 overlay；避免弹跳弹簧过度        |
+
+**Hover 长期不变量（2026-08-12）**：
+
+- **Hover 只允许背景反馈，禁止改变行内容/布局**（文字、图标、操作按钮均不得因 hover 出现/替换）。
+- 侧栏**选中行 hover 背景必须不变**（选中填充是稳定 chrome）；未选中行可正常变灰。
+- 状态卡片**无行内 hover 操作按钮**——Settle/Snooze 只在右键菜单；T3 式 hover 露出按钮曾替换状态标签导致行跳动，已删除。
+- 门禁：`workbench-fidelity-style-boundaries.test.ts`（负面源码断言）+ `desktop-selected-hover-stable.script.ts`（打包 Electron：选中 hover 背景/透明度不变、无 settle/snooze 按钮出现）。
 
 ## 8. 跨端与多表面（对齐真实导航模型）
 
@@ -386,6 +398,12 @@ Workspace 更多菜单能力（`workspace-header`）：新建智能体/终端/�
 - 为截图引入演示数据或假壳
 - 用 Web 验收代替 Electron / Android
 - 一次 PR 重写全部 agent 协议或 provider
+
+## 13. 项目名显示约定（2026-08-12）
+
+- **所有项目相关 UI 只显示 repo basename，禁止 `owner/repo` 形态**：状态卡片项目名、状态视图"所有项目" scope 下拉、by-project 组标题、项目设置对话框。
+- GitHub remote（`remote:github.com/owner/repo`）一律短化为 `repo`（`deriveProjectName` / `deriveProjectDisplayName` / `shortProjectName`）。
+- 门禁：`agent-grouping.test.ts`（deriveProjectName/DisplayName 短名断言）、`projects.test.ts`（shortProjectName）、`sidebar-status-view.test.tsx`（scope 下拉短名渲染）、`workbench-fidelity-style-boundaries.test.ts`（status 卡片必须调用 `shortProjectName`）。
 
 ---
 

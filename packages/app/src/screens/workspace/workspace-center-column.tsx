@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 
 import { SidebarMenuToggle } from "@/components/headers/menu-header";
 import { ScreenHeader } from "@/components/headers/screen-header";
+import { ConversationAspectColumn } from "@/components/conversation-aspect-column";
 import type { Theme } from "@/styles/theme";
 import { resolveThemeWorkbenchSurfaceRoles } from "@/styles/workbench-surface-roles";
 import { WorkspaceFocusProvider } from "@/workspace/focus";
@@ -85,6 +86,21 @@ const WorkspaceContent = memo(function WorkspaceContent({
       <View style={styles.emptyState}>
         <Text style={styles.emptyStateText}>{t("workspace.screen.noTabsAvailable")}</Text>
       </View>
+    );
+  }
+  // Host ConversationAspectColumn on the center-column shell (outside the keyed
+  // panel). Agent/draft switches remount WorkspacePaneContent only; the column
+  // instance stays mounted so measured maxWidth never re-falls back to 800.
+  // Terminal/browser/file/setup stay full-width (their own layout model).
+  if (contentModel.kind === "agent" || contentModel.kind === "draft") {
+    return (
+      <ConversationAspectColumn>
+        <WorkspacePaneContent
+          content={contentModel}
+          isWorkspaceFocused={isRouteFocused}
+          isPaneFocused={isRouteFocused}
+        />
+      </ConversationAspectColumn>
     );
   }
   return (

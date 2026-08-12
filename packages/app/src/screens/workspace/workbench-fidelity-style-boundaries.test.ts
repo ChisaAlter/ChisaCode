@@ -12,10 +12,13 @@ describe("workbench fidelity style boundaries", () => {
     expect(source).toContain("marginTop: -WORKBENCH_FRAME_HAIRLINE_OFFSET");
   });
 
-  it("uses the reference system font only on the desktop Electron workspace", () => {
+  it("uses the reference system font only on the desktop Electron workspace content", () => {
     const source = readSource("../../app/_layout/AppContainer.tsx");
 
-    expect(source).toContain('[data-testid="app-surface"] *');
+    // Scoped to the routed content slot (app-content), never the shell: the
+    // sidebar and chrome must keep their own font stack when a session opens.
+    expect(source).toContain('[data-testid="app-content"] *');
+    expect(source).not.toContain('[data-testid="app-surface"] *');
     expect(source).toContain("font-family: system-ui");
     expect(source).toContain('pathname.includes("/workspace/")');
   });
@@ -140,6 +143,76 @@ describe("workbench fidelity style boundaries", () => {
     expect(source).toContain('from "@/styles/workbench-surface-roles"');
     expect(source.match(/resolveThemeWorkbenchSurfaceRoles\(theme\)\.content/g)).toHaveLength(4);
     expect(source).not.toContain("backgroundColor: theme.colors.surfaceWorkspace");
+  });
+
+  it("hosts the centered conversation column on the center-column shell, not panels", () => {
+    // T3 architecture: the ChatView shell stays mounted; only the keyed message
+    // timeline remounts. ChisaCode mirrors this by hosting ConversationAspectColumn
+    // on the center-column shell (outside the keyed panel) so the conversation width
+    // is measured once and stays stable across agent/draft switches — eliminating the
+    // 800→paneHeight horizontal flash. The column must NOT live inside the panels.
+    const centerSource = readSource("./workspace-center-column.tsx");
+    const agentPanelSource = readSource("../../panels/agent-panel.tsx");
+    const draftTabSource = readSource("../../composer/draft/workspace-tab.tsx");
+
+    // Center column imports and gates the column by target kind (agent/draft only).
+    expect(centerSource).toContain('from "@/components/conversation-aspect-column"');
+    expect(centerSource).toContain("ConversationAspectColumn");
+    expect(centerSource).toContain('contentModel.kind === "agent"');
+    expect(centerSource).toContain('contentModel.kind === "draft"');
+    // Terminal/browser/file/setup panels render full-width (no centered column).
+    expect(centerSource).toContain("WorkspacePaneContent");
+
+    // Column must ignore transient non-positive onLayout heights so a keyed panel
+    // remount cannot flash maxWidth back to the 800 fallback.
+    const columnSource = readSource("../../components/conversation-aspect-column.tsx");
+    expect(columnSource).toContain("if (!(height > 0))");
+    expect(columnSource).toContain("return;");
+
+    // Panels must no longer host the column or import it. We check for the JSX
+    // tag and the import statement (not free-text comments, which may reference
+    // the component name to explain the architectural move).
+    expect(agentPanelSource).not.toContain("<ConversationAspectColumn");
+    expect(agentPanelSource).not.toContain('from "@/components/conversation-aspect-column"');
+    expect(draftTabSource).not.toContain("<ConversationAspectColumn");
+    expect(draftTabSource).not.toContain('from "@/components/conversation-aspect-column"');
+  });
+
+  it("keeps assistant turns free of the T3 AI header and duration footer text", () => {
+    // Product decision (2026-08-12): no AI badge + duration header above
+    // assistant prose, and no duration label in the completed-turn footer
+    // (copy button only). If these re-appear, the fidelity gate fails.
+    const viewSource = readSource("../../agent-stream/view.tsx");
+    const messageSource = readSource("../../components/message.tsx");
+    const footerSource = readSource("../../agent-stream/turn-footer.tsx");
+
+    // No component/JSX rendering the header anywhere in the render path.
+    expect(viewSource).not.toContain("AssistantTurnHeader");
+    expect(viewSource).not.toContain("assistant-turn-header");
+    // Header component must not exist at all (removed, not just unrendered).
+    expect(messageSource).not.toContain("export const AssistantTurnHeader");
+    expect(messageSource).not.toContain("assistantTurnHeaderStylesheet");
+    // No "Worked for" user-facing copy in the turn chrome (header or footer).
+    expect(viewSource).not.toContain("Worked for");
+    expect(messageSource).not.toContain("Worked for");
+    expect(footerSource).not.toContain("Worked for");
+  });
+
+  it("keeps status cards free of inline hover actions and raw owner/repo project labels", () => {
+    // Product decisions (2026-08-12): (1) no hover-revealed Settle/Snooze buttons
+    // on status cards — hover must never change row content/layout, only its
+    // background; Settle/Snooze stay in the right-click menu. (2) project labels
+    // always use the repo basename, never the owner/repo form.
+    const statusSource = readSource("../../components/sidebar-status-view.tsx");
+
+    // No hover action buttons / snooze preset chips inline on cards.
+    expect(statusSource).not.toContain("cardActions");
+    expect(statusSource).not.toContain("cardActionButton");
+    expect(statusSource).not.toContain("sidebar-status-settle-");
+    expect(statusSource).not.toContain("sidebar-status-snooze-");
+    expect(statusSource).not.toContain("SnoozePresetChipButton");
+    // Scope dropdown and card project names must go through the short-name helper.
+    expect(statusSource).toContain("shortProjectName(");
   });
 
   it("keeps the new-workspace Soft Home draft vertically centered on desktop", () => {

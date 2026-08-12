@@ -41,6 +41,7 @@ const {
   theme: {
     spacing: { 1: 4, 2: 8, 3: 12, 4: 16, 8: 32 },
     borderRadius: { md: 6, lg: 8, full: 9999 },
+    borderWidth: { 1: 1 },
     fontSize: { xs: 11, sm: 13 },
     fontWeight: { normal: "400", medium: "500" },
     iconSize: { sm: 14 },

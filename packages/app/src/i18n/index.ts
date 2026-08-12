@@ -494,8 +494,8 @@ export const resources = {
         allSessions: "所有会话",
         allSessionsLabel: "查看 {{title}} 的全部会话",
         closeSidebar: "关闭侧边栏",
-        byProject: "按项目",
-        byStatus: "按状态",
+        byProject: "项目",
+        byStatus: "状态",
         byProjectShort: "项目",
         byStatusShort: "状态",
         searchSessions: "搜索会话…",
@@ -794,6 +794,10 @@ export const resources = {
           unknownDaemonBody: "请先在设置中添加主机，或打开已配置主机上的智能体。",
           archivingTitle: "正在归档智能体...",
           archivingSubtitle: "请稍候，正在归档此智能体。",
+          createTimeout: "创建对话超时，消息已保留，请重试",
+          createMissingAgentId: "创建响应缺少对话 ID，请重试",
+          createMissingWorkspaceKey: "无法定位工作区，消息已保留，请重试",
+          autoSubmitRestored: "自动发送未能完成，消息已恢复到输入框，请点击发送",
         },
       },
       desktop: {
@@ -2459,8 +2463,8 @@ export const resources = {
         allSessions: "All sessions",
         allSessionsLabel: "View all sessions for {{title}}",
         closeSidebar: "Close sidebar",
-        byProject: "By project",
-        byStatus: "By status",
+        byProject: "Project",
+        byStatus: "Status",
         byProjectShort: "Project",
         byStatusShort: "Status",
         searchSessions: "Search sessions…",
@@ -2752,6 +2756,13 @@ export const resources = {
             "Add the host in Settings or open an agent on a configured server to continue.",
           archivingTitle: "Archiving agent...",
           archivingSubtitle: "Please wait while this agent is archived.",
+          createTimeout:
+            "Timed out creating the conversation; your message is preserved, please retry",
+          createMissingAgentId: "Create response missing conversation id; please retry",
+          createMissingWorkspaceKey:
+            "Cannot resolve the workspace; your message is preserved, please retry",
+          autoSubmitRestored:
+            "Auto-send did not complete; your message is back in the input box, please send it",
         },
       },
       desktop: {

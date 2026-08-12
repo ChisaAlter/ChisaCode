@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildSidebarProjectSnapshots,
   getProjectSortTimestamp,
+  shortProjectName,
   sortProjectsForSidebar,
   workspaceDescriptorToProjectMember,
   type SidebarV2ProjectMember,
@@ -123,6 +124,14 @@ describe("buildSidebarProjectSnapshots", () => {
       members: [makeMember({ workspaceId: "a", projectName: "owner/repo-name" })],
     });
     expect(snapshots[0]?.displayName).toBe("repo-name");
+  });
+
+  it("shortens owner/repo labels to the basename for status cards", () => {
+    expect(shortProjectName("ayasealter/ChisaTerminal")).toBe("ChisaTerminal");
+    expect(shortProjectName("a/b/c")).toBe("c");
+    expect(shortProjectName("no-slash")).toBe("no-slash");
+    expect(shortProjectName("trailing/")).toBe("trailing/");
+    expect(shortProjectName("")).toBe("Unknown project");
   });
 
   it("skips fully archived groups unless asked to include them", () => {

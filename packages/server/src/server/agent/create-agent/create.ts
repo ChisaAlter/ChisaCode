@@ -67,6 +67,12 @@ export interface CreateAgentFromSessionInput {
   worktreeName?: string;
   initialPrompt?: string;
   clientMessageId?: string;
+  /**
+   * Client-minted agent id (UUID). Adopted verbatim so the optimistic sidebar
+   * row and the authoritative agent share one key. When omitted the daemon
+   * mints its own UUID.
+   */
+  agentId?: string;
   outputSchema?: Record<string, unknown>;
   images?: Array<{ data: string; mimeType: string }>;
   attachments?: AgentAttachment[];
@@ -125,6 +131,7 @@ export interface CreateAgentCommandResult {
 
 interface ResolvedCreateAgent {
   config: AgentSessionConfig;
+  agentId?: string;
   createOptions?: AgentCreateOptions;
   metadataInitialPrompt?: string;
   prompt?: AgentPromptInput;
@@ -157,7 +164,7 @@ export async function createAgentCommand(
 
   const snapshot = await dependencies.agentManager.createAgent(
     resolved.config,
-    undefined,
+    resolved.agentId,
     resolved.createOptions,
   );
 
@@ -216,6 +223,7 @@ async function resolveSessionCreateAgent(
 
   return {
     config: sessionConfig,
+    agentId: input.agentId,
     createOptions: {
       labels: input.labels,
       ...(input.relationKind ? { relation: { kind: input.relationKind, source: "user" } } : {}),

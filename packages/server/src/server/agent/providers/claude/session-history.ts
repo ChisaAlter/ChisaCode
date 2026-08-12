@@ -13,6 +13,7 @@ import {
   type ClaudeHistoryEntry,
 } from "./history-converter.js";
 import { isClaudeContentChunk, type ClaudeContentChunk } from "./sdk-types-mapping.js";
+import { formatClaudeUserFacingErrorText } from "./user-facing-error-text.js";
 
 export const CLAUDE_INTERRUPT_TOOL_USE_PLACEHOLDER = "[Request interrupted by user for tool use]";
 
@@ -144,7 +145,11 @@ export class ClaudeSessionHistory {
       if (suppressText) {
         return [];
       }
-      return [{ type: textMessageType, text: content }];
+      const text =
+        textMessageType === "assistant_message"
+          ? formatClaudeUserFacingErrorText(content)
+          : content;
+      return [{ type: textMessageType, text }];
     }
 
     const items: AgentTimelineItem[] = [];
@@ -283,7 +288,10 @@ export class ClaudeSessionHistory {
       return;
     }
     if (!suppressText) {
-      items.push({ type: "assistant_message", text });
+      items.push({
+        type: "assistant_message",
+        text: formatClaudeUserFacingErrorText(text),
+      });
     }
   }
 

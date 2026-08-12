@@ -272,3 +272,65 @@ test("create_agent_request fails cleanly when worktree creation cannot resolve t
   await expectActiveAgentListEmpty();
   await expectWorktreeListEmpty(repoDir);
 });
+
+test("create_agent_request with a client-minted agentId adopts it verbatim", async () => {
+  const repoDir = createGitRepo();
+  const agentId = crypto.randomUUID();
+
+  const created = await ctx.client.createAgent({
+    config: {
+      ...getFullAccessConfig("codex"),
+      cwd: repoDir,
+    },
+    agentId,
+    initialPrompt: "Say done.",
+  });
+
+  expect(created.id).toBe(agentId);
+  await expectAgentPresentInActiveList(agentId);
+});
+
+test("create_agent_request retried with the same client-minted agentId returns the existing agent", async () => {
+  const repoDir = createGitRepo();
+  const agentId = crypto.randomUUID();
+
+  const first = await ctx.client.createAgent({
+    config: {
+      ...getFullAccessConfig("codex"),
+      cwd: repoDir,
+    },
+    agentId,
+    initialPrompt: "Say done.",
+  });
+  expect(first.id).toBe(agentId);
+
+  // A dropped-response retry with the same id must not create a second agent.
+  const retried = await ctx.client.createAgent({
+    config: {
+      ...getFullAccessConfig("codex"),
+      cwd: repoDir,
+    },
+    agentId,
+    initialPrompt: "Say done again.",
+  });
+  expect(retried.id).toBe(agentId);
+
+  const active = await ctx.client.fetchAgents();
+  const ids = active.entries.map((entry) => entry.agent.id);
+  expect(ids.filter((id) => id === agentId)).toHaveLength(1);
+});
+
+test("create_agent_request without a client-minted agentId still gets a server UUID", async () => {
+  const repoDir = createGitRepo();
+
+  const created = await ctx.client.createAgent({
+    config: {
+      ...getFullAccessConfig("codex"),
+      cwd: repoDir,
+    },
+    initialPrompt: "Say done.",
+  });
+
+  expect(created.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+  await expectAgentPresentInActiveList(created.id);
+});

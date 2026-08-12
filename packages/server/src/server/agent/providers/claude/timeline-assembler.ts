@@ -1,6 +1,7 @@
 import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
 
 import type { AgentTimelineItem } from "../../agent-sdk-types.js";
+import { formatClaudeUserFacingErrorText } from "./user-facing-error-text.js";
 
 interface TimelineFragment {
   kind: "assistant" | "reasoning";
@@ -282,7 +283,7 @@ export class ClaudeTimelineAssembler {
       if (content.length === 0) {
         return [];
       }
-      return [{ kind: "assistant", text: content }];
+      return [{ kind: "assistant", text: formatClaudeUserFacingErrorText(content) }];
     }
     const blocks = Array.isArray(content) ? content : [content];
     const fragments: TimelineFragment[] = [];
@@ -295,7 +296,10 @@ export class ClaudeTimelineAssembler {
         typeof rawBlock.text === "string" &&
         rawBlock.text.length > 0
       ) {
-        fragments.push({ kind: "assistant", text: rawBlock.text });
+        fragments.push({
+          kind: "assistant",
+          text: formatClaudeUserFacingErrorText(rawBlock.text),
+        });
       }
       if (
         (rawBlock.type === "thinking" || rawBlock.type === "thinking_delta") &&

@@ -15,7 +15,6 @@ import {
   softHomeComposerInputAreaStyle,
   softHomeComposerInputWrapperStyle,
 } from "@/composer/draft/soft-home-empty";
-import { ConversationAspectColumn } from "@/components/conversation-aspect-column";
 import { FileDropZone } from "@/components/file-drop-zone";
 import { AgentStreamView } from "@/agent-stream/view";
 import { composerWorkspaceAttachment } from "@/composer/attachments/workspace";
@@ -30,6 +29,7 @@ import { buildWorkspaceDraftAgentConfig } from "@/screens/workspace/workspace-dr
 import { buildDraftStoreKey } from "@/stores/draft-keys";
 import { usePanelStore } from "@/stores/panel-store";
 import { useCreateFlowStore } from "@/stores/create-flow-store";
+import { useDraftStore } from "@/stores/draft-store";
 import type { Agent } from "@/stores/session-store";
 import { useWorkspace, useWorkspaceExecutionAuthority } from "@/stores/session-store-hooks";
 import { useWorkspaceDraftSubmissionStore } from "@/stores/workspace-draft-submission-store";
@@ -37,14 +37,18 @@ import { encodeImages } from "@/utils/encode-images";
 import { resolveProjectPlacement } from "@/utils/project-placement";
 import type { WorkspaceFileOpenRequest } from "@/workspace/file-open";
 import { shouldAutoFocusWorkspaceDraftComposer } from "@/screens/workspace/workspace-draft-pane-focus";
+import { appI18n } from "@/i18n";
+import { buildWorkspaceTabPersistenceKey } from "@/stores/workspace-layout-store";
 import {
+  AUTO_SUBMIT_READINESS_WATCHDOG_MS,
   resolveSoftHomeBranchContext,
+  shouldRestorePendingAutoSubmit,
   shouldWaitForDraftModelReadiness,
   validateDraftSubmission,
 } from "@/composer/draft/workspace-tab-core";
 import type { AgentCapabilityFlags } from "@chisacode/protocol/agent-types";
-import type { AgentSnapshotPayload } from "@chisacode/protocol/messages";
-import type { DaemonClient } from "@chisacode/client/internal/daemon-client";
+import type { ProjectPlacementPayload } from "@chisacode/protocol/messages";
+import type { DaemonClient, CreateAgentResult } from "@chisacode/client/internal/daemon-client";
 import type { WorkspaceComposerAttachment } from "@/attachments/types";
 import {
   useWorkspaceAttachments,
@@ -166,6 +170,8 @@ async function submitDraftCreateRequest(input: {
   client: DaemonClient | null;
   workspaceDirectory: string | null;
   workspaceExecutionAuthority: { workspaceId: string } | null;
+  /** Client-minted agent id sent to the daemon so it adopts the same id. */
+  agentId: string;
   autoSubmitConfig: AutoSubmitConfig | null;
   systemPrompt?: string;
   composerState: {
@@ -177,7 +183,7 @@ async function submitDraftCreateRequest(input: {
     effectiveThinkingOptionId: string | null;
     featureValues: Record<string, unknown> | undefined;
   };
-}): Promise<{ agentId: string | null; result: AgentSnapshotPayload }> {
+}): Promise<{ agentId: string | null; result: CreateAgentResult }> {
   const {
     attempt,
     text,
@@ -186,6 +192,7 @@ async function submitDraftCreateRequest(input: {
     client,
     workspaceDirectory,
     workspaceExecutionAuthority,
+    agentId,
     autoSubmitConfig,
     systemPrompt,
     composerState,
@@ -219,6 +226,7 @@ async function submitDraftCreateRequest(input: {
     workspaceId: workspaceExecutionAuthority.workspaceId,
     ...(text ? { initialPrompt: text } : {}),
     clientMessageId: attempt.clientMessageId,
+    agentId,
     ...(imagesData && imagesData.length > 0 ? { images: imagesData } : {}),
     ...(attachmentsArray && attachmentsArray.length > 0 ? { attachments: attachmentsArray } : {}),
   });
@@ -232,8 +240,11 @@ async function submitDraftCreateRequest(input: {
 function buildDraftAgentSnapshot(input: {
   attempt: { timestamp: Date; text?: string };
   serverId: string;
-  draftId: string;
+  /** Client-minted agent id; the optimistic row and the daemon agent share it. */
+  agentId: string;
   workspaceDirectory: string | null;
+  /** Server-provided project placement for the workspace, when hydrated. */
+  workspaceProject?: ProjectPlacementPayload | null;
   autoSubmitConfig: AutoSubmitConfig | null;
   composerState: {
     effectiveModelId: string | null;
@@ -245,7 +256,15 @@ function buildDraftAgentSnapshot(input: {
     agentControls: { features?: Agent["features"] };
   };
 }): Agent {
-  const { attempt, serverId, draftId, workspaceDirectory, autoSubmitConfig, composerState } = input;
+  const {
+    attempt,
+    serverId,
+    agentId,
+    workspaceDirectory,
+    workspaceProject,
+    autoSubmitConfig,
+    composerState,
+  } = input;
   invariant(workspaceDirectory, "Workspace directory is required");
   const now = attempt.timestamp;
   const model = autoSubmitConfig?.model ?? (composerState.effectiveModelId || null);
@@ -265,7 +284,10 @@ function buildDraftAgentSnapshot(input: {
   const provisionalTitle = resolveProvisionalCreateTitle(attempt.text);
   return {
     serverId,
-    id: draftId,
+    // The optimistic row is keyed by the client-minted agent id, which the
+    // daemon adopts verbatim on create. The authoritative agent_update then
+    // updates this same row instead of creating a second sidebar entry.
+    id: agentId,
     provider,
     status: "running",
     createdAt: now,
@@ -285,8 +307,12 @@ function buildDraftAgentSnapshot(input: {
     thinkingOptionId,
     parentAgentId: null,
     labels: {},
+    // Prefer the workspace's registered project placement so the optimistic
+    // row groups under the same directory as the server-assigned agent. Falling
+    // back to a cwd-derived placement split the row into a separate directory
+    // until the first authoritative agent_update arrived.
     projectPlacement: resolveProjectPlacement({
-      projectPlacement: null,
+      projectPlacement: workspaceProject ?? null,
       cwd: workspaceDirectory,
     }),
   };
@@ -345,7 +371,8 @@ interface WorkspaceDraftAgentTabProps {
   draftId: string;
   initialSetup?: WorkspaceDraftTabSetup;
   isPaneFocused: boolean;
-  onCreated: (snapshot: AgentSnapshotPayload) => void;
+  /** Create result; may carry the daemon-provided project placement. */
+  onCreated: (snapshot: CreateAgentResult) => void;
   onOpenWorkspaceFile: (request: WorkspaceFileOpenRequest) => void;
   onOpenImportSheet?: () => void;
 }
@@ -514,7 +541,8 @@ export function WorkspaceDraftAgentTab({
     draftAgent,
     handleCreateFromInput,
     continueCreateFromAttempt,
-  } = useDraftAgentCreateFlow<Agent, AgentSnapshotPayload>({
+    setFormError,
+  } = useDraftAgentCreateFlow<Agent, CreateAgentResult>({
     draftId,
     getPendingServerId: () => serverId,
     initialAttempt: initialCreateAttempt,
@@ -544,17 +572,21 @@ export function WorkspaceDraftAgentTab({
       }
       Keyboard.dismiss();
     },
-    buildDraftAgent: (attempt) =>
-      buildDraftAgentSnapshot({
+    buildDraftAgent: (attempt) => {
+      const agentId = useDraftStore.getState().reserveDraftAgentId({ draftKey: draftStoreKey });
+      return buildDraftAgentSnapshot({
         attempt,
         serverId,
-        draftId,
+        agentId,
         workspaceDirectory: draftWorkingDirectory,
+        workspaceProject: workspaceDescriptor?.project ?? null,
         autoSubmitConfig,
         composerState,
-      }),
-    createRequest: async ({ attempt, text, images, attachments }) =>
-      submitDraftCreateRequest({
+      });
+    },
+    createRequest: async ({ attempt, text, images, attachments }) => {
+      const agentId = useDraftStore.getState().reserveDraftAgentId({ draftKey: draftStoreKey });
+      return submitDraftCreateRequest({
         attempt,
         text,
         images,
@@ -562,11 +594,20 @@ export function WorkspaceDraftAgentTab({
         client,
         workspaceDirectory: draftWorkingDirectory,
         workspaceExecutionAuthority,
+        agentId,
         autoSubmitConfig,
         systemPrompt: undefined,
         composerState,
-      }),
+      });
+    },
     onCreateSuccess: ({ result }) => {
+      // The layout conversion (convertDraftToAgent) no-ops without a
+      // persistence key, which would leave the draft stuck in "sent" with no
+      // error. Fail loudly so the machine returns to draft and the message is
+      // preserved in the composer instead of silently vanishing.
+      if (!buildWorkspaceTabPersistenceKey({ serverId, workspaceId })) {
+        throw new Error(appI18n.t("panels.agent.createMissingWorkspaceKey"));
+      }
       clearDraftInput("sent");
       onCreated(result);
     },
@@ -591,8 +632,8 @@ export function WorkspaceDraftAgentTab({
     if (autoSubmitKeyRef.current === submitKey) {
       return;
     }
-    const submission = consumePendingAutoSubmit({ serverId, workspaceId, draftId });
-    if (!submission) {
+    const submission = useWorkspaceDraftSubmissionStore.getState().pendingByDraftId[draftId];
+    if (!submission || submission.serverId !== serverId || submission.workspaceId !== workspaceId) {
       return;
     }
     autoSubmitKeyRef.current = submitKey;
@@ -612,14 +653,25 @@ export function WorkspaceDraftAgentTab({
           attachments: submission.attachments,
           cwd: submission.cwd,
         });
-    void createPromise.catch(() => {
-      setDraftText(submission.text);
-      setDraftAttachments(composerWorkspaceAttachment.userAttachmentsOnly(submission.attachments));
-      autoSubmitKeyRef.current = null;
-    });
+    void createPromise
+      .then(() => {
+        // Consume only after the create succeeded; the one-shot submission is
+        // removed on success so a later remount cannot re-fire it, while a
+        // failure (catch below) restores the text for a manual send.
+        consumePendingAutoSubmit({ serverId, workspaceId, draftId });
+        return undefined;
+      })
+      .catch(() => {
+        consumePendingAutoSubmit({ serverId, workspaceId, draftId });
+        setDraftText(submission.text);
+        setDraftAttachments(
+          composerWorkspaceAttachment.userAttachmentsOnly(submission.attachments),
+        );
+        autoSubmitKeyRef.current = null;
+      });
   }, [
-    continueCreateFromAttempt,
     consumePendingAutoSubmit,
+    continueCreateFromAttempt,
     draftId,
     handleCreateFromInput,
     initialCreateAttempt,
@@ -627,6 +679,61 @@ export function WorkspaceDraftAgentTab({
     serverId,
     setDraftAttachments,
     setDraftText,
+    workspaceId,
+  ]);
+
+  const pendingSinceRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (pendingAutoSubmit) {
+      pendingSinceRef.current ??= Date.now();
+    } else {
+      pendingSinceRef.current = null;
+    }
+  }, [pendingAutoSubmit]);
+
+  // Bounded readiness wait for the /new auto-send: if the gates (workspace
+  // hydration, daemon client, model defaults) never flip, restore the
+  // submission into the composer with an error instead of leaving the user on
+  // an empty draft page with the message silently gone.
+  useEffect(() => {
+    if (!pendingAutoSubmit || autoSubmitKeyRef.current !== null || isReadyForPendingAutoSubmit) {
+      return;
+    }
+    const timer = setTimeout(() => {
+      const waitedForMs = Date.now() - (pendingSinceRef.current ?? Date.now());
+      const shouldRestore = shouldRestorePendingAutoSubmit({
+        hasPending: true,
+        isReady: isReadyForPendingAutoSubmit,
+        sendStarted: autoSubmitKeyRef.current !== null,
+        waitedForMs,
+        thresholdMs: AUTO_SUBMIT_READINESS_WATCHDOG_MS,
+      });
+      if (!shouldRestore) {
+        return;
+      }
+      const submission = useWorkspaceDraftSubmissionStore.getState().pendingByDraftId[draftId];
+      if (
+        !submission ||
+        submission.serverId !== serverId ||
+        submission.workspaceId !== workspaceId
+      ) {
+        return;
+      }
+      consumePendingAutoSubmit({ serverId, workspaceId, draftId });
+      setDraftText(submission.text);
+      setDraftAttachments(composerWorkspaceAttachment.userAttachmentsOnly(submission.attachments));
+      setFormError(appI18n.t("panels.agent.autoSubmitRestored"));
+    }, AUTO_SUBMIT_READINESS_WATCHDOG_MS);
+    return () => clearTimeout(timer);
+  }, [
+    consumePendingAutoSubmit,
+    draftId,
+    isReadyForPendingAutoSubmit,
+    pendingAutoSubmit,
+    serverId,
+    setDraftAttachments,
+    setDraftText,
+    setFormError,
     workspaceId,
   ]);
 
@@ -812,48 +919,49 @@ export function WorkspaceDraftAgentTab({
   return (
     <FileDropZone onFilesDropped={handleFilesDropped}>
       <View style={styles.container}>
-        <ConversationAspectColumn>
-          <View style={styles.contentContainer}>
-            <View style={styles.streamContainer}>
-              <AgentStreamView
-                agentId={draftId}
-                serverId={serverId}
-                agent={draftAgent}
-                streamItems={optimisticStreamItems}
-                pendingPermissions={EMPTY_PENDING_PERMISSIONS}
-                onOpenWorkspaceFile={onOpenWorkspaceFile}
-              />
-            </View>
+        {/* The centered ConversationAspectColumn lives on the center-column shell
+            (workspace-center-column.tsx), not here — it stays mounted across
+            draft/agent switches so the conversation width never re-measures. */}
+        <View style={styles.contentContainer}>
+          <View style={styles.streamContainer}>
+            <AgentStreamView
+              agentId={draftId}
+              serverId={serverId}
+              agent={draftAgent}
+              streamItems={optimisticStreamItems}
+              pendingPermissions={EMPTY_PENDING_PERMISSIONS}
+              onOpenWorkspaceFile={onOpenWorkspaceFile}
+            />
           </View>
-          <ReanimatedAnimated.View style={inputAreaWrapperStyle}>
-            <View style={styles.inputAreaWrapper}>
-              <Composer
-                agentId={draftId}
-                serverId={serverId}
-                externalKeyboardShift
-                isPaneFocused={isPaneFocused}
-                onSubmitMessage={handleCreateFromInput}
-                isSubmitLoading={isSubmitting}
-                blurOnSubmit={true}
-                value={draftInput.text}
-                onChangeText={draftInput.setText}
-                attachments={draftInput.attachments}
-                workspaceAttachments={workspaceAttachments}
-                onOpenWorkspaceAttachment={handleOpenWorkspaceAttachment}
-                onChangeAttachments={draftInput.setAttachments}
-                cwd={composerState.workingDir}
-                clearDraft={draftInput.clear}
-                autoFocus={shouldAutoFocusWorkspaceDraftComposer({ isPaneFocused, isSubmitting })}
-                onAddImages={handleAddImagesCallback}
-                onFocusInput={handleFocusInputCallback}
-                commandDraftConfig={composerState.commandDraftConfig}
-                agentControls={composerAgentControls}
-                footer={composerFooter}
-                inputWrapperStyle={styles.composerInputWrapper}
-              />
-            </View>
-          </ReanimatedAnimated.View>
-        </ConversationAspectColumn>
+        </View>
+        <ReanimatedAnimated.View style={inputAreaWrapperStyle}>
+          <View style={styles.inputAreaWrapper}>
+            <Composer
+              agentId={draftId}
+              serverId={serverId}
+              externalKeyboardShift
+              isPaneFocused={isPaneFocused}
+              onSubmitMessage={handleCreateFromInput}
+              isSubmitLoading={isSubmitting}
+              blurOnSubmit={true}
+              value={draftInput.text}
+              onChangeText={draftInput.setText}
+              attachments={draftInput.attachments}
+              workspaceAttachments={workspaceAttachments}
+              onOpenWorkspaceAttachment={handleOpenWorkspaceAttachment}
+              onChangeAttachments={draftInput.setAttachments}
+              cwd={composerState.workingDir}
+              clearDraft={draftInput.clear}
+              autoFocus={shouldAutoFocusWorkspaceDraftComposer({ isPaneFocused, isSubmitting })}
+              onAddImages={handleAddImagesCallback}
+              onFocusInput={handleFocusInputCallback}
+              commandDraftConfig={composerState.commandDraftConfig}
+              agentControls={composerAgentControls}
+              footer={composerFooter}
+              inputWrapperStyle={styles.composerInputWrapper}
+            />
+          </View>
+        </ReanimatedAnimated.View>
       </View>
     </FileDropZone>
   );

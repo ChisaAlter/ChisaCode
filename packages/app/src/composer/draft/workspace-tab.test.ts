@@ -2,7 +2,9 @@ import { describe, expect, test } from "vitest";
 
 import { buildWorkspaceDraftAgentConfig } from "@/screens/workspace/workspace-draft-agent-config";
 import {
+  AUTO_SUBMIT_READINESS_WATCHDOG_MS,
   resolveSoftHomeBranchContext,
+  shouldRestorePendingAutoSubmit,
   shouldWaitForDraftModelReadiness,
   validateDraftSubmission,
 } from "./workspace-tab-core";
@@ -149,5 +151,67 @@ describe("resolveSoftHomeBranchContext", () => {
       workspaceId: "/repo/worktree",
       isGitCheckout: true,
     });
+  });
+});
+
+describe("shouldRestorePendingAutoSubmit", () => {
+  test("restores once the readiness wait exceeds the threshold", () => {
+    expect(
+      shouldRestorePendingAutoSubmit({
+        hasPending: true,
+        isReady: false,
+        sendStarted: false,
+        waitedForMs: AUTO_SUBMIT_READINESS_WATCHDOG_MS,
+        thresholdMs: AUTO_SUBMIT_READINESS_WATCHDOG_MS,
+      }),
+    ).toBe(true);
+  });
+
+  test("keeps waiting before the threshold", () => {
+    expect(
+      shouldRestorePendingAutoSubmit({
+        hasPending: true,
+        isReady: false,
+        sendStarted: false,
+        waitedForMs: AUTO_SUBMIT_READINESS_WATCHDOG_MS - 1,
+        thresholdMs: AUTO_SUBMIT_READINESS_WATCHDOG_MS,
+      }),
+    ).toBe(false);
+  });
+
+  test("never restores while the gates are satisfied", () => {
+    expect(
+      shouldRestorePendingAutoSubmit({
+        hasPending: true,
+        isReady: true,
+        sendStarted: false,
+        waitedForMs: AUTO_SUBMIT_READINESS_WATCHDOG_MS * 2,
+        thresholdMs: AUTO_SUBMIT_READINESS_WATCHDOG_MS,
+      }),
+    ).toBe(false);
+  });
+
+  test("never restores after the send already started", () => {
+    expect(
+      shouldRestorePendingAutoSubmit({
+        hasPending: true,
+        isReady: false,
+        sendStarted: true,
+        waitedForMs: AUTO_SUBMIT_READINESS_WATCHDOG_MS * 2,
+        thresholdMs: AUTO_SUBMIT_READINESS_WATCHDOG_MS,
+      }),
+    ).toBe(false);
+  });
+
+  test("never restores when no submission is pending", () => {
+    expect(
+      shouldRestorePendingAutoSubmit({
+        hasPending: false,
+        isReady: false,
+        sendStarted: false,
+        waitedForMs: AUTO_SUBMIT_READINESS_WATCHDOG_MS * 2,
+        thresholdMs: AUTO_SUBMIT_READINESS_WATCHDOG_MS,
+      }),
+    ).toBe(false);
   });
 });

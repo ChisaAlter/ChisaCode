@@ -11,7 +11,6 @@ import { shallow, useShallow } from "zustand/shallow";
 import { useStoreWithEqualityFn } from "zustand/traditional";
 import { AgentStreamView, type AgentStreamViewHandle } from "@/agent-stream/view";
 import { ArchivedAgentCallout } from "@/components/archived-agent-callout";
-import { ConversationAspectColumn } from "@/components/conversation-aspect-column";
 import { Composer } from "@/composer";
 import { AgentModeControl } from "@/composer/agent-controls/mode-control";
 import { FileDropZone } from "@/components/file-drop-zone";
@@ -53,6 +52,7 @@ import {
   deriveRouteBottomAnchorIntent,
   deriveRouteBottomAnchorRequest,
 } from "@/screens/agent/agent-ready-screen-bottom-anchor";
+import type { ProjectPlacementPayload } from "@chisacode/protocol/messages";
 import { WorkspaceDraftAgentTab } from "@/composer/draft/workspace-tab";
 import { useCreateFlowStore } from "@/stores/create-flow-store";
 import { buildDraftStoreKey, generateDraftId } from "@/stores/draft-keys";
@@ -324,8 +324,16 @@ function DraftPanel() {
   const handleCreated = useCallback(
     (agentSnapshot: Parameters<typeof normalizeAgentSnapshot>[0]) => {
       const normalized = normalizeAgentSnapshot(agentSnapshot, serverId);
+      // Prefer the placement the daemon attached to the create response, then
+      // the registered workspace's placement, then fall back to a cwd-derived
+      // one. The optimistic row already used the workspace placement, so the
+      // real row lands in the same sidebar directory (no fake new directory).
+      const workspaceProject =
+        useSessionStore.getState().sessions[serverId]?.workspaces?.get(workspaceId)?.project ??
+        null;
+      const createProject = (agentSnapshot as { project?: ProjectPlacementPayload | null }).project;
       const projectPlacement = resolveProjectPlacement({
-        projectPlacement: null,
+        projectPlacement: createProject ?? workspaceProject,
         cwd: normalized.cwd,
       });
       const hydrated = {
@@ -334,8 +342,8 @@ function DraftPanel() {
       };
       useSessionStore.getState().setAgents(serverId, (prev) => {
         const next = new Map(prev);
-        // Drop the optimistic draft-id row once the real agent id is known.
-        next.delete(target.draftId);
+        // The optimistic row is keyed by the same client-minted agent id, so
+        // setting the real snapshot in place replaces it (no second row).
         next.set(agentSnapshot.id, hydrated);
         return next;
       });
@@ -350,7 +358,7 @@ function DraftPanel() {
         useWorkspaceLayoutStore.getState().convertDraftToAgent(workspaceKey, agentSnapshot.id);
       }
     },
-    [queryClient, serverId, target, workspaceId],
+    [queryClient, serverId, workspaceId],
   );
 
   return (
@@ -1222,66 +1230,67 @@ function ChatAgentReadyContent({
     <RewindComposerRestoreProvider text={agentInputDraft.text} setText={agentInputDraft.setText}>
       <View style={styles.root} testID={agentId ? `agent-panel-${agentId}` : undefined}>
         <FileDropZone onFilesDropped={handleFilesDropped} disabled={isArchivingCurrentAgent}>
-          <ConversationAspectColumn>
-            <View style={styles.contentContainer}>
-              <ReanimatedAnimated.View style={animatedContentStyle}>
-                <AgentStreamSection
-                  streamViewRef={streamViewRef}
-                  serverId={serverId}
-                  agentId={agentId}
-                  agent={effectiveAgent}
-                  routeBottomAnchorRequest={routeBottomAnchorRequest}
-                  hasAppliedAuthoritativeHistory={hasAppliedAuthoritativeHistory}
-                  toast={panelToast.api}
-                  onOpenWorkspaceFile={onOpenWorkspaceFile}
-                />
-              </ReanimatedAnimated.View>
+          {/* The centered ConversationAspectColumn lives on the center-column shell
+              (workspace-center-column.tsx), not here — it stays mounted across agent
+              switches so the conversation width never re-measures and never flashes. */}
+          <View style={styles.contentContainer}>
+            <ReanimatedAnimated.View style={animatedContentStyle}>
+              <AgentStreamSection
+                streamViewRef={streamViewRef}
+                serverId={serverId}
+                agentId={agentId}
+                agent={effectiveAgent}
+                routeBottomAnchorRequest={routeBottomAnchorRequest}
+                hasAppliedAuthoritativeHistory={hasAppliedAuthoritativeHistory}
+                toast={panelToast.api}
+                onOpenWorkspaceFile={onOpenWorkspaceFile}
+              />
+            </ReanimatedAnimated.View>
 
-              {showHistorySyncOverlay ? (
-                <HistorySyncProgressBanner
-                  title={t("panels.agent.historySyncingTitle")}
-                  subtitle={t("panels.agent.historySyncingSubtitle")}
-                />
-              ) : null}
-            </View>
-
-            {historySyncErrorMessage ? (
-              <HistorySyncErrorBanner
-                title={t("panels.agent.historySyncFailed")}
-                message={historySyncErrorMessage}
+            {showHistorySyncOverlay ? (
+              <HistorySyncProgressBanner
+                title={t("panels.agent.historySyncingTitle")}
+                subtitle={t("panels.agent.historySyncingSubtitle")}
               />
             ) : null}
+          </View>
 
-            {agentState.status === "error" && agentState.lastError ? (
-              <HistorySyncErrorBanner
-                title={t("panels.agent.runFailed")}
-                message={agentState.lastError}
-              />
-            ) : null}
-
-            <AgentComposerSection
-              agentId={agentId}
-              serverId={serverId}
-              isPaneFocused={isPaneFocused}
-              isArchivingCurrentAgent={isArchivingCurrentAgent}
-              archivedAt={agentState.archivedAt}
-              cwd={cwd}
-              isSubmitLoading={false}
-              agentInputDraft={agentInputDraft}
-              onAttentionInputFocus={attentionController.clearOnInputFocus}
-              onAttentionPromptSend={attentionController.clearOnPromptSend}
-              onAddImages={handleAddImagesCallback}
-              onComposerHeightChange={handleComposerHeightChange}
-              onMessageSent={handleMessageSent}
-              onOptimisticMessageDispatched={handleOptimisticMessageDispatched}
+          {historySyncErrorMessage ? (
+            <HistorySyncErrorBanner
+              title={t("panels.agent.historySyncFailed")}
+              message={historySyncErrorMessage}
             />
+          ) : null}
 
-            <ToastViewport
-              toasts={panelToast.toasts}
-              onDismiss={panelToast.dismiss}
-              placement="panel"
+          {agentState.status === "error" && agentState.lastError ? (
+            <HistorySyncErrorBanner
+              title={t("panels.agent.runFailed")}
+              message={agentState.lastError}
             />
-          </ConversationAspectColumn>
+          ) : null}
+
+          <AgentComposerSection
+            agentId={agentId}
+            serverId={serverId}
+            isPaneFocused={isPaneFocused}
+            isArchivingCurrentAgent={isArchivingCurrentAgent}
+            archivedAt={agentState.archivedAt}
+            cwd={cwd}
+            isSubmitLoading={false}
+            agentInputDraft={agentInputDraft}
+            onAttentionInputFocus={attentionController.clearOnInputFocus}
+            onAttentionPromptSend={attentionController.clearOnPromptSend}
+            onAddImages={handleAddImagesCallback}
+            onComposerHeightChange={handleComposerHeightChange}
+            onMessageSent={handleMessageSent}
+            onOptimisticMessageDispatched={handleOptimisticMessageDispatched}
+          />
+
+          <ToastViewport
+            toasts={panelToast.toasts}
+            onDismiss={panelToast.dismiss}
+            placement="panel"
+          />
         </FileDropZone>
       </View>
     </RewindComposerRestoreProvider>
@@ -1684,8 +1693,9 @@ const styles = StyleSheet.create((theme) => ({
     overflow: "hidden",
     ...(isWeb ? { userSelect: "none" as const } : {}),
   },
-  // Soft .composer-dock vertical only: ConversationAspectColumn owns the 28px
-  // session inset so the pen-bar matches stream column width.
+  // Soft .composer-dock vertical only: the centered ConversationAspectColumn
+  // now lives on the center-column shell, so the pen-bar matches the stream
+  // column width via the shell-hosted column, not a panel-local wrapper.
   inputAreaWrapper: {
     width: "100%",
     minWidth: 0,

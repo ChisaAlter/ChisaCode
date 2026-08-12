@@ -194,6 +194,13 @@ export const CreateAgentRequestMessageSchema = z.object({
   worktreeName: z.string().optional(),
   initialPrompt: z.string().optional(),
   clientMessageId: z.string().optional(),
+  /**
+   * Client-minted agent id. The daemon adopts it verbatim so the optimistic
+   * sidebar row (keyed by the same id) and the authoritative agent share one
+   * key. Optional for wire compatibility: older clients omit it and the daemon
+   * mints its own UUID.
+   */
+  agentId: z.string().uuid().optional(),
   outputSchema: z.record(z.unknown()).optional(),
   images: z.array(ImageAttachmentSchema).optional(),
   attachments: AgentAttachmentsSchema,
@@ -399,6 +406,12 @@ export const AgentCreatedStatusPayloadSchema = z
   .object({
     status: z.literal("agent_created"),
     agent: AgentSnapshotPayloadSchema,
+    /**
+     * Project placement for the created agent's workspace. Optional so older
+     * daemons/clients remain wire-compatible; the client falls back to the
+     * workspace descriptor or a cwd-derived placement when absent.
+     */
+    project: ProjectPlacementPayloadSchema.nullable().optional(),
     /**
      * When true, the agent session was constructed and the initial prompt (if any)
      * was dispatched asynchronously. Optional for wire compatibility.

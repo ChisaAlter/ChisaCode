@@ -5,6 +5,7 @@ import type { ManagedAgent } from "./agent-manager.js";
 import { AgentPermissionController } from "./agent-permission-controller.js";
 import { AgentSessionStateController } from "./agent-session-state-controller.js";
 import { AgentTimelineController } from "./agent-timeline-controller.js";
+import { formatClaudeUserFacingErrorText } from "./providers/claude/user-facing-error-text.js";
 import { createUsageEventRecord, type UsageStore } from "../usage/usage-store.js";
 
 const SYSTEM_ERROR_PREFIX = "[System Error]";
@@ -183,7 +184,7 @@ export class AgentTurnEventController {
 
   formatFailure(event: TurnFailedEvent): string {
     const base = event.error.trim();
-    const parts = [base.length > 0 ? base : "Provider run failed"];
+    const parts = [base.length > 0 ? formatClaudeUserFacingErrorText(base) : "Provider run failed"];
     const code = event.code?.trim();
     if (code) {
       parts.push(`code: ${code}`);

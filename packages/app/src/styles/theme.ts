@@ -186,6 +186,7 @@ const lightSemanticColors = {
   foregroundMuted: "#6f7686",
   foregroundFaint: "#9aa1b0",
   foregroundSubtleText: "#3d4452",
+  foregroundSoft: "rgba(20, 23, 31, 0.8)",
 
   scrollbarHandle: "#9aa1b0",
 
@@ -270,6 +271,10 @@ interface DarkThemeConfig {
   foregroundMuted: string;
   foregroundFaint: string;
   foregroundSubtleText: string;
+  /** Foreground at 80% alpha — used for AI assistant prose (T3 `text-foreground/80`).
+   *  Implemented as a color token (not container opacity) so code blocks, tables,
+   *  and other child surfaces with their own color override stay full-strength. */
+  foregroundSoft: string;
   scrollbarHandle: string;
   border: string;
   borderAccent: string;
@@ -318,6 +323,7 @@ function buildDarkSemanticColors(tint: DarkThemeConfig) {
     foregroundMuted: tint.foregroundMuted,
     foregroundFaint: tint.foregroundFaint,
     foregroundSubtleText: tint.foregroundSubtleText,
+    foregroundSoft: tint.foregroundSoft,
 
     scrollbarHandle: tint.scrollbarHandle,
 
@@ -389,6 +395,7 @@ const chisacodeDarkColors = buildDarkSemanticColors({
   foregroundMuted: "#8b93a7",
   foregroundFaint: "#6b7386",
   foregroundSubtleText: "#b6becd",
+  foregroundSoft: "rgba(233, 237, 246, 0.8)",
   scrollbarHandle: "#2c3342",
   border: "#2c3342",
   borderAccent: "#3a4254",
@@ -418,6 +425,7 @@ const liquidNeonLightColors = {
   foregroundMuted: "#bfd0ea",
   foregroundFaint: "#8fa7c9",
   foregroundSubtleText: "#9fb5d3",
+  foregroundSoft: "rgba(247, 251, 255, 0.8)",
   scrollbarHandle: "rgba(255, 255, 255, 0.28)",
   border: "rgba(255, 255, 255, 0.18)",
   borderAccent: "rgba(99, 230, 255, 0.32)",
@@ -758,6 +766,7 @@ const chisakiDarkColors = buildDarkSemanticColors({
   foregroundMuted: "#b49da7",
   foregroundFaint: "#826c76",
   foregroundSubtleText: "#b49da7",
+  foregroundSoft: "rgba(248, 238, 242, 0.8)",
   scrollbarHandle: "#56303c",
   border: "#34242d",
   borderAccent: "#56303c",
@@ -791,6 +800,7 @@ const aemeathSemanticColors = {
   foregroundMuted: "#806f7c",
   foregroundFaint: "#a2939f",
   foregroundSubtleText: "#806f7c",
+  foregroundSoft: "rgba(43, 32, 40, 0.8)",
 
   border: "#f0e3eb",
   borderAccent: "#dbeef8",

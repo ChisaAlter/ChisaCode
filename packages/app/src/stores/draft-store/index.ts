@@ -18,6 +18,7 @@ import {
   isLegacyDraftImage,
   normalizeComposerAttachment,
   pruneFinalizedDraftRecords,
+  resolveReservedDraftAgentId,
   toDraftInputIfReady,
   type DraftInput,
   type DraftLifecycleState,
@@ -37,6 +38,14 @@ interface DraftStoreActions {
     draftKey: string;
     lifecycle?: Exclude<DraftLifecycleState, "active">;
   }) => void;
+  /**
+   * Returns the draft's reserved client-minted agent id, minting and persisting
+   * one on first use. The id is stable for the draft's lifetime so the
+   * optimistic sidebar row and the daemon-created agent share one key.
+   * @param input Draft store key
+   * @returns The reserved agent id (UUID)
+   */
+  reserveDraftAgentId: (input: { draftKey: string }) => string;
   getCreateModalDraft: () => DraftInput | null;
   saveCreateModalDraft: (draft: DraftInput | null) => void;
   beginDraftGeneration: (draftKey: string) => number;
@@ -53,6 +62,7 @@ function createDraftRecord(input: {
   draft: DraftInput;
   lifecycle: DraftLifecycleState;
   previousVersion?: number;
+  agentId?: string | null;
 }): DraftRecord {
   return {
     input: {
@@ -62,6 +72,7 @@ function createDraftRecord(input: {
     lifecycle: input.lifecycle,
     updatedAt: Date.now(),
     version: (input.previousVersion ?? 0) + 1,
+    ...(input.agentId ? { agentId: input.agentId } : {}),
   };
 }
 
@@ -252,6 +263,7 @@ export const useDraftStore = create<DraftStore>()(
                 draft: migratedDraft,
                 lifecycle: existing.lifecycle,
                 previousVersion: existing.version,
+                agentId: existing.agentId,
               }),
             },
           };
@@ -271,6 +283,7 @@ export const useDraftStore = create<DraftStore>()(
                 draft,
                 lifecycle: "active",
                 previousVersion: existing?.version,
+                agentId: existing?.agentId,
               }),
             },
           };
@@ -325,6 +338,46 @@ export const useDraftStore = create<DraftStore>()(
 
         draftGenerations.delete(draftKey);
         scheduleAttachmentGc();
+      },
+
+      reserveDraftAgentId: ({ draftKey }) => {
+        const existing = get().drafts[draftKey]?.agentId;
+        const { agentId, minted } = resolveReservedDraftAgentId(existing, () =>
+          crypto.randomUUID(),
+        );
+        if (!minted) {
+          return agentId;
+        }
+        set((state) => {
+          const current = state.drafts[draftKey];
+          if (current?.agentId) {
+            return state;
+          }
+          // Persist the minted id even when no draft record exists yet (e.g.
+          // auto-submit before any input touched the store): a minted-but-not-
+          // written id would be re-minted on the next call, splitting the
+          // optimistic sidebar row (client id) from the daemon-adopted id.
+          return {
+            drafts: {
+              ...state.drafts,
+              [draftKey]: current
+                ? {
+                    ...current,
+                    agentId,
+                    updatedAt: Date.now(),
+                    version: current.version + 1,
+                  }
+                : {
+                    input: { text: "", attachments: [] },
+                    lifecycle: "active",
+                    updatedAt: Date.now(),
+                    version: 1,
+                    agentId,
+                  },
+            },
+          };
+        });
+        return agentId;
       },
 
       getCreateModalDraft: () => {

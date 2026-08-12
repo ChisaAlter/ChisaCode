@@ -50,6 +50,12 @@ export interface CreateAgentRequestOptions extends AgentConfigOverrides {
   workspaceId?: string;
   initialPrompt?: string;
   clientMessageId?: string;
+  /**
+   * Client-minted agent id (UUID). When provided, the daemon adopts it verbatim
+   * so the optimistic sidebar row and the authoritative agent share one key.
+   * When omitted, the daemon mints its own UUID.
+   */
+  agentId?: string;
   outputSchema?: Record<string, unknown>;
   images?: CreateAgentRequestMessage["images"];
   attachments?: CreateAgentRequestMessage["attachments"];
@@ -60,6 +66,15 @@ export interface CreateAgentRequestOptions extends AgentConfigOverrides {
   requestId?: string;
   labels?: Record<string, string>;
 }
+
+/**
+ * The created agent snapshot, optionally carrying the project placement the
+ * daemon attached to the `agent_created` status. Older daemons omit `project`;
+ * callers must fall back to the workspace descriptor or a cwd-derived placement.
+ */
+export type CreateAgentResult = AgentSnapshotPayload & {
+  project?: ProjectPlacementPayload | null;
+};
 
 /** Latest agent snapshot and its optional project placement. */
 export interface FetchAgentResult {
@@ -106,7 +121,7 @@ export class AgentLifecycleClient {
     return { agent: payload.agent, project: payload.project ?? null };
   }
 
-  async createAgent(options: CreateAgentRequestOptions): Promise<AgentSnapshotPayload> {
+  async createAgent(options: CreateAgentRequestOptions): Promise<CreateAgentResult> {
     const requestId = this.transport.createRequestId(options.requestId);
     const config = resolveAgentConfig(options);
     const message = SessionInboundMessageSchema.parse({
@@ -117,6 +132,7 @@ export class AgentLifecycleClient {
       ...(options.workspaceId !== undefined ? { workspaceId: options.workspaceId } : {}),
       ...(options.initialPrompt ? { initialPrompt: options.initialPrompt } : {}),
       ...(options.clientMessageId ? { clientMessageId: options.clientMessageId } : {}),
+      ...(options.agentId ? { agentId: options.agentId } : {}),
       ...(options.outputSchema ? { outputSchema: options.outputSchema } : {}),
       ...(options.images && options.images.length > 0 ? { images: options.images } : {}),
       ...(options.attachments && options.attachments.length > 0
@@ -152,7 +168,9 @@ export class AgentLifecycleClient {
     if (status.status === "agent_create_failed") {
       throw new Error(status.error);
     }
-    return status.agent;
+    // Attach the daemon-provided project placement (when present) so callers can
+    // place the created agent under the correct sidebar directory immediately.
+    return status.project ? { ...status.agent, project: status.project } : status.agent;
   }
 
   async deleteAgent(agentId: string): Promise<void> {

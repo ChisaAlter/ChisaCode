@@ -1,7 +1,6 @@
 import React, { memo, useCallback, useMemo, type ReactNode } from "react";
 import { View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
-import type { TurnTiming } from "@/timeline/turn-time";
 import type { StreamItem } from "@/types/stream";
 import {
   collectAssistantTurnContentForStreamRenderStrategy,
@@ -36,34 +35,22 @@ export const TurnFooter = memo(function TurnFooter({
     return null;
   }
   return (
-    <CompletedTurnFooterRow
-      strategy={strategy}
-      items={host.items}
-      timing={host.timing}
-      startIndex={host.startIndex}
-    />
+    <CompletedTurnFooterRow strategy={strategy} items={host.items} startIndex={host.startIndex} />
   );
 });
 
 export const CompletedTurnFooterRow = memo(function CompletedTurnFooterRow({
   strategy,
   items,
-  timing,
   startIndex,
 }: {
   strategy: TurnContentStrategy;
   items: StreamItem[];
-  timing?: TurnTiming;
   startIndex: number;
 }) {
   return (
     <TurnFooterRow>
-      <CompletedTurnFooter
-        strategy={strategy}
-        items={items}
-        timing={timing}
-        startIndex={startIndex}
-      />
+      <CompletedTurnFooter strategy={strategy} items={items} startIndex={startIndex} />
     </TurnFooterRow>
   );
 });
@@ -71,12 +58,10 @@ export const CompletedTurnFooterRow = memo(function CompletedTurnFooterRow({
 function CompletedTurnFooter({
   strategy,
   items,
-  timing,
   startIndex,
 }: {
   strategy: TurnContentStrategy;
   items: StreamItem[];
-  timing?: TurnTiming;
   startIndex: number;
 }) {
   const getContent = useCallback(
@@ -90,11 +75,7 @@ function CompletedTurnFooter({
   );
   return (
     <View style={stylesheet.turnFooterSlot}>
-      <AssistantTurnFooter
-        getContent={getContent}
-        completedAt={timing?.completedAt}
-        durationMs={timing?.durationMs}
-      />
+      <AssistantTurnFooter getContent={getContent} />
     </View>
   );
 }

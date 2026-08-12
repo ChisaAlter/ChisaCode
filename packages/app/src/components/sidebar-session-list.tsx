@@ -109,6 +109,11 @@ import { sidebarV2ThreadKey, useSidebarV2Store } from "@/sidebar-v2/store";
 import { formatRelativeTimeLabel } from "@/sidebar-v2/presentation";
 import { SidebarStatusView } from "@/components/sidebar-status-view";
 
+// No CSS enter animation on the session list pane. Any `animation:` style on
+// the list container re-applies on every re-render (selection, hover, data
+// refresh) and re-rasterizes every project/session title — users see all text
+// "get wider" even for unselected rows.
+
 const SIDEBAR_PINNED_LABEL = "chisacode.sidebarPinned";
 const AUTO_SETTLE_AFTER_DAYS = 3;
 
@@ -156,7 +161,6 @@ function RefreshControlHost({
 const ThemedRefreshControlHost = withUnistyles(RefreshControlHost);
 
 const foregroundMutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
-const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
 const accentColorMapping = (theme: Theme) => ({ color: theme.colors.accent });
 const statusWarningColorMapping = (theme: Theme) => ({ color: theme.colors.statusWarning });
 const foregroundSubtleTextColorMapping = (theme: Theme) => ({
@@ -166,8 +170,9 @@ const refreshTintColorMapping = (theme: Theme) => ({
   tintColor: theme.colors.foregroundMuted,
 });
 
-function rowProviderIconColorMapping(isSelected: boolean) {
-  if (isSelected) return foregroundColorMapping;
+function rowProviderIconColorMapping(_isSelected: boolean) {
+  // Keep provider icon color stable on selection. Switching muted→solid made
+  // the leading glyph paint thicker and pushed title text sideways.
   return foregroundMutedColorMapping;
 }
 
@@ -437,12 +442,15 @@ function SidebarSessionRow({
   const rowStyle = useCallback(
     ({ hovered = false, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
       rowBaseStyle,
-      // Settled dimming first so hover/selected can restore full opacity.
-      lifecycle.isSettled && !isSelected && styles.rowSettled,
-      Boolean(hovered) && rowHoveredStyle,
+      // Keep settled dimming even when selected so glyphs do not re-rasterize
+      // wider on selection (opacity restore made text look "bolder"/wider).
+      lifecycle.isSettled && styles.rowSettled,
+      // Selected fill is the stable chrome. Hover/pressed must not recolor or
+      // dim the active row (users read that as the selection "getting darker").
+      !isSelected && Boolean(hovered) && rowHoveredStyle,
       isSelected && rowSelectedStyle,
       isDragging && styles.desktopRowDragging,
-      pressed && rowPressedStyle,
+      !isSelected && pressed && rowPressedStyle,
     ],
     [
       isDragging,
@@ -1546,6 +1554,7 @@ export function SidebarSessionList({
 }: SidebarSessionListProps) {
   const { t } = useTranslation();
   const isCompact = useIsCompactFormFactor();
+  const projectScrollContentStyle = isCompact ? styles.scrollContent : styles.desktopScrollContent;
   const queryClient = useQueryClient();
   const toast = useToast();
   const { archiveAgents, isArchivingAgent } = useArchiveAgent();
@@ -2264,6 +2273,7 @@ export function SidebarSessionList({
           onRename={handleRename}
           onAddProject={onAddProject}
           searchQuery={searchQuery}
+          worktreeProjectHints={worktreeProjectHints}
         />
         {renameModal}
         {renameProjectModal}
@@ -2332,108 +2342,109 @@ export function SidebarSessionList({
   const defaultGroupStyle = isCompact ? styles.group : styles.desktopGroup;
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={isCompact ? styles.scrollContent : styles.desktopScrollContent}
-      showsVerticalScrollIndicator={false}
-      refreshControl={refreshControl}
-      testID="sidebar-sessions"
-    >
-      {filteredPinnedForRender ? (
-        <SidebarSessionGroupView
-          group={filteredPinnedForRender}
-          groupStyle={isCompact && showGroupTitles ? styles.pinnedGroup : defaultGroupStyle}
-          serverId={serverId}
-          isCompact={isCompact}
-          showGroupTitles={showGroupTitles}
-          collapsed={false}
-          selectedAgentId={resolvedSelectedAgentId}
-          onAgentPress={onAgentPress}
-          onTogglePin={handleTogglePin}
-          onRename={handleRename}
-          onArchive={handleArchive}
-          onDelete={handleDelete}
-          onSnooze={handleSnooze}
-          onWake={handleWake}
-          onSettle={handleSettle}
-          onUnsettle={handleUnsettle}
-          onRegenerateTitle={handleRegenerateTitle}
-          onMarkUnread={handleMarkUnread}
-          nowIso={lifecycleNowIso}
-          pinningAgentKey={pinningAgentKey}
-          deletingAgentKey={deletingAgentKey}
-          isArchivingAgent={isArchivingAgent}
-          onToggleCollapsed={toggleCollapsedGroup}
-          onReorderAgents={handleReorderAgents}
-          pinnedProjectGroupKeys={pinnedProjectGroupKeys}
-          archivingProjectGroupKey={archivingProjectGroupKey}
-          removingProjectGroupKey={removingProjectGroupKey}
-          markingReadProjectGroupKey={markingReadProjectGroupKey}
-          onToggleProjectPin={handleToggleProjectPin}
-          onOpenProjectPath={handleOpenProjectPath}
-          onRenameProject={handleRenameProject}
-          onMarkProjectRead={handleMarkProjectRead}
-          onArchiveProject={handleArchiveProject}
-          onRemoveProject={handleRemoveProject}
-        />
-      ) : null}
-      {filteredWorkspaceGroups.length > 0 && !isCompact && showGroupTitles ? (
-        <Text style={styles.desktopSectionLabel}>{t("sidebar.projects")}</Text>
-      ) : null}
-      {filteredWorkspaceGroups.map((group) => (
-        <SidebarSessionGroupView
-          key={group.key}
-          group={group}
-          groupStyle={defaultGroupStyle}
-          serverId={serverId}
-          isCompact={isCompact}
-          showGroupTitles={showGroupTitles}
-          collapsed={Boolean(group.cwd && collapsedGroupKeys.has(group.key))}
-          selectedAgentId={resolvedSelectedAgentId}
-          onAgentPress={onAgentPress}
-          onTogglePin={handleTogglePin}
-          onRename={handleRename}
-          onArchive={handleArchive}
-          onDelete={handleDelete}
-          onSnooze={handleSnooze}
-          onWake={handleWake}
-          onSettle={handleSettle}
-          onUnsettle={handleUnsettle}
-          onRegenerateTitle={handleRegenerateTitle}
-          onMarkUnread={handleMarkUnread}
-          nowIso={lifecycleNowIso}
-          pinningAgentKey={pinningAgentKey}
-          deletingAgentKey={deletingAgentKey}
-          isArchivingAgent={isArchivingAgent}
-          onToggleCollapsed={toggleCollapsedGroup}
-          onReorderAgents={handleReorderAgents}
-          pinnedProjectGroupKeys={pinnedProjectGroupKeys}
-          archivingProjectGroupKey={archivingProjectGroupKey}
-          removingProjectGroupKey={removingProjectGroupKey}
-          markingReadProjectGroupKey={markingReadProjectGroupKey}
-          onToggleProjectPin={handleToggleProjectPin}
-          onOpenProjectPath={handleOpenProjectPath}
-          onRenameProject={handleRenameProject}
-          onMarkProjectRead={handleMarkProjectRead}
-          onArchiveProject={handleArchiveProject}
-          onRemoveProject={handleRemoveProject}
-        />
-      ))}
-      {hasMore && onLoadMore ? (
-        <Button
-          variant="ghost"
-          size="sm"
-          onPress={onLoadMore}
-          loading={isLoadingMore}
-          disabled={isLoadingMore}
-          style={styles.loadMoreButton}
-        >
-          {isLoadingMore ? t("common.loading") : t("sidebar.loadMoreSessions")}
-        </Button>
-      ) : null}
-      {renameModal}
-      {renameProjectModal}
-    </ScrollView>
+    <View style={styles.container} testID="sidebar-sessions">
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={projectScrollContentStyle}
+        showsVerticalScrollIndicator={false}
+        refreshControl={refreshControl}
+      >
+        {filteredPinnedForRender ? (
+          <SidebarSessionGroupView
+            group={filteredPinnedForRender}
+            groupStyle={isCompact && showGroupTitles ? styles.pinnedGroup : defaultGroupStyle}
+            serverId={serverId}
+            isCompact={isCompact}
+            showGroupTitles={showGroupTitles}
+            collapsed={false}
+            selectedAgentId={resolvedSelectedAgentId}
+            onAgentPress={onAgentPress}
+            onTogglePin={handleTogglePin}
+            onRename={handleRename}
+            onArchive={handleArchive}
+            onDelete={handleDelete}
+            onSnooze={handleSnooze}
+            onWake={handleWake}
+            onSettle={handleSettle}
+            onUnsettle={handleUnsettle}
+            onRegenerateTitle={handleRegenerateTitle}
+            onMarkUnread={handleMarkUnread}
+            nowIso={lifecycleNowIso}
+            pinningAgentKey={pinningAgentKey}
+            deletingAgentKey={deletingAgentKey}
+            isArchivingAgent={isArchivingAgent}
+            onToggleCollapsed={toggleCollapsedGroup}
+            onReorderAgents={handleReorderAgents}
+            pinnedProjectGroupKeys={pinnedProjectGroupKeys}
+            archivingProjectGroupKey={archivingProjectGroupKey}
+            removingProjectGroupKey={removingProjectGroupKey}
+            markingReadProjectGroupKey={markingReadProjectGroupKey}
+            onToggleProjectPin={handleToggleProjectPin}
+            onOpenProjectPath={handleOpenProjectPath}
+            onRenameProject={handleRenameProject}
+            onMarkProjectRead={handleMarkProjectRead}
+            onArchiveProject={handleArchiveProject}
+            onRemoveProject={handleRemoveProject}
+          />
+        ) : null}
+        {filteredWorkspaceGroups.length > 0 && !isCompact && showGroupTitles ? (
+          <Text style={styles.desktopSectionLabel}>{t("sidebar.projects")}</Text>
+        ) : null}
+        {filteredWorkspaceGroups.map((group) => (
+          <SidebarSessionGroupView
+            key={group.key}
+            group={group}
+            groupStyle={defaultGroupStyle}
+            serverId={serverId}
+            isCompact={isCompact}
+            showGroupTitles={showGroupTitles}
+            collapsed={Boolean(group.cwd && collapsedGroupKeys.has(group.key))}
+            selectedAgentId={resolvedSelectedAgentId}
+            onAgentPress={onAgentPress}
+            onTogglePin={handleTogglePin}
+            onRename={handleRename}
+            onArchive={handleArchive}
+            onDelete={handleDelete}
+            onSnooze={handleSnooze}
+            onWake={handleWake}
+            onSettle={handleSettle}
+            onUnsettle={handleUnsettle}
+            onRegenerateTitle={handleRegenerateTitle}
+            onMarkUnread={handleMarkUnread}
+            nowIso={lifecycleNowIso}
+            pinningAgentKey={pinningAgentKey}
+            deletingAgentKey={deletingAgentKey}
+            isArchivingAgent={isArchivingAgent}
+            onToggleCollapsed={toggleCollapsedGroup}
+            onReorderAgents={handleReorderAgents}
+            pinnedProjectGroupKeys={pinnedProjectGroupKeys}
+            archivingProjectGroupKey={archivingProjectGroupKey}
+            removingProjectGroupKey={removingProjectGroupKey}
+            markingReadProjectGroupKey={markingReadProjectGroupKey}
+            onToggleProjectPin={handleToggleProjectPin}
+            onOpenProjectPath={handleOpenProjectPath}
+            onRenameProject={handleRenameProject}
+            onMarkProjectRead={handleMarkProjectRead}
+            onArchiveProject={handleArchiveProject}
+            onRemoveProject={handleRemoveProject}
+          />
+        ))}
+        {hasMore && onLoadMore ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            onPress={onLoadMore}
+            loading={isLoadingMore}
+            disabled={isLoadingMore}
+            style={styles.loadMoreButton}
+          >
+            {isLoadingMore ? t("common.loading") : t("sidebar.loadMoreSessions")}
+          </Button>
+        ) : null}
+        {renameModal}
+        {renameProjectModal}
+      </ScrollView>
+    </View>
   );
 }
 
@@ -2632,13 +2643,8 @@ const styles = StyleSheet.create((theme) => ({
   },
   // Soft mobile selected: soft fill, no hard accent bar.
   rowSelected: {
+    // Soft fill only. No shadow/opacity — selection must not re-rasterize text.
     backgroundColor: theme.colors.surface0,
-    opacity: 1,
-    ...(isWeb
-      ? ({
-          boxShadow: "0 1px 2px rgba(20, 23, 31, 0.04)",
-        } as object)
-      : theme.shadow.sm),
   },
   rowSelectedIndicator: {
     display: "none",
@@ -2697,14 +2703,9 @@ const styles = StyleSheet.create((theme) => ({
     opacity: 1,
   },
   desktopRowSelected: {
-    // Soft .sess.on: white/soft elevated chip, no accent rail.
+    // Soft .sess.on: white/soft fill only. No boxShadow — selection must not
+    // re-composite text for every sibling row.
     backgroundColor: theme.colors.surface0,
-    opacity: 1,
-    ...(isWeb
-      ? ({
-          boxShadow: "0 1px 2px rgba(20, 23, 31, 0.04)",
-        } as object)
-      : theme.shadow.sm),
   },
   desktopRowPressed: {
     opacity: 0.9,
@@ -2856,11 +2857,12 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foreground,
     fontWeight: theme.fontWeight.normal,
   },
-  // Soft .sess .t: 12.5px text-2; selected uses --text.
+  // Soft .sess .t: 12.5px text-2. Keep color stable on selection so text does
+  // not re-rasterize thicker/wider when the row becomes active.
   desktopRowTitle: {
     flex: 1,
     minWidth: 0,
-    color: theme.colors.foregroundSubtleText,
+    color: theme.colors.foreground,
     fontSize: 12.5,
     lineHeight: 18,
     fontWeight: theme.fontWeight.normal,

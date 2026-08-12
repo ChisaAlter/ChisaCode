@@ -1,18 +1,45 @@
 import type { AggregatedAgent } from "@/hooks/use-aggregated-agents";
 
 /**
+ * Resolves the user's home directory for the managed-worktree check.
+ *
+ * Only web/Electron have process env access; native returns null and the
+ * worktree check falls back to stripping (legacy behavior for project-internal
+ * worktrees, which is still correct there).
+ */
+function resolveUserHome(): string | null {
+  if (typeof process !== "undefined" && process.env?.USERPROFILE) {
+    return process.env.USERPROFILE.replaceAll("\\", "/");
+  }
+  if (typeof process !== "undefined" && process.env?.HOME) {
+    return process.env.HOME.replaceAll("\\", "/");
+  }
+  return null;
+}
+
+/**
  * Derives the project key for grouping agents.
- * For worktrees, returns the parent repo path.
+ * For project-internal worktrees (`<project>/.chisacode/worktrees/...`), returns
+ * the parent repo path. CHISACODE_HOME's own worktree root
+ * (`<home>/.chisacode/worktrees/...`) is NOT project-internal: stripping it
+ * yields the user's home directory, which is not a project, and would group
+ * every such conversation under the home folder. Those paths are returned
+ * unchanged so the sidebar's worktree-hash grouping resolves the real project.
  * For regular repos/directories, returns the cwd.
  * @param cwd The agent working directory to derive the key from
+ * @param userHome Optional user home directory override (testing)
  * @returns The project grouping key
  */
-export function deriveProjectKey(cwd: string): string {
+export function deriveProjectKey(cwd: string, userHome?: string | null): string {
   const worktreeMarker = ".chisacode/worktrees/";
   const idx = cwd.indexOf(worktreeMarker);
   if (idx !== -1) {
-    // Return parent repo path (before .chisacode/worktrees/)
-    return cwd.slice(0, idx).replace(/\/$/, "");
+    const parent = cwd.slice(0, idx).replace(/\/$/, "");
+    const home = userHome !== undefined ? userHome : resolveUserHome();
+    if (home && parent.replaceAll("\\", "/").toLowerCase() === home.toLowerCase()) {
+      return cwd;
+    }
+    return parent;
   }
   return cwd;
 }
@@ -166,7 +193,13 @@ export function parseRepoShortNameFromRemoteUrl(remoteUrl: string | null): strin
 export function deriveProjectName(projectKey: string): string {
   const githubRemotePrefix = "remote:github.com/";
   if (projectKey.startsWith(githubRemotePrefix)) {
-    return projectKey.slice(githubRemotePrefix.length) || projectKey;
+    // Drop the owner prefix: "owner/repo" → "repo" (matches T3 short names).
+    const remotePath = projectKey.slice(githubRemotePrefix.length);
+    const slashIdx = remotePath.indexOf("/");
+    if (slashIdx >= 0 && slashIdx < remotePath.length - 1) {
+      return remotePath.slice(slashIdx + 1);
+    }
+    return remotePath || projectKey;
   }
   const segments = projectKey.split("/").filter(Boolean);
   return segments[segments.length - 1] || projectKey;
@@ -175,7 +208,7 @@ export function deriveProjectName(projectKey: string): string {
 /**
  * Formats a project name for display in the UI.
  *
- * - GitHub remotes show owner/repo
+ * - GitHub remotes show the repo basename (owner/repo → repo)
  * - Other remotes show the remote path when possible
  * - Local projects prefer the provided projectName, then fallback to cwd tail
  * @param input The project key and the fallback project name
@@ -187,7 +220,13 @@ export function deriveProjectDisplayName(input: {
 }): string {
   const githubPrefix = "remote:github.com/";
   if (input.projectKey.startsWith(githubPrefix)) {
-    return input.projectKey.slice(githubPrefix.length);
+    // Drop the owner prefix: "owner/repo" → "repo" (matches T3 sidebar short names).
+    const remotePath = input.projectKey.slice(githubPrefix.length);
+    const slashIdx = remotePath.indexOf("/");
+    if (slashIdx >= 0 && slashIdx < remotePath.length - 1) {
+      return remotePath.slice(slashIdx + 1);
+    }
+    return remotePath;
   }
 
   if (input.projectKey.startsWith("remote:")) {

@@ -35,7 +35,6 @@ import { Check, ChevronDown, X } from "lucide-react-native";
 import { usePanelStore } from "@/stores/panel-store";
 import {
   AssistantMessage,
-  AssistantTurnHeader,
   SpeakMessage,
   UserMessage,
   ActivityLog,
@@ -151,7 +150,6 @@ function renderStreamItemWithTurnFooter(input: {
     <CompletedTurnFooterRow
       strategy={input.strategy}
       items={footerHost.items}
-      timing={footerHost.timing}
       startIndex={footerHost.startIndex}
     />
   ) : null;
@@ -471,9 +469,8 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       (layoutItem: StreamLayoutItem, item: Extract<StreamItem, { kind: "assistant_message" }>) => {
         return (
           <View style={stylesheet.workbenchAssistantTurn}>
-            {layoutItem.showAssistantTurnHeader ? (
-              <AssistantTurnHeader durationMs={layoutItem.turnTiming?.durationMs} />
-            ) : null}
+            {/* No T3-style AI badge + duration turn header above assistant prose.
+                Duration remains available via the completed-turn footer only. */}
             <AssistantFileLinkResolverProvider
               client={client}
               serverId={resolvedServerId}

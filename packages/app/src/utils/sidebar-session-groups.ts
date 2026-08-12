@@ -205,18 +205,34 @@ export function extractManagedWorktreeParts(
   return { hash: match[1].toLowerCase(), slug: match[2] };
 }
 
+/**
+ * Whether a project key looks like a local filesystem path (drive letter,
+ * leading slash, or backslash) rather than a remote-style key.
+ */
+function isLocalPathLikeProjectKey(value: string): boolean {
+  return /^[a-zA-Z]:[\\/]/.test(value) || value.startsWith("/") || value.includes("\\");
+}
+
 function getPlacementProjectRoot(agent: AggregatedAgent): string | null {
   const placement = agent.projectPlacement;
   if (!placement) {
     return null;
   }
+  const projectKey = placement.projectKey.trim();
   if (placement.checkout.isChisaCodeOwnedWorktree === true) {
+    // Prefer the remote project key so worktree rows group under the same
+    // bucket as non-worktree rows of the same project (e.g. the optimistic
+    // draft of a new conversation). The main repo root is only a fallback
+    // when the key is a cwd-derived artifact (raw worktree path or a stripped
+    // home dir that never matched a workspace).
+    if (projectKey && !isLocalPathLikeProjectKey(projectKey)) {
+      return projectKey;
+    }
     const mainRepoRoot = placement.checkout.mainRepoRoot?.trim() ?? "";
     if (mainRepoRoot) {
       return mainRepoRoot;
     }
   }
-  const projectKey = placement.projectKey.trim();
   return projectKey || null;
 }
 
@@ -269,17 +285,22 @@ export interface SidebarWorktreeProjectHintSource {
 
 // eslint-disable-next-line complexity -- Hint resolution walks placement/registry/project fallbacks.
 function identityFromHintSource(source: SidebarWorktreeProjectHintSource): GroupIdentity | null {
-  const placementRoot =
-    (source.project?.checkout?.isChisaCodeOwnedWorktree
-      ? source.project.checkout.mainRepoRoot?.trim()
-      : null) ||
-    source.projectRootPath?.trim() ||
-    source.project?.projectKey?.trim() ||
-    null;
+  const projectKey = source.project?.projectKey?.trim() || source.projectId?.trim() || null;
+  const isWorktree = source.project?.checkout?.isChisaCodeOwnedWorktree === true;
+  const mainRepoRoot = source.project?.checkout?.mainRepoRoot?.trim() ?? null;
+  let placementRoot: string | null = null;
+  if (isWorktree && projectKey && !isLocalPathLikeProjectKey(projectKey)) {
+    // Same bucket as non-worktree rows of the project (remote key), not the
+    // main repo root path.
+    placementRoot = projectKey;
+  } else if (isWorktree) {
+    placementRoot = mainRepoRoot;
+  }
+  placementRoot = placementRoot || source.projectRootPath?.trim() || projectKey || null;
   if (!placementRoot) {
     return null;
   }
-  const projectKey =
+  const resolvedProjectKey =
     source.project?.projectKey?.trim() || source.projectId?.trim() || placementRoot;
   const projectName = source.project?.projectName?.trim() || source.projectDisplayName?.trim();
   let label = getAgentCwdGroupLabel(placementRoot);
@@ -291,8 +312,10 @@ function identityFromHintSource(source: SidebarWorktreeProjectHintSource): Group
   return {
     key: normalizeAgentCwdGroupKey(placementRoot),
     label,
-    cwd: placementRoot,
-    projectKey,
+    // The group's working directory must be a real path (used by the group
+    // header's "new conversation" action); the remote key is never a path.
+    cwd: isWorktree ? mainRepoRoot || source.projectRootPath?.trim() || null : placementRoot,
+    projectKey: resolvedProjectKey,
   };
 }
 
@@ -359,13 +382,18 @@ function buildWorktreeHashIndex(
     byHash.set(parts.hash, {
       key,
       label,
-      cwd: root,
+      // Real path for the group header's "new conversation" action.
+      cwd:
+        agent.projectPlacement?.checkout?.isChisaCodeOwnedWorktree === true
+          ? agent.projectPlacement.checkout.mainRepoRoot?.trim() || root
+          : root,
       projectKey: agent.projectPlacement?.projectKey.trim() || root,
     });
   }
   return byHash;
 }
 
+// eslint-disable-next-line complexity -- group identity walks placement/registry/project fallbacks
 function resolveSidebarSessionGroupIdentity(
   agent: AggregatedAgent,
   worktreeHashIndex: ReadonlyMap<string, GroupIdentity>,
@@ -374,10 +402,40 @@ function resolveSidebarSessionGroupIdentity(
 ): GroupIdentity {
   const placementRoot = getPlacementProjectRoot(agent);
   if (placementRoot) {
+    // A placement can carry the raw managed-worktree path (e.g. a cwd-derived
+    // fallback before the workspace registry hydrates, or a server fallback
+    // that never matched a registered workspace). Resolve such roots through
+    // the worktree-hash index so the row lands under the real project instead
+    // of a fake worktree/home directory.
+    const worktreeParts = extractManagedWorktreeParts(placementRoot);
+    if (worktreeParts) {
+      const known = worktreeHashIndex.get(worktreeParts.hash);
+      if (known) {
+        return known;
+      }
+    }
+    // The placement root can also be the stripped HOME of a CHISACODE_HOME
+    // worktree (`<home>/.chisacode/worktrees/...`), which deriveProjectKey
+    // cannot detect without process env (unavailable in sandboxed renderers).
+    // When the agent's own cwd is a managed worktree path, resolve via the
+    // cwd's hash instead of grouping under the home directory.
+    const cwdWorktreeParts = extractManagedWorktreeParts(agent.cwd);
+    if (cwdWorktreeParts) {
+      const known = worktreeHashIndex.get(cwdWorktreeParts.hash);
+      if (known) {
+        return known;
+      }
+    }
     return {
       key: normalizeAgentCwdGroupKey(placementRoot),
       label: getPlacementDisplayLabel(agent) ?? getAgentCwdGroupLabel(placementRoot, fallbackLabel),
-      cwd: placementRoot,
+      // The group's working directory must be a real path (used by the group
+      // header's "new conversation" action); a remote key or stripped home dir
+      // is never a path — prefer the main repo root for worktree rows.
+      cwd:
+        agent.projectPlacement?.checkout?.isChisaCodeOwnedWorktree === true
+          ? agent.projectPlacement.checkout.mainRepoRoot?.trim() || placementRoot
+          : placementRoot,
       projectKey: agent.projectPlacement?.projectKey.trim() || placementRoot,
     };
   }

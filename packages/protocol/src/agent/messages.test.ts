@@ -148,4 +148,108 @@ describe("agent message domain", () => {
     );
     expect(SessionInboundMessageSchema.safeParse(message).success).toBe(false);
   });
+
+  test("create_agent_request accepts an optional client-minted agentId", () => {
+    const base = {
+      type: "create_agent_request" as const,
+      config: {
+        provider: "codex" as const,
+        cwd: "/repo",
+      },
+      labels: {},
+      requestId: "create-1",
+    };
+    const withAgentId = {
+      ...base,
+      agentId: "3f2504e0-4f89-41d3-9a0c-0305e82c3301",
+    };
+
+    // Older clients omit agentId entirely and still parse.
+    expect(CreateAgentRequestMessageSchema.safeParse(base).success).toBe(true);
+    expect(CreateAgentRequestMessageSchema.safeParse(withAgentId).success).toBe(true);
+    expect(SessionInboundMessageSchema.safeParse(withAgentId).success).toBe(true);
+  });
+
+  test("create_agent_request rejects a non-UUID agentId", () => {
+    const message = {
+      type: "create_agent_request" as const,
+      config: {
+        provider: "codex" as const,
+        cwd: "/repo",
+      },
+      labels: {},
+      agentId: "not-a-uuid",
+      requestId: "create-1",
+    };
+
+    expect(CreateAgentRequestMessageSchema.safeParse(message).success).toBe(false);
+  });
+
+  test("agent_created status carries an optional project placement", () => {
+    const agent = {
+      id: "agent-1",
+      provider: "codex",
+      cwd: "/repo",
+      model: null,
+      createdAt: "2026-04-20T00:00:00.000Z",
+      updatedAt: "2026-04-20T00:01:00.000Z",
+      lastUserMessageAt: null,
+      status: "idle",
+      capabilities: {
+        supportsStreaming: true,
+        supportsSessionPersistence: true,
+        supportsDynamicModes: true,
+        supportsMcpServers: true,
+        supportsReasoningStream: true,
+        supportsToolInvocations: true,
+      },
+      currentModeId: null,
+      availableModes: [],
+      pendingPermissions: [],
+      persistence: null,
+      title: null,
+      labels: {},
+    };
+    const withProject = {
+      status: "agent_created" as const,
+      agentId: "agent-1",
+      requestId: "create-1",
+      agent,
+      project: {
+        projectKey: "remote:github.com/owner/repo",
+        projectName: "owner/repo",
+        checkout: {
+          cwd: "/repo",
+          isGit: true,
+          currentBranch: "main",
+          remoteUrl: "git@github.com:owner/repo.git",
+          worktreeRoot: "/repo",
+          isChisaCodeOwnedWorktree: false,
+          mainRepoRoot: null,
+        },
+      },
+      pendingRun: true,
+    };
+    const withoutProject = {
+      status: "agent_created" as const,
+      agentId: "agent-1",
+      requestId: "create-1",
+      agent,
+      pendingRun: true,
+    };
+
+    expect(AgentCreatedStatusPayloadSchema.safeParse(withProject).success).toBe(true);
+    expect(AgentCreatedStatusPayloadSchema.safeParse(withoutProject).success).toBe(true);
+    const parsed = KnownStatusPayloadSchema.parse(withProject) as {
+      status: string;
+      agentId: string;
+      requestId: string;
+      project?: { projectKey: string };
+      pendingRun?: boolean;
+    };
+    expect(parsed.status).toBe("agent_created");
+    expect(parsed.agentId).toBe("agent-1");
+    expect(parsed.project?.projectKey).toBe("remote:github.com/owner/repo");
+    expect(parsed.pendingRun).toBe(true);
+  });
 });

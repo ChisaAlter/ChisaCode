@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   deriveDateGroup,
   deriveProjectDisplayName,
+  deriveProjectName,
   deriveRemoteProjectKey,
   groupAgents,
   parseRepoNameFromRemoteUrl,
@@ -52,14 +53,29 @@ describe("deriveRemoteProjectKey", () => {
   });
 });
 
+describe("deriveProjectName", () => {
+  it("drops the owner prefix from GitHub remote keys (by-project group titles)", () => {
+    expect(deriveProjectName("remote:github.com/ayasealter/ChisaTerminal")).toBe("ChisaTerminal");
+    expect(deriveProjectName("remote:github.com/getchisacode/chisacode")).toBe("chisacode");
+    expect(deriveProjectName("/Users/me/dev/chisacode")).toBe("chisacode");
+  });
+});
+
 describe("deriveProjectDisplayName", () => {
-  it("shows owner/repo for GitHub remote keys", () => {
+  it("shows the repo basename (not owner/repo) for GitHub remote keys", () => {
     expect(
       deriveProjectDisplayName({
         projectKey: "remote:github.com/getchisacode/chisacode",
         projectName: "chisacode",
       }),
-    ).toBe("getchisacode/chisacode");
+    ).toBe("chisacode");
+    // Nested owner paths also collapse to the repo basename.
+    expect(
+      deriveProjectDisplayName({
+        projectKey: "remote:github.com/ayasealter/ChisaTerminal",
+        projectName: "ChisaTerminal",
+      }),
+    ).toBe("ChisaTerminal");
   });
 
   it("shows remote path for non-GitHub remote keys", () => {

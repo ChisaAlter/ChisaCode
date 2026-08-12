@@ -57,16 +57,63 @@ import type { CreateChisaCodeWorktreeWorkflowResult } from "../worktree-session.
 import { handleModelGatewayRequest } from "../model-gateway/model-gateway.js";
 import type { ApplyVisionFallbackParams } from "../agent/vision-fallback.js";
 import { buildUsageSummary, exportUsageEvents, pruneUsageEvents } from "../usage/usage-store.js";
+
+/**
+ * Runs one create attempt per client-minted agent id at a time.
+ *
+ * A retried create with the same id arriving while the first attempt is still
+ * running awaits it, then re-runs the create body — the serial idempotency
+ * check inside it (see `AgentLifecycleHandler.handleCreateAgentRequest`) finds
+ * the created agent and emits the retry's own response. Without this, two
+ * concurrent attempts could both pass that serial check and create twice.
+ */
+export class AgentCreateInFlightDedupe {
+  private readonly inFlightByAgentId = new Map<string, Promise<unknown>>();
+
+  /**
+   * Runs the create, deduping concurrent attempts per agent id.
+   * @param agentId The client-minted agent id, if any (daemon-minted ids are never deduped)
+   * @param run The create attempt
+   * @returns The attempt result
+   * @throws When the in-flight attempt failed, or when the re-run attempt fails
+   */
+  async run<T>(agentId: string | undefined, run: () => Promise<T>): Promise<T> {
+    if (!agentId) {
+      return run();
+    }
+    const inFlight = this.inFlightByAgentId.get(agentId);
+    if (inFlight) {
+      await inFlight;
+    } else {
+      const attempt = run().finally(() => {
+        this.inFlightByAgentId.delete(agentId);
+      });
+      this.inFlightByAgentId.set(agentId, attempt);
+      return attempt;
+    }
+    // The first attempt settled; run again so the serial idempotency check
+    // emits this retry's own response for the now-created agent.
+    return run();
+  }
+
+  clear(): void {
+    this.inFlightByAgentId.clear();
+  }
+}
+
 export class AgentLifecycleHandler implements DisposableHandler {
   private readonly context: AgentLifecycleHandlerContext;
   private readonly directoryHandler: AgentDirectoryHandler;
+  private readonly createInFlightDedupe = new AgentCreateInFlightDedupe();
 
   constructor(context: AgentLifecycleHandlerContext, directoryHandler: AgentDirectoryHandler) {
     this.context = context;
     this.directoryHandler = directoryHandler;
   }
 
-  dispose(): void {}
+  dispose(): void {
+    this.createInFlightDedupe.clear();
+  }
 
   /** Dispatch an inbound message to the appropriate handler. Returns undefined for unhandled messages. */
   dispatch(msg: SessionInboundMessage): Promise<void> | undefined {
@@ -594,12 +641,45 @@ export class AgentLifecycleHandler implements DisposableHandler {
   private async handleCreateAgentRequest(
     msg: Extract<SessionInboundMessage, { type: "create_agent_request" }>,
   ): Promise<void> {
+    const { agentId, requestId } = msg;
+    try {
+      // Dedupe concurrent creates with the same client-minted id (e.g. a retry
+      // arriving while the first attempt is still running); the re-run falls
+      // into the serial idempotency check inside runCreateAgentRequest, which
+      // emits this request's own response for the created agent.
+      await this.createInFlightDedupe.run(agentId, () => this.runCreateAgentRequest(msg));
+    } catch (error) {
+      // Only reachable when an awaited in-flight create failed; the attempt
+      // itself already emitted its own failure status.
+      const wireError = toWorktreeWireError(error);
+      this.context.sessionLogger.error(
+        { err: error },
+        "Failed to await in-flight agent create for retry",
+      );
+      if (requestId) {
+        this.context.emit({
+          type: "status",
+          payload: {
+            status: "agent_create_failed",
+            requestId,
+            error: wireError.message,
+            errorCode: wireError.code,
+          },
+        });
+      }
+    }
+  }
+
+  private async runCreateAgentRequest(
+    msg: Extract<SessionInboundMessage, { type: "create_agent_request" }>,
+  ): Promise<void> {
     const {
       config,
       worktreeName,
       requestId,
       initialPrompt,
       clientMessageId,
+      agentId,
       outputSchema,
       git,
       worktree,
@@ -611,7 +691,7 @@ export class AgentLifecycleHandler implements DisposableHandler {
       env,
     } = msg;
     this.context.sessionLogger.info(
-      { cwd: config.cwd, provider: config.provider, worktreeName },
+      { cwd: config.cwd, provider: config.provider, worktreeName, agentId },
       `Creating agent in ${config.cwd} (${config.provider})${
         worktreeName ? ` with worktree ${worktreeName}` : ""
       }`,
@@ -620,6 +700,41 @@ export class AgentLifecycleHandler implements DisposableHandler {
     let createdWorktreeForCleanup: CreateChisaCodeWorktreeWorkflowResult | null = null;
     let createdAgentId: string | null = null;
     try {
+      // Idempotency for client-minted ids: a retried create with the same
+      // agentId (e.g. after a dropped response) must return the existing agent
+      // instead of creating a second row. The optimistic sidebar row is keyed by
+      // this id, so returning the same agent keeps the UI consistent.
+      if (agentId) {
+        const existingAgent = this.context.agentManager.getAgent(agentId);
+        const existingRecord = existingAgent ? null : await this.context.agentStorage.get(agentId);
+        if (existingAgent || existingRecord) {
+          this.context.sessionLogger.info(
+            { agentId },
+            `Create requested for existing agent ${agentId}; returning it`,
+          );
+          const agentPayload = existingAgent
+            ? await this.buildAgentPayload(existingAgent)
+            : this.buildStoredAgentPayload(existingRecord!);
+          const project = await this.context.buildProjectPlacementForCwd(agentPayload.cwd, {
+            refreshGit: false,
+            fallback: true,
+          });
+          if (requestId) {
+            this.context.emit({
+              type: "status",
+              payload: {
+                status: "agent_created",
+                agentId,
+                requestId,
+                agent: agentPayload,
+                project: project ?? undefined,
+                pendingRun: false,
+              },
+            });
+          }
+          return;
+        }
+      }
       const trimmedPrompt = initialPrompt?.trim();
       const { explicitTitle, provisionalTitle } = resolveCreateAgentTitles({
         configTitle: config.title,
@@ -659,6 +774,7 @@ export class AgentLifecycleHandler implements DisposableHandler {
           worktreeName,
           initialPrompt,
           clientMessageId,
+          agentId,
           outputSchema,
           images,
           attachments,
@@ -693,6 +809,13 @@ export class AgentLifecycleHandler implements DisposableHandler {
 
       if (requestId) {
         const agentPayload = await this.buildAgentPayload(liveSnapshot);
+        // Attach the workspace project placement so the client can place the
+        // created agent under the correct sidebar directory immediately, without
+        // waiting for the first agent_update push.
+        const project = await this.context.buildProjectPlacementForCwd(agentPayload.cwd, {
+          refreshGit: false,
+          fallback: true,
+        });
         this.context.emit({
           type: "status",
           payload: {
@@ -700,6 +823,7 @@ export class AgentLifecycleHandler implements DisposableHandler {
             agentId: liveSnapshot.id,
             requestId,
             agent: agentPayload,
+            project: project ?? undefined,
             // Initial prompt (if any) is dispatched asynchronously after create.
             pendingRun: true,
           },

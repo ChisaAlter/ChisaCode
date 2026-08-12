@@ -6,6 +6,38 @@ export interface WorkspaceDraftAutoSubmitConfig {
   model: string | null;
 }
 
+/**
+ * How long the /new auto-send flow waits for its readiness gates (workspace
+ * hydration, daemon client, model defaults) before restoring the submission
+ * into the composer for a manual send. Bounds the auto-send so a stalled gate
+ * can never leave the user on an empty draft page with the message gone.
+ */
+export const AUTO_SUBMIT_READINESS_WATCHDOG_MS = 10_000;
+
+/**
+ * Whether the pending /new submission should be restored to the composer and
+ * given up on automatic sending.
+ * @param input.hasPending Whether a pending auto-submit still exists
+ * @param input.isReady Whether the auto-submit readiness gates are satisfied
+ * @param input.sendStarted Whether the create attempt already started
+ * @param input.waitedForMs How long readiness was waited for
+ * @param input.thresholdMs The wait budget before restoring
+ * @returns True when the submission should be restored for a manual send
+ */
+export function shouldRestorePendingAutoSubmit(input: {
+  hasPending: boolean;
+  isReady: boolean;
+  sendStarted: boolean;
+  waitedForMs: number;
+  thresholdMs: number;
+}): boolean {
+  const { hasPending, isReady, sendStarted, waitedForMs, thresholdMs } = input;
+  if (!hasPending || isReady || sendStarted) {
+    return false;
+  }
+  return waitedForMs >= thresholdMs;
+}
+
 export function shouldWaitForDraftModelReadiness(input: {
   autoSubmitConfig: WorkspaceDraftAutoSubmitConfig | null;
   isModelLoading: boolean;

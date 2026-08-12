@@ -15,16 +15,17 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
-  Circle,
   Folder,
-  GitBranch,
+  FolderPlus,
   Plus,
   Undo2,
 } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { ThemedIconHost } from "@/components/themed-icon-host";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
+import { WORKBENCH_META_LINE_HEIGHT } from "@/constants/layout";
 import { Button } from "@/components/ui/button";
+import { getProviderIcon } from "@/components/provider-icons";
 import type { AggregatedAgent } from "@/hooks/use-aggregated-agents";
 import { isWeb } from "@/constants/platform";
 import { navigateToAgent } from "@/utils/navigate-to-agent";
@@ -51,6 +52,7 @@ import {
 } from "@/sidebar-v2/presentation";
 import { resolveSidebarV2Status } from "@/sidebar-v2/logic";
 import { resolveSelectedThreads } from "@/sidebar-v2/actions";
+import { shortProjectName } from "@/sidebar-v2/projects";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -59,11 +61,17 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const AUTO_SETTLE_AFTER_DAYS = 3;
 
 const foregroundMutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
-const foregroundFaintColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundFaint });
 const statusWarningColorMapping = (theme: Theme) => ({ color: theme.colors.statusWarning });
 
 interface SidebarStatusViewProps {
@@ -81,6 +89,12 @@ interface SidebarStatusViewProps {
   onRename: (agent: AggregatedAgent) => void;
   onAddProject?: () => void;
   searchQuery?: string;
+  /**
+   * Worktree hash → project identity hints so cwd-derived placements that
+   * stripped a CHISACODE_HOME worktree into the home directory resolve to the
+   * real project instead of a fake home group.
+   */
+  worktreeProjectHints?: ReadonlyMap<string, { projectKey: string | null }>;
 }
 
 function normalizeSelectedAgentId(selectedAgentId: string | undefined): string | null {
@@ -133,6 +147,7 @@ export function SidebarStatusView({
   onRename,
   onAddProject,
   searchQuery = "",
+  worktreeProjectHints,
 }: SidebarStatusViewProps) {
   const { t } = useTranslation();
   const [nowIso, setNowIso] = useState(() => new Date().toISOString());
@@ -157,8 +172,11 @@ export function SidebarStatusView({
   const clearSelection = useSidebarV2Store((state) => state.clearSelection);
 
   const threads = useMemo(
-    () => agents.filter((agent) => !agent.archivedAt).map((agent) => agentToSidebarThread(agent)),
-    [agents],
+    () =>
+      agents
+        .filter((agent) => !agent.archivedAt)
+        .map((agent) => agentToSidebarThread(agent, null, undefined, worktreeProjectHints)),
+    [agents, worktreeProjectHints],
   );
 
   const agentById = useMemo(() => {
@@ -169,6 +187,9 @@ export function SidebarStatusView({
     return map;
   }, [agents]);
 
+  // T3-style project scope list: one logical project per key, used by the
+  // "All projects" dropdown (not chip pills). Labels use the short basename
+  // (owner/repo → repo) to match the T3 scope menu — never the raw owner/repo.
   const projectOptions = useMemo(() => {
     const seen = new Map<string, string>();
     for (const thread of threads) {
@@ -176,13 +197,15 @@ export function SidebarStatusView({
         continue;
       }
       if (!seen.has(thread.projectKey)) {
-        seen.set(thread.projectKey, thread.projectName ?? thread.projectKey);
+        seen.set(thread.projectKey, shortProjectName(thread.projectName ?? thread.projectKey));
       }
     }
-    return [...seen.entries()].map(([projectKey, displayName]) => ({
-      projectKey,
-      displayName,
-    }));
+    return [...seen.entries()]
+      .map(([projectKey, displayName]) => ({
+        projectKey,
+        displayName,
+      }))
+      .sort((left, right) => left.displayName.localeCompare(right.displayName));
   }, [threads]);
 
   const scopedThreads = useMemo(() => {
@@ -276,12 +299,22 @@ export function SidebarStatusView({
     );
   }, [serverId, setSettledVisibleCount, uiState?.settledVisibleCount]);
 
-  const handleClearScope = useCallback(() => {
+  const handleSelectAllProjects = useCallback(() => {
     if (!serverId) {
       return;
     }
     setScopeProjectKey(serverId, null);
   }, [serverId, setScopeProjectKey]);
+
+  const handleSelectProjectScope = useCallback(
+    (projectKey: string) => {
+      if (!serverId) {
+        return;
+      }
+      setScopeProjectKey(serverId, projectKey);
+    },
+    [serverId, setScopeProjectKey],
+  );
 
   const handleOpenThread = useCallback(
     (thread: SidebarV2Thread) => {
@@ -326,6 +359,13 @@ export function SidebarStatusView({
   const bulkDeleteButtonStyle = useMemo(() => [styles.bulkButton, styles.bulkButtonDanger], []);
   const bulkDeleteTextStyle = useMemo(
     () => [styles.bulkButtonText, styles.bulkButtonDangerText],
+    [],
+  );
+  const addProjectButtonStyle = useCallback(
+    ({ hovered = false, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
+      styles.scopeAddButton,
+      (Boolean(hovered) || pressed) && styles.scopeAddButtonHovered,
+    ],
     [],
   );
 
@@ -388,8 +428,6 @@ export function SidebarStatusView({
     clearSelection();
   }, [agentById, clearSelection, onDelete, selectedThreadKeys, threadByKey]);
 
-  const noopToggle = useCallback(() => undefined, []);
-
   const scopeLabel = useMemo(() => {
     if (!uiState?.scopeProjectKey) {
       return t("sidebarV2.allProjects");
@@ -399,6 +437,10 @@ export function SidebarStatusView({
         ?.displayName ?? t("sidebarV2.allProjects")
     );
   }, [projectOptions, t, uiState?.scopeProjectKey]);
+
+  // T3 SidebarV2: active shelf has no "Sessions" header — only Snoozed/Settled
+  // render collapsible shelf labels.
+  const showScopeRow = projectOptions.length > 0 || Boolean(onAddProject);
 
   if (!serverId) {
     return (
@@ -533,79 +575,111 @@ export function SidebarStatusView({
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {projectOptions.length > 1 ? (
-          <View style={styles.scopeRow}>
-            <Pressable
-              style={scopeTriggerStyle}
-              onPress={handleClearScope}
-              testID="sidebar-status-scope-all"
-            >
-              <ThemedIconHost
-                Icon={Folder}
-                size={ICON_SIZE.sm}
-                uniProps={foregroundMutedColorMapping}
-              />
-              <Text style={styles.scopeLabel} numberOfLines={1}>
-                {scopeLabel}
-              </Text>
-            </Pressable>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.scopeChips}>
-              {projectOptions.map((project) => (
-                <ScopeChip
-                  key={project.projectKey}
-                  projectKey={project.projectKey}
-                  displayName={project.displayName}
-                  selected={uiState?.scopeProjectKey === project.projectKey}
-                  serverId={serverId}
-                  setScopeProjectKey={setScopeProjectKey}
+        {showScopeRow ? (
+          <View style={styles.scopeRow} testID="sidebar-status-scope-row">
+            {projectOptions.length > 0 ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  accessibilityLabel={t("sidebarV2.allProjects")}
+                  style={scopeTriggerStyle}
+                  testID="sidebar-status-scope-trigger"
+                >
+                  <ThemedIconHost
+                    Icon={Folder}
+                    size={ICON_SIZE.sm}
+                    uniProps={foregroundMutedColorMapping}
+                  />
+                  <Text style={styles.scopeLabel} numberOfLines={1}>
+                    {scopeLabel}
+                  </Text>
+                  <ThemedIconHost
+                    Icon={ChevronDown}
+                    size={ICON_SIZE.xs}
+                    uniProps={foregroundMutedColorMapping}
+                  />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" width={240}>
+                  <DropdownMenuItem
+                    selected={!uiState?.scopeProjectKey}
+                    onSelect={handleSelectAllProjects}
+                    showSelectedCheck
+                    testID="sidebar-status-scope-all"
+                  >
+                    {t("sidebarV2.allProjects")}
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  {projectOptions.map((project) => (
+                    <ProjectScopeMenuItem
+                      key={project.projectKey}
+                      projectKey={project.projectKey}
+                      displayName={project.displayName}
+                      selected={uiState?.scopeProjectKey === project.projectKey}
+                      onSelect={handleSelectProjectScope}
+                    />
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              <View style={styles.scopeTriggerStatic} testID="sidebar-status-scope-trigger">
+                <ThemedIconHost
+                  Icon={Folder}
+                  size={ICON_SIZE.sm}
+                  uniProps={foregroundMutedColorMapping}
                 />
-              ))}
-            </ScrollView>
+                <Text style={styles.scopeLabel} numberOfLines={1}>
+                  {scopeLabel}
+                </Text>
+              </View>
+            )}
+            {onAddProject ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t("sidebarV2.newProject")}
+                onPress={onAddProject}
+                style={addProjectButtonStyle}
+                testID="sidebar-status-new-project"
+              >
+                <ThemedIconHost
+                  Icon={FolderPlus}
+                  size={ICON_SIZE.sm}
+                  uniProps={foregroundMutedColorMapping}
+                />
+              </Pressable>
+            ) : null}
           </View>
         ) : null}
 
-        {partition.activeThreads.length > 0 ? (
-          <>
-            <ShelfHeader
-              label={t("sidebar.sessions")}
-              count={partition.activeThreads.length}
-              expanded
-              onToggle={noopToggle}
-              showChevron={false}
+        {partition.activeThreads.map((thread) => {
+          const agent = resolveAgent(thread);
+          if (!agent) {
+            return null;
+          }
+          const threadKey = sidebarV2ThreadKey(thread.serverId, thread.id);
+          const isUnread = Boolean(localUnreadCompletedAtByKey[threadKey]);
+          return (
+            <StatusCardRow
+              key={thread.id}
+              thread={thread}
+              agent={agent}
+              isActive={normalizedSelectedAgentId === thread.id}
+              isSelected={selectedThreadKeys.includes(threadKey)}
+              isMultiSelectMode={isMultiSelectMode}
+              isUnread={isUnread}
+              nowIso={nowIso}
+              onOpen={handleOpenThread}
+              onToggleSelect={handleToggleSelect}
+              onRangeSelect={handleRangeSelect}
+              onWake={onWake}
+              onUnsettle={onUnsettle}
+              onSnooze={onSnooze}
+              onSettle={onSettle}
+              onRegenerateTitle={onRegenerateTitle}
+              onMarkUnread={onMarkUnread}
+              onDelete={onDelete}
+              onRename={onRename}
             />
-            {partition.activeThreads.map((thread) => {
-              const agent = resolveAgent(thread);
-              if (!agent) {
-                return null;
-              }
-              const threadKey = sidebarV2ThreadKey(thread.serverId, thread.id);
-              const isUnread = Boolean(localUnreadCompletedAtByKey[threadKey]);
-              return (
-                <StatusCardRow
-                  key={thread.id}
-                  thread={thread}
-                  agent={agent}
-                  isActive={normalizedSelectedAgentId === thread.id}
-                  isSelected={selectedThreadKeys.includes(threadKey)}
-                  isMultiSelectMode={isMultiSelectMode}
-                  isUnread={isUnread}
-                  nowIso={nowIso}
-                  onOpen={handleOpenThread}
-                  onToggleSelect={handleToggleSelect}
-                  onRangeSelect={handleRangeSelect}
-                  onWake={onWake}
-                  onUnsettle={onUnsettle}
-                  onSnooze={onSnooze}
-                  onSettle={onSettle}
-                  onRegenerateTitle={onRegenerateTitle}
-                  onMarkUnread={onMarkUnread}
-                  onDelete={onDelete}
-                  onRename={onRename}
-                />
-              );
-            })}
-          </>
-        ) : null}
+          );
+        })}
 
         {partition.snoozedThreads.length > 0 ? (
           <>
@@ -708,85 +782,68 @@ export function SidebarStatusView({
   );
 }
 
-function ScopeChip({
+function ProjectScopeMenuItem({
   projectKey,
   displayName,
   selected,
-  serverId,
-  setScopeProjectKey,
+  onSelect,
 }: {
   projectKey: string;
   displayName: string;
   selected: boolean;
-  serverId: string;
-  setScopeProjectKey: (serverId: string, projectKey: string | null) => void;
+  onSelect: (projectKey: string) => void;
 }) {
-  const chipStyle = useMemo(
-    () => [styles.scopeChip, selected && styles.scopeChipSelected],
-    [selected],
-  );
-  const textStyle = useMemo(
-    () => [styles.scopeChipText, selected && styles.scopeChipTextSelected],
-    [selected],
-  );
-  const handlePress = useCallback(() => {
-    setScopeProjectKey(serverId, selected ? null : projectKey);
-  }, [projectKey, selected, serverId, setScopeProjectKey]);
-
+  const handleSelect = useCallback(() => onSelect(projectKey), [onSelect, projectKey]);
   return (
-    <Pressable
-      style={chipStyle}
-      onPress={handlePress}
+    <DropdownMenuItem
+      selected={selected}
+      onSelect={handleSelect}
+      showSelectedCheck
       testID={`sidebar-status-scope-${projectKey}`}
     >
-      <Text style={textStyle}>{displayName}</Text>
-    </Pressable>
+      {displayName}
+    </DropdownMenuItem>
   );
 }
 
+/**
+ * T3 shelf header for Snoozed / Settled only.
+ * Active threads render without a header (matches T3 SidebarV2).
+ */
 function ShelfHeader({
   label,
   count,
   expanded,
   onToggle,
   tone,
-  showChevron = true,
 }: {
   label: string;
   count: number;
   expanded: boolean;
   onToggle: () => void;
   tone?: "snoozed" | "settled";
-  showChevron?: boolean;
 }) {
   const labelStyle = useMemo(
     () => [styles.shelfHeaderLabel, tone === "snoozed" ? styles.shelfHeaderSnoozed : null],
     [tone],
   );
-  const pressHandler = showChevron ? onToggle : undefined;
-  const role = showChevron ? ("button" as const) : undefined;
+  const accessibilityState = useMemo(() => ({ expanded }), [expanded]);
 
   return (
     <Pressable
       style={styles.shelfHeader}
-      onPress={pressHandler}
-      accessibilityRole={role}
+      onPress={onToggle}
+      accessibilityRole="button"
+      accessibilityState={accessibilityState}
       testID={`sidebar-status-shelf-${label}`}
     >
-      <Text style={labelStyle}>
-        {label}
-        {count > 0 ? ` (${count})` : ""}
-      </Text>
-      {showChevron ? (
-        <>
-          <View style={styles.shelfHeaderDivider} />
-          <ThemedIconHost
-            Icon={expanded ? ChevronDown : ChevronRight}
-            size={ICON_SIZE.xs}
-            uniProps={foregroundMutedColorMapping}
-          />
-        </>
-      ) : null}
+      <Text style={labelStyle}>{expanded || count === 0 ? label : `${label} (${count})`}</Text>
+      <View style={styles.shelfHeaderDivider} />
+      <ThemedIconHost
+        Icon={expanded ? ChevronDown : ChevronRight}
+        size={ICON_SIZE.xs}
+        uniProps={tone === "snoozed" ? statusWarningColorMapping : foregroundMutedColorMapping}
+      />
     </Pressable>
   );
 }
@@ -838,18 +895,25 @@ function StatusCardRow({
     woke: isWoke,
     unseenCompletion: isUnread,
   });
+  // Keep recede based on lifecycle only — do NOT restore full opacity when the
+  // row becomes active/selected. Opacity jumps make glyphs re-rasterize wider.
   const shouldRecede = shouldSidebarRowRecede({
     status,
     isUnread,
     isWoke,
-    isActive,
-    isSelected,
+    isActive: false,
+    isSelected: false,
   });
   const timeLabel = formatRelativeTimeLabel(thread.lastActivityAt, new Date(nowIso));
   const canSettleThread = canSettle(thread, { now: nowIso });
   const canSnoozeThread = canSnooze(thread, { now: nowIso });
   const snoozePresets = useMemo(() => resolveSnoozePresets(new Date(nowIso)), [nowIso]);
 
+  // No inline hover actions on status cards. T3's hover-revealed Settle/Snooze
+  // replaced the status/time label on hover, which made the row content jump
+  // horizontally on every pointer move — removed per product decision. Settle
+  // and Snooze stay in the right-click menu only; hover must never change the
+  // row's content or layout, only (optionally) its background.
   let statusNode: React.ReactNode = null;
   if (topStatus) {
     statusNode = <Text style={statusTextStyle(topStatus.color)}>{topStatus.label}</Text>;
@@ -862,9 +926,10 @@ function StatusCardRow({
       styles.card,
       isActive && styles.cardActive,
       isSelected && styles.cardMultiSelected,
-      Boolean(hovered) && styles.cardHovered,
+      // Active/selected fill is stable chrome — do not recolor or dim on hover.
+      !(isActive || isSelected) && Boolean(hovered) && styles.cardHovered,
       shouldRecede && styles.cardReceded,
-      pressed && styles.cardPressed,
+      !(isActive || isSelected) && pressed && styles.cardPressed,
     ],
     [isActive, isSelected, shouldRecede],
   );
@@ -884,10 +949,10 @@ function StatusCardRow({
     },
     [isMultiSelectMode, onOpen, onRangeSelect, onToggleSelect, thread],
   );
-  const handleSettle = useCallback(() => onSettle(agent), [agent, onSettle]);
   const accessibilityLabel = thread.projectName
     ? `${thread.projectName}: ${thread.title}`
     : thread.title;
+  const ProviderIcon = getProviderIcon(agent.provider);
 
   return (
     <ContextMenu>
@@ -907,7 +972,7 @@ function StatusCardRow({
               uniProps={foregroundMutedColorMapping}
             />
             <Text style={styles.cardProjectName} numberOfLines={1}>
-              {thread.projectName ?? "Local"}
+              {shortProjectName(thread.projectName ?? "Local")}
             </Text>
           </View>
           {statusNode}
@@ -917,34 +982,20 @@ function StatusCardRow({
         </Text>
         <View style={styles.cardLine3}>
           {thread.branch ? (
-            <View style={styles.cardBranch}>
-              <ThemedIconHost
-                Icon={GitBranch}
-                size={ICON_SIZE.xs}
-                uniProps={foregroundFaintColorMapping}
-              />
-              <Text style={styles.cardBranchText} numberOfLines={1}>
-                {thread.branch}
-              </Text>
-            </View>
+            <Text style={styles.cardBranchText} numberOfLines={1}>
+              {thread.branch}
+            </Text>
           ) : (
             <View style={styles.cardBranchSpacer} />
           )}
-        </View>
-        {canSettleThread ? (
-          <Pressable
-            style={styles.cardSettleButton}
-            onPress={handleSettle}
-            hitSlop={8}
-            testID={`sidebar-status-settle-${thread.id}`}
-          >
+          <View style={styles.cardProviderIcon}>
             <ThemedIconHost
-              Icon={Circle}
+              Icon={ProviderIcon}
               size={ICON_SIZE.sm}
-              uniProps={foregroundFaintColorMapping}
+              uniProps={foregroundMutedColorMapping}
             />
-          </Pressable>
-        ) : null}
+          </View>
+        </View>
       </ContextMenuTrigger>
       <StatusRowMenu
         agent={agent}
@@ -1034,15 +1085,18 @@ function StatusSlimRow({
   );
   const handleWake = useCallback(() => onWake(agent), [agent, onWake]);
   const handleUnsettle = useCallback(() => onUnsettle(agent), [agent, onUnsettle]);
+  const ProviderIcon = getProviderIcon(agent.provider);
 
   const rowStyle = useCallback(
     ({ hovered = false, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
       styles.slimRow,
       isActive && styles.cardActive,
       isSelected && styles.cardMultiSelected,
-      Boolean(hovered) && styles.cardHovered,
-      variant === "settled" && !isActive && !isSelected && styles.cardReceded,
-      pressed && styles.cardPressed,
+      // Active/selected fill is stable chrome — do not recolor or dim on hover.
+      !(isActive || isSelected) && Boolean(hovered) && styles.cardHovered,
+      // Keep settled dimming even when selected/active so text width does not jump.
+      variant === "settled" && styles.cardReceded,
+      !(isActive || isSelected) && pressed && styles.cardPressed,
     ],
     [isActive, isSelected, variant],
   );
@@ -1057,7 +1111,15 @@ function StatusSlimRow({
         accessibilityLabel={thread.title}
         aria-selected={isActive || isSelected}
       >
-        {variant === "settled" ? <View style={styles.slimCircle} /> : null}
+        {variant === "settled" || variant === "search" ? (
+          <View style={styles.slimProviderIcon}>
+            <ThemedIconHost
+              Icon={ProviderIcon}
+              size={ICON_SIZE.sm}
+              uniProps={foregroundMutedColorMapping}
+            />
+          </View>
+        ) : null}
         {variant === "snoozed" ? (
           <ThemedIconHost
             Icon={AlarmClock}
@@ -1324,68 +1386,76 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: 11.5,
     color: theme.colors.foregroundMuted,
   },
+  // T3: "All projects" dropdown + FolderPlus on one row.
   scopeRow: {
-    gap: 6,
-    marginBottom: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginBottom: 6,
+    minHeight: 34,
   },
   scopeTrigger: {
-    minHeight: 36,
-    paddingHorizontal: 10,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
+    flex: 1,
+    minWidth: 0,
+    minHeight: 34,
+    paddingHorizontal: 8,
+    borderRadius: 8,
     backgroundColor: "transparent",
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    ...(isWeb
-      ? ({
-          boxShadow: "inset 0 0 0 1px rgba(20, 23, 31, 0.04)",
-        } as object)
-      : {}),
+    gap: 8,
+  },
+  scopeTriggerStatic: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 34,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
   },
   scopeTriggerHovered: {
-    backgroundColor: theme.colors.surface1,
+    backgroundColor: theme.colors.surfaceSidebarHover,
   },
   scopeLabel: {
     flex: 1,
-    fontSize: 12.5,
-    color: theme.colors.foregroundMuted,
-  },
-  scopeChips: {
-    maxHeight: 34,
-  },
-  scopeChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: theme.colors.surface1,
-    marginRight: 6,
-  },
-  scopeChipSelected: {
-    backgroundColor: theme.colors.surface3,
-  },
-  scopeChipText: {
-    fontSize: 12,
-    color: theme.colors.foregroundMuted,
-  },
-  scopeChipTextSelected: {
-    color: theme.colors.foreground,
+    minWidth: 0,
+    fontSize: 13,
+    lineHeight: 18,
     fontWeight: theme.fontWeight.medium,
+    color: theme.colors.foregroundMuted,
+  },
+  scopeAddButton: {
+    width: 30,
+    height: 30,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  scopeAddButtonHovered: {
+    backgroundColor: theme.colors.surfaceSidebarHover,
   },
   shelfHeader: {
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[1],
-    paddingVertical: 8,
-    paddingHorizontal: theme.spacing[0.5],
+    // T3: mb-1 mt-3 px-2.5
+    marginTop: 12,
+    marginBottom: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 0,
   },
   shelfHeaderLabel: {
-    fontSize: 12,
-    fontWeight: "600",
+    // T3: text-xs font-medium muted → calibrated to by-project .cc-group 12.5.
+    fontSize: 12.5,
+    fontWeight: theme.fontWeight.medium,
+    lineHeight: WORKBENCH_META_LINE_HEIGHT,
     color: theme.colors.foregroundMuted,
   },
   shelfHeaderSnoozed: {
+    // T3: text-blue-600
     color: theme.colors.accent,
   },
   shelfHeaderDivider: {
@@ -1394,21 +1464,18 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: theme.colors.border,
   },
   card: {
+    // T3 card density: h ~ 4.875rem, px/py content inset, no permanent fill.
     paddingHorizontal: 10,
-    paddingVertical: 10,
+    paddingVertical: 8,
     minHeight: 78,
-    borderRadius: 10,
+    borderRadius: 8,
     justifyContent: "center",
-    gap: 3,
+    gap: 4,
     position: "relative",
   },
   cardActive: {
+    // Fill only. Avoid boxShadow on selection — it re-composites nearby text.
     backgroundColor: theme.colors.surface0,
-    ...(isWeb
-      ? ({
-          boxShadow: "0 1px 2px rgba(20, 23, 31, 0.06)",
-        } as object)
-      : theme.shadow.sm),
   },
   cardMultiSelected: {
     backgroundColor: theme.colors.surface3,
@@ -1436,53 +1503,57 @@ const styles = StyleSheet.create((theme) => ({
   },
   cardProjectName: {
     flex: 1,
-    fontSize: 13,
+    // T3: text-xs muted → calibrated to by-project workspace group title 12.5.
+    fontSize: 12.5,
+    lineHeight: WORKBENCH_META_LINE_HEIGHT,
+    fontWeight: theme.fontWeight.medium,
     color: theme.colors.foregroundMuted,
   },
   cardTime: {
-    fontSize: 13,
+    // T3: text-xs muted time/status slot
+    fontSize: 12,
+    lineHeight: WORKBENCH_META_LINE_HEIGHT,
     color: theme.colors.foregroundMuted,
     marginLeft: 8,
   },
   cardTitle: {
-    fontSize: 15,
-    fontWeight: "600",
+    // T3: text-sm medium → calibrated per roadmap: 13 medium card title.
+    fontSize: 13,
+    fontWeight: theme.fontWeight.medium,
+    lineHeight: 18,
     color: theme.colors.foreground,
-    paddingRight: 28,
+    paddingRight: 4,
   },
   cardLine3: {
     flexDirection: "row",
     alignItems: "center",
     minHeight: 18,
-  },
-  cardBranch: {
-    flex: 1,
-    minWidth: 0,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingRight: 28,
+    gap: 6,
   },
   cardBranchSpacer: {
     flex: 1,
   },
   cardBranchText: {
     flex: 1,
-    fontSize: 13,
+    minWidth: 0,
+    // T3: branch plain text, no leading git icon
+    fontSize: 12,
+    lineHeight: WORKBENCH_META_LINE_HEIGHT,
     color: theme.colors.foregroundMuted,
   },
-  cardSettleButton: {
-    position: "absolute",
-    right: 10,
-    bottom: 12,
-    width: 22,
-    height: 22,
+  // T3 trailing provider/agent icon (replaces hollow settle circle).
+  cardProviderIcon: {
+    width: 18,
+    height: 18,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 999,
+    flexShrink: 0,
+    opacity: 0.7,
+    pointerEvents: "none",
   },
   slimRow: {
-    minHeight: 34,
+    // T3 slim: h-9, gap-2.5, px-2.5
+    minHeight: 36,
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 8,
@@ -1490,16 +1561,19 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     gap: 10,
   },
-  slimCircle: {
+  slimProviderIcon: {
     width: 16,
     height: 16,
-    borderRadius: 999,
-    borderWidth: 1.5,
-    borderColor: theme.colors.foregroundFaint,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+    opacity: 0.55,
   },
   slimTitle: {
     flex: 1,
-    fontSize: 14,
+    // T3: text-sm → calibrated to by-project row title 12.5.
+    fontSize: 12.5,
+    lineHeight: 18,
     color: theme.colors.foreground,
   },
   slimWake: {
@@ -1507,7 +1581,7 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.statusWarning,
   },
   slimTime: {
-    fontSize: 13,
+    fontSize: 12,
     color: theme.colors.foregroundMuted,
   },
   slimAction: {
@@ -1522,40 +1596,47 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     justifyContent: "center",
     gap: theme.spacing[0.5],
+    // T3: h-9 text-sm muted
+    minHeight: 36,
     paddingVertical: 8,
     borderRadius: theme.borderRadius.sm,
   },
   showMoreLabel: {
-    fontSize: 12,
+    fontSize: 13,
     color: theme.colors.foregroundMuted,
   },
   statusSky: {
-    fontSize: 13,
-    fontWeight: "500",
+    fontSize: 12,
+    fontWeight: theme.fontWeight.medium,
+    lineHeight: WORKBENCH_META_LINE_HEIGHT,
     marginLeft: 8,
     color: theme.colors.accentBright,
   },
   statusAmber: {
-    fontSize: 13,
-    fontWeight: "500",
+    fontSize: 12,
+    fontWeight: theme.fontWeight.medium,
+    lineHeight: WORKBENCH_META_LINE_HEIGHT,
     marginLeft: 8,
     color: theme.colors.statusWarning,
   },
   statusIndigo: {
-    fontSize: 13,
-    fontWeight: "500",
+    fontSize: 12,
+    fontWeight: theme.fontWeight.medium,
+    lineHeight: WORKBENCH_META_LINE_HEIGHT,
     marginLeft: 8,
     color: theme.colors.accent,
   },
   statusRed: {
-    fontSize: 13,
-    fontWeight: "500",
+    fontSize: 12,
+    fontWeight: theme.fontWeight.medium,
+    lineHeight: WORKBENCH_META_LINE_HEIGHT,
     marginLeft: 8,
     color: theme.colors.destructive,
   },
   statusEmerald: {
-    fontSize: 13,
-    fontWeight: "500",
+    fontSize: 12,
+    fontWeight: theme.fontWeight.medium,
+    lineHeight: WORKBENCH_META_LINE_HEIGHT,
     marginLeft: 8,
     color: theme.colors.success,
   },

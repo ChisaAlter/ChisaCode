@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useReducer } from "react";
 import type { ComposerAttachment } from "@/attachments/types";
 import { splitComposerAttachmentsForSubmit } from "@/composer/attachments/submit";
+import { appI18n } from "@/i18n";
 import { useCreateFlowStore } from "@/stores/create-flow-store";
 import { useSessionStore } from "@/stores/session-store";
 import {
@@ -12,6 +13,41 @@ import {
 import type { AgentAttachment } from "@chisacode/protocol/messages";
 
 const EMPTY_STREAM_ITEMS: StreamItem[] = [];
+
+/**
+ * Client-side cap on how long a draft create may wait for the daemon ack.
+ * The daemon-side create keeps running after this deadline and is idempotent
+ * for client-minted ids, so a retry returns the same agent instead of
+ * duplicating. 60s matches the transport's own cap, so the deadline only
+ * fires when the create can never settle; under machine load real creates
+ * have been observed up to ~41s.
+ */
+const CREATE_REQUEST_DEADLINE_MS = 60_000;
+
+/**
+ * Rejects with the deadline error when the wrapped promise does not settle in
+ * time. The underlying request is not cancelled; callers must tolerate the
+ * daemon completing it afterwards.
+ * @param promise The create request promise
+ * @param onTimeout Builds the deadline error message
+ * @returns The wrapped result
+ * @throws The deadline error when the promise does not settle in time
+ */
+async function withCreateDeadline<T>(promise: Promise<T>, onTimeout: () => Error): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(onTimeout()), CREATE_REQUEST_DEADLINE_MS);
+      }),
+    ]);
+  } finally {
+    if (timer !== null) {
+      clearTimeout(timer);
+    }
+  }
+}
 
 interface CreateAttempt {
   clientMessageId: string;
@@ -247,36 +283,60 @@ export function useDraftAgentCreateFlow<TDraftAgent, TCreateResult>({
           cwd,
         });
 
-        const createResult = await createRequest({
-          attempt,
-          text: attempt.text,
-          images: attempt.images,
-          attachments: attempt.attachments,
-          cwd,
-        });
+        const optimisticAgentId =
+          useCreateFlowStore.getState().pendingByDraftId[draftId]?.agentId ?? null;
 
-        if (createResult.agentId) {
-          updatePendingAgentId({ draftId, agentId: createResult.agentId });
-          appendOptimisticUserMessageToAgentStream(
-            pendingServerId,
-            createResult.agentId,
-            buildOptimisticUserMessage({
-              id: attempt.clientMessageId,
-              text: attempt.text,
-              timestamp: attempt.timestamp,
-              images: attempt.images,
-              attachments: attempt.attachments,
-            }),
-            { placement: "tail", skipIfUserMessageExists: true },
-          );
-          markPendingCreateLifecycle({ draftId, lifecycle: "sent" });
+        const createResult = await withCreateDeadline(
+          createRequest({
+            attempt,
+            text: attempt.text,
+            images: attempt.images,
+            attachments: attempt.attachments,
+            cwd,
+          }),
+          () => new Error(appI18n.t("panels.agent.createTimeout")),
+        );
+
+        // A create ack without an agent id cannot transition the draft (the
+        // layout-store conversion no-ops on blank ids), so fail loudly instead
+        // of leaving the machine stuck in "creating" with a locked composer.
+        if (!createResult.agentId) {
+          throw new Error(appI18n.t("panels.agent.createMissingAgentId"));
         }
 
+        updatePendingAgentId({ draftId, agentId: createResult.agentId });
+        appendOptimisticUserMessageToAgentStream(
+          pendingServerId,
+          createResult.agentId,
+          buildOptimisticUserMessage({
+            id: attempt.clientMessageId,
+            text: attempt.text,
+            timestamp: attempt.timestamp,
+            images: attempt.images,
+            attachments: attempt.attachments,
+          }),
+          { placement: "tail", skipIfUserMessageExists: true },
+        );
+        markPendingCreateLifecycle({ draftId, lifecycle: "sent" });
+
         await onCreateSuccess({ result: createResult.result, attempt });
+
+        // Older daemons do not adopt client-minted ids and return their own;
+        // drop the optimistic row keyed by the reserved id so it does not
+        // linger as a phantom beside the authoritative row.
+        if (optimisticAgentId && optimisticAgentId !== createResult.agentId) {
+          removeOptimisticSidebarAgent({
+            serverId: pendingServerId,
+            draftId: optimisticAgentId,
+          });
+        }
       } catch (error) {
         const resolved = error instanceof Error ? error : new Error("Failed to create agent");
-        // Remove optimistic sidebar projection if create never produced a real agent.
-        removeOptimisticSidebarAgent({ serverId: pendingServerId, draftId });
+        // Remove optimistic sidebar projection if create never produced a real
+        // agent. The row is keyed by the preallocated agent id, not the draft id.
+        const pending = useCreateFlowStore.getState().pendingByDraftId[draftId];
+        const optimisticKey = pending?.agentId ?? draftId;
+        removeOptimisticSidebarAgent({ serverId: pendingServerId, draftId: optimisticKey });
         dispatch({ type: "CREATE_FAILED", message: resolved.message });
         markPendingCreateLifecycle({ draftId, lifecycle: "abandoned" });
         clearPendingCreateAttempt({ draftId });
@@ -341,10 +401,19 @@ export function useDraftAgentCreateFlow<TDraftAgent, TCreateResult>({
         ...(wirePayload.attachments.length > 0 ? { attachments: wirePayload.attachments } : {}),
       };
 
+      // The optimistic row is keyed by the client-minted agent id, which the
+      // daemon adopts verbatim on create. Reserve it up front so the pending
+      // record, the optimistic row, and the wire request all agree.
+      const optimisticAgent = buildDraftAgent(attempt);
+      const optimisticAgentId =
+        optimisticAgent && typeof optimisticAgent === "object"
+          ? (((optimisticAgent as { id?: unknown }).id as string | undefined) ?? null)
+          : null;
+
       setPendingCreateAttempt({
         draftId,
         serverId: pendingServerId,
-        agentId: null,
+        agentId: optimisticAgentId,
         clientMessageId: attempt.clientMessageId,
         text: attempt.text,
         timestamp: attempt.timestamp.getTime(),
@@ -385,10 +454,44 @@ export function useDraftAgentCreateFlow<TDraftAgent, TCreateResult>({
       if (!isSubmitting) {
         dispatch({ type: "SUBMIT", attempt });
       }
+      // Preallocate the client-minted agent id and project the optimistic
+      // sidebar row, mirroring handleCreateFromInput. The new-workspace
+      // pre-submit path reaches creation through this hook (and the machine
+      // may already be "creating" from a restored initial attempt), so without
+      // this the sidebar row only appeared after the server's first
+      // agent_update. Both calls are idempotent.
+      const pendingServerId = getPendingServerId();
+      if (pendingServerId) {
+        const optimisticAgent = buildDraftAgent(attempt);
+        const optimisticAgentId =
+          optimisticAgent && typeof optimisticAgent === "object"
+            ? (((optimisticAgent as { id?: unknown }).id as string | undefined) ?? null)
+            : null;
+        if (optimisticAgentId) {
+          updatePendingAgentId({ draftId, agentId: optimisticAgentId });
+        }
+        projectOptimisticSidebarAgent({
+          serverId: pendingServerId,
+          draftId,
+          attempt,
+          buildDraftAgent,
+        });
+      }
       await runCreateAttempt({ attempt, cwd });
     },
-    [isSubmitting, runCreateAttempt],
+    [
+      buildDraftAgent,
+      draftId,
+      getPendingServerId,
+      isSubmitting,
+      runCreateAttempt,
+      updatePendingAgentId,
+    ],
   );
+
+  const setFormError = useCallback((message: string) => {
+    dispatch({ type: "DRAFT_SET_ERROR", message });
+  }, []);
 
   return {
     machine,
@@ -398,6 +501,7 @@ export function useDraftAgentCreateFlow<TDraftAgent, TCreateResult>({
     draftAgent,
     handleCreateFromInput,
     continueCreateFromAttempt,
+    setFormError,
   };
 }
 

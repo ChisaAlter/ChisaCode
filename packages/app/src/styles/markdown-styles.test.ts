@@ -23,15 +23,44 @@ describe("createMarkdownStyles", () => {
     });
   });
 
-  it("createWorkbenchMarkdownStyles uses Soft chat prose scale", () => {
+  it("createWorkbenchMarkdownStyles aligns AI prose to T3 text-sm / leading-relaxed / foreground@80%", () => {
     const workbench = createWorkbenchMarkdownStyles(darkTheme);
+    // T3 ChatMarkdown: text-sm (14) / leading-relaxed (1.625 → 23) / text-foreground/80.
     expect(workbench.body).toMatchObject({
-      fontSize: 14.5,
-      lineHeight: Math.round(14.5 * 1.65),
+      fontSize: 14,
+      lineHeight: Math.round(14 * 1.625),
+      color: darkTheme.colors.foregroundSoft,
+    });
+    // Text leaves must also carry soft color / scale (markdown-display uses both).
+    expect(workbench.text).toMatchObject({
+      fontSize: 14,
+      lineHeight: Math.round(14 * 1.625),
+      color: darkTheme.colors.foregroundSoft,
+    });
+    // T3 paragraph margin ~0.65rem ≈ 10px.
+    expect(workbench.paragraph).toMatchObject({
+      marginBottom: 10,
+    });
+    // T3 heading ladder: h1 20 / h2 18 / h3 16 / h4 14 (full foreground, not soft).
+    expect(workbench.heading1).toMatchObject({
+      fontSize: 20,
+      lineHeight: Math.round(20 * 1.3),
       color: darkTheme.colors.foreground,
     });
-    expect(workbench.paragraph).toMatchObject({
-      marginBottom: 12,
+    expect(workbench.heading2).toMatchObject({
+      fontSize: 18,
+      lineHeight: Math.round(18 * 1.3),
+      color: darkTheme.colors.foreground,
+    });
+    expect(workbench.heading3).toMatchObject({
+      fontSize: 16,
+      lineHeight: Math.round(16 * 1.3),
+      color: darkTheme.colors.foreground,
+    });
+    expect(workbench.heading4).toMatchObject({
+      fontSize: 14,
+      lineHeight: Math.round(14 * 1.3),
+      color: darkTheme.colors.foreground,
     });
   });
 

@@ -322,9 +322,9 @@ export function createMarkdownStyles(theme: Theme) {
     // =========================================================================
 
     blockquote: {
+      // Quoted content keeps the soft surface card but no left quotation bar:
+      // the 3px border-left read as a stray shadow band on light backgrounds.
       backgroundColor: theme.colors.surface0,
-      borderLeftWidth: 3,
-      borderLeftColor: theme.colors.border,
       paddingHorizontal: theme.spacing[4],
       paddingVertical: theme.spacing[3],
       marginVertical: theme.spacing[3],
@@ -427,36 +427,91 @@ export function createCompactMarkdownStyles(theme: Theme) {
 }
 
 /**
- * Soft Workbench chat prose (.a): 14.5px / 1.65, not dense chrome tokens.
+ * Soft Workbench chat prose (.a), aligned to T3code's `text-foreground/80`:
+ * body 14px / leading-relaxed (~23) / foregroundSoft (foreground @ 80% alpha).
+ * T3 reference: ChatMarkdown root class `text-sm leading-relaxed text-foreground/80`.
  * @param theme Active application theme
  * @returns Soft-tuned markdown styles for the conversation stream
  */
 export function createWorkbenchMarkdownStyles(theme: Theme) {
   const baseStyles = createMarkdownStyles(theme);
-  const softBodySize = 14.5;
-  const softBodyLineHeight = Math.round(softBodySize * 1.65);
+  // T3 alignment: text-sm = 14px, leading-relaxed = 1.625 → 23px line-height.
+  const softBodySize = 14;
+  const softBodyLineHeight = Math.round(softBodySize * 1.625);
 
   return {
     ...baseStyles,
-    // Soft .a: 14.5 / 1.65, paragraph stack 12.
+    // T3: 14 / 23 / foreground@80% (color token, not container opacity, so
+    // code blocks and tables with their own color stay full-strength).
+    // react-native-markdown-display applies `body` to the root and `text` to
+    // text leaves — both must carry the soft color / line-height or leaves
+    // keep the base full-foreground + browser-default line-height.
     body: {
       ...baseStyles.body,
       fontSize: softBodySize,
       lineHeight: softBodyLineHeight,
+      color: theme.colors.foregroundSoft,
     },
+    text: {
+      ...baseStyles.text,
+      fontSize: softBodySize,
+      lineHeight: softBodyLineHeight,
+      color: theme.colors.foregroundSoft,
+    },
+    // T3: paragraph margin 0.65rem ≈ 10px.
     paragraph: {
       ...baseStyles.paragraph,
-      marginBottom: 12,
+      marginBottom: 10,
+    },
+    // T3 heading ladder: h1 20 / h2 18 / h3 16 / h4 14 (font-weight 600, full foreground).
+    // Headings keep full foreground strength (T3 color: var(--foreground)) — the
+    // 80% softening is for body prose only, headings stay crisp.
+    heading1: {
+      ...baseStyles.heading1,
+      fontSize: 20,
+      lineHeight: Math.round(20 * 1.3),
+      color: theme.colors.foreground,
+    },
+    heading2: {
+      ...baseStyles.heading2,
+      fontSize: 18,
+      lineHeight: Math.round(18 * 1.3),
+      color: theme.colors.foreground,
+    },
+    heading3: {
+      ...baseStyles.heading3,
+      fontSize: 16,
+      lineHeight: Math.round(16 * 1.3),
+      color: theme.colors.foreground,
+    },
+    heading4: {
+      ...baseStyles.heading4,
+      fontSize: 14,
+      lineHeight: Math.round(14 * 1.3),
+      color: theme.colors.foreground,
     },
     heading5: {
       ...baseStyles.heading5,
       fontSize: softBodySize,
       lineHeight: softBodyLineHeight,
+      color: theme.colors.foreground,
     },
     heading6: {
       ...baseStyles.heading6,
       fontSize: softBodySize,
       lineHeight: Math.round(softBodySize * 1.4),
+      color: theme.colors.foregroundMuted,
+    },
+    // Keep list markers on the same scale as body prose.
+    bullet_list_icon: {
+      ...baseStyles.bullet_list_icon,
+      fontSize: softBodySize,
+      lineHeight: softBodyLineHeight,
+    },
+    ordered_list_icon: {
+      ...baseStyles.ordered_list_icon,
+      fontSize: softBodySize,
+      lineHeight: softBodyLineHeight,
     },
   };
 }

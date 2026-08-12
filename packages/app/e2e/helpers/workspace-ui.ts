@@ -101,6 +101,111 @@ export async function switchAgentViaSidebar(page: Page, agentId: string): Promis
   await expect(page).toHaveURL(/\/workspace\//, { timeout: 30_000 });
 }
 
+export interface ConversationColumnBox {
+  width: number;
+  x: number;
+  y: number;
+  height: number;
+}
+
+/**
+ * Measure the centered conversation column geometry (host or column node).
+ * Used to gate the agent-switch horizontal flash regression: width/x must stay
+ * stable across same-workspace agent switches once the shell-hosted column has
+ * settled after its first measure.
+ */
+export async function measureConversationAspectColumn(
+  page: Page,
+): Promise<ConversationColumnBox | null> {
+  return page.evaluate(() => {
+    const node =
+      document.querySelector<HTMLElement>('[data-testid="conversation-aspect-column"]') ??
+      document.querySelector<HTMLElement>('[data-testid="conversation-aspect-host"]');
+    if (!node) {
+      return null;
+    }
+    const rect = node.getBoundingClientRect();
+    return {
+      width: rect.width,
+      x: rect.x,
+      y: rect.y,
+      height: rect.height,
+    };
+  });
+}
+
+/**
+ * Sample conversation column width/x for ~sampleMs after a switch and assert the
+ * max delta stays within thresholdPx (default 0.5). Returns the final sample.
+ */
+export async function expectConversationColumnWidthStable(
+  page: Page,
+  options?: {
+    baseline?: ConversationColumnBox | null;
+    sampleMs?: number;
+    thresholdPx?: number;
+  },
+): Promise<ConversationColumnBox> {
+  const sampleMs = options?.sampleMs ?? 220;
+  const thresholdPx = options?.thresholdPx ?? 0.5;
+  const startedAt = Date.now();
+  let baseline = options?.baseline ?? null;
+  let last: ConversationColumnBox | null = null;
+  let maxWidthDelta = 0;
+  let maxXDelta = 0;
+
+  while (Date.now() - startedAt < sampleMs) {
+    const sample = await measureConversationAspectColumn(page);
+    if (sample) {
+      if (!baseline) {
+        baseline = sample;
+      } else {
+        maxWidthDelta = Math.max(maxWidthDelta, Math.abs(sample.width - baseline.width));
+        maxXDelta = Math.max(maxXDelta, Math.abs(sample.x - baseline.x));
+      }
+      last = sample;
+    }
+    await page.waitForTimeout(16);
+  }
+
+  expect(last, "conversation-aspect-column should be present after switch").not.toBeNull();
+  expect(
+    maxWidthDelta,
+    `conversation column width jumped by ${maxWidthDelta}px (threshold ${thresholdPx})`,
+  ).toBeLessThanOrEqual(thresholdPx);
+  expect(
+    maxXDelta,
+    `conversation column x jumped by ${maxXDelta}px (threshold ${thresholdPx})`,
+  ).toBeLessThanOrEqual(thresholdPx);
+  return last as ConversationColumnBox;
+}
+
+/**
+ * Assert the visible terminal surface is full-width of the main panel (not capped
+ * by the centered conversation column). Terminal/browser/file panels must bypass
+ * ConversationAspectColumn.
+ */
+export async function expectTerminalSurfaceFullWidth(page: Page): Promise<void> {
+  const metrics = await page.evaluate(() => {
+    const terminal = document.querySelector<HTMLElement>('[data-testid="terminal-surface"]');
+    const main = document.querySelector<HTMLElement>('[data-testid="workspace-main-panel"]');
+    if (!terminal || !main) {
+      return null;
+    }
+    const terminalRect = terminal.getBoundingClientRect();
+    const mainRect = main.getBoundingClientRect();
+    return {
+      terminalWidth: terminalRect.width,
+      mainWidth: mainRect.width,
+    };
+  });
+  expect(metrics, "terminal-surface and workspace-main-panel should be present").not.toBeNull();
+  // Allow a small layout hairline for borders/scrollbars; the point is the terminal
+  // is not constrained to the ~800 conversation column.
+  expect(metrics!.terminalWidth).toBeGreaterThan(metrics!.mainWidth * 0.9);
+  expect(metrics!.terminalWidth).toBeGreaterThan(850);
+}
+
 /**
  * Opens a workspace by route. SidebarV2 lists agent threads, not workspaces,
  * so agent-less workspaces are reachable only by URL.

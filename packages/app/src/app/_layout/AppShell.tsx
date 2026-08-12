@@ -13,10 +13,6 @@ import { withUnistyles } from "react-native-unistyles";
 import { SidebarAnimationProvider } from "@/contexts/sidebar-animation-context";
 import { HorizontalScrollProvider } from "@/contexts/horizontal-scroll-context";
 import { useHosts } from "@/runtime/host-runtime";
-import {
-  buildWorkspaceTabPersistenceKey,
-  useWorkspaceLayoutStore,
-} from "@/stores/workspace-layout-store";
 import { resolveActiveHostRedirectRoute } from "@/utils/host-runtime-bootstrap";
 import {
   parseHostAgentRouteFromPathname,
@@ -25,7 +21,7 @@ import {
   parseSettingsHostRouteFromPathname,
   parseWorkspaceOpenIntent,
 } from "@/utils/host-routes";
-import { resolveSelectedSidebarAgentIdFromWorkspaceLayout } from "@/utils/selected-sidebar-agent";
+import { useSelectedSidebarAgentIdFromWorkspaceLayout } from "@/utils/selected-sidebar-agent";
 import type { Theme } from "@/styles/theme";
 import { AppContainer } from "./AppContainer";
 import { useStoreReady } from "./BootstrapProvider";
@@ -45,19 +41,13 @@ function AppWithSidebar({ children }: { children: ReactNode }) {
     [chromeServerId, pathname],
   );
   const workspaceRoute = useMemo(() => parseHostWorkspaceRouteFromPathname(pathname), [pathname]);
-  const selectedWorkspaceAgentKey = useWorkspaceLayoutStore((state) => {
-    if (!workspaceRoute) {
+  const selectedWorkspaceAgentId = useSelectedSidebarAgentIdFromWorkspaceLayout(workspaceRoute);
+  const selectedWorkspaceAgentKey = useMemo(() => {
+    if (!workspaceRoute || !selectedWorkspaceAgentId) {
       return undefined;
     }
-    const workspaceKey = buildWorkspaceTabPersistenceKey(workspaceRoute);
-    if (!workspaceKey) {
-      return undefined;
-    }
-    const agentId = resolveSelectedSidebarAgentIdFromWorkspaceLayout(
-      state.activeTargetByWorkspace[workspaceKey],
-    );
-    return agentId ? `${workspaceRoute.serverId}:${agentId}` : undefined;
-  });
+    return `${workspaceRoute.serverId}:${selectedWorkspaceAgentId}`;
+  }, [selectedWorkspaceAgentId, workspaceRoute]);
   const shouldShowAppChrome =
     storeReady && chromeServerId !== null && hosts.some((host) => host.serverId === chromeServerId);
 

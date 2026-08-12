@@ -140,6 +140,7 @@ import {
   AgentLifecycleClient,
   type AgentRefreshedStatusPayload,
   type CreateAgentRequestOptions,
+  type CreateAgentResult,
   type FetchAgentResult,
   type ImportAgentInput,
 } from "./daemon-client-agent-lifecycle.js";
@@ -192,6 +193,7 @@ export type {
 
 export type {
   CreateAgentRequestOptions,
+  CreateAgentResult,
   FetchAgentResult,
   ImportAgentInput,
   FetchAgentTimelineCursor,
@@ -913,7 +915,7 @@ export class DaemonClient {
   // Agent Lifecycle
   // ============================================================================
 
-  async createAgent(options: CreateAgentRequestOptions): Promise<AgentSnapshotPayload> {
+  async createAgent(options: CreateAgentRequestOptions): Promise<CreateAgentResult> {
     return this.agentLifecycle.createAgent(options);
   }
 
