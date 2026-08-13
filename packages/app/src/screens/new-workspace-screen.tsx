@@ -3,7 +3,6 @@ import { Pressable, Text, View } from "react-native";
 import type { PressableStateCallbackType } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
-import { createNameId } from "mnemonic-id";
 import { useQuery } from "@tanstack/react-query";
 import {
   Check,
@@ -62,7 +61,6 @@ import { navigateToPreparedWorkspaceTab } from "@/utils/workspace-navigation";
 import type { ComposerAttachment, UserComposerAttachment } from "@/attachments/types";
 import type { ImageAttachment, MessagePayload } from "@/composer/types";
 import type { AgentAttachment, GitHubSearchItem } from "@chisacode/protocol/messages";
-import type { CreateChisaCodeWorktreeInput } from "@chisacode/client/internal/daemon-client";
 import type { AgentProvider } from "@chisacode/protocol/agent-types";
 import { validateBranchSlug } from "@chisacode/protocol/branch-slug";
 import {
@@ -72,12 +70,11 @@ import {
 import { resolveNewWorkspaceDraftReset } from "./new-workspace-draft-reset";
 import { isEmptyWorkspaceSubmission, runCreateEmptyWorkspace } from "./new-workspace-empty";
 import {
-  pickerItemToCheckoutRequest,
-  pickerItemToWorktreeSlug,
-  pickerOptionToRenderModel,
-  type PickerCheckoutRequest,
-  type PickerItem,
-} from "./new-workspace-picker-item";
+  resolveBranchPickerEmptyText,
+  seedCurrentBranchDetails,
+} from "./new-workspace-branch-picker";
+import { planNewWorkspaceSendOpen } from "./new-workspace-ensure";
+import { pickerOptionToRenderModel, type PickerItem } from "./new-workspace-picker-item";
 import { findCheckoutHintPrAttachment, syncPickerPrAttachment } from "./new-workspace-picker-state";
 import { useTranslation } from "react-i18next";
 
@@ -102,19 +99,6 @@ const ThemedX = withUnistyles(X, (theme: Theme) => ({
 const ThemedFolder = withUnistyles(Folder, (theme: Theme) => ({
   color: theme.colors.foregroundMuted,
 }));
-
-function resolveCheckoutRequest(
-  selectedItem: PickerItem | null,
-  currentBranch: string | null,
-): PickerCheckoutRequest | undefined {
-  const selectedCheckoutRequest = pickerItemToCheckoutRequest(selectedItem);
-  if (selectedCheckoutRequest) return selectedCheckoutRequest;
-  if (!currentBranch) return undefined;
-  return {
-    action: "branch-off",
-    refName: currentBranch,
-  };
-}
 
 interface NewWorkspaceScreenProps {
   serverId: string;
@@ -571,26 +555,6 @@ interface SubmitDraftInput {
   composerState: NonNullable<ReturnType<typeof useAgentInputDraft>["composerState"]>;
 }
 
-async function createAndMergeWorkspace(input: {
-  client: NonNullable<ReturnType<typeof useHostRuntimeClient>>;
-  createInput: Parameters<
-    NonNullable<ReturnType<typeof useHostRuntimeClient>>["createChisaCodeWorktree"]
-  >[0];
-  mergeWorkspaces: (
-    serverId: string,
-    workspaces: ReturnType<typeof normalizeWorkspaceDescriptor>[],
-  ) => void;
-  serverId: string;
-}): Promise<ReturnType<typeof normalizeWorkspaceDescriptor>> {
-  const payload = await input.client.createChisaCodeWorktree(input.createInput);
-  if (payload.error || !payload.workspace) {
-    throw new Error(payload.error ?? "Failed to create worktree");
-  }
-  const normalizedWorkspace = normalizeWorkspaceDescriptor(payload.workspace);
-  input.mergeWorkspaces(input.serverId, [normalizedWorkspace]);
-  return normalizedWorkspace;
-}
-
 async function openAndMergeWorkspace(input: {
   client: NonNullable<ReturnType<typeof useHostRuntimeClient>>;
   cwd: string;
@@ -910,7 +874,6 @@ function submitWorkspaceDraft(input: SubmitDraftInput): void {
 export function NewWorkspaceScreen({
   serverId,
   sourceDirectory,
-  projectId,
   displayName: displayNameProp,
   resetKey,
 }: NewWorkspaceScreenProps) {
@@ -1048,6 +1011,7 @@ export function NewWorkspaceScreen({
 
   const clientReady = isConnected && Boolean(client);
   const directoryReady = Boolean(normalizedSelectedDirectory);
+  const branchQueryEnabled = clientReady && directoryReady;
   const pickerQueryEnabled = pickerOpen && clientReady && directoryReady;
 
   const checkoutStatusQuery = useQuery({
@@ -1061,6 +1025,7 @@ export function NewWorkspaceScreen({
     },
     enabled: clientReady && directoryReady,
     staleTime: Infinity,
+    retry: false,
     refetchOnMount: false,
     refetchOnReconnect: false,
     refetchOnWindowFocus: false,
@@ -1086,8 +1051,9 @@ export function NewWorkspaceScreen({
         limit: 20,
       });
     },
-    enabled: pickerQueryEnabled,
+    enabled: branchQueryEnabled,
     staleTime: 15_000,
+    retry: false,
   });
 
   const githubPrSearchQuery = useGithubSearchQuery({
@@ -1100,8 +1066,9 @@ export function NewWorkspaceScreen({
   });
 
   const branchDetails = useMemo(
-    () => normalizeBranchDetails(branchSuggestionsQuery.data),
-    [branchSuggestionsQuery.data],
+    () =>
+      seedCurrentBranchDetails(currentBranch, normalizeBranchDetails(branchSuggestionsQuery.data)),
+    [branchSuggestionsQuery.data, currentBranch],
   );
   const githubFeaturesEnabled = githubPrSearchQuery.data?.githubFeaturesEnabled !== false;
   const prItems: GitHubSearchItem[] = useMemo(() => {
@@ -1215,70 +1182,40 @@ export function NewWorkspaceScreen({
     }
   }, []);
 
-  const buildCreateWorktreeInput = useCallback(
-    (input: {
-      cwd: string;
-      prompt: string;
-      attachments: AgentAttachment[];
-    }): CreateChisaCodeWorktreeInput => {
-      const checkoutRequest = resolveCheckoutRequest(selectedItem, currentBranch);
-      const trimmedPrompt = input.prompt.trim();
-      const hasFirstAgentContext = trimmedPrompt.length > 0 || input.attachments.length > 0;
-
-      return {
-        cwd: input.cwd,
-        ...(projectId && input.cwd === normalizedSourceDirectory ? { projectId } : {}),
-        worktreeSlug: pickerItemToWorktreeSlug(selectedItem, createNameId()),
-        ...(hasFirstAgentContext
-          ? {
-              firstAgentContext: {
-                ...(trimmedPrompt ? { prompt: trimmedPrompt } : {}),
-                ...(input.attachments.length > 0 ? { attachments: input.attachments } : {}),
-              },
-            }
-          : {}),
-        ...checkoutRequest,
-      };
-    },
-    [currentBranch, normalizedSourceDirectory, projectId, selectedItem],
-  );
-
   const ensureWorkspace = useCallback(
     async (input: { cwd: string; prompt: string; attachments: AgentAttachment[] }) => {
       if (createdWorkspace) {
         return createdWorkspace;
       }
-      const connectedClient = withConnectedClient();
-      const checkoutStatus = await connectedClient
-        .getCheckoutStatus(input.cwd)
-        .catch(() => checkoutStatusQuery.data ?? null);
-      if (checkoutStatus?.isGit === false) {
-        const normalizedWorkspace = await openAndMergeWorkspace({
-          client: connectedClient,
-          cwd: input.cwd,
-          mergeWorkspaces,
-          serverId,
-        });
-        setCreatedWorkspace(normalizedWorkspace);
-        return normalizedWorkspace;
+      const workspaces = useSessionStore.getState().sessions[serverId]?.workspaces;
+      const plan = planNewWorkspaceSendOpen({
+        cwd: input.cwd,
+        openWorkspaces: workspaces
+          ? Array.from(workspaces.values()).map((openWorkspace) => ({
+              id: openWorkspace.id,
+              workspaceDirectory: openWorkspace.workspaceDirectory,
+            }))
+          : [],
+      });
+      if (plan.mode === "reuse-open") {
+        const existing = useSessionStore
+          .getState()
+          .sessions[serverId]?.workspaces.get(plan.workspaceId);
+        if (existing) {
+          setCreatedWorkspace(existing);
+          return existing;
+        }
       }
-      const normalizedWorkspace = await createAndMergeWorkspace({
-        client: connectedClient,
-        createInput: buildCreateWorktreeInput(input),
+      const normalizedWorkspace = await openAndMergeWorkspace({
+        client: withConnectedClient(),
+        cwd: input.cwd,
         mergeWorkspaces,
         serverId,
       });
       setCreatedWorkspace(normalizedWorkspace);
       return normalizedWorkspace;
     },
-    [
-      buildCreateWorktreeInput,
-      checkoutStatusQuery.data,
-      createdWorkspace,
-      mergeWorkspaces,
-      serverId,
-      withConnectedClient,
-    ],
+    [createdWorkspace, mergeWorkspaces, serverId, withConnectedClient],
   );
 
   const handleSubmitNewWorkspace = useCallback(
@@ -1389,10 +1326,12 @@ export function NewWorkspaceScreen({
     [composerState, isPending],
   );
 
-  const pickerEmptyText =
-    branchSuggestionsQuery.isFetching || githubPrSearchQuery.isFetching
-      ? t("workspace.searching")
-      : t("workspace.noMatchingRefs");
+  const pickerEmptyText = resolveBranchPickerEmptyText({
+    hasBranchOptions: branchDetails.length > 0,
+    branchesFetching: branchSuggestionsQuery.isFetching,
+    searchingLabel: t("workspace.searching"),
+    noMatchLabel: t("workspace.noMatchingRefs"),
+  });
 
   const workspaceControls = useMemo(
     () => (

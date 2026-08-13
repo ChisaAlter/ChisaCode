@@ -55,6 +55,7 @@ export function useCheckoutStatusQuery({
     },
     enabled: enabled && !!client && isConnected && !!cwd,
     staleTime: Infinity,
+    retry: false,
     refetchOnMount: false,
     refetchOnReconnect: false,
     refetchOnWindowFocus: false,

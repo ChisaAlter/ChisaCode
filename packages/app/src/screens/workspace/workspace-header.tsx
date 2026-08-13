@@ -619,11 +619,22 @@ export function WorkspaceDesktopSoftTopbar({
           {openInCwd.length > 0 ? (
             <WorkspaceOpenInEditorButton serverId={normalizedServerId} cwd={openInCwd} />
           ) : null}
+          {isGitCheckout && currentBranchName && openInCwd.length > 0 ? (
+            <BranchSwitcher
+              currentBranchName={currentBranchName}
+              title={currentBranchName}
+              serverId={normalizedServerId}
+              workspaceId={openInCwd}
+              isGitCheckout={isGitCheckout}
+              presentation="soft-pill"
+            />
+          ) : null}
           {showGitSlot ? (
             <WorkspaceGitActions
               serverId={normalizedServerId}
               cwd={openInCwd}
               forceLoading={isLoading}
+              hideIdlePrimary={Boolean(currentBranchName)}
             />
           ) : null}
         </View>

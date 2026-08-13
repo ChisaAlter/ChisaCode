@@ -41,6 +41,11 @@ interface GitActionsSplitButtonProps {
    * primary chip so the topbar Git slot never collapses next to Open.
    */
   idleLabel?: string;
+  /**
+   * Desktop topbar hosts BranchSwitcher for the idle branch name. Hide the
+   * disabled fake-branch chip so that slot is actually clickable.
+   */
+  hideIdlePrimary?: boolean;
   loading?: boolean;
 }
 
@@ -101,6 +106,7 @@ function resolvePrimaryChipState(input: {
   loading: boolean;
   idleLabel: string;
   checkingLabel: string;
+  hideIdlePrimary?: boolean;
 }): {
   showPrimaryChip: boolean;
   primaryDisabled: boolean;
@@ -109,8 +115,8 @@ function resolvePrimaryChipState(input: {
   primaryAccessibilityLabel: string;
   canPressPrimary: boolean;
 } {
-  const { primary, loading, idleLabel, checkingLabel } = input;
-  const showIdlePrimary = !primary && !loading;
+  const { primary, loading, idleLabel, checkingLabel, hideIdlePrimary = false } = input;
+  const showIdlePrimary = !primary && !loading && !hideIdlePrimary;
   const primaryDisabled = primary ? primary.disabled : true;
   const primaryIsPending = primary?.status === "pending" || loading;
   let primaryLabel = idleLabel;
@@ -135,6 +141,7 @@ function GitPrimarySplit({
   hideLabels,
   loading,
   idleLabel,
+  hideIdlePrimary = false,
   onSelect,
   archiveShortcutKeys,
 }: {
@@ -143,6 +150,7 @@ function GitPrimarySplit({
   hideLabels?: boolean;
   loading: boolean;
   idleLabel: string;
+  hideIdlePrimary?: boolean;
   onSelect: (action: GitAction) => void;
   archiveShortcutKeys?: ShortcutKey[][] | null;
 }) {
@@ -152,6 +160,7 @@ function GitPrimarySplit({
     loading,
     idleLabel,
     checkingLabel: t("git.checkingRepository"),
+    hideIdlePrimary,
   });
 
   const primaryPressableStyle = useCallback(
@@ -181,34 +190,36 @@ function GitPrimarySplit({
     [chip.canPressPrimary],
   );
 
-  if (!chip.showPrimaryChip) {
+  if (!chip.showPrimaryChip && secondary.length === 0) {
     return null;
   }
 
   return (
     <View style={styles.splitButton}>
-      <Pressable
-        testID="changes-primary-cta"
-        style={primaryPressableStyle}
-        onPress={handlePrimaryPress}
-        disabled={!chip.canPressPrimary}
-        accessibilityRole="button"
-        accessibilityLabel={chip.primaryAccessibilityLabel}
-        accessibilityState={primaryAccessibilityState}
-      >
-        <View style={styles.splitButtonContent}>
-          {chip.primaryIsPending ? (
-            <ThemedActivityIndicator
-              size="small"
-              style={styles.splitButtonSpinnerOnly}
-              uniProps={foregroundColorMapping}
-            />
-          ) : (
-            primary?.icon
-          )}
-          {!hideLabels ? <Text style={styles.splitButtonText}>{chip.primaryLabel}</Text> : null}
-        </View>
-      </Pressable>
+      {chip.showPrimaryChip ? (
+        <Pressable
+          testID="changes-primary-cta"
+          style={primaryPressableStyle}
+          onPress={handlePrimaryPress}
+          disabled={!chip.canPressPrimary}
+          accessibilityRole="button"
+          accessibilityLabel={chip.primaryAccessibilityLabel}
+          accessibilityState={primaryAccessibilityState}
+        >
+          <View style={styles.splitButtonContent}>
+            {chip.primaryIsPending ? (
+              <ThemedActivityIndicator
+                size="small"
+                style={styles.splitButtonSpinnerOnly}
+                uniProps={foregroundColorMapping}
+              />
+            ) : (
+              primary?.icon
+            )}
+            {!hideLabels ? <Text style={styles.splitButtonText}>{chip.primaryLabel}</Text> : null}
+          </View>
+        </Pressable>
+      ) : null}
       {secondary.length > 0 ? (
         <DropdownMenu>
           <DropdownMenuTrigger
@@ -244,6 +255,7 @@ export function GitActionsSplitButton({
   gitActions,
   hideLabels,
   idleLabel,
+  hideIdlePrimary = false,
   loading = false,
 }: GitActionsSplitButtonProps) {
   const { t } = useTranslation();
@@ -280,6 +292,7 @@ export function GitActionsSplitButton({
         hideLabels={hideLabels}
         loading={loading}
         idleLabel={resolvedIdleLabel}
+        hideIdlePrimary={hideIdlePrimary}
         onSelect={handleActionSelect}
         archiveShortcutKeys={archiveShortcutKeys}
       />

@@ -56,6 +56,7 @@ export function buildGithubSearchQueryOptions(input: GitHubSearchQueryInput) {
     },
     enabled: input.enabled && Boolean(input.client),
     staleTime: GITHUB_SEARCH_STALE_TIME,
+    retry: false,
   };
 }
 

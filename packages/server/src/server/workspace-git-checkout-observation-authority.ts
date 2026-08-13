@@ -16,6 +16,7 @@ interface WorkspaceGitCheckoutObservationDependencies {
     context?: CheckoutContext,
   ) => Promise<CheckoutSnapshotFacts>;
   now: () => Date;
+  hasLocalSnapshot?: (cwd: string) => boolean;
 }
 
 interface WorkspaceGitCheckoutObservationAuthorityOptions {
@@ -180,10 +181,24 @@ export class WorkspaceGitCheckoutObservationAuthority {
     if (!this.isActiveObservedTarget(target)) {
       return;
     }
-    if (hasOrigin) {
+    if (hasOrigin && this.deps.hasLocalSnapshot?.(target.cwd)) {
       this.repositoryFetchAuthority.attachWorkspace({ repoGitRoot, cwd: target.cwd });
     }
     target.setupComplete = true;
+  }
+
+  attachFetchIfReady(cwd: string): void {
+    const target = this.targets.get(cwd);
+    if (!target?.setupComplete || !target.repoGitRoot || target.closed) {
+      return;
+    }
+    if (!this.deps.hasLocalSnapshot?.(cwd)) {
+      return;
+    }
+    this.repositoryFetchAuthority.attachWorkspace({
+      repoGitRoot: target.repoGitRoot,
+      cwd: target.cwd,
+    });
   }
 
   private loadFactsForTarget(

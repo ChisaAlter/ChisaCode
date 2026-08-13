@@ -71,6 +71,15 @@ describe("workspace draft agent model validation", () => {
     ).toBe(false);
   });
 
+  test("does not wait for provider snapshot when grokbuild already has a model", () => {
+    expect(
+      shouldWaitForDraftModelReadiness({
+        autoSubmitConfig: { provider: "grokbuild", model: "grok-4.6" },
+        isModelLoading: true,
+      }),
+    ).toBe(false);
+  });
+
   test("still requires a selected model when the provider exposes models", () => {
     expect(
       validate({

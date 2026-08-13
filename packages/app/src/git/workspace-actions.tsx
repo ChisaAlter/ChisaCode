@@ -11,6 +11,7 @@ import { useTranslation } from "react-i18next";
 import { GitHubIcon } from "@/components/icons/github-icon";
 import { ThemedIconHost } from "@/components/themed-icon-host";
 import { GitActionsSplitButton } from "@/git/actions-split-button";
+import { resolveIdleGitButtonLabel } from "@/git/idle-git-button-label";
 import { useGitActions } from "@/git/use-actions";
 import type { GitActions } from "@/git/policy";
 import type { Theme } from "@/styles/theme";
@@ -21,9 +22,13 @@ interface WorkspaceGitActionsProps {
   hideLabels?: boolean;
   /**
    * When the workspace header is still resolving checkout identity, keep the Git
-   * chip mounted in a loading state so Open/Git geometry never collapses.
+   * button mounted in a loading state so Open/Git geometry never collapses.
    */
   forceLoading?: boolean;
+  /**
+   * Desktop topbar shows BranchSwitcher for the idle branch name.
+   */
+  hideIdlePrimary?: boolean;
 }
 
 const mutedColorMapping = (theme: Theme) => ({
@@ -56,9 +61,10 @@ export function WorkspaceGitActions({
   cwd,
   hideLabels,
   forceLoading = false,
+  hideIdlePrimary = false,
 }: WorkspaceGitActionsProps) {
   const { t } = useTranslation();
-  const { gitActions, isGit, isStatusLoading, statusError } = useGitActions({
+  const { gitActions, isGit, isStatusLoading, statusError, branchLabel } = useGitActions({
     serverId,
     cwd,
     icons: ICONS,
@@ -66,18 +72,19 @@ export function WorkspaceGitActions({
     enabled: cwd.trim().length > 0,
   });
 
-  const showLoadingChip = forceLoading || isStatusLoading;
+  const showLoading = forceLoading || isStatusLoading;
 
   // Always reserve the topbar Git slot once mounted.
   // Loading / non-git query lag / clean idle must not collapse the control next to Open.
-  if (!isGit && !showLoadingChip) {
-    // Status resolved as not-git (or hard error with no git payload): keep a disabled chip
+  if (!isGit && !showLoading) {
+    // Status resolved as not-git (or hard error with no git payload): keep a disabled button
     // so the header geometry stays stable instead of vanishing.
     return (
       <GitActionsSplitButton
         gitActions={EMPTY_GIT_ACTIONS}
         hideLabels={hideLabels}
         idleLabel={statusError ? t("git.refreshFailed") : t("git.notGitRepository")}
+        hideIdlePrimary={hideIdlePrimary}
         loading={false}
       />
     );
@@ -87,8 +94,12 @@ export function WorkspaceGitActions({
     <GitActionsSplitButton
       gitActions={isGit ? gitActions : EMPTY_GIT_ACTIONS}
       hideLabels={hideLabels}
-      idleLabel={t("git.actionUpToDate")}
-      loading={showLoadingChip && !isGit}
+      idleLabel={resolveIdleGitButtonLabel({
+        branchLabel: hideIdlePrimary ? "" : branchLabel,
+        fallback: t("git.actionUpToDate"),
+      })}
+      hideIdlePrimary={hideIdlePrimary}
+      loading={showLoading && !isGit}
     />
   );
 }

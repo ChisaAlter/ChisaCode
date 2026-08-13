@@ -361,6 +361,34 @@ describe("WorkspaceGitServiceImpl primitive refresh entrypoint", () => {
     service.dispose();
   });
 
+  test("initial workspace refresh warms branch suggestions before fetch", async () => {
+    const order: string[] = [];
+    const listBranchSuggestions = vi.fn(async () => {
+      order.push("suggest");
+      return [];
+    });
+    const runGitFetch = vi.fn(async () => {
+      order.push("fetch");
+    });
+    const service = createService({
+      listBranchSuggestions,
+      runGitFetch,
+      hasOriginRemote: vi.fn(async () => true),
+    });
+    const subscription = service.registerWorkspace({ cwd: REPO_CWD }, vi.fn());
+    await flushPromises();
+    await flushPromises();
+    await flushPromises();
+
+    expect(listBranchSuggestions).toHaveBeenCalled();
+    if (order.includes("fetch")) {
+      expect(order.indexOf("suggest")).toBeLessThan(order.indexOf("fetch"));
+    }
+
+    subscription.unsubscribe();
+    service.dispose();
+  });
+
   test("forced getSnapshot bypasses the internal min-gap and re-shells", async () => {
     let nowMs = 0;
     const getCheckoutStatus = vi.fn(async (cwd: string) => createCheckoutStatus(cwd));
@@ -755,7 +783,7 @@ describe("WorkspaceGitServiceImpl primitive refresh entrypoint", () => {
     expect(getPullRequestStatus).toHaveBeenCalledWith(
       REPO_CWD,
       expect.anything(),
-      { force: false, reason: "initial" },
+      { force: true, reason: "initial-github" },
       expect.anything(),
     );
 
@@ -1166,7 +1194,15 @@ describe("WorkspaceGitServiceImpl primitive refresh entrypoint", () => {
     await flushPromises();
 
     expect(getCheckoutStatus).toHaveBeenCalledTimes(2);
-    await expect(directRead).resolves.toEqual(createSnapshot(REPO_CWD));
+    await expect(directRead).resolves.toEqual(
+      createSnapshot(REPO_CWD, {
+        github: {
+          featuresEnabled: false,
+          pullRequest: null,
+          error: null,
+        },
+      }),
+    );
 
     selfHealRefresh.resolve(createCheckoutStatus(REPO_CWD));
     await flushPromises();

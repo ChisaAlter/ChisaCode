@@ -254,7 +254,13 @@ export class CheckoutGitHandler implements DisposableHandler {
     const { cwd, requestId } = msg;
     const resolvedCwd = expandTilde(cwd);
     try {
-      const snapshot = await this.context.workspaceGitService.getSnapshot(resolvedCwd);
+      const peeked = this.context.workspaceGitService.peekSnapshot(resolvedCwd);
+      const snapshot =
+        peeked ??
+        (await this.context.workspaceGitService.getSnapshot(resolvedCwd, {
+          includeGitHub: false,
+          reason: "checkout-status",
+        }));
       this.context.emit({
         type: "checkout_status_response",
         payload: buildCheckoutStatusPayloadFromSnapshot({ cwd, requestId, snapshot }),

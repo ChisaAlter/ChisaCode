@@ -495,6 +495,23 @@ describe("WorkspaceGitServiceImpl", () => {
     service.dispose();
   });
 
+  test("initial workspace refresh loads local git before GitHub", async () => {
+    const getPullRequestStatus = vi.fn(async () => createPullRequestStatusResult());
+    const listener = vi.fn();
+    const service = createService({ getPullRequestStatus });
+    const subscription = service.registerWorkspace({ cwd: REPO_CWD }, listener);
+    await flushPromises();
+    await flushPromises();
+
+    expect(service.peekSnapshot(REPO_CWD)?.git.currentBranch).toBe("main");
+    expect(listener).toHaveBeenCalled();
+    expect(listener.mock.calls[0]?.[0]?.github.pullRequest ?? null).toBeNull();
+    expect(getPullRequestStatus).toHaveBeenCalledTimes(0);
+
+    subscription.unsubscribe();
+    service.dispose();
+  });
+
   test("equivalent cwd strings share one workspace target across service entry points", async () => {
     const getPullRequestStatus = vi.fn(async () => createPullRequestStatusResult());
     const resolveAbsoluteGitDir = vi.fn(async () => join(REPO_CWD, ".git"));
