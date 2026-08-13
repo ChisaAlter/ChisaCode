@@ -1,6 +1,6 @@
 {
   "name": "@chisacode/server",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "ChisaCode backend server",
   "files": [
     "dist/server",
@@ -58,9 +58,9 @@
     "@agentclientprotocol/sdk": "^0.17.1",
     "@ai-sdk/mcp": "2.0.10",
     "@anthropic-ai/claude-agent-sdk": "^0.2.141",
-    "@chisacode/highlight": "1.0.2",
-    "@chisacode/protocol": "1.0.2",
-    "@chisacode/relay": "1.0.2",
+    "@chisacode/highlight": "1.0.3",
+    "@chisacode/protocol": "1.0.3",
+    "@chisacode/relay": "1.0.3",
     "@isaacs/ttlcache": "^2.1.4",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@opencode-ai/sdk": "1.14.46",
@@ -88,7 +88,7 @@
     "zod-to-json-schema": "^3.25.1"
   },
   "devDependencies": {
-    "@chisacode/client": "1.0.2",
+    "@chisacode/client": "1.0.3",
     "@playwright/test": "^1.56.1",
     "@types/express": "^4.17.20",
     "@types/node": "^20.9.0",

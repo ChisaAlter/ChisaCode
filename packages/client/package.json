@@ -1,6 +1,6 @@
 {
   "name": "@chisacode/client",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "ChisaCode client SDK package",
   "files": [
     "dist",
@@ -37,8 +37,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@chisacode/protocol": "1.0.2",
-    "@chisacode/relay": "1.0.2",
+    "@chisacode/protocol": "1.0.3",
+    "@chisacode/relay": "1.0.3",
     "zod": "^4.3.6"
   },
   "devDependencies": {

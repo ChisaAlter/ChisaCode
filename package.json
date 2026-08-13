@@ -1,6 +1,6 @@
 {
   "name": "chisacode",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "private": true,
   "description": "Local-first control surface for Claude, Codex, OpenCode, Pi, Kimi Code, and Grok Build",
   "keywords": [
