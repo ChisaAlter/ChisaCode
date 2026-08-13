@@ -105,6 +105,22 @@ const DEFAULT_ACP_CAPABILITIES: AgentCapabilityFlags = {
   supportsRewindBoth: false,
 };
 
+/**
+ * One ACP probe answers both models and modes. Discovery results are cached
+ * per cwd so a snapshot refresh does not spawn two child processes; `force`
+ * bypasses the completed cache (an in-flight probe is still joined).
+ */
+const ACP_PROBE_DISCOVERY_TTL_MS = 5 * 60_000;
+/** Probe-only initialize cap; real sessions are not subject to this timeout. */
+const ACP_PROBE_INITIALIZE_TIMEOUT_MS = 12_000;
+
+interface ACPDiscoverySnapshot {
+  cwd: string;
+  models: AgentModelDefinition[];
+  modes: AgentMode[];
+  fetchedAt: number;
+}
+
 interface ACPAgentClientOptions {
   provider: string;
   logger: Logger;
@@ -174,6 +190,8 @@ export class ACPAgentClient implements AgentClient {
   protected readonly runtimeSettings?: ProviderRuntimeSettings;
   protected readonly defaultCommand: [string, ...string[]];
   protected readonly defaultModes: AgentMode[];
+  private readonly discoveryByCwd = new Map<string, ACPDiscoverySnapshot>();
+  private readonly discoveryInFlight = new Map<string, Promise<ACPDiscoverySnapshot>>();
   private readonly modelTransformer?: (models: AgentModelDefinition[]) => AgentModelDefinition[];
   private readonly sessionResponseTransformer?: (
     response: SessionStateResponse,
@@ -298,8 +316,50 @@ export class ACPAgentClient implements AgentClient {
   }
 
   async listModels(options: ListModelsOptions): Promise<AgentModelDefinition[]> {
-    const { cwd } = options;
-    const probe = await this.spawnProcess(ACP_PROBE_ENV);
+    const discovery = await this.resolveDiscovery(options.cwd, options.force);
+    return discovery.models;
+  }
+
+  async listModes(options: ListModesOptions): Promise<AgentMode[]> {
+    const discovery = await this.resolveDiscovery(options.cwd, options.force);
+    return discovery.modes;
+  }
+
+  /**
+   * Resolves models + modes from a single probe session, cached per cwd.
+   * Concurrent callers join the in-flight probe; `force` bypasses the
+   * completed cache but still joins an in-flight one (mirrors the snapshot
+   * manager's no-parallel-probe invariant).
+   */
+  private resolveDiscovery(cwd: string, force: boolean): Promise<ACPDiscoverySnapshot> {
+    const cached = this.discoveryByCwd.get(cwd);
+    if (cached && !force && Date.now() - cached.fetchedAt < ACP_PROBE_DISCOVERY_TTL_MS) {
+      return Promise.resolve(cached);
+    }
+    const inFlight = this.discoveryInFlight.get(cwd);
+    if (inFlight) {
+      return inFlight;
+    }
+    const promise = this.runDiscovery(cwd);
+    this.discoveryInFlight.set(cwd, promise);
+    // Consume the rejection before cleaning up the in-flight slot: a rejected
+    // discovery is surfaced to listModels/listModes (and from there caught by
+    // the snapshot manager), but a bare `void promise.finally(...)` chain would
+    // itself reject and trip the daemon's unhandledRejection fatal handler.
+    void promise
+      .catch(() => undefined)
+      .finally(() => {
+        if (this.discoveryInFlight.get(cwd) === promise) {
+          this.discoveryInFlight.delete(cwd);
+        }
+      });
+    return promise;
+  }
+
+  private async runDiscovery(cwd: string): Promise<ACPDiscoverySnapshot> {
+    const probe = await this.spawnProcess(ACP_PROBE_ENV, {
+      initializeTimeoutMs: ACP_PROBE_INITIALIZE_TIMEOUT_MS,
+    });
     try {
       const response = await probe.connection.newSession({
         cwd,
@@ -311,27 +371,19 @@ export class ACPAgentClient implements AgentClient {
         transformed.models,
         transformed.configOptions,
       );
-      return this.modelTransformer ? this.modelTransformer(models) : models;
-    } finally {
-      await this.closeProbe(probe);
-    }
-  }
-
-  async listModes(options: ListModesOptions): Promise<AgentMode[]> {
-    const { cwd } = options;
-    const probe = await this.spawnProcess(ACP_PROBE_ENV);
-    try {
-      const response = await probe.connection.newSession({
-        cwd,
-        mcpServers: [],
-      });
-      const transformed = this.transformSessionResponse(response);
       const modeInfo = deriveModesFromACP(
         this.defaultModes,
         transformed.modes,
         transformed.configOptions,
       );
-      return modeInfo.modes;
+      const snapshot: ACPDiscoverySnapshot = {
+        cwd,
+        models: this.modelTransformer ? this.modelTransformer(models) : models,
+        modes: modeInfo.modes,
+        fetchedAt: Date.now(),
+      };
+      this.discoveryByCwd.set(cwd, snapshot);
+      return snapshot;
     } finally {
       await this.closeProbe(probe);
     }

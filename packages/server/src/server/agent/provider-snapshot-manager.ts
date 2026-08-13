@@ -45,6 +45,14 @@ import {
 const DEFAULT_REFRESH_TIMEOUT_MS = 30_000;
 /** Full refreshes skip ready providers whose snapshot is newer than this. */
 const PROVIDER_READY_FRESH_MS = 60_000;
+/**
+ * Maximum provider probes running at once, shared across every cwd scope.
+ * Cold-start warm-up previously fired all providers in parallel, so a slow
+ * runtime (e.g. one waiting on machine-level MCP during initialize) starved
+ * the others into the 30s timeout. Two slots keep the first round finishing
+ * while still pipelining the rest.
+ */
+const MAX_PROVIDER_PROBE_CONCURRENCY = 2;
 
 type ProviderSnapshotChangeListener = (entries: ProviderSnapshotEntry[], cwd: string) => void;
 
@@ -174,6 +182,8 @@ export class ProviderSnapshotManager {
     enabled: false,
     baseUrl: null,
   };
+  private activeProbes = 0;
+  private readonly probeQueue: Array<() => void> = [];
 
   constructor(options: ProviderSnapshotManagerOptions) {
     this.logger = options.logger;
@@ -521,6 +531,10 @@ export class ProviderSnapshotManager {
     this.events.removeAllListeners();
     this.snapshots.clear();
     this.providerLoads.clear();
+    // Release queued probes; their loads short-circuit on the destroyed flag.
+    while (this.probeQueue.length > 0) {
+      this.probeQueue.shift()?.();
+    }
   }
 
   private buildRegistry(): Record<AgentProvider, ProviderDefinition> {
@@ -671,8 +685,40 @@ export class ProviderSnapshotManager {
 
   private async loadProviders(options: ProviderLoadOptions): Promise<void> {
     await Promise.allSettled(
-      options.providers.map((provider) => this.loadProvider({ ...options, provider })),
+      options.providers.map((provider) => {
+        const existingLoad = this.getProviderLoad(options.cwd, provider);
+        if (existingLoad) {
+          // Already probing in this scope — join it instead of consuming a
+          // probe slot for a duplicate.
+          return existingLoad.promise;
+        }
+        return this.withProbeSlot(() => this.loadProvider({ ...options, provider }));
+      }),
     );
+  }
+
+  /**
+   * Runs a single provider load under the shared probe concurrency slot.
+   * Queued loads wait for a free slot before calling `loadProvider`; slots
+   * are released as soon as the load settles (including the in-flight reuse
+   * short-circuit).
+   */
+  private async withProbeSlot<T>(task: () => Promise<T>): Promise<T> {
+    while (this.activeProbes >= MAX_PROVIDER_PROBE_CONCURRENCY) {
+      await new Promise<void>((release) => {
+        this.probeQueue.push(release);
+      });
+    }
+    this.activeProbes += 1;
+    try {
+      return await task();
+    } finally {
+      this.activeProbes -= 1;
+      const next = this.probeQueue.shift();
+      if (next) {
+        next();
+      }
+    }
   }
 
   private loadProvider(options: ProviderLoadOptions & { provider: AgentProvider }): Promise<void> {

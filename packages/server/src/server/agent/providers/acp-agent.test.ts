@@ -1192,6 +1192,151 @@ describe("ACPAgentClient listModes", () => {
   });
 });
 
+describe("ACPAgentClient probe discovery cache", () => {
+  function createCountingClient(probeSessions: Array<{ models?: unknown; modes?: unknown }>) {
+    let spawnCount = 0;
+    const newSession = vi.fn((_input: unknown) => {
+      const session = probeSessions[Math.min(spawnCount - 1, probeSessions.length - 1)] ?? {};
+      return Promise.resolve({
+        models: session.models ?? null,
+        modes: session.modes ?? null,
+        configOptions: [],
+      });
+    });
+
+    class CountingACPAgentClient extends ACPAgentClient {
+      protected override async spawnProcess(): Promise<SpawnedACPProcess> {
+        spawnCount += 1;
+        return {
+          child: { kill: vi.fn(), exitCode: 0, signalCode: null, once: vi.fn() },
+          connection: { newSession },
+          initialize: { agentCapabilities: {} },
+        } as SpawnedACPProcess;
+      }
+
+      protected override async closeProbe(): Promise<void> {}
+    }
+
+    const client = new CountingACPAgentClient({
+      provider: "pi",
+      logger: createTestLogger(),
+      defaultCommand: ["test-acp"],
+      defaultModes: [],
+    });
+    return { client, newSession, spawnCount: () => spawnCount };
+  }
+
+  test("answers models and modes from a single probe and reuses it for the same cwd", async () => {
+    const { client, spawnCount } = createCountingClient([
+      {
+        models: {
+          availableModels: [{ modelId: "gpt-4.1-mini", name: "gpt-4.1-mini", description: null }],
+          currentModelId: "gpt-4.1-mini",
+        },
+        modes: {
+          availableModes: [{ id: "default", name: "Default", description: null }],
+          currentModeId: "default",
+        },
+      },
+    ]);
+
+    await client.listModels({ cwd: "/tmp/cache-cwd", force: false });
+    await client.listModes({ cwd: "/tmp/cache-cwd", force: false });
+    await client.listModels({ cwd: "/tmp/cache-cwd", force: false });
+
+    expect(spawnCount()).toBe(1);
+  });
+
+  test("force bypasses the completed cache and spawns a fresh probe", async () => {
+    const { client, spawnCount } = createCountingClient([
+      { models: null, modes: null },
+      { models: null, modes: null },
+    ]);
+
+    await client.listModels({ cwd: "/tmp/force-cwd", force: false });
+    await client.listModes({ cwd: "/tmp/force-cwd", force: true });
+    await client.listModels({ cwd: "/tmp/force-cwd", force: false });
+
+    expect(spawnCount()).toBe(2);
+  });
+
+  test("concurrent models and modes requests join a single in-flight probe", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => {
+      release = r;
+    });
+    let spawnCount = 0;
+    const newSession = vi.fn(async () => {
+      await gate;
+      return Promise.resolve({ models: null, modes: null, configOptions: [] });
+    });
+
+    class GatedACPAgentClient extends ACPAgentClient {
+      protected override async spawnProcess(): Promise<SpawnedACPProcess> {
+        spawnCount += 1;
+        return {
+          child: { kill: vi.fn(), exitCode: 0, signalCode: null, once: vi.fn() },
+          connection: { newSession },
+          initialize: { agentCapabilities: {} },
+        } as SpawnedACPProcess;
+      }
+
+      protected override async closeProbe(): Promise<void> {}
+    }
+
+    const client = new GatedACPAgentClient({
+      provider: "pi",
+      logger: createTestLogger(),
+      defaultCommand: ["test-acp"],
+      defaultModes: [],
+    });
+
+    const modelsPromise = client.listModels({ cwd: "/tmp/inflight-cwd", force: false });
+    const modesPromise = client.listModes({ cwd: "/tmp/inflight-cwd", force: false });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(spawnCount).toBe(1);
+    release();
+    await Promise.all([modelsPromise, modesPromise]);
+    expect(spawnCount).toBe(1);
+  });
+
+  test("a failing discovery rejects callers without leaving an unhandled rejection", async () => {
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown) => {
+      unhandled.push(reason);
+    };
+    process.on("unhandledRejection", onUnhandled);
+    let spawnCount = 0;
+
+    class FailingACPAgentClient extends ACPAgentClient {
+      protected override async spawnProcess(): Promise<SpawnedACPProcess> {
+        spawnCount += 1;
+        throw new Error("Authentication required");
+      }
+
+      protected override async closeProbe(): Promise<void> {}
+    }
+
+    const client = new FailingACPAgentClient({
+      provider: "pi",
+      logger: createTestLogger(),
+      defaultCommand: ["test-acp"],
+      defaultModes: [],
+    });
+    try {
+      await expect(client.listModels({ cwd: "/tmp/fail-cwd", force: false })).rejects.toThrow(
+        "Authentication required",
+      );
+      // The in-flight cleanup chain must not resurface the rejection.
+      await new Promise((r) => setTimeout(r, 50));
+      expect(unhandled).toHaveLength(0);
+      expect(spawnCount).toBe(1);
+    } finally {
+      process.off("unhandledRejection", onUnhandled);
+    }
+  });
+});
+
 describe("transformPiModels", () => {
   test("keeps slash-free labels unchanged", () => {
     expect(

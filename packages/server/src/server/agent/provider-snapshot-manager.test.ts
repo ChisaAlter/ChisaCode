@@ -675,9 +675,14 @@ describe("ProviderSnapshotManager refresh guards", () => {
 
   test("settings refresh clears cached loads and still starts a fresh forced probe", async () => {
     const warmAvailability = createDeferred();
-    const refreshedAvailability = createDeferred();
-    const deferreds = [warmAvailability, refreshedAvailability];
-    const isAvailable = vi.fn(() => deferreds[Math.min(isAvailable.mock.calls.length, 1)].promise);
+    const projectAvailability = createDeferred();
+    const homeAvailability = createDeferred();
+    const deferreds = [warmAvailability, projectAvailability, homeAvailability];
+    const isAvailable = vi.fn(() => {
+      // mock.calls.length already includes this call; index from 0.
+      const callIndex = Math.min(isAvailable.mock.calls.length - 1, 2);
+      return deferreds[callIndex].promise;
+    });
     const manager = new ProviderSnapshotManager({
       logger: createTestLogger(),
       providerOverrides: disabledBuiltIns,
@@ -691,8 +696,11 @@ describe("ProviderSnapshotManager refresh guards", () => {
       await vi.waitFor(() => expect(isAvailable).toHaveBeenCalledTimes(1));
 
       const settingsRefresh = manager.refreshSettingsSnapshot({ providers: [provider] });
-      // Clearing cached loads lets the forced settings refresh start new probes
-      // for the project and home scopes (two scopes, two new probes).
+      // Clearing cached loads lets the forced settings refresh start a new
+      // probe; the shared limiter (2 slots) holds the home-scope probe until
+      // the warm-up probe frees a slot.
+      await vi.waitFor(() => expect(isAvailable).toHaveBeenCalledTimes(2));
+      warmAvailability.release();
       await vi.waitFor(() => expect(isAvailable).toHaveBeenCalledTimes(3));
 
       for (const deferred of deferreds) {
@@ -765,6 +773,55 @@ describe("ProviderSnapshotManager refresh guards", () => {
       }
     } finally {
       vi.useRealTimers();
+    }
+  });
+
+  test("cold-start warm-up runs at most two probes at once and queues the rest", async () => {
+    const deferreds = [createDeferred(), createDeferred(), createDeferred()];
+    const calls: string[] = [];
+    const makeProbe = (name: string, index: number) =>
+      vi.fn(() => {
+        calls.push(name);
+        return deferreds[index].promise;
+      });
+    const manager = new ProviderSnapshotManager({
+      logger: createTestLogger(),
+      providerOverrides: {
+        ...disabledBuiltIns,
+        "zai-a": { extends: "claude", label: "ZAI A", enabled: true },
+        "zai-b": { extends: "claude", label: "ZAI B", enabled: true },
+      },
+      enableDevProviders: true,
+      extraClients: {
+        mock: createExtraClient(provider, { isAvailable: makeProbe("mock", 0) }),
+        "zai-a": createExtraClient("zai-a" as AgentProvider, {
+          isAvailable: makeProbe("zai-a", 1),
+        }),
+        "zai-b": createExtraClient("zai-b" as AgentProvider, {
+          isAvailable: makeProbe("zai-b", 2),
+        }),
+      },
+    });
+    try {
+      // Two probes start; the third queues behind the shared slots.
+      void manager.listProviders({ cwd: "/tmp/project", wait: false });
+      await vi.waitFor(() => expect(calls.length).toBe(2));
+
+      // A different scope's warm-up queues behind the same slots.
+      void manager.listProviders({ cwd: "/tmp/other", wait: false });
+      await new Promise((r) => setTimeout(r, 100));
+      expect(calls.length).toBe(2);
+
+      // Releasing one probe lets the next queued probe start.
+      deferreds[0].release();
+      await vi.waitFor(() => expect(calls.length).toBe(3));
+
+      for (const deferred of deferreds) {
+        deferred.release();
+      }
+      await new Promise((r) => setTimeout(r, 100));
+    } finally {
+      manager.destroy();
     }
   });
 });

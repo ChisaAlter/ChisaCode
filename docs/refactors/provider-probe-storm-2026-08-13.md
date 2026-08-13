@@ -1,6 +1,6 @@
 # Provider 探测风暴与 error 可见性（2026-08-13）
 
-阶段一已落地并完成打包桌面验证。本文是契约说明，不是调研笔记。路线图条目见 `docs/refactors/comprehensive-improvement-roadmap.md`。
+阶段一与阶段二 2a 均已完成并通过打包桌面实机验证。本文是契约说明，不是调研笔记。路线图条目见 `docs/refactors/comprehensive-improvement-roadmap.md`。
 
 ## 用户可见行为
 
@@ -33,10 +33,24 @@
 
 原型：`prototypes/provider-error-visibility.html`。
 
-## 阶段二（未做，勿与阶段一混交）
+## 阶段二（2026-08-13 起拆分实施）
 
-单次 `isAvailable()` / initialize 仍可能卡 30s，因为部分 runtime 会等机器级 MCP（cua-driver、taptap-maker、maker-lua-lsp）连上。阶段一只降频率、保列表可见，不缩短单次探测。
+### 2a 已落地：冷启动限流 + ACP 单 spawn
 
-下一阶段应把探测与 MCP 握手拆开：initialize 不等 MCP 齐就返回，MCP 使用独立超时。在那之前不要宣称「探测风暴彻底消失」，也不要用用户真实 12-provider daemon 的一次超时来否定阶段一。
+- **全局探测并发槽 = 2**（`provider-snapshot-manager.ts` `MAX_PROVIDER_PROBE_CONCURRENCY`，`withProbeSlot`）。`warmUp`、cwd refresh、Settings 多 scope 共用同一把锁；定向 Retry 最多排队。冷启动不再 12 路并行抢 PATH/`--version`/npx/venv——这是「点重试才可用」的主因（第一轮互抢，单测被拖到 30s error）。
+- 排队前先查 in-flight，force 仍复用进行中的探测（阶段一契约保留）。
+- **ACP `listModels` + `listModes` 合并为一次 probe**（`acp-agent.ts` `resolveDiscovery`/`runDiscovery`），按 cwd 缓存 5 分钟；`force` 绕过已完成缓存但合并进行中的探测。Kimi/Grok/generic-ACP 冷启动进程数减半。
+- **probe initialize 上限 12s**（`ACP_PROBE_INITIALIZE_TIMEOUT_MS`），只打探测路径，真会话不受限。
 
-门禁脚本证明的是协议和行为，不是用户日常机器上的 MCP 冷启动时长。日常配置的抽检方式：打开选择器时 `daemon.log` 不应再因选择器打开刷出一批 `Failed to check provider availability`。
+### 2b 未做：native Grok MCP 隔离（机器证据否决）
+
+原计划给 native grok 探测隔离 `GROK_HOME`。实机核对用户 `~/.grok/config.toml`（38 行）只有一个**远程** MCP（`ardot-remote`，URL 直连，不 spawn 不阻塞）——不存在「5 个机器级 MCP spawn 挂起」的本地场景，隔离反而有丢模型/auth 风险。grok CLI 1.0.3 也无 `--skip-mcp` 官方标志。此路径关闭；若未来用户配置出现本地 stdio MCP，再按隔离方案评估。
+
+### 2c 已验证/已知边界
+
+- **打包桌面实机 PASS**（`desktop-provider-first-round.script.ts`，用户真实配置复制进隔离 home，未剥离 provider）：第一轮全部收敛（0 loading 残留、0 次 `Failed to check provider availability`）、5 家直接有模型（无需点重试）、开选择器零 unscoped refresh。1 家 error 为 kimi `Authentication required`——隔离 home 无 CLI 侧凭据的环境 artifact，真故障稳定报错（重试不掩盖）符合预期。证据 `.omo/evidence/desktop-provider-first-round-2026-08-13/`。
+- **实机发现的既有缺陷已修复**：探测失败（如 `Authentication required`）若经 ACP discovery 路径传播，`void promise.finally(...)` 清理链会把 rejection 变成 unhandled rejection → daemon worker 自杀重启循环。已在 `resolveDiscovery` 用 `.catch(() => undefined)` 消费 rejection 并加回归测试。**任何探测失败都必须只影响该 provider 条目，不得杀死 daemon。**
+- Settings 全量 refresh 串行后接近 client 60s timeout 的可能性——未实测撞线，若出现再改 fire-and-forget ack + PUSH，单独开刀。
+- Codex `listModels` 的 app-server initialize 未加独立超时（不塞 MCP；若真机仍慢再单独加）。
+
+## 已验证
