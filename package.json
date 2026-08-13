@@ -2,14 +2,15 @@
   "name": "chisacode",
   "version": "1.0.2",
   "private": true,
-  "description": "ChisaCode: voice-controlled development environment with OpenAI Realtime API",
+  "description": "Local-first control surface for Claude, Codex, OpenCode, Pi, Kimi Code, and Grok Build",
   "keywords": [
-    "development",
+    "agents",
+    "claude",
+    "codex",
+    "desktop",
+    "local-first",
     "mcp",
-    "openai",
-    "realtime",
-    "voice",
-    "voice-assistant"
+    "opencode"
   ],
   "homepage": "https://chisacode.sh",
   "license": "AGPL-3.0-or-later",

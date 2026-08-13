@@ -9,6 +9,7 @@ Thanks for your interest in contributing. This guide covers the essentials.
 ```bash
 git clone https://github.com/ChisaAlter/ChisaCode.git
 cd ChisaCode
+git checkout cn-main
 npm ci
 ```
 

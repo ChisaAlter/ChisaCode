@@ -1,65 +1,92 @@
 # ChisaCode
 
-**Local-first, multi-provider agent control surface.** Run, monitor, and interact with coding agents from desktop, mobile, web, and CLI — the daemon is local-first; relay metadata may be visible and providers may receive prompts.
+**Local-first control surface for coding agents.**
 
-[![License](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue.svg)](LICENSE)
+> Language: **English** | [简体中文](README.zh-CN.md)
 
-## Features
+<p align="center">
+  <a href="https://github.com/ChisaAlter/ChisaCode/releases">Releases</a>
+  ·
+  <a href="docs/cli.md">CLI</a>
+  ·
+  <a href="docs/custom-providers.md">Providers</a>
+  ·
+  <a href="SECURITY.md">Security</a>
+  ·
+  <a href="LICENSE">AGPL-3.0-or-later</a>
+</p>
 
-- **Multi-provider** — Built-in support for Claude, Codex, OpenCode, Pi, Kimi Code, and Grok Build. Custom providers extend built-in ones or use the ACP (Agent Client Protocol) command interface. Pick the right model for each job, switch freely.
-- **Cross-platform** — Desktop (macOS, Linux, Windows via Electron), mobile (iOS, Android via Expo), web, and CLI. Start work at your desk, check progress from your phone, script from the terminal.
-- **Local-first** — The daemon runs on your machine. Your code, your keys, your environment. No cloud dependency, no telemetry.
-- **E2E encrypted relay** — Remote access via an untrusted relay with Curve25519 + XSalsa20-Poly1305 encryption. The relay routes bytes, cannot read E2EE payload content (metadata remains visible).
-- **BYOK** — Bring your own API keys. Use your subsidized plans and first-party provider pricing. ChisaCode adds zero markup.
-- **Agent orchestration** — Launch multiple agents side-by-side in split panes, mix providers, delegate sub-agent tasks, schedule cron-triggered runs.
-- **Voice mode** — Dictate prompts or talk through problems hands-free with built-in dictation and voice agent support.
-- **MCP integration** — Daemon exposes an MCP server; agents get a scoped companion MCP server for delegation to child agents.
-- **Workspaces & worktrees** — Isolated git worktree workspaces so agents can work without affecting your main checkout.
+ChisaCode runs a local daemon on your machine, starts the agent CLIs you already use, and lets desktop, Android, web, and CLI clients watch and control the same sessions.
 
-## Quick Start
+It does not host models and it is not a cloud coding agent. You install and log into the underlying provider CLIs; ChisaCode starts, hosts, streams, and orchestrates them.
 
-**Prerequisites:** Node.js >= 22, npm workspaces.
+Default GitHub Release artifacts are **Windows desktop** and the **Android APK**. Source still contains Electron, Expo, and CLI surfaces for local development.
+
+## Built-in providers
+
+Provider IDs come from `packages/protocol/src/provider-manifest.ts`:
+
+| ID          | Label      | Runtime ChisaCode expects |
+| ----------- | ---------- | ------------------------- |
+| `claude`    | Claude     | `claude` CLI              |
+| `codex`     | Codex      | `codex` CLI               |
+| `opencode`  | OpenCode   | `opencode` CLI / server   |
+| `pi`        | Pi         | `pi` CLI                  |
+| `kimi`      | Kimi Code  | `kimi acp` CLI            |
+| `grokbuild` | Grok Build | `grok agent stdio`        |
+
+Custom providers live under `agents.providers` in `$CHISACODE_HOME/config.json`. Each custom entry must `extends` one of the IDs above, or `extends: "acp"` for a generic Agent Client Protocol command. See [custom providers](docs/custom-providers.md).
+
+## What it does
+
+- Starts and hosts agent processes through a local Node.js daemon
+- Streams output, tool calls, permission prompts, and status to every connected client
+- Lets desktop, Android, web, and CLI clients share one daemon
+- Opens git projects in the directory you pick; extra isolated worktrees are opt-in, not the default
+- Exposes a Docker-style CLI for agents, providers, worktrees, schedules, terminals, loops, chat, permissions, speech, and the daemon
+- Exposes MCP tools so an agent can create or control other ChisaCode agents
+- Supports an untrusted E2E-encrypted relay for remote access; metadata remains visible, and selected providers still receive prompts
+
+## Install
+
+Download the current Windows installer or Android APK from [GitHub Releases](https://github.com/ChisaAlter/ChisaCode/releases).
+
+The desktop app starts its built-in daemon on cold start. From Settings you can install the bundled CLI so `chisacode` matches that app version.
 
 ```bash
-# Clone and install
+chisacode daemon status
+chisacode provider ls
+chisacode run --provider codex "review this repository"
+```
+
+## Develop from source
+
+**Prerequisites:** Node.js 22 or newer on `PATH`, npm workspaces, Git.
+
+```bash
 git clone https://github.com/ChisaAlter/ChisaCode.git
 cd ChisaCode
 npm ci
 
-# Start development (daemon + Expo app)
-npm run dev          # macOS / Linux
-npm run dev:win      # Windows
+npm run dev:win      # Windows: daemon on localhost:6767 + Expo
+npm run dev          # macOS / Linux: portless daemon + Expo names
 
-# Or run focused surfaces
-npm run dev:server   # Daemon only
+npm run dev:server   # daemon only
 npm run dev:app      # Expo app only
 npm run dev:desktop  # Electron desktop app
+```
 
-# CLI from the checkout (not the globally installed binary)
-npm run cli -- ls -a -g
+Checkout CLI (not a global install):
+
+```bash
+npm run cli -- provider ls
 npm run cli -- daemon status
+npm run cli -- run --provider codex "check this repository"
 ```
 
-The daemon logs to `$CHISACODE_HOME/daemon.log`. Set `CHISACODE_LOG_LEVEL=trace` for verbose provider and session traces.
+Daemon logs: `$CHISACODE_HOME/daemon.log` (desktop/stable default `~/.chisacode`). Set `CHISACODE_LOG_LEVEL=trace` for provider and session traces.
 
-## Project Structure
-
-This is an npm workspace monorepo:
-
-```
-packages/
-├── protocol/       # Shared WebSocket schemas, provider manifests, protocol types
-├── client/         # Daemon WebSocket driver and SDK facade
-├── server/         # Daemon: agent lifecycle, WebSocket API, MCP server, relay transport
-├── app/            # Expo client for iOS, Android, web, and desktop renderer
-├── cli/            # Docker-style CLI (chisacode run/ls/logs/wait)
-├── relay/          # E2E encrypted relay for remote access
-├── desktop/        # Electron desktop wrapper
-├── highlight/      # Shared syntax highlighting engine
-└── expo-two-way-audio/  # Native two-way audio module
-```
-
-Key build dependency chains:
+Workspace package imports resolve through compiled `dist/`. Rebuild the producing package before diagnosing cross-package type errors:
 
 ```bash
 npm run build:client       # protocol → client
@@ -68,88 +95,88 @@ npm run build:server       # server-deps → server → cli
 npm run build:app-deps     # highlight → protocol → client → expo-two-way-audio
 ```
 
-Package imports resolve through compiled `dist/` output. Rebuild producer packages before diagnosing cross-package type errors.
-
-## Architecture
-
-```
-┌──────────┐   ┌──────────┐   ┌──────────┐
-│  Mobile   │   │   CLI    │   │ Desktop  │
-│  (Expo)   │   │(Commander)│   │(Electron)│
-└─────┬─────┘   └─────┬────┘   └─────┬────┘
-      │               │              │
-      │  WebSocket    │              │  Managed subprocess
-      │  (direct or   │              │  + WebSocket
-      │   via relay)  │              │
-      └───────┬───────┴──────────────┘
-              │
-       ┌──────▼──────┐
-       │   Daemon    │
-       │  (Node.js)  │
-       └──────┬──────┘
-              │
- ┌────────────┼────────────┬────────────┬────────────┬────────────┐
- │            │            │            │            │            │
-Claude      Codex      OpenCode       Pi       Kimi Code   Grok Build
- Agent       Agent       Agent        RPC         ACP         ACP
-  SDK       Server
-```
-
-**Data flow:** Client sends agent creation request → daemon spawns provider process → events stream over WebSocket to all connected clients → tool calls normalized to `ToolCallDetail` → permissions flow through user approval.
-
-Agent state persists to `$CHISACODE_HOME/agents/` as file-backed JSON. Timeline is append-only with epoch-based sequencing. An optional SQLite index accelerates cross-agent queries.
-
-## Development
-
-Key commands for contributors:
+## CLI
 
 ```bash
-npm run typecheck    # Run after every change
-npm run lint         # Lint with oxlint
-npm run format       # Auto-format with oxfmt
+chisacode ls
+chisacode run --provider claude "fix the failing tests"
+chisacode attach <agent-id>
+chisacode send <agent-id> "also update the docs"
+chisacode wait <agent-id>
+
+chisacode provider ls
+chisacode provider inspect codex
+chisacode provider models claude
+
+chisacode worktree ls
+chisacode schedule create --every 5m "check whether CI is still green"
+chisacode terminal create --cwd .
 ```
 
-See the `docs/` directory for detailed guides:
+Full command reference: [docs/cli.md](docs/cli.md).
 
-| Document                                                                                                                         | Topic                                                                      |
-| -------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| [docs/product.md](docs/product.md)                                                                                               | Product philosophy, target user, strategic bets                            |
-| [docs/architecture.md](docs/architecture.md)                                                                                     | System design, packages, WebSocket protocol, agent lifecycle               |
-| [docs/development.md](docs/development.md)                                                                                       | Dev server, build sync gotchas, CLI reference                              |
-| [docs/testing.md](docs/testing.md)                                                                                               | TDD workflow, test organization                                            |
-| [docs/providers.md](docs/providers.md)                                                                                           | Adding a new agent provider                                                |
-| [SECURITY.md](SECURITY.md)                                                                                                       | Security boundaries, Relay threat model, and vulnerability reporting       |
-| [docs/security/production-hardening-current-state-2026-08-10.md](docs/security/production-hardening-current-state-2026-08-10.md) | Current production-hardening state, Relay rollout, and verification bounds |
-| [docs/security/relay-auth-handshake-v2-threat-model.md](docs/security/relay-auth-handshake-v2-threat-model.md)                   | Relay client-authentication threat model and compatibility contract        |
-| [docs/rpc-namespacing.md](docs/rpc-namespacing.md)                                                                               | WebSocket RPC naming convention                                            |
-| [docs/design.md](docs/design.md)                                                                                                 | Theme tokens, colors, fonts, spacing                                       |
-| [docs/release.md](docs/release.md)                                                                                               | Release playbook and checklist                                             |
+## Repository map
 
-**Important rules for contributors:**
+This is an npm workspace monorepo. Default branch: `cn-main`.
 
-- The WebSocket protocol is append-only. Never remove fields or make optional fields required.
-- New features gate on `server_info.features.*` capability flags. No degradation fallbacks.
-- Do not run full test suites locally — run only the changed test file: `npx vitest run <file> --bail=1`
-- Always format with `npm run format` before committing.
+| Package                         | Role                                                            |
+| ------------------------------- | --------------------------------------------------------------- |
+| `@chisacode/protocol`           | WebSocket schemas, provider manifests, wire types               |
+| `@chisacode/client`             | Daemon WebSocket driver and SDK                                 |
+| `@chisacode/server`             | Local daemon, provider runtimes, storage, MCP, relay, schedules |
+| `@chisacode/app`                | Expo client for Android, iOS, web, and the desktop renderer     |
+| `@chisacode/desktop`            | Electron shell; Windows is the default shipped desktop artifact |
+| `@chisacode/cli`                | `chisacode` command line                                        |
+| `@chisacode/relay`              | E2E-encrypted relay transport                                   |
+| `@chisacode/highlight`          | Shared syntax highlighting                                      |
+| `@chisacode/expo-two-way-audio` | Native two-way audio                                            |
+
+```
+Clients (desktop / Android / web / CLI)
+        │  WebSocket (direct or relay)
+        ▼
+   Local daemon (Node.js)
+        │
+        ├── Claude / Codex / OpenCode / Pi / Kimi Code / Grok Build
+        └── custom providers (`extends` built-in or `acp`)
+```
+
+Agent state is file-backed JSON under `$CHISACODE_HOME/agents/`.
+
+## Docs
+
+| Document                                             | Topic                                       |
+| ---------------------------------------------------- | ------------------------------------------- |
+| [docs/product.md](docs/product.md)                   | What ChisaCode is and who it is for         |
+| [docs/architecture.md](docs/architecture.md)         | System design and data flow                 |
+| [docs/development.md](docs/development.md)           | Dev server, `CHISACODE_HOME`, build gotchas |
+| [docs/cli.md](docs/cli.md)                           | CLI reference                               |
+| [docs/providers.md](docs/providers.md)               | Adding a built-in provider                  |
+| [docs/custom-providers.md](docs/custom-providers.md) | User-facing custom provider config          |
+| [docs/testing.md](docs/testing.md)                   | How tests are written here                  |
+| [docs/release.md](docs/release.md)                   | Windows + Android release playbook          |
+| [SECURITY.md](SECURITY.md)                           | Threat model and vulnerability reporting    |
+| [CONTRIBUTING.md](CONTRIBUTING.md)                   | Setup, style, and PR checklist              |
+
+Contributor rules that the code actually enforces:
+
+- The WebSocket protocol is backward-compatible. Do not remove fields or make optional fields required.
+- New features gate on `server_info.features.*`. There is no degraded fallback for old daemons.
+- Do not run the full test suite locally. Run the changed file: `npx vitest run <file> --bail=1`
+- Format with `npm run format` (oxfmt). Lint with `npm run lint` (oxlint). Typecheck after every change.
 
 ## Security
 
-- **E2E encryption** — Relay traffic is encrypted with Curve25519 ECDH + XSalsa20-Poly1305. The relay is payload-confidential (metadata still visible).
-- **DNS rebinding protection** — Host header validation on every HTTP request and WebSocket upgrade.
-- **Agent isolation** — Providers handle their own authentication. ChisaCode may store API keys locally and transmit them to user-selected upstreams.
-- **Local trust boundary** — Daemon binds `127.0.0.1` by default. Optional password auth via bearer token for TCP exposure.
+- Relay application traffic uses Curve25519 ECDH + XSalsa20-Poly1305. The relay is untrusted; metadata stays visible.
+- The daemon binds `127.0.0.1` by default. Binding `0.0.0.0` / `::` without a password is fail-closed unless you set an explicit override.
+- Providers handle their own login. Prompts and code may go to the provider or gateway you selected.
 
-See [SECURITY.md](SECURITY.md) for the full threat model and vulnerability reporting.
+See [SECURITY.md](SECURITY.md).
 
 ## License
 
-ChisaCode is licensed under AGPL-3.0-or-later. See [LICENSE](LICENSE) for the
-full license text.
+ChisaCode is licensed under AGPL-3.0-or-later. See [LICENSE](LICENSE).
 
-ChisaCode is a modified version derived from
-[Paseo](https://github.com/getpaseo/paseo). See [NOTICE](NOTICE) for source,
-modification, and attribution notices.
+ChisaCode is a modified, independently renamed derivative of [Paseo](https://github.com/getpaseo/paseo). Source, modification, and attribution notices are in [NOTICE](NOTICE).
 
-When ChisaCode is distributed as binaries or made available for remote network
-interaction, publish the corresponding source code for that exact version under
-AGPL-3.0-or-later.
+When ChisaCode is distributed as binaries or offered for remote network interaction, publish the corresponding source for that exact version under AGPL-3.0-or-later.
