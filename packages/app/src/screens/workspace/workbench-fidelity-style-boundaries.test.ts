@@ -109,6 +109,12 @@ describe("workbench fidelity style boundaries", () => {
 
     expect(rightPanelSource).toContain('testID="workspace-right-panel"');
     expect(rightPanelSource).toContain('testID="workspace-right-panel-empty"');
+    expect(rightPanelSource).not.toContain('testID="workspace-right-panel-close"');
+    expect(rightPanelSource).not.toContain("rightPanelHeader");
+    expect(rightPanelSource).not.toContain("onClose");
+    expect(screenSource).toContain("WorkspaceDesktopSoftTopbar");
+    expect(centerSource).not.toContain("WorkspaceDesktopSoftTopbar");
+    expect(centerSource).toContain('testID="workspace-mobile-header-actions"');
     expect(rightPanelSource).toContain("workspace.rightPanel.openASurface");
     expect(drawerSource).toContain('testID="workspace-terminal-drawer"');
     expect(screenSource).toContain("WorkspaceRightPanel");
