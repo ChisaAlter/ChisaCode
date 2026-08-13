@@ -73,6 +73,7 @@ CLAUDE.local.md
 # Local agent/tooling artifacts (do not commit)
 .tmp/
 .omc/
+.omo/
 .understand-anything/
 .workbuddy/
 .uploads/

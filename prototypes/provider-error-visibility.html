@@ -30,7 +30,11 @@
         font-family: -apple-system, "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
       }
 
-      * { box-sizing: border-box; margin: 0; padding: 0; }
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
 
       body {
         min-height: 100vh;
@@ -98,9 +102,18 @@
         color: var(--foreground);
         cursor: pointer;
       }
-      .composer-trigger .provider-name { color: var(--foregroundMuted); font-size: 11.5px; margin-right: 2px; }
-      .composer-trigger .model-name { font-weight: 550; }
-      .composer-trigger .caret { color: var(--foregroundFaint); font-size: 10px; }
+      .composer-trigger .provider-name {
+        color: var(--foregroundMuted);
+        font-size: 11.5px;
+        margin-right: 2px;
+      }
+      .composer-trigger .model-name {
+        font-weight: 550;
+      }
+      .composer-trigger .caret {
+        color: var(--foregroundFaint);
+        font-size: 10px;
+      }
       .composer-mode-chip {
         background: var(--surface2);
         border: 1px solid var(--border);
@@ -151,10 +164,13 @@
         font-size: 12px;
         cursor: pointer;
       }
-      .retry-btn:hover { background: rgba(217, 119, 6, 0.08); }
+      .retry-btn:hover {
+        background: rgba(217, 119, 6, 0.08);
+      }
       .retry-btn .spinner {
         display: inline-block;
-        width: 10px; height: 10px;
+        width: 10px;
+        height: 10px;
         border: 1.5px solid rgba(146, 64, 14, 0.35);
         border-top-color: #92400e;
         border-radius: 50%;
@@ -162,14 +178,18 @@
         margin-right: 5px;
         vertical-align: -1px;
       }
-      @keyframes spin { to { transform: rotate(360deg); } }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
 
       /* ---------- 2. Selector provider list ---------- */
       .selector-shell {
         background: var(--surface0);
         border: 1px solid var(--border);
         border-radius: 12px;
-        box-shadow: 0 6px 24px rgba(20, 23, 31, 0.10);
+        box-shadow: 0 6px 24px rgba(20, 23, 31, 0.1);
         padding: 8px;
         max-width: 640px;
       }
@@ -189,9 +209,12 @@
         border-radius: 8px;
         cursor: pointer;
       }
-      .provider-row:hover { background: var(--surface2); }
+      .provider-row:hover {
+        background: var(--surface2);
+      }
       .provider-icon {
-        width: 18px; height: 18px;
+        width: 18px;
+        height: 18px;
         border-radius: 5px;
         background: var(--surface3);
         display: inline-flex;
@@ -201,9 +224,20 @@
         color: var(--foregroundSubtleText);
         flex-shrink: 0;
       }
-      .provider-row .name { font-size: 13px; color: var(--foreground); flex: 1; }
-      .trailing { display: flex; align-items: center; gap: 8px; }
-      .count { font-size: 12px; color: var(--foregroundMuted); }
+      .provider-row .name {
+        font-size: 13px;
+        color: var(--foreground);
+        flex: 1;
+      }
+      .trailing {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .count {
+        font-size: 12px;
+        color: var(--foregroundMuted);
+      }
       .badge-warning {
         display: inline-flex;
         align-items: center;
@@ -214,16 +248,27 @@
         border-radius: 5px;
         padding: 2px 6px;
       }
-      .badge-warning svg { width: 11px; height: 11px; }
+      .badge-warning svg {
+        width: 11px;
+        height: 11px;
+      }
       .row-spinner {
-        width: 12px; height: 12px;
+        width: 12px;
+        height: 12px;
         border: 1.5px solid var(--border);
         border-top-color: var(--foregroundFaint);
         border-radius: 50%;
         animation: spin 0.7s linear infinite;
       }
-      .chevron { color: var(--foregroundFaint); font-size: 11px; }
-      .divider { height: 1px; background: var(--border); margin: 4px 8px; }
+      .chevron {
+        color: var(--foregroundFaint);
+        font-size: 11px;
+      }
+      .divider {
+        height: 1px;
+        background: var(--border);
+        margin: 4px 8px;
+      }
 
       /* ---------- 3. Drill-down with cached models ---------- */
       .drill-header {
@@ -241,8 +286,15 @@
         padding: 2px 6px;
         border-radius: 5px;
       }
-      .back-btn:hover { background: var(--surface2); }
-      .drill-title { font-size: 13px; font-weight: 600; color: var(--foreground); flex: 1; }
+      .back-btn:hover {
+        background: var(--surface2);
+      }
+      .drill-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--foreground);
+        flex: 1;
+      }
       .model-row {
         display: flex;
         align-items: center;
@@ -251,10 +303,21 @@
         border-radius: 8px;
         cursor: pointer;
       }
-      .model-row:hover { background: var(--surface2); }
-      .model-row.selected { background: var(--surface1); box-shadow: var(--etch-ring); }
-      .model-row .model-info { flex: 1; min-width: 0; }
-      .model-row .model-name { font-size: 13px; color: var(--foreground); }
+      .model-row:hover {
+        background: var(--surface2);
+      }
+      .model-row.selected {
+        background: var(--surface1);
+        box-shadow: var(--etch-ring);
+      }
+      .model-row .model-info {
+        flex: 1;
+        min-width: 0;
+      }
+      .model-row .model-name {
+        font-size: 13px;
+        color: var(--foreground);
+      }
       .model-row .model-desc {
         font-size: 11px;
         color: var(--foregroundFaint);
@@ -271,7 +334,11 @@
         padding: 1px 5px;
         flex-shrink: 0;
       }
-      .check { color: var(--accent); font-size: 12px; flex-shrink: 0; }
+      .check {
+        color: var(--accent);
+        font-size: 12px;
+        flex-shrink: 0;
+      }
 
       /* ---------- 4. Error empty state (already shipped, for contrast) ---------- */
       .empty-state {
@@ -282,7 +349,12 @@
         padding: 24px 12px;
         text-align: center;
       }
-      .empty-state .msg { font-size: 12.5px; color: var(--foregroundMuted); max-width: 360px; line-height: 1.5; }
+      .empty-state .msg {
+        font-size: 12.5px;
+        color: var(--foregroundMuted);
+        max-width: 360px;
+        line-height: 1.5;
+      }
       .btn-default {
         background: var(--surface0);
         border: 1px solid var(--border);
@@ -292,14 +364,17 @@
         font-size: 12px;
         cursor: pointer;
       }
-      .btn-default:hover { background: var(--surface2); }
+      .btn-default:hover {
+        background: var(--surface2);
+      }
     </style>
   </head>
   <body>
     <div class="page-title">Provider 连接异常可见性 — 模型列表不再被 error 状态挡住</div>
     <div class="page-sub">
       目标：provider 探测失败（error）时，<b>不隐藏模型列表</b>、<b>不把已选 provider 清空</b>。
-      显示上次缓存的模型并持续给出琥珀色警告 + 单 provider 重试。发送时若 provider 仍未恢复，由服务端错误在草稿页暴露（不静默）。
+      显示上次缓存的模型并持续给出琥珀色警告 + 单 provider 重试。发送时若 provider
+      仍未恢复，由服务端错误在草稿页暴露（不静默）。
     </div>
 
     <!-- 1. Composer: selected provider is error -->
@@ -316,9 +391,21 @@
         </div>
         <div class="warning-strip">
           <span class="warn-icon">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-              <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path
+                d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
+              />
+              <line x1="12" y1="9" x2="12" y2="13" />
+              <line x1="12" y1="17" x2="12.01" y2="17" />
             </svg>
           </span>
           <span class="warn-text">
@@ -329,7 +416,9 @@
         </div>
       </div>
       <div class="section-note">
-        触发按钮仍显示 provider + 当前模型（缓存），点击可正常打开选择器；警告条不拦截输入，仅提示。重试只针对该 provider（定向 force，不触发全量探测）。
+        触发按钮仍显示 provider +
+        当前模型（缓存），点击可正常打开选择器；警告条不拦截输入，仅提示。重试只针对该
+        provider（定向 force，不触发全量探测）。
       </div>
     </div>
 
@@ -341,7 +430,9 @@
         <div class="provider-row">
           <span class="provider-icon">C</span>
           <span class="name">Claude</span>
-          <span class="trailing"><span class="count">8 个模型</span><span class="chevron">›</span></span>
+          <span class="trailing"
+            ><span class="count">8 个模型</span><span class="chevron">›</span></span
+          >
         </div>
         <div class="provider-row">
           <span class="provider-icon">X</span>
@@ -349,9 +440,19 @@
           <span class="trailing">
             <span class="count">6 个模型</span>
             <span class="badge-warning">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-                <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path
+                  d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
+                />
+                <line x1="12" y1="9" x2="12" y2="13" />
+                <line x1="12" y1="17" x2="12.01" y2="17" />
               </svg>
               缓存
             </span>
@@ -361,11 +462,15 @@
         <div class="provider-row">
           <span class="provider-icon">K</span>
           <span class="name">Kimi</span>
-          <span class="trailing"><span class="row-spinner"></span><span class="count">加载中...</span><span class="chevron">›</span></span>
+          <span class="trailing"
+            ><span class="row-spinner"></span><span class="count">加载中...</span
+            ><span class="chevron">›</span></span
+          >
         </div>
       </div>
       <div class="section-note">
-        error provider 不再从列表消失：模型数照常显示，右侧加琥珀色「缓存」徽标，说明这些是上次成功获取的模型。
+        error provider
+        不再从列表消失：模型数照常显示，右侧加琥珀色「缓存」徽标，说明这些是上次成功获取的模型。
       </div>
     </div>
 
@@ -377,11 +482,23 @@
           <button class="back-btn">‹ 返回</button>
           <span class="drill-title">Codex</span>
         </div>
-        <div class="warning-strip" style="margin: 0 4px 6px;">
+        <div class="warning-strip" style="margin: 0 4px 6px">
           <span class="warn-icon">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-              <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path
+                d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
+              />
+              <line x1="12" y1="9" x2="12" y2="13" />
+              <line x1="12" y1="17" x2="12.01" y2="17" />
             </svg>
           </span>
           <span class="warn-text">
@@ -414,7 +531,8 @@
         </div>
       </div>
       <div class="section-note">
-        缓存模型仍可选择（保持当前会话可换模型）；警告头内重试按钮带 spinner 状态（重试中禁点）。重试成功后徽标与警告自动消失（PUSH 更新）。
+        缓存模型仍可选择（保持当前会话可换模型）；警告头内重试按钮带 spinner
+        状态（重试中禁点）。重试成功后徽标与警告自动消失（PUSH 更新）。
       </div>
     </div>
 
@@ -423,10 +541,22 @@
       <div class="section-label">④ 对照 — error 且无缓存模型（既有行为，保留）</div>
       <div class="selector-shell">
         <div class="empty-state">
-          <span style="color: var(--foregroundMuted);">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-              <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+          <span style="color: var(--foregroundMuted)">
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path
+                d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
+              />
+              <line x1="12" y1="9" x2="12" y2="13" />
+              <line x1="12" y1="17" x2="12.01" y2="17" />
             </svg>
           </span>
           <span class="msg">Timed out checking Grok availability after 30000ms</span>

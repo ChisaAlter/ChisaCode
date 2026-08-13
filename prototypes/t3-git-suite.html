@@ -427,7 +427,9 @@
       草稿页和对话顶栏共用同一套控件。下面两帧是挂载点；底部按钮打开合同里的 8
       个弹窗。这是可点的视觉合同，不是实现。
     </p>
-    <p class="state" id="state">状态：env=Local · branch=fix/right-panel-below-topbar · dirty · 无 PR</p>
+    <p class="state" id="state">
+      状态：env=Local · branch=fix/right-panel-below-topbar · dirty · 无 PR
+    </p>
 
     <div class="frames">
       <div>
@@ -567,9 +569,19 @@
         <h2>Commit</h2>
         <p>只提交勾选的文件。主按钮会接着 Push 并创建 PR。</p>
         <div class="files">
-          <label class="file"><input type="checkbox" checked /> packages/app/src/git/workspace-actions.tsx <span class="add">+24</span></label>
-          <label class="file"><input type="checkbox" checked /> packages/app/src/screens/workspace/workspace-header.tsx <span class="add">+18</span></label>
-          <label class="file"><input type="checkbox" /> docs/superpowers/specs/2026-08-13-t3-git-suite-design.md <span class="add">+220</span></label>
+          <label class="file"
+            ><input type="checkbox" checked /> packages/app/src/git/workspace-actions.tsx
+            <span class="add">+24</span></label
+          >
+          <label class="file"
+            ><input type="checkbox" checked />
+            packages/app/src/screens/workspace/workspace-header.tsx
+            <span class="add">+18</span></label
+          >
+          <label class="file"
+            ><input type="checkbox" /> docs/superpowers/specs/2026-08-13-t3-git-suite-design.md
+            <span class="add">+220</span></label
+          >
         </div>
         <textarea>Align desktop git suite with T3 branch toolbar</textarea>
         <div class="actions">
@@ -646,9 +658,9 @@
         closeAll();
         backdrop.appendChild(tpl.content.cloneNode(true));
         backdrop.classList.add("show");
-        document.querySelectorAll('.nav [data-open="' + key + '"]').forEach((b) =>
-          b.classList.add("active"),
-        );
+        document
+          .querySelectorAll('.nav [data-open="' + key + '"]')
+          .forEach((b) => b.classList.add("active"));
       }
 
       document.body.addEventListener("click", (event) => {
