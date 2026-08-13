@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from "react";
 import { Pressable, Text, View, type PressableStateCallbackType } from "react-native";
-import { FileCode2, FolderTree, Globe2, SquareTerminal, X } from "lucide-react-native";
+import { FileCode2, FolderTree, Globe2, SquareTerminal } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
 
@@ -17,13 +17,11 @@ import {
   WORKBENCH_META_FONT_SIZE,
   WORKBENCH_META_LINE_HEIGHT,
 } from "@/constants/layout";
-import { useWindowControlsPadding } from "@/utils/desktop-window";
 
 const ThemedFileCode2 = withUnistyles(FileCode2);
 const ThemedFolderTree = withUnistyles(FolderTree);
 const ThemedGlobe2 = withUnistyles(Globe2);
 const ThemedSquareTerminal = withUnistyles(SquareTerminal);
-const ThemedX = withUnistyles(X);
 
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
@@ -39,7 +37,6 @@ export interface WorkspaceRightPanelProps {
   terminalId: string | null;
   browserId: string | null;
   isWorkspaceFocused: boolean;
-  onClose: () => void;
   onOpenSurface: (surface: RightPanelSurface) => void;
   onOpenFile?: (filePath: string) => void;
   onOpenFileExplorer: () => void;
@@ -71,20 +68,12 @@ export function WorkspaceRightPanel({
   terminalId,
   browserId,
   isWorkspaceFocused,
-  onClose,
   onOpenSurface,
   onOpenFile,
   onOpenFileExplorer,
   onOpenWorkspaceFile,
 }: WorkspaceRightPanelProps) {
-  const { t } = useTranslation();
   const hasWorkspaceRoot = Boolean(workspaceRoot && workspaceRoot.trim().length > 0);
-  // Full-height rail shares the caption strip with DesktopWindowControls on Win/Linux.
-  const windowControlsPadding = useWindowControlsPadding("rightPanelHeader");
-  const headerStyle = useMemo(
-    () => [styles.header, { paddingRight: 14 + windowControlsPadding.right }],
-    [windowControlsPadding.right],
-  );
 
   const cards = useMemo<SurfaceCardSpec[]>(
     () => [
@@ -126,23 +115,6 @@ export function WorkspaceRightPanel({
 
   return (
     <View style={styles.rail} testID="workspace-right-panel">
-      <View style={headerStyle}>
-        <Text style={styles.headerTitle} numberOfLines={1}>
-          {activeSurface
-            ? t(`workspace.rightPanel.surface.${activeSurface}`)
-            : t("workspace.rightPanel.title")}
-        </Text>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={t("workspace.rightPanel.close")}
-          onPress={onClose}
-          style={styles.closeButton}
-          testID="workspace-right-panel-close"
-        >
-          <ThemedX size={16} uniProps={mutedColorMapping} />
-        </Pressable>
-      </View>
-
       {activeSurface == null ? (
         <RightPanelEmptyState cards={cards} onOpenSurface={onOpenSurface} />
       ) : (
@@ -379,32 +351,6 @@ const styles = StyleSheet.create((theme) => ({
     borderLeftColor: theme.colors.border,
     backgroundColor: theme.colors.surfaceWorkspace,
     ...(isWeb ? ({ boxShadow: "-8px 0 24px rgba(20, 23, 31, 0.04)" } as object) : {}),
-  },
-  header: {
-    height: 48,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    // Horizontal: paddingLeft fixed; paddingRight set dynamically for caption reserve.
-    paddingLeft: 14,
-    paddingRight: 14,
-    borderBottomWidth: theme.borderWidth[1],
-    borderBottomColor: theme.colors.surface2,
-  },
-  headerTitle: {
-    flex: 1,
-    minWidth: 0,
-    fontSize: 13.5,
-    lineHeight: 18,
-    fontWeight: "500",
-    color: theme.colors.foreground,
-  },
-  closeButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
   },
   emptyState: {
     flex: 1,

@@ -17,7 +17,6 @@ import {
 import {
   WorkspaceHeaderRightControls,
   WorkspaceHeaderTitleBar,
-  WorkspaceDesktopSoftTopbar,
 } from "@/screens/workspace/workspace-header";
 import { WorkspaceEnvironmentPanelRail } from "@/screens/workspace/workspace-environment-panel";
 import { WorkspaceGitActions } from "@/git/workspace-actions";
@@ -161,32 +160,23 @@ export function WorkspaceCenterColumn({
   const environmentRailVisible = !isMobile && isEnvironmentPanelVisible;
 
   const headerRight = useMemo(() => {
-    if (isMobile) {
-      const openInCwd = isAbsolutePath(normalizedWorkspaceId) ? normalizedWorkspaceId : "";
-      // Compact has no soft topbar action cluster; mount the single Git write path here.
-      return (
-        <View style={styles.mobileHeaderRight} testID="workspace-mobile-header-actions">
-          {headerRightControls.isGitCheckout && openInCwd.length > 0 ? (
-            <WorkspaceGitActions serverId={normalizedServerId} cwd={openInCwd} hideLabels />
-          ) : null}
-          <WorkspaceHeaderRightControls
-            {...headerRightControls}
-            isMobile
-            isEnvironmentPanelVisible={isEnvironmentPanelVisible}
-            createTerminalDisabled={isCreateTerminalPending}
-            onCreateTerminal={headerTitleBar.onCreateTerminal}
-          />
-        </View>
-      );
+    if (!isMobile) {
+      return null;
     }
+    const openInCwd = isAbsolutePath(normalizedWorkspaceId) ? normalizedWorkspaceId : "";
     return (
-      <WorkspaceHeaderRightControls
-        {...headerRightControls}
-        isMobile={false}
-        isEnvironmentPanelVisible={isEnvironmentPanelVisible}
-        createTerminalDisabled={isCreateTerminalPending}
-        onCreateTerminal={headerTitleBar.onCreateTerminal}
-      />
+      <View style={styles.mobileHeaderRight} testID="workspace-mobile-header-actions">
+        {headerRightControls.isGitCheckout && openInCwd.length > 0 ? (
+          <WorkspaceGitActions serverId={normalizedServerId} cwd={openInCwd} hideLabels />
+        ) : null}
+        <WorkspaceHeaderRightControls
+          {...headerRightControls}
+          isMobile
+          isEnvironmentPanelVisible={isEnvironmentPanelVisible}
+          createTerminalDisabled={isCreateTerminalPending}
+          onCreateTerminal={headerTitleBar.onCreateTerminal}
+        />
+      </View>
     );
   }, [
     headerRightControls,
@@ -196,35 +186,6 @@ export function WorkspaceCenterColumn({
     isMobile,
     normalizedServerId,
     normalizedWorkspaceId,
-  ]);
-
-  // Desktop topbar owns T3-style breadcrumb + action cluster + panel toggles.
-  const desktopSoftTopbar = useMemo(() => {
-    if (isMobile) return null;
-    return (
-      <WorkspaceDesktopSoftTopbar
-        {...headerTitleBar}
-        {...headerRightControls}
-        activeTarget={activeTarget}
-        normalizedServerId={normalizedServerId}
-        normalizedWorkspaceId={normalizedWorkspaceId}
-        showCreateBrowserTab={showCreateBrowserTab}
-        createTerminalDisabled={isCreateTerminalPending}
-        browserContextDockDisabled={!hasEnvironmentBrowserContext}
-        isEnvironmentPanelVisible={isEnvironmentPanelVisible}
-      />
-    );
-  }, [
-    activeTarget,
-    hasEnvironmentBrowserContext,
-    headerRightControls,
-    headerTitleBar,
-    isCreateTerminalPending,
-    isEnvironmentPanelVisible,
-    isMobile,
-    normalizedServerId,
-    normalizedWorkspaceId,
-    showCreateBrowserTab,
   ]);
 
   const content = useMemo(
@@ -241,7 +202,6 @@ export function WorkspaceCenterColumn({
 
   return (
     <View style={styles.centerColumn}>
-      {desktopSoftTopbar}
       {isMobile ? (
         <ScreenHeader
           left={

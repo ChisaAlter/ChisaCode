@@ -20,6 +20,7 @@ import { usePanelStore } from "@/stores/panel-store";
 import { useWorkspaceLayoutChrome } from "@/screens/workspace/use-workspace-layout-chrome";
 import { WorkspaceRightPanel } from "@/screens/workspace/workspace-right-panel";
 import { WorkspaceTerminalDrawer } from "@/screens/workspace/workspace-terminal-drawer";
+import { WorkspaceDesktopSoftTopbar } from "@/screens/workspace/workspace-header";
 import { useSessionStore, type WorkspaceDescriptor } from "@/stores/session-store";
 import {
   buildWorkspaceTabPersistenceKey,
@@ -916,7 +917,6 @@ function WorkspaceScreenContent({
     handleToggleTerminalDrawer,
     handleToggleRightPanel,
     handleOpenRightPanelSurface,
-    handleCloseRightPanel,
     handleCloseTerminalDrawer,
   } = useWorkspaceLayoutChrome({
     isMobile,
@@ -1161,6 +1161,20 @@ function WorkspaceScreenContent({
     ],
   );
 
+  const desktopSoftTopbar = !isMobile ? (
+    <WorkspaceDesktopSoftTopbar
+      {...workspaceCenterHeaderTitleBar}
+      {...workspaceCenterHeaderRightControls}
+      activeTarget={activeTarget}
+      normalizedServerId={normalizedServerId}
+      normalizedWorkspaceId={normalizedWorkspaceId}
+      showCreateBrowserTab={getIsElectron()}
+      createTerminalDisabled={isCreateTerminalPending}
+      browserContextDockDisabled={!hasEnvironmentBrowserContext}
+      isEnvironmentPanelVisible={isEnvironmentPanelVisible}
+    />
+  ) : null;
+
   const desktopTerminalDrawer = useMemo(() => {
     if (isMobile) {
       return null;
@@ -1206,6 +1220,7 @@ function WorkspaceScreenContent({
             workspaceId={normalizedWorkspaceId}
             isRouteFocused={isRouteFocused}
           />
+          {desktopSoftTopbar}
           <View style={styles.threePaneRow}>
             <FloatingPanelPortalHostNameProvider hostName={workspaceFloatingPanelPortalHostName}>
               <WorkspaceCenterColumn
@@ -1244,7 +1259,6 @@ function WorkspaceScreenContent({
                 terminalId={activeTerminalId}
                 browserId={rightPanelBrowserId}
                 isWorkspaceFocused={isRouteFocused}
-                onClose={handleCloseRightPanel}
                 onOpenSurface={handleOpenRightPanelSurface}
                 onOpenFile={handleOpenFileFromExplorer}
                 onOpenFileExplorer={handleToggleExplorer}

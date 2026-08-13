@@ -116,35 +116,28 @@ describe("resolveWindowControlsPadding", () => {
     });
   });
 
-  it("reserves caption width on the docked right-panel header only", () => {
+  it("does not expose a caption-sharing role for the right panel", () => {
     expect(
       resolveWindowControlsPadding({
-        role: "rightPanelHeader",
+        role: "titlebar",
         rawPadding,
         sidebarClosed: false,
         explorerOpen: false,
         focusModeEnabled: false,
       }),
-    ).toEqual({
-      left: 0,
-      right: rawPadding.right,
-      top: 0,
-    });
-  });
+    ).toEqual(rawPadding);
 
-  it("clears right-panel header padding when raw caption inset is zero", () => {
-    expect(
-      resolveWindowControlsPadding({
-        role: "rightPanelHeader",
-        rawPadding: { left: 0, right: 0, top: 0 },
-        sidebarClosed: false,
-        explorerOpen: false,
-        focusModeEnabled: false,
-      }),
-    ).toEqual({
-      left: 0,
-      right: 0,
-      top: 0,
-    });
+    const roles = ["sidebar", "header", "detailHeader", "tabRow", "explorerSidebar"] as const;
+    for (const role of roles) {
+      expect(
+        resolveWindowControlsPadding({
+          role,
+          rawPadding,
+          sidebarClosed: false,
+          explorerOpen: true,
+          focusModeEnabled: false,
+        }),
+      ).toEqual({ left: 0, right: 0, top: 0 });
+    }
   });
 });
