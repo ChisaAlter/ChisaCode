@@ -120,8 +120,11 @@ app.json
 # Local ZCode client state (not project source)
 .zcode/
 
-# Local ChisaCode agent session/diagnostic context (not project source)
-.chisacode-context/
+# Local CLI / debug helpers that must not be committed
+cli-client-id
+cleanup-verify-agents.mjs
+probe-providers.mjs
+
 
 # Windows reserved device name accidental files (cannot be staged by Git on Win)
 nul
