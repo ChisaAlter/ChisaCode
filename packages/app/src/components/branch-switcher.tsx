@@ -9,6 +9,7 @@ import { useIsCompactFormFactor } from "@/constants/layout";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { useToast } from "@/contexts/toast-context";
 import { useBranchSwitcher } from "@/hooks/use-branch-switcher";
+import { resolveBranchPickerEmptyText } from "@/screens/new-workspace-branch-picker";
 import { ScreenTitle } from "@/components/headers/screen-title";
 import { useTranslation } from "react-i18next";
 import type { Theme } from "@/styles/theme";
@@ -52,7 +53,7 @@ export function BranchSwitcher({
   const queryClient = useQueryClient();
   const isSoftPill = presentation === "soft-pill";
 
-  const { branchOptions, isOpen, setIsOpen, handleBranchSelect } = useBranchSwitcher({
+  const { branchOptions, isFetching, isOpen, setIsOpen, handleBranchSelect } = useBranchSwitcher({
     client,
     normalizedServerId: serverId,
     normalizedWorkspaceId: workspaceId,
@@ -76,6 +77,12 @@ export function BranchSwitcher({
   );
 
   const handleOpen = useCallback(() => setIsOpen(true), [setIsOpen]);
+  const pickerEmptyText = resolveBranchPickerEmptyText({
+    hasBranchOptions: branchOptions.length > 0,
+    branchesFetching: isFetching,
+    searchingLabel: t("workspace.searching"),
+    noMatchLabel: t("branches.empty"),
+  });
 
   const triggerStyle = useCallback(
     ({ hovered = false, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
@@ -128,7 +135,7 @@ export function BranchSwitcher({
         searchable
         placeholder={t("branches.placeholder")}
         searchPlaceholder={t("branches.searchPlaceholder")}
-        emptyText={t("branches.empty")}
+        emptyText={pickerEmptyText}
         title={t("branches.title")}
         open={isOpen}
         onOpenChange={setIsOpen}

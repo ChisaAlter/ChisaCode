@@ -92,6 +92,8 @@ describe("workbench fidelity style boundaries", () => {
     expect(headerSource).toContain('testID="workspace-header-title"');
     expect(headerSource).toContain('testID="workspace-header-breadcrumb"');
     expect(headerSource).toContain("WorkspaceOpenInEditorButton");
+    expect(headerSource).toContain("BranchSwitcher");
+    expect(headerSource).toContain("hideIdlePrimary");
     expect(headerSource).toContain("WorkspaceGitActions");
     expect(headerSource).toContain('testID="workspace-terminal-drawer-toggle"');
     expect(headerSource).toContain('testID="workspace-right-panel-toggle"');

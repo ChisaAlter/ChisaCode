@@ -254,6 +254,7 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
         watch: this.deps.watch,
         getCheckoutSnapshotFacts: this.deps.getCheckoutSnapshotFacts,
         now: this.deps.now,
+        hasLocalSnapshot: (cwd) => this.peekSnapshot(cwd) !== null,
       },
       repositoryFetchAuthority: this.repositoryFetchAuthority,
       scheduleRefresh: (cwd) => this.scheduleWorkspaceRefresh(cwd),
@@ -517,9 +518,24 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
       }
       void this.refreshWorkspaceTarget(target, {
         force: false,
-        includeGitHub: true,
+        includeGitHub: false,
         reason: "initial",
         notify: true,
+      }).then(async () => {
+        if (!this.isActiveObservedWorkspaceTarget(target)) {
+          return;
+        }
+        await this.suggestBranchesForCwd(target.cwd, { limit: 20 }).catch(() => undefined);
+        if (!this.isActiveObservedWorkspaceTarget(target)) {
+          return;
+        }
+        this.checkoutObservation.attachFetchIfReady(target.cwd);
+        return this.refreshWorkspaceTarget(target, {
+          force: true,
+          includeGitHub: true,
+          reason: "initial-github",
+          notify: true,
+        });
       });
     });
   }

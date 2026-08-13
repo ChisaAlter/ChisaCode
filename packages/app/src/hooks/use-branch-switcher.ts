@@ -5,7 +5,26 @@ import type { DaemonClient } from "@chisacode/client/internal/daemon-client";
 import type { ComboboxOption } from "@/components/ui/combobox";
 import type { ToastApi } from "@/components/toast-host";
 import { invalidateCheckoutGitQueriesForClient } from "@/git/query-keys";
+import { seedCurrentBranchDetails } from "@/screens/new-workspace-branch-picker";
 import { confirmDialog } from "@/utils/confirm-dialog";
+
+export function resolveBranchSwitcherQueryEnabled(input: {
+  isGitCheckout: boolean;
+  hasClient: boolean;
+  isConnected: boolean;
+}): boolean {
+  return input.isGitCheckout && input.hasClient && input.isConnected;
+}
+
+export function buildBranchSwitcherOptions(
+  currentBranchName: string | null,
+  options: ComboboxOption[],
+): ComboboxOption[] {
+  return seedCurrentBranchDetails(
+    currentBranchName,
+    options.map((option) => ({ name: option.id, committerDate: 0 })),
+  ).map((detail) => ({ id: detail.name, label: detail.name }));
+}
 
 interface UseBranchSwitcherInput {
   client: DaemonClient | null;
@@ -20,6 +39,7 @@ interface UseBranchSwitcherInput {
 
 interface UseBranchSwitcherResult {
   branchOptions: ComboboxOption[];
+  isFetching: boolean;
   isOpen: boolean;
   setIsOpen: (open: boolean) => void;
   handleBranchSelect: (branchId: string) => void;
@@ -54,15 +74,22 @@ export function useBranchSwitcher({
       }
       return payload.branches ?? [];
     },
-    enabled: isOpen && isGitCheckout && Boolean(client) && isConnected,
+    enabled: resolveBranchSwitcherQueryEnabled({
+      isGitCheckout,
+      hasClient: Boolean(client),
+      isConnected,
+    }),
     retry: false,
     staleTime: 15_000,
   });
 
   const branchOptions = useMemo<ComboboxOption[]>(() => {
     const branches = branchSuggestionsQuery.data ?? [];
-    return branches.map((name) => ({ id: name, label: name }));
-  }, [branchSuggestionsQuery.data]);
+    return buildBranchSwitcherOptions(
+      currentBranchName,
+      branches.map((name) => ({ id: name, label: name })),
+    );
+  }, [branchSuggestionsQuery.data, currentBranchName]);
 
   const stashListQueryKey = useMemo(
     () => ["stashList", normalizedServerId, normalizedWorkspaceId] as const,
@@ -177,5 +204,12 @@ export function useBranchSwitcher({
     ],
   );
 
-  return { branchOptions, isOpen, setIsOpen, handleBranchSelect, invalidateStashAndCheckout };
+  return {
+    branchOptions,
+    isFetching: branchSuggestionsQuery.isFetching,
+    isOpen,
+    setIsOpen,
+    handleBranchSelect,
+    invalidateStashAndCheckout,
+  };
 }

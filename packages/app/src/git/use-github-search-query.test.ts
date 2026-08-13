@@ -38,5 +38,6 @@ describe("buildGithubSearchQueryOptions", () => {
     await query.queryFn();
 
     expect(requests).toEqual([{ cwd: "/repo", query: "123", limit: 20, kinds: ["github-pr"] }]);
+    expect(query.retry).toBe(false);
   });
 });

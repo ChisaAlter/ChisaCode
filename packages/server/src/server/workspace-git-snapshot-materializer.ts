@@ -167,7 +167,7 @@ export class WorkspaceGitSnapshotMaterializer {
     const previousPollKey = this.getGitHubPollKey(target);
     const context: CheckoutContext = { chisacodeHome: this.chisacodeHome, logger: this.logger };
     const facts = await this.deps.loadFacts(target.cwd, context, {
-      allowRecent: !request.force,
+      allowRecent: !request.force || request.includeGitHub,
     });
     const checkoutContext: CheckoutContext = { ...context, facts };
     const checkoutStatus = await this.deps.getCheckoutStatus(target.cwd, checkoutContext);

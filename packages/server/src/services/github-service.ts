@@ -704,6 +704,7 @@ async function runGhCommand(
     cwd: options.cwd,
     envOverlay: { ...GITHUB_ENV, ...options.envOverlay },
     maxBuffer: 10 * 1024 * 1024,
+    timeout: 8_000,
   });
 }
 
