@@ -15,6 +15,7 @@ Use this when adding or changing built-in providers, custom providers, model/mod
 - `docs/providers.md`
 - `docs/custom-providers.md`
 - `docs/development.md`
+- `docs/refactors/provider-probe-storm-2026-08-13.md`
 
 ## Invariants
 
@@ -31,7 +32,9 @@ Provider discovery is represented by a per-scope snapshot. The home scope is enc
 
 A cold pull may return provisional `loading` entries, but every active provider load must publish a terminal `ready`, `error`, or `unavailable` state. `ready` with an empty `models` array is valid and means the command is available but no models were discovered. Structured reasons distinguish disabled providers, missing commands, runtime startup failures, discovery failures, refresh timeouts, and configuration changes. Refresh retains cached models/modes while loading and must expose a retryable error rather than leaving a permanent spinner.
 
-Settings configuration replacement updates metadata without starting provider processes. Explicit refresh is responsible for probing; it invalidates all established scopes and force-refreshes the home scope. Provider snapshot listeners are owned by `ProviderHandler` and are removed with the session lifecycle.
+Settings configuration replacement updates metadata without starting provider processes. Explicit refresh is responsible for probing; it invalidates all established scopes and force-refreshes the home scope. Opening the model selector is not an explicit refresh: the app may only stale-refetch the snapshot query. A full force refresh reuses in-flight loads and skips ready providers fresher than 60 seconds; a targeted Retry always forces the named providers. Provider snapshot listeners are owned by `ProviderHandler` and are removed with the session lifecycle.
+
+The composer and model selector treat `error` as visible, not hidden. Last-good models stay in the selector; `RESOLVABLE_PROVIDER_STATUSES` and `SELECTABLE_PROVIDER_STATUSES` include `error`. `unavailable`/disabled stay gated. Do not collapse a selected error provider to "请选择模型".
 
 Pi availability answers only whether its configured launch command exists. Authentication, gateway configuration, and model discovery are reported separately by snapshot discovery and diagnostics. Pi RPC close must reject pending requests, handle stdin failures, and produce at most one terminal turn event.
 

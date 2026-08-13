@@ -890,6 +890,8 @@ export const resources = {
         openProviderSettings: "打开 {{provider}} 设置",
         selectModelWithValue: "选择模型（{{value}}）",
         defaultModel: "默认",
+        cachedBadge: "缓存",
+        connectionIssueHeader: "连接异常，显示上次缓存的模型",
       },
       providerSelection: {
         initialPromptRequired: "请输入初始提示词",
@@ -2870,6 +2872,8 @@ export const resources = {
         openProviderSettings: "Open {{provider}} settings",
         selectModelWithValue: "Select model ({{value}})",
         defaultModel: "Default",
+        cachedBadge: "Cached",
+        connectionIssueHeader: "Connection issue — showing last cached models",
       },
       providerSelection: {
         initialPromptRequired: "Enter an initial prompt",

@@ -1,5 +1,5 @@
-import { QueryClient } from "@tanstack/react-query";
-import { beforeEach, describe, expect, it } from "vitest";
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { DaemonClient } from "@chisacode/client/internal/daemon-client";
 import type { ProviderSnapshotEntry } from "@chisacode/protocol/agent-types";
@@ -7,8 +7,8 @@ import {
   applyProvidersSnapshotUpdate,
   fetchProvidersSnapshot,
   providersSnapshotQueryKey,
+  refetchProvidersSnapshotIfStale,
   refreshAndApplyProvidersSnapshot,
-  selectorOpenRefetchDecision,
   type ProvidersSnapshotClient,
   type ProvidersSnapshotUpdateMessage,
 } from "./use-providers-snapshot";
@@ -295,46 +295,44 @@ describe("applyProvidersSnapshotUpdate", () => {
   });
 });
 
-describe("selectorOpenRefetchDecision", () => {
-  it("refetches stale entries when no provider is selected", () => {
-    expect(
-      selectorOpenRefetchDecision({
-        entries: [codexEntry("ready", [readyCodexModel])],
-        selectedProvider: null,
-      }),
-    ).toBe("refetch-stale");
+describe("refetchProvidersSnapshotIfStale", () => {
+  let queryClient: QueryClient;
+
+  beforeEach(() => {
+    queryClient = new QueryClient();
   });
 
-  it("refreshes the snapshot when the selected provider has no entry", () => {
-    expect(selectorOpenRefetchDecision({ entries: [], selectedProvider: "codex" })).toBe(
-      "refresh-now",
-    );
+  it("refetches only active snapshot queries and only when stale", async () => {
+    const queryKey = providersSnapshotQueryKey(serverId);
+    const queryFn = vi.fn(async () => providersSnapshot([codexEntry("ready", [readyCodexModel])]));
+    const observer = new QueryObserver(queryClient, { queryKey, queryFn, staleTime: 60_000 });
+    const unsubscribe = observer.subscribe(() => {});
+    try {
+      // Initial mount fetch.
+      await vi.waitFor(() => expect(queryFn).toHaveBeenCalledTimes(1));
+
+      // Fresh data: opening the selector must not trigger any request.
+      await refetchProvidersSnapshotIfStale(queryClient, queryKey);
+      expect(queryFn).toHaveBeenCalledTimes(1);
+
+      // Stale data: opening the selector triggers a plain read refetch, never a refresh RPC.
+      queryClient.setQueryData(queryKey, (previous) => previous, { updatedAt: 0 });
+      await refetchProvidersSnapshotIfStale(queryClient, queryKey);
+      await vi.waitFor(() => expect(queryFn).toHaveBeenCalledTimes(2));
+    } finally {
+      unsubscribe();
+    }
   });
 
-  it("refreshes the snapshot when the selected provider is still loading", () => {
-    expect(
-      selectorOpenRefetchDecision({
-        entries: [codexEntry("loading")],
-        selectedProvider: "codex",
-      }),
-    ).toBe("refresh-now");
-  });
+  it("does not refetch inactive queries even when stale", async () => {
+    const queryKey = providersSnapshotQueryKey(serverId, "/repo-a");
+    const queryFn = vi.fn(async () => providersSnapshot([]));
+    await queryClient.fetchQuery({ queryKey, queryFn, staleTime: 60_000 });
+    queryClient.invalidateQueries({ queryKey });
+    queryFn.mockClear();
 
-  it("keeps a stale-only refetch when the selected provider is ready with no models", () => {
-    expect(
-      selectorOpenRefetchDecision({
-        entries: [codexEntry("ready", [])],
-        selectedProvider: "codex",
-      }),
-    ).toBe("refetch-stale");
-  });
+    await refetchProvidersSnapshotIfStale(queryClient, queryKey);
 
-  it("keeps a stale-only refetch when the selected provider is ready with models", () => {
-    expect(
-      selectorOpenRefetchDecision({
-        entries: [codexEntry("ready", [readyCodexModel])],
-        selectedProvider: "codex",
-      }),
-    ).toBe("refetch-stale");
+    expect(queryFn).not.toHaveBeenCalled();
   });
 });

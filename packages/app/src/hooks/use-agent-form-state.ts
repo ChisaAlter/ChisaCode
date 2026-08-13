@@ -550,8 +550,7 @@ export function useAgentFormState(options: UseAgentFormStateOptions = {}): UseAg
   );
 
   const refetchProviderModelsIfStale = useCallback(() => {
-    const { provider, runtimeProvider } = reducerStateRef.current.form;
-    refetchSnapshotIfStale(runtimeProvider ?? provider);
+    refetchSnapshotIfStale();
   }, [refetchSnapshotIfStale]);
 
   const persistFormPreferences = useCallback(async () => {

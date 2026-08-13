@@ -43,6 +43,8 @@ import {
 } from "../diagnostic-redaction.js";
 
 const DEFAULT_REFRESH_TIMEOUT_MS = 30_000;
+/** Full refreshes skip ready providers whose snapshot is newer than this. */
+const PROVIDER_READY_FRESH_MS = 60_000;
 
 type ProviderSnapshotChangeListener = (entries: ProviderSnapshotEntry[], cwd: string) => void;
 
@@ -228,9 +230,10 @@ export class ProviderSnapshotManager {
     }
     const snapshotCwd = resolveSnapshotCwd(options.cwd);
     const providers = this.resolveRefreshProviders(options.providers);
-    this.resetSnapshotToLoading(snapshotCwd, providers, { preserveExisting: true });
+    const providersToRefresh = providers ?? this.resolveFullRefreshProviders(snapshotCwd);
+    this.resetSnapshotToLoading(snapshotCwd, providersToRefresh, { preserveExisting: true });
     this.emitChange(snapshotCwd);
-    await this.refreshProviders(snapshotCwd, providers ?? this.getProviderIds());
+    await this.refreshProviders(snapshotCwd, providersToRefresh);
   }
 
   async refreshSettingsSnapshot(
@@ -682,7 +685,12 @@ export class ProviderSnapshotManager {
     }
 
     const existingLoad = this.getProviderLoad(options.cwd, options.provider);
-    if (existingLoad && !options.force) {
+    if (existingLoad) {
+      // A probe is already in flight for this provider in this scope. Reuse it
+      // instead of running a parallel availability check and model fetch — the
+      // in-flight load emits its result through the same snapshot entry.
+      // refreshSettingsSnapshot clears cached loads before forcing, so explicit
+      // settings refreshes still start a fresh probe.
       return existingLoad.promise;
     }
 
@@ -988,6 +996,18 @@ export class ProviderSnapshotManager {
     const providerIds = new Set(this.getProviderIds());
     return Array.from(new Set(providers)).filter((provider) => providerIds.has(provider));
   }
+
+  /**
+   * Resolves the providers a full refresh (no explicit provider list) should
+   * re-probe, skipping providers that are ready with a fresh snapshot.
+   * Re-probing them on every full refresh is the availability probe storm this
+   * guard prevents. Targeted refreshes always force — the caller asked for
+   * those specific providers.
+   */
+  private resolveFullRefreshProviders(cwdKey: string): AgentProvider[] {
+    const snapshot = this.snapshots.get(cwdKey);
+    return this.getProviderIds().filter((provider) => !isReadyAndFresh(snapshot?.get(provider)));
+  }
 }
 
 function preservedProviderSnapshotData(
@@ -1001,6 +1021,14 @@ function preservedProviderSnapshotData(
     ...(current.modes ? { modes: current.modes } : {}),
     ...(current.fetchedAt ? { fetchedAt: current.fetchedAt } : {}),
   };
+}
+
+function isReadyAndFresh(entry: ProviderSnapshotEntry | undefined): boolean {
+  if (!entry || entry.status !== "ready" || !entry.fetchedAt) {
+    return false;
+  }
+  const fetchedAt = Date.parse(entry.fetchedAt);
+  return Number.isFinite(fetchedAt) && Date.now() - fetchedAt < PROVIDER_READY_FRESH_MS;
 }
 
 export function resolveSnapshotCwd(cwd?: string | null): string {

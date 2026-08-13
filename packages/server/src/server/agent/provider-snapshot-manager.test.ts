@@ -601,3 +601,170 @@ describe("ProviderSnapshotManager cwd routing", () => {
     }
   });
 });
+
+describe("ProviderSnapshotManager refresh guards", () => {
+  const disabledBuiltIns = {
+    claude: { enabled: false },
+    codex: { enabled: false },
+    opencode: { enabled: false },
+    pi: { enabled: false },
+    kimi: { enabled: false },
+    grokbuild: { enabled: false },
+    // enableDevProviders registers the slow dev provider whose probes never
+    // resolve — keep it disabled so warm-up stays deterministic.
+    "mock-slow": { enabled: false },
+  };
+  const provider = "mock" as AgentProvider;
+
+  function createDeferred(): { promise: Promise<boolean>; release: () => void } {
+    let release!: () => void;
+    const promise = new Promise<boolean>((r) => {
+      release = () => r(true);
+    });
+    return { promise, release };
+  }
+
+  function createMockManager(): {
+    manager: ProviderSnapshotManager;
+    isAvailable: ReturnType<typeof vi.fn>;
+  } {
+    const isAvailable = vi.fn(async () => true);
+    const manager = new ProviderSnapshotManager({
+      logger: createTestLogger(),
+      providerOverrides: disabledBuiltIns,
+      enableDevProviders: true,
+      extraClients: {
+        mock: createExtraClient(provider, { isAvailable }),
+      },
+    });
+    return { manager, isAvailable };
+  }
+
+  test("force refresh reuses an in-flight probe instead of running a parallel one", async () => {
+    const availability = createDeferred();
+    const isAvailable = vi.fn(() => availability.promise);
+    const manager = new ProviderSnapshotManager({
+      logger: createTestLogger(),
+      providerOverrides: disabledBuiltIns,
+      enableDevProviders: true,
+      extraClients: {
+        mock: createExtraClient(provider, { isAvailable }),
+      },
+    });
+    try {
+      // Warm-up starts a non-force probe that we hold open.
+      void manager.listProviders({ cwd: "/tmp/project", wait: false });
+      await vi.waitFor(() => expect(isAvailable).toHaveBeenCalledTimes(1));
+
+      const refreshPromise = manager.refreshSnapshotForCwd({ cwd: "/tmp/project" });
+      // The force refresh must join the in-flight load, not start a second probe.
+      await vi.waitFor(() => expect(isAvailable).toHaveBeenCalledTimes(1));
+
+      availability.release();
+      await refreshPromise;
+
+      const entry = (await manager.listProviders({ cwd: "/tmp/project" })).find(
+        (candidate) => candidate.provider === provider,
+      );
+      expect(entry?.status).toBe("ready");
+      expect(entry?.models?.length ?? 0).toBeGreaterThan(0);
+    } finally {
+      manager.destroy();
+    }
+  });
+
+  test("settings refresh clears cached loads and still starts a fresh forced probe", async () => {
+    const warmAvailability = createDeferred();
+    const refreshedAvailability = createDeferred();
+    const deferreds = [warmAvailability, refreshedAvailability];
+    const isAvailable = vi.fn(() => deferreds[Math.min(isAvailable.mock.calls.length, 1)].promise);
+    const manager = new ProviderSnapshotManager({
+      logger: createTestLogger(),
+      providerOverrides: disabledBuiltIns,
+      enableDevProviders: true,
+      extraClients: {
+        mock: createExtraClient(provider, { isAvailable }),
+      },
+    });
+    try {
+      void manager.listProviders({ cwd: "/tmp/project", wait: false });
+      await vi.waitFor(() => expect(isAvailable).toHaveBeenCalledTimes(1));
+
+      const settingsRefresh = manager.refreshSettingsSnapshot({ providers: [provider] });
+      // Clearing cached loads lets the forced settings refresh start new probes
+      // for the project and home scopes (two scopes, two new probes).
+      await vi.waitFor(() => expect(isAvailable).toHaveBeenCalledTimes(3));
+
+      for (const deferred of deferreds) {
+        deferred.release();
+      }
+      await settingsRefresh;
+
+      const entry = (await manager.listProviders({ cwd: "/tmp/project" })).find(
+        (candidate) => candidate.provider === provider,
+      );
+      expect(entry?.status).toBe("ready");
+    } finally {
+      manager.destroy();
+    }
+  });
+
+  test("full refresh skips a ready provider with a fresh snapshot", async () => {
+    const { manager, isAvailable } = createMockManager();
+    try {
+      await manager.listProviders({ cwd: "/tmp/project", wait: true });
+      expect(isAvailable).toHaveBeenCalledTimes(1);
+      isAvailable.mockClear();
+
+      await manager.refreshSnapshotForCwd({ cwd: "/tmp/project" });
+
+      expect(isAvailable).not.toHaveBeenCalled();
+      const entry = (await manager.listProviders({ cwd: "/tmp/project" })).find(
+        (candidate) => candidate.provider === provider,
+      );
+      expect(entry?.status).toBe("ready");
+      expect(entry?.models?.length ?? 0).toBeGreaterThan(0);
+    } finally {
+      manager.destroy();
+    }
+  });
+
+  test("targeted refresh still forces a probe for the requested provider", async () => {
+    const { manager, isAvailable } = createMockManager();
+    try {
+      await manager.listProviders({ cwd: "/tmp/project", wait: true });
+      isAvailable.mockClear();
+
+      await manager.refreshSnapshotForCwd({ cwd: "/tmp/project", providers: [provider] });
+
+      expect(isAvailable).toHaveBeenCalledTimes(1);
+      const entry = (await manager.listProviders({ cwd: "/tmp/project" })).find(
+        (candidate) => candidate.provider === provider,
+      );
+      expect(entry?.status).toBe("ready");
+    } finally {
+      manager.destroy();
+    }
+  });
+
+  test("full refresh re-probes a ready provider once its snapshot is stale", async () => {
+    vi.useFakeTimers();
+    try {
+      const { manager, isAvailable } = createMockManager();
+      try {
+        await manager.listProviders({ cwd: "/tmp/project", wait: true });
+        const callsAfterWarm = isAvailable.mock.calls.length;
+        expect(callsAfterWarm).toBe(1);
+
+        await vi.advanceTimersByTimeAsync(61_000);
+        await manager.refreshSnapshotForCwd({ cwd: "/tmp/project" });
+
+        expect(isAvailable.mock.calls.length).toBe(callsAfterWarm + 1);
+      } finally {
+        manager.destroy();
+      }
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});

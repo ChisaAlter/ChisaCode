@@ -765,8 +765,8 @@ export const AgentControls = memo(function AgentControls({
   );
 
   const handleModelSelectorOpen = useCallback(() => {
-    refetchSnapshotIfStale(agentProvider);
-  }, [agentProvider, refetchSnapshotIfStale]);
+    refetchSnapshotIfStale();
+  }, [refetchSnapshotIfStale]);
 
   const handleRetryModelProvider = useCallback(
     (provider: AgentProvider) => {

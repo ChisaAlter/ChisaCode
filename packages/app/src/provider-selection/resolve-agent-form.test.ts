@@ -1105,5 +1105,33 @@ describe("resolveAgentForm", () => {
 
       expect([...map.keys()]).toEqual(["codex"]);
     });
+
+    it("keeps an error-status provider in the resolvable and selectable maps", () => {
+      const entries: ProviderSnapshotEntry[] = [
+        {
+          provider: "codex",
+          status: "error",
+          enabled: true,
+          error: "Timed out checking Codex availability after 30000ms",
+          label: "Codex",
+          description: "",
+          defaultModeId: "auto",
+          modes: [],
+          models: [{ provider: "codex", id: "gpt-5.4", label: "GPT-5.4" }],
+        },
+      ];
+      const resolvable = buildProviderDefinitionMapForStatuses({
+        snapshotEntries: entries,
+        providerDefinitions: [TEST_CODEX_DEFINITION],
+        statuses: new Set<ProviderSnapshotEntry["status"]>(["ready", "loading", "error"]),
+      });
+      const selectable = buildProviderDefinitionMapForStatuses({
+        snapshotEntries: entries,
+        providerDefinitions: [TEST_CODEX_DEFINITION],
+        statuses: new Set<ProviderSnapshotEntry["status"]>(["ready", "error"]),
+      });
+      expect([...resolvable.keys()]).toEqual(["codex"]);
+      expect([...selectable.keys()]).toEqual(["codex"]);
+    });
   });
 });

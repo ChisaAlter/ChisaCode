@@ -24,6 +24,10 @@ export interface ProviderSelectorProvider {
   id: string;
   label: string;
   modelSelection: ProviderModelSelection;
+  /** Snapshot status of the entry backing this row (absent for static definitions). */
+  status?: ProviderSnapshotEntry["status"];
+  /** Snapshot error message when status is "error" — feeds warning strips. */
+  error?: string | null;
 }
 
 export interface ProviderSelectionCopy {
@@ -211,6 +215,8 @@ export function buildSelectableProviderSelectorProviders(
       id: entry.provider,
       label,
       modelSelection: buildEntryModelSelection(entry, label, copy),
+      status: entry.status,
+      error: entry.error ?? null,
     };
     selectorProviders.push(provider);
     selectorProviderById.set(provider.id, provider);
@@ -227,6 +233,8 @@ export function buildSelectableProviderSelectorProviders(
         id: entry.provider,
         label,
         modelSelection: buildEntryModelSelection(entry, label, copy),
+        status: entry.status,
+        error: entry.error ?? null,
       };
       selectorProviders.push(standalone);
       selectorProviderById.set(standalone.id, standalone);
@@ -298,6 +306,26 @@ export function getAllProviderModelRows(
   providers: ProviderSelectorProvider[],
 ): ProviderSelectionModelRow[] {
   return providers.flatMap(getProviderModelRows);
+}
+
+/**
+ * Returns the snapshot-backed selector row for the given provider when that
+ * provider is currently in error. Used by the composer to decorate the
+ * selected-model trigger without introducing extra cbar height.
+ */
+export function findErrorSelectorProvider(
+  providers: ProviderSelectorProvider[],
+  selectedProvider: string | null | undefined,
+): ProviderSelectorProvider | null {
+  const providerId = selectedProvider?.trim();
+  if (!providerId) {
+    return null;
+  }
+  const provider = providers.find((entry) => entry.id === providerId);
+  if (!provider || provider.status !== "error") {
+    return null;
+  }
+  return provider;
 }
 
 export function resolveSelectedModelLabel(input: {

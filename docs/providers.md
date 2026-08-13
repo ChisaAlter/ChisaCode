@@ -145,7 +145,15 @@ The daemon keeps provider snapshots per resolved working directory. Missing or b
 
 The Settings page receives both pull responses and `providers_snapshot_update` pushes. Home updates omit `cwd`; workspace updates carry the server-resolved canonical cwd. Refresh retains cached models and modes while probing, and a failed refresh is retryable instead of becoming an endless loading state.
 
+Opening the model selector is a stale snapshot read, not a probe. It must never send an unscoped `refresh_providers_snapshot_request`. The daemon already warms any still-loading entry on a plain `get_providers_snapshot` pull and pushes `providers_snapshot_update` as probes finish. Only an explicit Settings refresh or a per-provider Retry may force a probe.
+
+A full force refresh (no provider list) reuses any in-flight probe and skips providers that are already `ready` with `fetchedAt` younger than 60 seconds. A targeted force for an explicit provider list always probes those providers. Settings refresh still clears cached loads first, so it remains a real re-probe.
+
+`error` is a terminal snapshot status, not a reason to hide models or clear the composer selection. Last-good models/modes stay visible and selectable, with a warning and Retry. `unavailable` and disabled providers stay gated. A create/send against a still-error provider fails at the daemon (`getReadyProvider`) and must surface that error — it must not fail silently.
+
 Settings refresh invalidates all established cwd scopes and immediately force-refreshes the home scope. Existing workspace scopes are re-warmed on their next pull or active query. Registry/config replacement updates metadata without starting provider processes; explicit refresh is the only probing path.
+
+Availability probes can still take up to 30 seconds when a provider runtime initialize waits on machine-level MCP servers. Stage one of the 2026-08-13 work stops the selector from triggering that probe storm and keeps error providers usable. Decoupling initialize from MCP readiness is a separate follow-up; shrinking `refreshTimeoutMs` to 10s is not the default because cold Windows spawns would false-error.
 
 For Pi, install `@earendil-works/pi-coding-agent` and authenticate it with `~/.pi/agent/auth.json` or the credentials supported by your Pi setup. Model providers and gateway models are configured by Pi's model configuration and the environment passed by ChisaCode. ChisaCode's Pi diagnostics report command availability, model discovery, auth-related failures, and MCP probe state separately. Use Settings → provider details → Refresh/Retry, then the Diagnostic action; the CLI `provider inspect` command is useful when the daemon is unavailable. Never paste auth tokens or full environment values into diagnostics.
 

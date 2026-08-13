@@ -57,11 +57,18 @@ export const INITIAL_USER_MODIFIED: UserModifiedFields = {
 
 type ProviderPrefs = NonNullable<FormPreferences["providerPreferences"]>[AgentProvider];
 
+// Error providers stay resolvable/selectable: the snapshot preserves last-good
+// models, so a failing probe must not wipe the selection or hide the model
+// list. Unavailable/disabled providers remain gated.
 export const RESOLVABLE_PROVIDER_STATUSES = new Set<ProviderSnapshotEntry["status"]>([
   "ready",
   "loading",
+  "error",
 ]);
-export const SELECTABLE_PROVIDER_STATUSES = new Set<ProviderSnapshotEntry["status"]>(["ready"]);
+export const SELECTABLE_PROVIDER_STATUSES = new Set<ProviderSnapshotEntry["status"]>([
+  "ready",
+  "error",
+]);
 
 export type AgentFormAction =
   | {

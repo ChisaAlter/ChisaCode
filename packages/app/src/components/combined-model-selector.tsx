@@ -53,6 +53,9 @@ type IconColorMapping = (theme: Theme) => { color: string; fill?: string };
 const foregroundMutedColorMapping = (theme: Theme) => ({
   color: theme.colors.foregroundMuted,
 });
+const warningColorMapping = (theme: Theme) => ({
+  color: theme.colors.statusWarning,
+});
 const foregroundColorMapping = (theme: Theme) => ({
   color: theme.colors.foreground,
 });
@@ -115,6 +118,7 @@ import { getProviderIcon } from "@/components/provider-icons";
 import {
   buildSelectedTriggerLabel,
   filterAndRankModelRows,
+  findErrorSelectorProvider,
   getProviderModelRows,
   resolveSelectedModelLabel,
   type ProviderModelSelectionValue,
@@ -363,6 +367,17 @@ function iconButtonStyle({ hovered, pressed }: PressableStateCallbackType & { ho
   ];
 }
 
+function cachedWarningRetryStyle({
+  hovered,
+  pressed,
+}: PressableStateCallbackType & { hovered?: boolean }) {
+  return [
+    styles.cachedWarningRetry,
+    Boolean(hovered) && styles.cachedWarningRetryHovered,
+    pressed && styles.cachedWarningRetryPressed,
+  ];
+}
+
 function GroupProviderButton({ provider, onDrillDown }: GroupProviderButtonProps) {
   const { t } = useTranslation();
   const ProvIcon = getProviderIcon(provider.id);
@@ -376,7 +391,12 @@ function GroupProviderButton({ provider, onDrillDown }: GroupProviderButtonProps
   if (selection.kind === "models") {
     const count = selection.rows.length;
     stateNode = (
-      <Text style={styles.drillDownCount}>{t("modelSelector.modelCount", { count })}</Text>
+      <View style={styles.rowStateInline}>
+        <Text style={styles.drillDownCount}>{t("modelSelector.modelCount", { count })}</Text>
+        {provider.status === "error" ? (
+          <Text style={styles.cachedBadge}>{t("modelSelector.cachedBadge")}</Text>
+        ) : null}
+      </View>
     );
   } else if (selection.kind === "loading") {
     stateNode = (
@@ -547,6 +567,61 @@ function ProviderErrorEmptyState({
   );
 }
 
+/**
+ * Warning strip rendered above a provider's model list when the provider is in
+ * error but last-good cached models are still shown. Retry targets only this
+ * provider.
+ */
+function ProviderCachedWarningStrip({
+  providerId,
+  message,
+  onRetryProvider,
+  isRetryingProvider,
+}: {
+  providerId: string;
+  message: string;
+  onRetryProvider?: (provider: AgentProvider) => void;
+  isRetryingProvider: boolean;
+}) {
+  const { t } = useTranslation();
+  const handleRetry = useCallback(() => {
+    onRetryProvider?.(providerId);
+  }, [onRetryProvider, providerId]);
+  return (
+    <View style={styles.cachedWarningStrip}>
+      <ThemedIconHost Icon={AlertTriangle} size={ICON_SIZE.sm} uniProps={warningColorMapping} />
+      <View style={styles.cachedWarningBody}>
+        <Text numberOfLines={1} style={styles.cachedWarningText}>
+          {t("modelSelector.connectionIssueHeader")}
+        </Text>
+        <Text numberOfLines={1} style={styles.cachedWarningDetail}>
+          {message}
+        </Text>
+      </View>
+      {onRetryProvider ? (
+        <Pressable
+          onPress={handleRetry}
+          disabled={isRetryingProvider}
+          style={cachedWarningRetryStyle}
+          accessibilityRole="button"
+          accessibilityLabel={t("common.retry")}
+        >
+          {isRetryingProvider ? (
+            <ThemedActivityIndicatorHost
+              size="small"
+              uniProps={warningColorMapping}
+              style={styles.cachedWarningRetrySpinner}
+            />
+          ) : null}
+          <Text style={styles.cachedWarningRetryText}>
+            {isRetryingProvider ? t("modelSelector.retrying") : t("common.retry")}
+          </Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
 function SelectorContent({
   view,
   providers,
@@ -627,16 +702,26 @@ function SelectorContent({
     }
 
     return (
-      <ProviderModelRows
-        rows={visibleRows}
-        selectedProvider={selectedProvider}
-        selectedRuntimeProvider={selectedRuntimeProvider}
-        selectedModel={selectedModel}
-        favoriteKeys={favoriteKeys}
-        onSelect={onSelect}
-        onToggleFavorite={onToggleFavorite}
-        normalizedQuery={normalizedQuery}
-      />
+      <>
+        {selectedViewProvider.status === "error" ? (
+          <ProviderCachedWarningStrip
+            providerId={view.providerId}
+            message={selectedViewProvider.error ?? t("modelSelector.unknownError")}
+            onRetryProvider={onRetryProvider}
+            isRetryingProvider={isRetryingProvider}
+          />
+        ) : null}
+        <ProviderModelRows
+          rows={visibleRows}
+          selectedProvider={selectedProvider}
+          selectedRuntimeProvider={selectedRuntimeProvider}
+          selectedModel={selectedModel}
+          favoriteKeys={favoriteKeys}
+          onSelect={onSelect}
+          onToggleFavorite={onToggleFavorite}
+          normalizedQuery={normalizedQuery}
+        />
+      </>
     );
   }
 
@@ -739,6 +824,11 @@ export function CombinedModelSelector({
       },
     });
   }, [isLoading, providers, selectedModel, selectedProvider, selectedRuntimeProvider, t]);
+
+  const selectedProviderIsError = useMemo(
+    () => findErrorSelectorProvider(providers, selectedProvider) !== null,
+    [providers, selectedProvider],
+  );
 
   const desktopFixedHeight = useMemo(() => {
     if (view.kind !== "provider") {
@@ -898,6 +988,7 @@ export function CombinedModelSelector({
             <Text style={styles.triggerText} numberOfLines={1} ellipsizeMode="tail">
               {triggerLabel}
             </Text>
+            {selectedProviderIsError ? <View style={styles.triggerWarningDot} /> : null}
             <ThemedIconHost Icon={ChevronDown} size={10} uniProps={foregroundMutedColorMapping} />
           </>
         )}
@@ -972,6 +1063,13 @@ const styles = StyleSheet.create((theme) => ({
     lineHeight: WORKBENCH_META_LINE_HEIGHT,
     fontWeight: theme.fontWeight.normal,
   },
+  triggerWarningDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: theme.colors.statusWarning,
+    flexShrink: 0,
+  },
   customTriggerWrapper: {
     paddingHorizontal: 0,
     paddingVertical: 0,
@@ -1034,6 +1132,72 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: 12.5,
     lineHeight: 16,
     color: theme.colors.foregroundMuted,
+  },
+  // Amber "cached" badge on provider rows whose probe is in error while
+  // last-good models are still shown.
+  cachedBadge: {
+    fontSize: 11,
+    lineHeight: 14,
+    color: theme.colors.statusWarning,
+    backgroundColor: theme.colors.statusWarningBg,
+    borderRadius: 5,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+  },
+  cachedWarningStrip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+    backgroundColor: theme.colors.statusWarningBg,
+    borderWidth: 1,
+    borderColor: "rgba(217, 119, 6, 0.28)",
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    marginHorizontal: theme.spacing[1],
+    marginBottom: theme.spacing[1],
+  },
+  cachedWarningBody: {
+    flex: 1,
+    minWidth: 0,
+    gap: 1,
+  },
+  cachedWarningText: {
+    fontSize: 12,
+    lineHeight: 16,
+    color: theme.colors.statusWarning,
+  },
+  cachedWarningDetail: {
+    fontSize: 11,
+    lineHeight: 14,
+    color: theme.colors.foregroundMuted,
+  },
+  cachedWarningRetry: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[1],
+    backgroundColor: theme.colors.surface0,
+    borderWidth: 1,
+    borderColor: "rgba(217, 119, 6, 0.28)",
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    flexShrink: 0,
+  },
+  cachedWarningRetryHovered: {
+    backgroundColor: theme.colors.statusWarningBg,
+  },
+  cachedWarningRetryPressed: {
+    backgroundColor: theme.colors.statusWarningBg,
+  },
+  cachedWarningRetryText: {
+    fontSize: 12,
+    lineHeight: 16,
+    color: theme.colors.statusWarning,
+  },
+  cachedWarningRetrySpinner: {
+    width: 10,
+    height: 10,
   },
   rowStateInline: {
     flexDirection: "row",

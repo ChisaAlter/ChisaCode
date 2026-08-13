@@ -5,6 +5,7 @@ import {
   buildProviderSelectorProviders,
   buildSelectableProviderSelectorProviders,
   buildSelectedTriggerLabel,
+  findErrorSelectorProvider,
   filterAndRankModelRows,
   filterProviderSelectorProvidersByRuntimeProvider,
   getProviderModelRows,
@@ -49,6 +50,8 @@ describe("combined model selector data", () => {
       {
         id: "codex",
         label: "Codex",
+        status: "ready",
+        error: null,
         modelSelection: {
           kind: "models",
           rows: [
@@ -82,6 +85,8 @@ describe("combined model selector data", () => {
       {
         id: "deepseek-tui",
         label: "DeepSeek TUI",
+        status: "ready",
+        error: null,
         modelSelection: {
           kind: "models",
           rows: [
@@ -357,6 +362,8 @@ describe("combined model selector data", () => {
       {
         id: "grok-4-5-codex",
         label: "grok-4.5 Codex",
+        status: "ready",
+        error: null,
         modelSelection: {
           kind: "models",
           rows: [
@@ -393,16 +400,51 @@ describe("combined model selector data", () => {
         id: "loading-provider",
         label: "loading-provider",
         modelSelection: { kind: "loading" },
+        status: "loading",
+        error: null,
       },
       {
         id: "error-provider",
         label: "error-provider",
         modelSelection: { kind: "error", message: "boom" },
+        status: "error",
+        error: "boom",
       },
       {
         id: "unavailable-provider",
         label: "unavailable-provider",
         modelSelection: { kind: "error", message: "Unavailable" },
+        status: "unavailable",
+        error: null,
+      },
+    ]);
+  });
+
+  it("keeps last-good cached models when a provider is in error", () => {
+    const providers = buildSelectableProviderSelectorProviders([
+      snapshotEntry({
+        provider: "codex",
+        label: "Codex",
+        status: "error",
+        error: "Timed out checking Codex availability after 30000ms",
+        models: [codexModel],
+      }),
+    ]);
+    expect(providers).toEqual([
+      {
+        id: "codex",
+        label: "Codex",
+        status: "error",
+        error: "Timed out checking Codex availability after 30000ms",
+        modelSelection: {
+          kind: "models",
+          rows: [
+            expect.objectContaining({
+              provider: "codex",
+              modelId: "gpt-5.4",
+            }),
+          ],
+        },
       },
     ]);
   });
@@ -677,5 +719,35 @@ describe("combined model selector data", () => {
         hasClient: true,
       }),
     ).toEqual({ ok: true });
+  });
+});
+
+describe("findErrorSelectorProvider", () => {
+  it("returns the selected provider when its snapshot is in error", () => {
+    const providers = [
+      {
+        id: "codex",
+        label: "Codex",
+        status: "error" as const,
+        error: "Timed out checking Codex availability after 30000ms",
+        modelSelection: { kind: "models" as const, rows: [] },
+      },
+    ];
+    expect(findErrorSelectorProvider(providers, "codex")).toEqual(providers[0]);
+  });
+
+  it("returns null when the selected provider is ready or missing", () => {
+    const providers = [
+      {
+        id: "codex",
+        label: "Codex",
+        status: "ready" as const,
+        error: null,
+        modelSelection: { kind: "models" as const, rows: [] },
+      },
+    ];
+    expect(findErrorSelectorProvider(providers, "codex")).toBeNull();
+    expect(findErrorSelectorProvider(providers, "claude")).toBeNull();
+    expect(findErrorSelectorProvider(providers, null)).toBeNull();
   });
 });

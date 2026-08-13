@@ -120,20 +120,27 @@ export function applyProvidersSnapshotUpdate(input: {
   }
 }
 
-export type SelectorOpenRefetchDecision = "refetch-stale" | "refresh-now";
-
-export function selectorOpenRefetchDecision(input: {
-  entries: ProviderSnapshotEntry[] | undefined;
-  selectedProvider: AgentProvider | null | undefined;
-}): SelectorOpenRefetchDecision {
-  if (!input.selectedProvider) {
-    return "refetch-stale";
-  }
-  const selectedEntry = input.entries?.find((entry) => entry.provider === input.selectedProvider);
-  if (!selectedEntry || selectedEntry.status === "loading") {
-    return "refresh-now";
-  }
-  return "refetch-stale";
+/**
+ * Refetches the providers snapshot query only when its data is stale.
+ *
+ * This is the only action the model-selector open path may take. Opening the
+ * selector must never force a provider re-probe: a forced refresh re-runs
+ * availability checks and model discovery for every provider in parallel
+ * (and, in the home scope, across every workspace scope on the daemon).
+ * Probing is daemon-side work driven by warm-up and PUSH updates — a plain
+ * stale read is always sufficient because the daemon's snapshot read warms
+ * up any entry that is still loading.
+ * @param queryClient The TanStack Query client
+ * @param queryKey The providers snapshot query key
+ * @returns A promise that resolves once the (possibly skipped) refetch settles
+ */
+export function refetchProvidersSnapshotIfStale(
+  queryClient: QueryClient,
+  queryKey: readonly unknown[],
+): Promise<void> {
+  return queryClient
+    .refetchQueries({ queryKey, type: "active", stale: true })
+    .then(() => undefined);
 }
 
 interface UseProvidersSnapshotResult {
@@ -145,7 +152,7 @@ interface UseProvidersSnapshotResult {
   refreshError: string | null;
   supportsSnapshot: boolean;
   refresh: (providers?: AgentProvider[]) => Promise<void>;
-  refetchIfStale: (selectedProvider?: AgentProvider | null) => void;
+  refetchIfStale: () => void;
 }
 
 interface UseProvidersSnapshotOptions {
@@ -242,20 +249,9 @@ export function useProvidersSnapshot(
     [refreshSnapshot],
   );
 
-  const refetchIfStale = useCallback(
-    (selectedProvider?: AgentProvider | null) => {
-      const decision = selectorOpenRefetchDecision({
-        entries: snapshotQuery.data?.entries,
-        selectedProvider,
-      });
-      if (decision === "refresh-now") {
-        void refreshSnapshot(undefined);
-        return;
-      }
-      void queryClient.refetchQueries({ queryKey, type: "active", stale: true });
-    },
-    [queryClient, queryKey, refreshSnapshot, snapshotQuery.data?.entries],
-  );
+  const refetchIfStale = useCallback(() => {
+    void refetchProvidersSnapshotIfStale(queryClient, queryKey);
+  }, [queryClient, queryKey]);
 
   return {
     entries: snapshotQuery.data?.entries ?? undefined,
