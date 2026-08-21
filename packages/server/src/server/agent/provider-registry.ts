@@ -38,6 +38,7 @@ import { ClaudeAgentClient } from "./providers/claude/agent.js";
 import { CodexAppServerAgentClient } from "./providers/codex-app-server-agent.js";
 import { KimiCodeAgentClient } from "./providers/kimi-code-agent.js";
 import { GrokBuildAgentClient } from "./providers/grok-build-agent.js";
+import { DshAgentClient } from "./providers/dsh-agent.js";
 import { OpenCodeAgentClient } from "./providers/opencode-agent.js";
 import { PiRpcAgentClient } from "./providers/pi/agent.js";
 import { GenericACPAgentClient } from "./providers/generic-acp-agent.js";
@@ -153,6 +154,14 @@ const PROVIDER_CLIENT_FACTORIES: Record<string, ProviderClientFactory> = {
       runtimeSettings,
       providerId: options?.customProvider?.id,
       label: options?.customProvider?.label,
+      models: [...(options?.profileModels ?? []), ...(options?.additionalModels ?? [])],
+    }),
+  dsh: (logger, runtimeSettings, options) =>
+    new DshAgentClient({
+      logger,
+      runtimeSettings,
+      providerId: options?.customProvider?.id ?? "dsh",
+      label: options?.customProvider?.label ?? "DeepSeek Harness",
       models: [...(options?.profileModels ?? []), ...(options?.additionalModels ?? [])],
     }),
   mock: (logger) => new MockLoadTestAgentClient(logger),
@@ -453,7 +462,12 @@ function createRegistryEntry(
   provider: AgentProvider,
   resolved: ResolvedProvider,
 ): ProviderDefinition {
-  const shouldCreateMetadataClientEagerly = resolved.definition.id !== "kimi";
+  // kimi/dsh construct lazily: building their client does sync disk/vendor work
+  // (managed config materialization, npm-root resolution) that must not sit on
+  // the daemon's cold-start path, and neither can serve metadata faster than
+  // their profile/gateway model configuration already does.
+  const shouldCreateMetadataClientEagerly =
+    resolved.definition.id !== "kimi" && resolved.definition.id !== "dsh";
   const modelClient = shouldCreateMetadataClientEagerly ? resolved.createBaseClient(logger) : null;
   const getModelClient = () => modelClient ?? resolved.createBaseClient(logger);
 

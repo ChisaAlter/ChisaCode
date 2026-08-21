@@ -78,7 +78,7 @@ describe("ProviderSnapshotManager public surface", () => {
     const manager = new ProviderSnapshotManager({ logger: createTestLogger() });
     try {
       const ids = manager.listRegisteredProviderIds();
-      expect(ids).toEqual(["claude", "codex", "opencode", "pi", "kimi", "grokbuild"]);
+      expect(ids).toEqual(["claude", "codex", "opencode", "pi", "kimi", "grokbuild", "dsh"]);
     } finally {
       manager.destroy();
     }
@@ -140,6 +140,7 @@ describe("ProviderSnapshotManager public surface", () => {
         pi: { enabled: false },
         kimi: { enabled: false },
         grokbuild: { enabled: false },
+        dsh: { enabled: false },
       },
       extraClients: {
         codex: createExtraClient("codex", { isAvailable, listModels: fetchModels }),
@@ -166,6 +167,7 @@ describe("ProviderSnapshotManager public surface", () => {
         pi: { enabled: false },
         kimi: { enabled: false },
         grokbuild: { enabled: false },
+        dsh: { enabled: false },
       },
       extraClients: { codex: createExtraClient("codex", { isAvailable }) },
     });
@@ -199,12 +201,13 @@ describe("ProviderSnapshotManager public surface", () => {
         pi: { enabled: false },
         kimi: { enabled: false },
         grokbuild: { enabled: false },
+        dsh: { enabled: false },
       },
     });
     try {
       const entries = await manager.listProviders({ cwd: "/tmp/project", wait: true });
       const providers = entries.map((entry) => entry.provider);
-      expect(providers).toEqual(["claude", "codex", "opencode", "pi", "kimi", "grokbuild"]);
+      expect(providers).toEqual(["claude", "codex", "opencode", "pi", "kimi", "grokbuild", "dsh"]);
       for (const entry of entries) {
         expect(entry.enabled).toBe(false);
         expect(entry.status).toBe("unavailable");
@@ -411,6 +414,7 @@ describe("ProviderSnapshotManager applyMutableProviderConfig", () => {
         pi: { enabled: false },
         kimi: { enabled: false },
         grokbuild: { enabled: false },
+        dsh: { enabled: false },
       },
     });
     try {
@@ -441,6 +445,7 @@ describe("ProviderSnapshotManager applyMutableProviderConfig", () => {
         pi: { enabled: false },
         kimi: { enabled: false },
         grokbuild: { enabled: false },
+        dsh: { enabled: false },
       },
     });
     try {
@@ -468,6 +473,7 @@ describe("ProviderSnapshotManager applyMutableProviderConfig", () => {
         pi: { enabled: false },
         kimi: { enabled: false },
         grokbuild: { enabled: false },
+        dsh: { enabled: false },
       },
     });
     try {
@@ -505,6 +511,7 @@ describe("ProviderSnapshotManager lifecycle", () => {
         pi: { enabled: false },
         kimi: { enabled: false },
         grokbuild: { enabled: false },
+        dsh: { enabled: false },
       },
     });
     try {
@@ -533,6 +540,7 @@ describe("ProviderSnapshotManager lifecycle", () => {
         pi: { enabled: false },
         kimi: { enabled: false },
         grokbuild: { enabled: false },
+        dsh: { enabled: false },
       },
     });
     const listener = vi.fn();
@@ -557,6 +565,7 @@ describe("ProviderSnapshotManager cwd routing", () => {
         pi: { enabled: false },
         kimi: { enabled: false },
         grokbuild: { enabled: false },
+        dsh: { enabled: false },
       },
     });
     try {
@@ -581,6 +590,7 @@ describe("ProviderSnapshotManager cwd routing", () => {
         pi: { enabled: false },
         kimi: { enabled: false },
         grokbuild: { enabled: false },
+        dsh: { enabled: false },
       },
     });
     try {
@@ -610,6 +620,7 @@ describe("ProviderSnapshotManager refresh guards", () => {
     pi: { enabled: false },
     kimi: { enabled: false },
     grokbuild: { enabled: false },
+    dsh: { enabled: false },
     // enableDevProviders registers the slow dev provider whose probes never
     // resolve — keep it disabled so warm-up stays deterministic.
     "mock-slow": { enabled: false },

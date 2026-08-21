@@ -61,7 +61,15 @@ export interface NormalizedGitHubSkillSource {
   archiveUrl: string;
 }
 
-const SKILL_PROVIDER_SCOPE_ORDER = ["claude", "codex", "opencode", "pi", "kimi", "grokbuild"];
+const SKILL_PROVIDER_SCOPE_ORDER = [
+  "claude",
+  "codex",
+  "opencode",
+  "pi",
+  "kimi",
+  "grokbuild",
+  "dsh",
+];
 
 function defaultRoots(): UserSkillRoots {
   const home = homedir();
@@ -214,6 +222,8 @@ function providerScopeBaseLabel(provider: string | null | undefined): string | n
       return "Kimi Code";
     case "grokbuild":
       return "Grok Build";
+    case "dsh":
+      return "DeepSeek Harness";
     case "mock":
       return "Mock Load Test";
     case "mock-slow":

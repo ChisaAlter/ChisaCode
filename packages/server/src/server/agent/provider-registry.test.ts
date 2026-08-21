@@ -30,6 +30,12 @@ const mockState = vi.hoisted(() => {
         providerId?: string;
         label?: string;
       }>,
+      dsh: [] as Array<{
+        runtimeSettings?: unknown;
+        providerId?: string;
+        label?: string;
+        models?: unknown[];
+      }>,
       genericAcp: [] as Array<{
         command: string[];
         env?: Record<string, string>;
@@ -46,6 +52,7 @@ const mockState = vi.hoisted(() => {
       this.constructorArgs.pi = [];
       this.constructorArgs.kimi = [];
       this.constructorArgs.grokbuild = [];
+      this.constructorArgs.dsh = [];
       this.constructorArgs.genericAcp = [];
       this.isCommandAvailable.mockReset();
       this.isCommandAvailable.mockImplementation(async (_command: string) => false);
@@ -336,6 +343,56 @@ vi.mock("./providers/grok-build-agent.js", () => ({
   },
 }));
 
+vi.mock("./providers/dsh-agent.js", () => ({
+  DshAgentClient: class DshAgentClient {
+    readonly capabilities = {
+      supportsStreaming: true,
+      supportsSessionPersistence: true,
+      supportsDynamicModes: true,
+      supportsMcpServers: true,
+      supportsReasoningStream: true,
+      supportsToolInvocations: true,
+    };
+    readonly provider = "dsh";
+    readonly runtimeSettings?: unknown;
+
+    constructor(options: {
+      runtimeSettings?: unknown;
+      providerId?: string;
+      label?: string;
+      models?: unknown[];
+    }) {
+      this.runtimeSettings = options.runtimeSettings;
+      mockState.constructorArgs.dsh.push({
+        runtimeSettings: options.runtimeSettings,
+        providerId: options.providerId,
+        label: options.label,
+        models: options.models,
+      });
+    }
+
+    async createSession(): Promise<never> {
+      throw new Error("not implemented");
+    }
+
+    async resumeSession(): Promise<never> {
+      throw new Error("not implemented");
+    }
+
+    async listModels(): Promise<AgentModelDefinition[]> {
+      return mockState.runtimeModels.get(this.provider) ?? [];
+    }
+
+    async listModes(): Promise<[]> {
+      return [];
+    }
+
+    async isAvailable(): Promise<boolean> {
+      return true;
+    }
+  },
+}));
+
 vi.mock("./providers/generic-acp-agent.js", () => ({
   GenericACPAgentClient: class GenericACPAgentClient {
     readonly capabilities = {
@@ -464,6 +521,7 @@ test("builds registry with no overrides in built-in manifest order", () => {
     "pi",
     "kimi",
     "grokbuild",
+    "dsh",
   ]);
 });
 
@@ -486,6 +544,23 @@ test("grokbuild client uses the Grok Build ACP launcher", () => {
       },
       env: { XAI_API_KEY: "secret" },
     },
+  });
+});
+
+test("dsh client uses the DeepSeek Harness ACP launcher with default identity", () => {
+  const registry = buildProviderRegistry(logger, {
+    providerOverrides: {
+      dsh: {
+        env: { DEEPSEEK_API_KEY: "secret" },
+      },
+    },
+  });
+
+  expect(registry.dsh.createClient(logger).provider).toBe("dsh");
+  expect(mockState.constructorArgs.dsh.at(-1)).toMatchObject({
+    providerId: "dsh",
+    label: "DeepSeek Harness",
+    runtimeSettings: { env: { DEEPSEEK_API_KEY: "secret" } },
   });
 });
 

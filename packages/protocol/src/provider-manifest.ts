@@ -146,6 +146,18 @@ const KIMI_MODES: AgentProviderModeDefinition[] = [
   },
 ];
 
+// DSH (DeepSeek Harness) rides an automation-only ACP transport with no runtime
+// mode discovery; a single inert default mode keeps the selector stable.
+const DSH_MODES: AgentProviderModeDefinition[] = [
+  {
+    id: "default",
+    label: "Default",
+    description: "Default DeepSeek Harness mode",
+    icon: "Bot",
+    colorTier: "moderate",
+  },
+];
+
 export const AGENT_PROVIDER_DEFINITIONS: AgentProviderDefinition[] = [
   {
     id: "claude",
@@ -202,6 +214,13 @@ export const AGENT_PROVIDER_DEFINITIONS: AgentProviderDefinition[] = [
     description: "xAI's terminal coding agent via ACP",
     defaultModeId: null,
     modes: [],
+  },
+  {
+    id: "dsh",
+    label: "DeepSeek Harness",
+    description: "DeepSeek's official coding-agent harness via ACP (automation transport)",
+    defaultModeId: "default",
+    modes: DSH_MODES,
   },
 ];
 

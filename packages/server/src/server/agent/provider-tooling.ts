@@ -65,6 +65,14 @@ const PROVIDER_TOOLING: Record<string, ProviderToolingDefinition> = {
     packageName: "@xai-official/grok",
     installArgs: ["install", "-g", "@xai-official/grok@latest"],
   },
+  dsh: {
+    // Version probing uses `dsh --version`; the ACP transport binary
+    // (`dsh-acp-demo`) ships no version flag. Both packages must be installed
+    // together, pinned to the rc channel while upstream ships prereleases.
+    binary: "dsh",
+    packageName: "@deepseek-ai/dsh",
+    installArgs: ["install", "-g", "@deepseek-ai/dsh@next", "@deepseek-ai/dsh-acp-demo@next"],
+  },
 };
 
 export function isProviderToolingSupported(provider: AgentProvider): boolean {

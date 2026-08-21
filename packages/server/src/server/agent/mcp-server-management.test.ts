@@ -44,6 +44,7 @@ describe("listManagedMcpServers", () => {
       { type: "provider", provider: "pi", label: "Pi" },
       { type: "provider", provider: "kimi", label: "Kimi Code" },
       { type: "provider", provider: "grokbuild", label: "Grok Build" },
+      { type: "provider", provider: "dsh", label: "DeepSeek Harness" },
     ];
 
     expect(result.scopes).toEqual([{ type: "global", label: "Global" }, ...expectedProviders]);

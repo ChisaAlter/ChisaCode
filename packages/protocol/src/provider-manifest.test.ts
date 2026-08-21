@@ -11,6 +11,7 @@ describe("provider manifest compatibility", () => {
       "pi",
       "kimi",
       "grokbuild",
+      "dsh",
     ]);
     expect(IMPORTABLE_PROVIDERS).toEqual(["claude", "codex", "opencode", "pi"]);
   });
