@@ -1,4 +1,11 @@
-export type BuiltinProviderIconName = "claude" | "codex" | "kimi" | "opencode" | "pi" | "grokbuild";
+export type BuiltinProviderIconName =
+  | "claude"
+  | "codex"
+  | "kimi"
+  | "opencode"
+  | "pi"
+  | "grokbuild"
+  | "dsh";
 
 export type ProviderIconName = { kind: "builtin"; id: BuiltinProviderIconName } | { kind: "bot" };
 
@@ -9,12 +16,14 @@ const BUILTIN_PROVIDER_IDS: ReadonlySet<BuiltinProviderIconName> = new Set([
   "opencode",
   "pi",
   "grokbuild",
+  "dsh",
 ]);
 
 // Longer ids first so "opencode" / "grokbuild" win over shorter collisions.
 const BUILTIN_PROVIDER_ICON_MATCHERS: readonly BuiltinProviderIconName[] = [
   "opencode",
   "grokbuild",
+  "dsh",
   "claude",
   "codex",
   "kimi",

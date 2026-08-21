@@ -2,6 +2,7 @@ import { Bot } from "lucide-react-native";
 import type { ComponentType } from "react";
 import { ClaudeIcon } from "@/components/icons/claude-icon";
 import { CodexIcon } from "@/components/icons/codex-icon";
+import { DshIcon } from "@/components/icons/dsh-icon";
 import { KimiIcon } from "@/components/icons/kimi-icon";
 import { OpenCodeIcon } from "@/components/icons/opencode-icon";
 import { PiIcon } from "@/components/icons/pi-icon";
@@ -26,6 +27,7 @@ const BUILTIN_PROVIDER_ICONS: Record<BuiltinProviderIconName, ProviderIconCompon
   // No dedicated brand asset yet; keep a stable non-generic mapping point for
   // Grok Build / `*-grokbuild` faces (falls through Bot only if removed).
   grokbuild: Bot,
+  dsh: DshIcon as unknown as ProviderIconComponent,
 };
 
 export function getProviderIcon(provider: string): ProviderIconComponent {
