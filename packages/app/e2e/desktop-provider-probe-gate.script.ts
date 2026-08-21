@@ -107,6 +107,7 @@ function prepareIsolatedHome(home: string): void {
       pi: { enabled: false },
       kimi: { enabled: false },
       grokbuild: { enabled: false },
+      dsh: { enabled: false },
     },
   };
   writeFileSync(targetConfig, JSON.stringify(raw, null, 2));

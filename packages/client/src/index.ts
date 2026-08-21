@@ -298,6 +298,7 @@ export interface ChisaCodeProviderActions {
   pi(input?: ChisaCodeProviderConfigInput): ChisaCodeProviderConfig;
   kimi(input?: ChisaCodeProviderConfigInput): ChisaCodeProviderConfig;
   grokbuild(input?: ChisaCodeProviderConfigInput): ChisaCodeProviderConfig;
+  dsh(input?: ChisaCodeProviderConfigInput): ChisaCodeProviderConfig;
   config(
     provider: ChisaCodeAgentProvider,
     input?: ChisaCodeProviderConfigInput,
@@ -418,6 +419,7 @@ export function createChisaCodeClient(config: ChisaCodeClientConfig): ChisaCodeC
       pi: (input) => providerConfig("pi", input),
       kimi: (input) => providerConfig("kimi", input),
       grokbuild: (input) => providerConfig("grokbuild", input),
+      dsh: (input) => providerConfig("dsh", input),
       config: (provider, input) => providerConfig(provider, input),
       listModels: (provider, options) => daemonClient.listProviderModels(provider, options),
       listModes: (provider, options) => daemonClient.listProviderModes(provider, options),

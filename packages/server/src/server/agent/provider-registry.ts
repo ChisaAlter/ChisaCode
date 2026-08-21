@@ -823,7 +823,7 @@ function buildAllGatewayProviderModels(
   );
 }
 
-type GatewayAgentFace = "claude" | "codex" | "opencode" | "pi" | "kimi" | "grokbuild";
+type GatewayAgentFace = "claude" | "codex" | "opencode" | "pi" | "kimi" | "grokbuild" | "dsh";
 
 type GatewayAgentFaceFlags = Record<GatewayAgentFace, boolean>;
 
@@ -896,6 +896,20 @@ function gatewayProviderOverride(params: {
       enabled: gateway.enabled !== false,
     };
   }
+  if (extendsProvider === "dsh") {
+    return {
+      extends: "dsh",
+      label: params.label,
+      env: {
+        DEEPSEEK_API_KEY: token,
+        // The dsh-deepseek adapter appends `/chat/completions` to the base URL;
+        // serve chat completions under `<routeBase>/v1` like the kimi face.
+        DEEPSEEK_BASE_URL: `${routeBase}/v1`,
+      },
+      models,
+      enabled: gateway.enabled !== false,
+    };
+  }
   if (extendsProvider === "opencode") {
     const configPath = writeOpenCodeCompatibleGatewayConfig({
       gatewayId: gateway.id,
@@ -932,9 +946,9 @@ function gatewayProviderOverride(params: {
  *
  * Closed-set semantics for `supplyScope` (mirrored by the app read path in
  * `custom-model-providers.ts`):
- * - `supplyScope === "all"` → all 6 faces, regardless of preset/attachToAllAgents
+ * - `supplyScope === "all"` → all 7 faces, regardless of preset/attachToAllAgents
  * - `supplyScope === "matched"` → narrowed by protocolPreset
- *   (claude → 1, codex → 1, openai → 4, all → 6); without a preset, falls back
+ *   (claude → 1, codex → 1, openai → 5, all → 7); without a preset, falls back
  *   to legacy upstream inference below
  * - `supplyScope` omitted → legacy behavior: `attachToAllAgents === true` or
  *   `protocolPreset === "all"` → all 6 faces; preset narrows; no preset infers
@@ -999,6 +1013,7 @@ function allFaces(): GatewayAgentFaceFlags {
     pi: true,
     kimi: true,
     grokbuild: true,
+    dsh: true,
   };
 }
 
@@ -1010,6 +1025,7 @@ function noneFaces(): GatewayAgentFaceFlags {
     pi: false,
     kimi: false,
     grokbuild: false,
+    dsh: false,
   };
 }
 
@@ -1028,6 +1044,7 @@ function openaiFamilyFaces(): GatewayAgentFaceFlags {
     pi: true,
     kimi: true,
     grokbuild: true,
+    dsh: true,
   };
 }
 
@@ -1159,6 +1176,17 @@ function materializeGatewayProviderOverrides(
       labelSuffix: "Grok Build",
       models: buildAllGatewayProviderModels(gateway, {
         models: gateway.generatedModels?.grokbuild,
+      }),
+    });
+  }
+  if (faces.dsh) {
+    registerGatewayFaceOverride({
+      ...shared,
+      face: "dsh",
+      extendsProvider: "dsh",
+      labelSuffix: "DeepSeek",
+      models: buildAllGatewayProviderModels(gateway, {
+        models: gateway.generatedModels?.dsh,
       }),
     });
   }
