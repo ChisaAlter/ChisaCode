@@ -531,6 +531,7 @@ describe("collapseCompletedTurnThoughtsForDisplay", () => {
       "pi",
       "kimi",
       "grokbuild",
+      "dsh",
       "mock",
       "mock-slow",
     ]);
