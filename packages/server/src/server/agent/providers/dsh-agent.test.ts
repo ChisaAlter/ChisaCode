@@ -11,6 +11,7 @@ import {
   DSH_DEFAULT_MODELS,
   DshAgentClient,
   resolveDshVendorDir,
+  withDefaultDshModels,
 } from "./dsh-agent.js";
 
 const VENDOR_PACKAGES = [
@@ -76,7 +77,10 @@ describe("buildManagedDshCordisYml", () => {
     expect(yml).toContain('      - id: "deepseek-v4-vision"');
     expect(yml).toContain("inputModalities: [text, image]");
     expect(yml).toContain('model: "deepseek-v4-vision"');
-    expect(yml).toContain(`persistenceRoot: ${JSON.stringify(join("/managed/home", "sessions"))}`);
+    // Per-process isolation keeps concurrent probes/sessions off dsh's
+    // single-writer SQLite persistence root (module-5 packaged evidence).
+    expect(yml).toContain("persistenceRoot: !!js String.raw`");
+    expect(yml).toContain("\\p${process.pid}`");
     expect(yml).toContain("workspaceContext: false");
     expect(yml).toContain("!!js process.cwd()");
   });
@@ -184,6 +188,20 @@ describe("DshAgentClient launch", () => {
     expect(existsSync(join(home, "provider-runtime"))).toBe(false);
   });
 
+  test("reports the narrowed automation-only capability flags", () => {
+    makeHome();
+    const client = new DshAgentClient({ logger: createTestLogger(), models: [] });
+    expect(client.capabilities).toMatchObject({
+      supportsStreaming: true,
+      supportsSessionPersistence: false,
+      supportsDynamicModes: false,
+      supportsMcpServers: false,
+      supportsReasoningStream: false,
+      supportsToolInvocations: false,
+      supportsRewindConversation: false,
+    });
+  });
+
   test("gateway env passes through untouched", () => {
     makeHome();
     const client = new DshAgentClient({
@@ -226,6 +244,20 @@ describe("resolveDshVendorDir", () => {
     tempRoots.push(incomplete);
     process.env.CHISACODE_DSH_VENDOR_DIR = incomplete;
     expect(resolveDshVendorDir()).toBeNull();
+  });
+});
+
+describe("withDefaultDshModels", () => {
+  test("keeps discovered models when the transport reports any", () => {
+    const discovered = [{ provider: "dsh", id: "custom-x", label: "Custom X" }];
+    expect(withDefaultDshModels(discovered)).toEqual(discovered);
+  });
+
+  test("falls back to the default catalog with the dsh provider id", () => {
+    const models = withDefaultDshModels([]);
+    expect(models.map((model) => model.id)).toEqual(["deepseek-v4-flash", "deepseek-v4-pro"]);
+    expect(models.every((model) => model.provider === "dsh")).toBe(true);
+    expect(models.find((model) => model.isDefault)?.defaultThinkingOptionId).toBe("high");
   });
 });
 

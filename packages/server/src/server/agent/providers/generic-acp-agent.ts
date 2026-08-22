@@ -1,7 +1,7 @@
 import { homedir } from "node:os";
 import type { Logger } from "pino";
 
-import type { AgentProvider } from "../agent-sdk-types.js";
+import type { AgentCapabilityFlags, AgentProvider } from "../agent-sdk-types.js";
 import { checkProviderLaunchAvailable, resolveProviderLaunch } from "../provider-launch-config.js";
 import {
   ACPAgentClient,
@@ -30,6 +30,12 @@ interface GenericACPAgentClientOptions {
   label?: string;
   waitForInitialCommands?: boolean;
   initialCommandsWaitTimeoutMs?: number;
+  /**
+   * Capability overrides for providers whose ACP surface is narrower than the
+   * generic default (e.g. dsh's automation-only transport). Omitted keeps
+   * DEFAULT_ACP_CAPABILITIES.
+   */
+  capabilities?: AgentCapabilityFlags;
   /** Custom process spawner (e.g. SSH transport for remote agents). */
   spawn?: ACPProcessSpawner;
 }
@@ -51,6 +57,7 @@ export class GenericACPAgentClient extends ACPAgentClient {
       defaultCommand: options.command,
       waitForInitialCommands: options.waitForInitialCommands,
       initialCommandsWaitTimeoutMs: options.initialCommandsWaitTimeoutMs,
+      capabilities: options.capabilities,
     });
 
     this.command = options.command;

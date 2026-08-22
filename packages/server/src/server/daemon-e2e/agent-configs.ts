@@ -52,6 +52,11 @@ export const agentConfigs = {
     provider: "pi",
     thinkingOptionId: "medium",
   },
+  dsh: {
+    provider: "dsh",
+    // The managed composition pins this model; flash keeps turns cheap/fast.
+    model: "deepseek-v4-flash",
+  },
 } as const satisfies Record<string, AgentTestConfig>;
 
 export type AgentProvider = keyof typeof agentConfigs;
@@ -125,6 +130,8 @@ export function isProviderAvailable(provider: AgentProvider): Promise<boolean> {
             Boolean(process.env.OPENROUTER_API_KEY) ||
             existsSync(join(homedir(), ".pi", "agent", "auth.json")))
         );
+      case "dsh":
+        return (await isCommandAvailable("dsh-acp-demo")) && Boolean(process.env.DEEPSEEK_API_KEY);
       default:
         return false;
     }
@@ -132,6 +139,14 @@ export function isProviderAvailable(provider: AgentProvider): Promise<boolean> {
 
   providerAvailabilityCache.set(provider, availability);
   return availability;
+}
+
+/**
+ * True when the dsh ACP transport binary is installed, regardless of
+ * credentials. Used by tests that verify the missing-key failure path.
+ */
+export function isDshHarnessInstalled(): Promise<boolean> {
+  return isCommandAvailable("dsh-acp-demo");
 }
 
 /**

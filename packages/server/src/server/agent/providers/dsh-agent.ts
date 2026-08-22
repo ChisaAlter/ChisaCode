@@ -7,6 +7,15 @@ import { pathToFileURL } from "node:url";
 
 import type { Logger } from "pino";
 
+import type {
+  AgentCapabilityFlags,
+  AgentLaunchContext,
+  AgentModelDefinition,
+  AgentSession,
+  AgentSessionConfig,
+  ListModelsOptions,
+} from "../agent-sdk-types.js";
+import { normalizeAgentModelDefinition } from "../agent-sdk-types.js";
 import type { ProviderProfileModel, ProviderRuntimeSettings } from "../provider-launch-config.js";
 import { GenericACPAgentClient } from "./generic-acp-agent.js";
 
@@ -71,6 +80,24 @@ interface DshAgentClientOptions {
 }
 
 /**
+ * Capability truth table for dsh's automation-only ACP transport
+ * (docs/dsh-upstream-contract.md §3): committed blocks stream out, but there
+ * are no tool-call frames, no reasoning deltas, no modes, no session load,
+ * and non-empty mcpServers are rejected at session/new.
+ */
+const DSH_ACP_CAPABILITIES: AgentCapabilityFlags = {
+  supportsStreaming: true,
+  supportsSessionPersistence: false,
+  supportsDynamicModes: false,
+  supportsMcpServers: false,
+  supportsReasoningStream: false,
+  supportsToolInvocations: false,
+  supportsRewindConversation: false,
+  supportsRewindFiles: false,
+  supportsRewindBoth: false,
+};
+
+/**
  * ACP client for DeepSeek Harness (`dsh`).
  *
  * Unlike kimi/grokbuild (which only need a managed home for gateway faces),
@@ -98,7 +125,38 @@ export class DshAgentClient extends GenericACPAgentClient {
       env: prepared.env,
       providerId,
       label,
+      capabilities: DSH_ACP_CAPABILITIES,
     });
+  }
+
+  /**
+   * dsh rejects non-empty mcpServers at session/new, so daemon-managed MCP
+   * wiring (companion server, per-scope servers) is stripped before launch.
+   * Permission prompts are unaffected: they arrive via session/request_permission.
+   */
+  override async createSession(
+    config: AgentSessionConfig,
+    launchContext?: AgentLaunchContext,
+  ): Promise<AgentSession> {
+    const hasMcpServers = Object.keys(config.mcpServers ?? {}).length > 0;
+    if (!hasMcpServers) {
+      return super.createSession(config, launchContext);
+    }
+    this.logger.warn(
+      { provider: "dsh", dropped: Object.keys(config.mcpServers ?? {}) },
+      "dsh ACP transport accepts no mcpServers; dropping them for this session",
+    );
+    return super.createSession({ ...config, mcpServers: {} }, launchContext);
+  }
+
+  /**
+   * dsh's ACP session/new advertises no model catalog, so without this
+   * fallback the provider would show an empty picker. Surface the verified
+   * default catalog instead; configured/gateway models still win.
+   */
+  override async listModels(options: ListModelsOptions): Promise<AgentModelDefinition[]> {
+    const discovered = await super.listModels(options);
+    return withDefaultDshModels(discovered);
   }
 }
 
@@ -283,7 +341,12 @@ export function buildManagedDshCordisYml(
     `  config:`,
     `    provider: deepseek-official`,
     `    model: ${yamlString(defaultModel?.id ?? "")}`,
-    `    persistenceRoot: ${yamlString(join(home, "sessions"))}`,
+    // ChisaCode spawns several dsh-acp-demo processes per daemon (per-cwd
+    // probes + sessions). The upstream composition owns a single-writer SQLite
+    // query index under persistenceRoot: a shared path makes the second
+    // concurrent boot fail with sqlite "database is locked" (observed on
+    // packaged desktop probes, 2026-08-22). Isolate per process.
+    `    persistenceRoot: !!js ${dshPersistenceRootExpression(home)}`,
     `    workspaceContext: false`,
     `    persona: |-`,
     `      You are a coding assistant powered by the {{model}} model. Your working directory is {{cwd}}.`,
@@ -308,6 +371,34 @@ function mergeDshModels(models: ProviderProfileModel[]): ProviderProfileModel[] 
     };
   }
   return mergedModels;
+}
+
+/**
+ * Builds the cordis `!!js` expression for a per-process session root.
+ * The upstream demo's SQLite query index is single-writer, so ChisaCode's
+ * concurrent dsh processes (parallel probes + sessions) each get
+ * `<home>/sessions/p<pid>`. YAML `!!js` plain scalars cannot carry a leading
+ * quoted string plus trailing operators, so the expression leads with an
+ * identifier and keeps the path inside a raw template literal.
+ */
+function dshPersistenceRootExpression(home: string): string {
+  const base = join(home, "sessions");
+  return `String.raw\`${base.replaceAll("`", "\\`")}\\p\${process.pid}\``;
+}
+
+/**
+ * Falls back to the verified default DeepSeek catalog when a dsh session
+ * reports no models (its ACP transport never advertises a model list).
+ * @param discovered Models reported by the transport or configured
+ * @returns Discovered models, or the default catalog when empty
+ */
+export function withDefaultDshModels(discovered: AgentModelDefinition[]): AgentModelDefinition[] {
+  if (discovered.length > 0) {
+    return discovered;
+  }
+  return DSH_DEFAULT_MODELS.map((model) =>
+    normalizeAgentModelDefinition({ provider: "dsh", ...model }),
+  );
 }
 
 function yamlString(value: string): string {

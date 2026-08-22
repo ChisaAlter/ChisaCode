@@ -140,7 +140,17 @@ export async function spawnInitializedACPProcess(
   const initializeTimeoutPromise = options.initializeTimeoutMs
     ? new Promise<never>((_, reject) => {
         timeout = setTimeout(() => {
-          reject(new Error(`ACP initialize timed out after ${options.initializeTimeoutMs}ms`));
+          // Keep stderr tail and child liveness in the timeout: a hung ACP
+          // boot (slow composition load, blocked child) otherwise surfaces as
+          // a bare timeout that is indistinguishable from a quiet crash.
+          const stderrTail = stderrChunks.join("").trim();
+          const exitState = child.exitCode !== null ? `exited(${child.exitCode})` : "running";
+          reject(
+            new Error(
+              `ACP initialize timed out after ${options.initializeTimeoutMs}ms (child ${exitState})` +
+                (stderrTail ? ` | child stderr: ${stderrTail.slice(-800)}` : ""),
+            ),
+          );
         }, options.initializeTimeoutMs);
       })
     : null;
