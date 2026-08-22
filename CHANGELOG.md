@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- DeepSeek Harness is available as a built-in provider (`dsh`), riding its official ACP transport with a managed composition, its own icon, and gateway support — `supplyScope: "all"` gateways that enable an OpenAI or matched upstream now grow a `<gateway>-dsh` face
+- ACP initialize timeouts name the child's exit state and stderr tail instead of reporting a bare deadline
+
+### Notes
+
+- Existing gateways with `supplyScope: "all"` automatically gain a `*-dsh` face after upgrading; disable the built-in `dsh` provider in Settings if you don't want DeepSeek Harness sessions
+
 ## 1.0.3 - 2026-08-13
 
 ### Added

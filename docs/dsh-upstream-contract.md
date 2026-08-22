@@ -168,3 +168,9 @@ ChisaCode ACP SDK 0.17.1(protocolVersion 1)与上游 SDK 0.25.1 **互通正常**
 | provider id `dsh`                             | 维持(agentInfo.name 为 `deepseek-harness-acp`,显示 label 取 "DeepSeek Harness",id 仍 `dsh`) | 不变                                                                                                       |
 | manifest modes                                | `defaultModeId: null`(automation-only 无模式概念先行;若 UI 必需再打最小模式桩)              | 模块 1 定稿                                                                                                |
 | 思考档                                        | `off/low/high/max`,默认 `high`                                                              | ProviderProfileModel thinkingOptions 在网关面与 manifest 模型目录共用                                      |
+
+## 9. 模块 5 实机踩坑实录(2026-08-22)
+
+- **persistence 单写者锁(已修)**:ChisaCode 会并发拉起多个 `dsh-acp-demo` 进程(home scope 探测 + per-cwd 探测 + 会话)。上游 `dsh-acp-demo` 组合在 `persistenceRoot` 下写 SQLite 查询索引(`session-query.db`、JSONL 包),`same-path` 并发 boot 直接 `ERR_SQLITE_ERROR code=5 database is locked`,child exit(1),ACP initialize 收不到响应 → 超时。受管 cordis.yml 因此把 `persistenceRoot` 写成 `!!js String.raw`<home>/sessions\p${process.pid}``(pid 隔离;YAML 约束:!!js 值不允许"引号标量 + 尾部操作数"的混形,须以标识符起头)。
+- **静默超时无证据(已修)**:原 `process-runtime.ts` 的 initialize 超时不带子进程 stderr 与存活态,排错全靠猜。现错误消息带 `(child exited(1)) | child stderr: …` 尾部证据,诊断价值大(此修复随后进入主分支)。
+- **`dsh-acp-demo --version` 不存在**:tooling 的版本探测用 `dsh --version`(dsh-acp-demo 没有 version arg,会抛 ERR_PARSE_ARGS_UNKNOWN_OPTION)。

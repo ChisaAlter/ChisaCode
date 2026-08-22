@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "generatedAt": "2026-08-10T08:52:01.232Z",
+  "generatedAt": "2026-08-22T09:09:45.491Z",
   "generator": "scripts/generate-modular-knowledge-graphs.mjs",
   "module": {
     "id": "cli",
@@ -66,7 +66,7 @@
       "yaml",
       "zx"
     ],
-    "unresolvedInternalImports": 1
+    "unresolvedInternalImports": 0
   },
   "nodes": [
     {
@@ -1863,8 +1863,8 @@
       "id": "file:packages/cli/tests/helpers/zx-path-compat.ts",
       "type": "support",
       "path": "packages/cli/tests/helpers/zx-path-compat.ts",
-      "lines": 22,
-      "imports": ["./helpers/zx-path-compat.ts", "zx"]
+      "lines": 21,
+      "imports": ["zx"]
     },
     {
       "id": "file:packages/cli/tests/run-all.ts",
@@ -4988,10 +4988,5 @@
       "specifier": "../helpers/test-daemon.ts"
     }
   ],
-  "unresolvedInternalImports": [
-    {
-      "from": "packages/cli/tests/helpers/zx-path-compat.ts",
-      "specifier": "./helpers/zx-path-compat.ts"
-    }
-  ]
+  "unresolvedInternalImports": []
 }

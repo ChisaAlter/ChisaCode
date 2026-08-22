@@ -35,7 +35,7 @@ Provider IDs must be lowercase alphanumeric with hyphens (`/^[a-z][a-z0-9-]*$/`)
 
 ## Extending a built-in provider
 
-Use `extends` to create a new provider entry that inherits from a built-in provider (`claude`, `codex`, `opencode`, `pi`, `kimi`, or `grokbuild`). The new provider gets its own entry in the provider list, with its own label, environment, and model definitions.
+Use `extends` to create a new provider entry that inherits from a built-in provider (`claude`, `codex`, `opencode`, `pi`, `kimi`, `grokbuild`, or `dsh`). The new provider gets its own entry in the provider list, with its own label, environment, and model definitions.
 
 ```json
 {
@@ -182,6 +182,29 @@ For pay-as-you-go, use `ANTHROPIC_API_KEY` with a standard Model Studio key (`sk
 - The coding plan is for personal use only in interactive coding tools
 - Web search (`WebSearch` tool) is an Anthropic-only server-side feature — third-party endpoints don't support it. Add `"disallowedTools": ["WebSearch"]` to avoid errors.
 - Official docs: [alibabacloud.com/help/en/model-studio/claude-code-coding-plan](https://www.alibabacloud.com/help/en/model-studio/claude-code-coding-plan)
+
+---
+
+## DeepSeek Harness (`dsh`) as a built-in provider
+
+DeepSeek ships an official coding-agent harness — [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (`dsh`) — with an ACP automation transport. ChisaCode exposes it as the built-in provider `dsh`: there is nothing to configure beyond installing the upstream CLI.
+
+1. Install the harness and its ACP transport globally (pin the rc channel while upstream is in its 0.1.x prerelease cadence; bare `@latest` picks up a stale `dsh-acp-demo`):
+
+```bash
+npm i -g @deepseek-ai/dsh@next @deepseek-ai/dsh-acp-demo@next
+```
+
+2. Export `DEEPSEEK_API_KEY` (or store it once via `dsh web` → Models, which writes `$DSH_HOME/.credentials.yaml`), then start a chat with **DeepSeek Harness** in the provider picker.
+
+Behavior notes:
+
+- Upstream's ACP surface is automation-only: no runtime model or mode switching, no MCP pass-through, no rewind/session-load. Model selection is pinned per launch (v4 Pro / v4 Flash from the default catalog); switching models takes effect on the next session.
+- ChisaCode materializes an isolated composition under `$CHISACODE_HOME/provider-runtime/dsh/` with its own session index per process; your `$DSH_HOME` credentials and settings are not modified.
+- A missing key fails the turn with an explicit credential error instead of hanging.
+- Verified contract details and version pins live in `docs/dsh-upstream-contract.md`.
+
+To run DeepSeek's chat-completions gateway models through other harnesses (e.g. a gateway face like `deepseek-dsh`), keep using Settings → Custom model providers, or see the deepseek examples in the gateway section.
 
 ---
 
@@ -606,7 +629,7 @@ Use `disallowedTools` to disable unsupported tools:
 
 ### Valid `extends` values
 
-Built-in providers: `claude`, `codex`, `opencode`, `pi`, `kimi`, `grokbuild`
+Built-in providers: `claude`, `codex`, `opencode`, `pi`, `kimi`, `grokbuild`, `dsh`
 
 Special value: `acp` — creates a generic ACP provider (requires `command`)
 

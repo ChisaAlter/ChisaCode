@@ -23,6 +23,7 @@ These provider IDs come from ChisaCode's shared provider manifest and appear in 
 | `pi`        | [Pi](https://www.npmjs.com/package/@earendil-works/pi-coding-agent) | `pi`               |
 | `kimi`      | [Kimi Code](https://github.com/MoonshotAI/kimi-code)                | `kimi acp`         |
 | `grokbuild` | [Grok Build](https://x.ai/cli)                                      | `grok agent stdio` |
+| `dsh`       | [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) | `dsh-acp-demo`     |
 
 ### Pi notes
 

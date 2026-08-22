@@ -1,10 +1,10 @@
 {
   "version": "1.0.0",
-  "generatedAt": "2026-08-10T08:52:02.168Z",
+  "generatedAt": "2026-08-22T09:09:46.415Z",
   "generator": "scripts/generate-modular-knowledge-graphs.mjs",
   "project": {
     "name": "chisacode",
-    "description": "ChisaCode: voice-controlled development environment with OpenAI Realtime API",
+    "description": "Local-first control surface for Claude, Codex, OpenCode, Pi, Kimi Code, and Grok Build",
     "packageManager": "npm workspaces",
     "moduleCount": 9
   },
@@ -24,13 +24,13 @@
       "handoffPath": "docs/modules/app/README.md",
       "dependsOn": ["client", "expo-two-way-audio", "highlight", "protocol"],
       "dependedOnBy": [],
-      "fileCount": 1286,
+      "fileCount": 1326,
       "categories": {
-        "config": 41,
-        "test": 397,
-        "support": 62,
+        "config": 42,
+        "test": 409,
+        "support": 77,
         "docs": 2,
-        "source": 784
+        "source": 796
       }
     },
     {
@@ -188,8 +188,9 @@
       "handoffPath": "docs/modules/relay/README.md",
       "dependsOn": [],
       "dependedOnBy": ["client", "server"],
-      "fileCount": 17,
+      "fileCount": 44,
       "categories": {
+        "support": 27,
         "config": 3,
         "docs": 1,
         "source": 7,
@@ -211,13 +212,13 @@
       "handoffPath": "docs/modules/server/README.md",
       "dependsOn": ["client", "highlight", "protocol", "relay"],
       "dependedOnBy": ["cli", "desktop"],
-      "fileCount": 849,
+      "fileCount": 856,
       "categories": {
+        "config": 28,
         "docs": 4,
-        "config": 27,
         "support": 15,
-        "test": 357,
-        "source": 446
+        "test": 361,
+        "source": 448
       }
     }
   ],

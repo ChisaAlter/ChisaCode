@@ -26,14 +26,15 @@ GitHub Release 的默认产物是 **Windows 桌面端** 和 **Android APK**。�
 
 Provider ID 以 `packages/protocol/src/provider-manifest.ts` 为准：
 
-| Provider ID | 显示名称   | ChisaCode 期望的运行时  |
-| ----------- | ---------- | ----------------------- |
-| `claude`    | Claude     | `claude` CLI            |
-| `codex`     | Codex      | `codex` CLI             |
-| `opencode`  | OpenCode   | `opencode` CLI / server |
-| `pi`        | Pi         | `pi` CLI                |
-| `kimi`      | Kimi Code  | `kimi acp` CLI          |
-| `grokbuild` | Grok Build | `grok agent stdio`      |
+| Provider ID | 显示名称         | ChisaCode 期望的运行时                                                                |
+| ----------- | ---------------- | ------------------------------------------------------------------------------------- |
+| `claude`    | Claude           | `claude` CLI                                                                          |
+| `codex`     | Codex            | `codex` CLI                                                                           |
+| `opencode`  | OpenCode         | `opencode` CLI / server                                                               |
+| `pi`        | Pi               | `pi` CLI                                                                              |
+| `kimi`      | Kimi Code        | `kimi acp` CLI                                                                        |
+| `grokbuild` | Grok Build       | `grok agent stdio`                                                                    |
+| `dsh`       | DeepSeek Harness | `dsh-acp-demo` ACP 传输(`@deepseek-ai/dsh` + `@deepseek-ai/dsh-acp-demo`,rc 频道 pin) |
 
 自定义 provider 写在 `$CHISACODE_HOME/config.json` 的 `agents.providers` 下。必须继承上面某个内置 ID，或 `extends: "acp"` 来跑通用 Agent Client Protocol 命令。见 [自定义 provider](docs/custom-providers.md)。
 

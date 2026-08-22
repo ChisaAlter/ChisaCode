@@ -8,20 +8,32 @@ ChisaCode also supports user-defined providers through config. For runtime confi
 
 The shared provider manifest currently exposes these user-facing built-ins:
 
-| ID          | Label      | Integration shape                          |
-| ----------- | ---------- | ------------------------------------------ |
-| `claude`    | Claude     | direct provider backed by Claude tooling   |
-| `codex`     | Codex      | direct provider backed by Codex app-server |
-| `opencode`  | OpenCode   | direct provider backed by OpenCode         |
-| `pi`        | Pi         | direct provider backed by Pi RPC           |
-| `kimi`      | Kimi Code  | ACP-backed provider                        |
-| `grokbuild` | Grok Build | ACP-backed provider                        |
+| ID          | Label            | Integration shape                                                                     |
+| ----------- | ---------------- | ------------------------------------------------------------------------------------- |
+| `claude`    | Claude           | direct provider backed by Claude tooling                                              |
+| `codex`     | Codex            | direct provider backed by Codex app-server                                            |
+| `opencode`  | OpenCode         | direct provider backed by OpenCode                                                    |
+| `pi`        | Pi               | direct provider backed by Pi RPC                                                      |
+| `kimi`      | Kimi Code        | ACP-backed provider                                                                   |
+| `grokbuild` | Grok Build       | ACP-backed provider                                                                   |
+| `dsh`       | DeepSeek Harness | ACP-backed automation transport (spawns `dsh-acp-demo --config <managed cordis.yml>`) |
 
 Development-only providers are `mock` and `mock-slow`.
 
 Custom provider config may derive from any built-in provider ID above, or from the special `acp` value for a generic Agent Client Protocol command.
 
 Grok Build is implemented as a built-in ACP provider. Its default launcher is `grok agent stdio`; models and modes are discovered from the Grok Build runtime.
+
+DeepSeek Harness (`dsh`) is an ACP provider with an upstream-narrowed, automation-only transport:
+there is no `session/load`, no `availableModels`/`modes` reporting, no MCP server acceptance, and
+`session/update` carries committed blocks only (no token streaming or tool-call frames). ChisaCode
+materializes a managed cordis.yml composition per provider instance under
+`$CHISACODE_HOME/provider-runtime/dsh/<id>-<baseUrlHash>/` (vendored plugin URLs resolved against
+the globally installed `@deepseek-ai/dsh` package's nested node_modules; the default model and
+thinking effort are pinned per launch because the transport has no runtime model switching).
+The session persistence root is isolated per spawned process because the upstream query index is
+single-writer. The verified contract facts live in `docs/dsh-upstream-contract.md`; renew them when
+upstream ships past the 0.1.x prerelease cadence.
 
 ## Integration Patterns
 
@@ -121,7 +133,18 @@ For model gateway support, add generated-provider ID fields only when the gatewa
 
 If the provider participates in server E2E tests, add its real-provider config and availability check. Availability checks should prove the command and required credentials are present; they should not hide failures inside normal tests.
 
-### 7. Verify
+### 7. Operations and management surfaces
+
+Also register the provider in these daemon-side tables so squeeze surfaces stay consistent:
+
+- `provider-tooling.ts` (`PROVIDER_TOOLING`) — binary name, npm package, install args; missing entries silently disable Install/Update buttons.
+- `provider-snapshot-manager.ts` (`PROVIDER_ENV_KEYS`) — diagnostics env presence columns.
+- `mcp-server-management.ts` (`MCP_PROVIDER_SCOPE_ORDER`) and `skills-management.ts` (`SKILL_PROVIDER_SCOPE_ORDER` + label switch).
+- `vision-fallback.ts` — gateway face id/suffix tables when the provider is a gateway face.
+- Cold-start behavior: ACP providers whose client construction does disk/vendor I/O should join the lazy metadata set in `createRegistryEntry` (see the kimi/dsh comment).
+- `docs/protocol manifest test` pins `BUILTIN_PROVIDER_IDS`; `provider-snapshot-manager.test.ts` pins probe orders; app `use-acp-provider-catalog.test.ts` pins the catalog.
+
+### 8. Verify
 
 Use targeted checks:
 

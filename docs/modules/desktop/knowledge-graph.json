@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "generatedAt": "2026-08-10T08:52:01.294Z",
+  "generatedAt": "2026-08-22T09:09:45.547Z",
   "generator": "scripts/generate-modular-knowledge-graphs.mjs",
   "module": {
     "id": "desktop",
@@ -247,7 +247,7 @@
       "id": "file:packages/desktop/src/daemon/daemon-manager.ts",
       "type": "source",
       "path": "packages/desktop/src/daemon/daemon-manager.ts",
-      "lines": 921,
+      "lines": 968,
       "imports": [
         "../features/attachments.js",
         "../features/auto-updater.js",
