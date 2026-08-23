@@ -233,17 +233,16 @@ function resolveInitialDshPin(models: ProviderProfileModel[]): {
   };
 }
 
-/** Bilingual fail-fast: no usable credential anywhere. */
-function assertDshCredentials(env: Record<string, string> | undefined): void {
+/** Fail-fast unless a DeepSeek credential will actually be visible to the spawn. */
+function assertDshCredentials(env: Record<string, string | undefined>): void {
+  // Process env is the only channel that reliably feeds the spawn; the
+  // ~/.dsh/.credentials.yaml written by `dsh web` is not read by the
+  // dsh-acp-demo adapter in production flows.
   if (env?.DEEPSEEK_API_KEY?.trim() || process.env.DEEPSEEK_API_KEY?.trim()) {
     return;
   }
-  const dshHome = (env?.DSH_HOME ?? process.env.DSH_HOME)?.trim() || join(homedir(), ".dsh");
-  if (existsSync(join(dshHome, ".credentials.yaml"))) {
-    return;
-  }
   throw new Error(
-    "DeepSeek Harness 尚未配置 API 密钥:请设置环境变量 DEEPSEEK_API_KEY(或将 key 写入 $DSH_HOME/.credentials.yaml;不会有任何请求发出)。",
+    "DeepSeek Harness 尚未配置 API 密钥:请设置环境变量 DEEPSEEK_API_KEY 后重试(本次请求未发出)。",
   );
 }
 
