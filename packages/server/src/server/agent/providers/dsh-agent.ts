@@ -234,7 +234,7 @@ function resolveInitialDshPin(models: ProviderProfileModel[]): {
 }
 
 /** Fail-fast unless a DeepSeek credential will actually be visible to the spawn. */
-function assertDshCredentials(env: Record<string, string | undefined>): void {
+function assertDshCredentials(env: Record<string, string> | undefined): void {
   // Process env is the only channel that reliably feeds the spawn; the
   // ~/.dsh/.credentials.yaml written by `dsh web` is not read by the
   // dsh-acp-demo adapter in production flows.
