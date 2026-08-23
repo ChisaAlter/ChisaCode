@@ -1021,6 +1021,9 @@ test("model gateway materializes provider entries for all built-in agents", asyn
     ],
   });
 
+  // dsh faces build lazily (see the createRegistryEntry lazy note); drive one
+  // materialization explicitly instead of relying on cold-start construction.
+  registry["zai-dsh"].createClient(logger);
   const dshGatewayArgs = mockState.constructorArgs.dsh.find((entry) => {
     const env =
       typeof entry.runtimeSettings === "object" && entry.runtimeSettings !== null

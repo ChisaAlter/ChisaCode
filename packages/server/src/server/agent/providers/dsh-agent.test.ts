@@ -221,6 +221,88 @@ describe("DshAgentClient launch", () => {
     const configPath = client.command[2];
     expect(readFileSync(configPath, "utf8")).not.toContain("sk-gateway-token");
   });
+  test("createSession fails fast with actionable copy when no credential exists", async () => {
+    const { home } = makeHome();
+    // Hermetic: scrub any host-level key/home so the failure is deterministic.
+    delete process.env.DEEPSEEK_API_KEY;
+    process.env.DSH_HOME = join(home, "dsh-home-empty");
+    const client = new DshAgentClient({ logger: createTestLogger(), models: [] });
+    await expect(
+      client.createSession(
+        {
+          cwd: join(home, "workspace"),
+          title: "dsh-no-key-unit",
+          provider: "acp",
+        } as never,
+        undefined,
+      ),
+    ).rejects.toThrow(/尚未配置 API 密钥.*DEEPSEEK_API_KEY/s);
+  });
+
+  test("createSession rewrites the managed composition when the session picks a non-default model", async () => {
+    const { home } = makeHome();
+    const client = new DshAgentClient({
+      logger: createTestLogger(),
+      models: DSH_DEFAULT_MODELS,
+      runtimeSettings: { env: { DEEPSEEK_API_KEY: "sk-test" } },
+    });
+    const configPath = client.command[2];
+    const initial = readFileSync(configPath, "utf8");
+    expect(initial).toContain('model: "deepseek-v4-pro"');
+
+    // Session asks for flash + high thinking: the yml is rewritten before spawn.
+    const sessionPromise = client.createSession(
+      {
+        cwd: join(home, "workspace"),
+        title: "dsh-pin-unit",
+        provider: "acp",
+        model: "deepseek-v4-flash",
+        thinkingOptionId: "high",
+      } as never,
+      undefined,
+    );
+    // The session spawn itself will fail (no real workspace boot → child dies),
+    // but by then the yml must already carry the flash pin.
+    await sessionPromise.catch(() => undefined);
+    const rewritten = readFileSync(configPath, "utf8");
+    expect(rewritten).toContain('model: "deepseek-v4-flash"');
+    expect(rewritten).toContain('reasoningEffort: "high"');
+  });
+
+  test("pinCompositionForConfig keeps thinking:off pins without a reasoningEffort line", async () => {
+    const { home } = makeHome();
+    const client = new DshAgentClient({
+      logger: createTestLogger(),
+      models: [
+        {
+          id: "deepseek-v4-flash",
+          label: "Flash",
+          isDefault: true,
+          thinkingOptions: [
+            { id: "off", label: "Off" },
+            { id: "high", label: "High", isDefault: true },
+          ],
+        },
+      ],
+      runtimeSettings: { env: { DEEPSEEK_API_KEY: "sk-test" } },
+    });
+    const configPath = client.command[2];
+    await client
+      .createSession(
+        {
+          cwd: join(home, "workspace"),
+          title: "dsh-pin-off-unit",
+          provider: "acp",
+          model: "deepseek-v4-flash",
+          thinkingOptionId: "off",
+        } as never,
+        undefined,
+      )
+      .catch(() => undefined);
+    const rewritten = readFileSync(configPath, "utf8");
+    expect(rewritten).toContain("thinking: disabled");
+    expect(rewritten).not.toContain("reasoningEffort");
+  });
 });
 
 describe("resolveDshVendorDir", () => {

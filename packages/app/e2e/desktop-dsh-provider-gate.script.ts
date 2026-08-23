@@ -7,11 +7,9 @@
  *      storms on this machine; dsh's own probe is MCP-free + fast).
  *   2. The composer model selector lists "DeepSeek Harness" and its
  *      default-catalog models (ACP discovery advertises none upstream).
- *   3. A first send on /new keeps the draft-send hard gates (composer
- *      clears + sidebar row appears immediately).
- *   4. With no DEEPSEEK_API_KEY in the environment, the turn fails with the
- *      upstream "no API key" message surfaced in the stream — no stuck
- *      spinner, no silent hang.
+ *   3. A first send on /new without credentials fails the create *fast* with
+ *      the Zh actionable banner; the composer keeps the draft text and never
+ *      gets stuck (CREATE_FAILED lane, per the draft-send hard gates).
  *   5. daemon.log shows the managed cordis.yml composition was used
  *      (provider-runtime/dsh/...), proving the file-URL plugin wiring ran.
  *
@@ -340,58 +338,67 @@ async function main(): Promise<void> {
     const shotComposer = path.join(home, "shots-composer-dsh.png");
     await page.screenshot({ path: shotComposer });
 
-    // Send the gate prompt. With no DEEPSEEK_API_KEY the upstream must fail
-    // the turn with the credential error instead of hanging.
+    // Send the gate prompt. With no DEEPSEEK_API_KEY the session create fails
+    // BEFORE any turn: the composer falls back to draft with a banner.
     const promptText = `Reply with exactly: DSH_DESKTOP_GATE_OK ${randomUUID().slice(0, 8)}`;
     await composerInput(page).fill(promptText);
     const sentAt = Date.now();
     await draftCreateOrSend(page);
 
-    const composerCleared = await pollUntil(
+    // In the missing-key lane the create RPC fails immediately; the draft
+    // must remain editable with the text retained (users fix the key and
+    // resend). The optimistic sidebar row rolls back on CREATE_FAILED.
+    const draftRetained = await pollUntil(
       async () =>
         (await composerInput(page!)
           .inputValue()
-          .catch(() => promptText)) === "",
+          .catch(() => "")) !== "",
       30_000,
-      "composer cleared after send",
+      "draft retained after failed create",
     );
     record(
-      "draft-send-clear",
-      composerCleared,
-      composerCleared ? `cleared in ${Date.now() - sentAt}ms` : "draft stayed in composer",
+      "draft-retained-on-failure",
+      draftRetained,
+      draftRetained
+        ? "draft text retained (no silent drop on create failure)"
+        : "draft text vanished on create failure",
     );
 
-    const rowAppeared = await pollUntil(
-      async () => {
-        const count = await page!
-          .locator('[data-testid^="sidebar-session-"], [data-testid^="sidebar-v2-thread-"]')
-          .count()
-          .catch(() => 0);
-        return count > 0;
-      },
-      30_000,
-      "sidebar row appears after send",
-    );
-    record(
-      "sidebar-row-immediate",
-      rowAppeared,
-      rowAppeared ? `row seen in ${Date.now() - sentAt}ms` : "no sidebar row after send",
-    );
-
-    const errorSurfaced = await pollUntil(
+    // With no API key the create leg of dsh fails FAST (composer returns to
+    // draft with an error banner); the optimistic sidebar row is rolled back
+    // by the create flow. Both hard gates are about the error lane here,
+    // because there is no session to stream to.
+    const errorBannerVisible = await pollUntil(
       async () => {
         const body = await page!.evaluate(() => document.body.innerText).catch(() => "");
-        return /no API key/i.test(body);
+        return /尚未配置 API 密钥/.test(body);
       },
-      180_000,
-      "missing-key error surfaced in stream",
+      30_000,
+      "missing-key banner in UI",
     );
     record(
       "missing-key-error-surface",
-      errorSurfaced,
-      errorSurfaced
-        ? `credential error visible in ${Date.now() - sentAt}ms`
-        : "no credential error after 180s (turn hung?)",
+      errorBannerVisible,
+      errorBannerVisible
+        ? `credential banner visible in ${Date.now() - sentAt}ms`
+        : "no credential banner after 30s (create hung?)",
+    );
+
+    const noStuckRow = await pollUntil(
+      async () => {
+        // The composer stays editable: draft never gets stuck on a dead create.
+        const canType = await composerInput(page!)
+          .isEditable()
+          .catch(() => false);
+        return canType;
+      },
+      30_000,
+      "composer editable after failed create",
+    );
+    record(
+      "composer-not-stuck",
+      noStuckRow,
+      noStuckRow ? "composer remains editable after fast-create failure" : "composer stuck",
     );
     const shotFinal = path.join(home, "shots-final-dsh.png");
     await page.screenshot({ path: shotFinal });

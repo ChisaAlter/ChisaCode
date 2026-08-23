@@ -19,7 +19,7 @@ const BUILTIN_PROVIDER_IDS: ReadonlySet<BuiltinProviderIconName> = new Set([
   "dsh",
 ]);
 
-// Longer ids first so "opencode" / "grokbuild" win over shorter collisions.
+// Provider tokens with varied lengths first (opencode/grokbuild outrank shorter ids); "dsh" likewise wins any dsh-branded face.
 const BUILTIN_PROVIDER_ICON_MATCHERS: readonly BuiltinProviderIconName[] = [
   "opencode",
   "grokbuild",

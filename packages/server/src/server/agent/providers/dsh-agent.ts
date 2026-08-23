@@ -1,6 +1,6 @@
 import { execSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, renameSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -110,6 +110,8 @@ const DSH_ACP_CAPABILITIES: AgentCapabilityFlags = {
  * them with their intended singleton dependency tree.
  */
 export class DshAgentClient extends GenericACPAgentClient {
+  private readonly managedComposition: ManagedDshCompositionState | null;
+
   constructor(options: DshAgentClientOptions) {
     const providerId = options.providerId ?? "dsh";
     const label = options.label ?? "DeepSeek Harness";
@@ -127,17 +129,26 @@ export class DshAgentClient extends GenericACPAgentClient {
       label,
       capabilities: DSH_ACP_CAPABILITIES,
     });
+    this.managedComposition = prepared.managed
+      ? {
+          ...prepared.managed,
+          pinnedModelId: resolveInitialDshPin(prepared.managed.models).modelId,
+          pinnedThinkingId: resolveInitialDshPin(prepared.managed.models).thinkingId,
+        }
+      : null;
   }
 
   /**
-   * dsh rejects non-empty mcpServers at session/new, so daemon-managed MCP
-   * wiring (companion server, per-scope servers) is stripped before launch.
-   * Permission prompts are unaffected: they arrive via session/request_permission.
+   * Session-creation gate: credentials, per-session model/thinking pinning,
+   * and the MCP strip all live here because dsh's transport cannot express
+   * any of them at runtime.
    */
   override async createSession(
     config: AgentSessionConfig,
     launchContext?: AgentLaunchContext,
   ): Promise<AgentSession> {
+    assertDshCredentials(this.runtimeSettings?.env);
+    this.pinCompositionForConfig(config);
     const hasMcpServers = Object.keys(config.mcpServers ?? {}).length > 0;
     if (!hasMcpServers) {
       return super.createSession(config, launchContext);
@@ -147,6 +158,40 @@ export class DshAgentClient extends GenericACPAgentClient {
       "dsh ACP transport accepts no mcpServers; dropping them for this session",
     );
     return super.createSession({ ...config, mcpServers: {} }, launchContext);
+  }
+
+  /**
+   * dsh pins model + thinking effort inside cordis.yml and cannot switch at
+   * runtime. Rewrite the composition when the session requests a different
+   * pin so the chip selection actually steers the spawned process. The write
+   * is atomic (tmp + rename) because probe spawns may read concurrently.
+   */
+  private pinCompositionForConfig(config: AgentSessionConfig): void {
+    const managed = this.managedComposition;
+    if (!managed || !config.model) {
+      return;
+    }
+    const model = managed.models.find((candidate) => candidate.id === config.model);
+    if (!model) {
+      return;
+    }
+    const requestedThinking = resolveDshThinking(model, config.thinkingOptionId);
+    if (model.id === managed.pinnedModelId && requestedThinking === managed.pinnedThinkingId) {
+      return;
+    }
+    writeManagedDshCompositionAtomic(managed.home, {
+      pluginBaseDir: managed.pluginBaseDir,
+      models: managed.models,
+      pinnedModelId: model.id,
+      pinnedThinkingId: requestedThinking,
+    });
+    managed.pinnedModelId = model.id;
+    managed.pinnedThinkingId = requestedThinking;
+  }
+
+  /** Docs-only accessor for tests and diagnostics. */
+  get pinnedModelId(): string | undefined {
+    return this.managedComposition?.pinnedModelId;
   }
 
   /**
@@ -160,9 +205,52 @@ export class DshAgentClient extends GenericACPAgentClient {
   }
 }
 
+interface ManagedDshCompositionState {
+  home: string;
+  pluginBaseDir: string;
+  models: ProviderProfileModel[];
+  pinnedModelId: string;
+  pinnedThinkingId: string;
+}
+
+/** Maps a selected thinking option to the upstream reasoningEffort contract. */
+function resolveDshThinking(model: ProviderProfileModel, thinkingOptionId?: string): string {
+  const options = model.thinkingOptions ?? [];
+  if (thinkingOptionId && options.some((option) => option.id === thinkingOptionId)) {
+    return thinkingOptionId;
+  }
+  return options.find((option) => option.isDefault)?.id ?? "high";
+}
+
+function resolveInitialDshPin(models: ProviderProfileModel[]): {
+  modelId: string;
+  thinkingId: string;
+} {
+  const model = models.find((candidate) => candidate.isDefault) ?? models[0];
+  return {
+    modelId: model?.id ?? "",
+    thinkingId: model ? resolveDshThinking(model) : "high",
+  };
+}
+
+/** Bilingual fail-fast: no usable credential anywhere. */
+function assertDshCredentials(env: Record<string, string> | undefined): void {
+  if (env?.DEEPSEEK_API_KEY?.trim() || process.env.DEEPSEEK_API_KEY?.trim()) {
+    return;
+  }
+  const dshHome = (env?.DSH_HOME ?? process.env.DSH_HOME)?.trim() || join(homedir(), ".dsh");
+  if (existsSync(join(dshHome, ".credentials.yaml"))) {
+    return;
+  }
+  throw new Error(
+    "DeepSeek Harness 尚未配置 API 密钥:请设置环境变量 DEEPSEEK_API_KEY(或将 key 写入 $DSH_HOME/.credentials.yaml;不会有任何请求发出)。",
+  );
+}
+
 interface PreparedDshLaunch {
   command: [string, ...string[]];
   env: Record<string, string> | undefined;
+  managed?: Omit<ManagedDshCompositionState, "pinnedModelId" | "pinnedThinkingId">;
 }
 
 function prepareDshLaunch(options: {
@@ -183,7 +271,7 @@ function prepareDshLaunch(options: {
 
   const pluginBase = resolveDshVendorDir();
   if (pluginBase) {
-    writeManagedDshComposition(home, { pluginBaseDir: pluginBase, models });
+    writeManagedDshCompositionAtomic(home, { pluginBaseDir: pluginBase, models });
   } else {
     options.logger.warn(
       { provider: options.providerId },
@@ -198,6 +286,7 @@ function prepareDshLaunch(options: {
   return {
     command: [DSH_BINARY, ...insertArgs, "--config", configPath],
     env: runtimeSettings?.env,
+    managed: pluginBase ? { home, pluginBaseDir: pluginBase, models } : undefined,
   };
 }
 
@@ -237,15 +326,24 @@ function isCompleteVendorDir(dir: string): boolean {
   return DSH_VENDOR_PACKAGES.every((pkg) => existsSync(join(dir, pkg)));
 }
 
-function writeManagedDshComposition(
-  home: string,
-  options: { pluginBaseDir: string; models: ProviderProfileModel[] },
-): void {
+function writeManagedDshCompositionAtomic(home: string, options: DshCompositionOptions): void {
   mkdirSync(join(home, "sessions"), { recursive: true, mode: 0o700 });
-  writeFileSync(join(home, "cordis.yml"), buildManagedDshCordisYml(home, options), {
+  const target = join(home, "cordis.yml");
+  const tmp = join(home, `.cordis.yml.tmp-${process.pid}-${Date.now()}`);
+  writeFileSync(tmp, buildManagedDshCordisYml(home, options), {
     encoding: "utf8",
     mode: 0o600,
   });
+  // Same-dir rename is atomic on NTFS even when concurrent spawns read the old path.
+  renameSync(tmp, target);
+}
+
+interface DshCompositionOptions {
+  pluginBaseDir: string;
+  models: ProviderProfileModel[];
+  /** Optional explicit spawn-time pins (session create) overriding isDefault. */
+  pinnedModelId?: string;
+  pinnedThinkingId?: string;
 }
 
 /**
@@ -254,15 +352,23 @@ function writeManagedDshComposition(
  * @param options Plugin base directory plus the provider's model catalog
  * @returns cordis.yml document contents
  */
-export function buildManagedDshCordisYml(
-  home: string,
-  options: { pluginBaseDir: string; models: ProviderProfileModel[] },
-): string {
+export function buildManagedDshCordisYml(home: string, options: DshCompositionOptions): string {
   const pluginUrl = (pkg: string) =>
     `${pathToFileURL(join(options.pluginBaseDir, pkg, "lib", "index.js")).href}`;
   const models = mergeDshModels(options.models);
-  const defaultModel = models.find((model) => model.isDefault) ?? models[0];
-  const defaultThinking = defaultModel?.thinkingOptions?.find((option) => option.isDefault);
+  const pinnedModel =
+    (options.pinnedModelId
+      ? models.find((candidate) => candidate.id === options.pinnedModelId)
+      : undefined) ??
+    models.find((model) => model.isDefault) ??
+    models[0];
+  const defaultThinking =
+    (options.pinnedThinkingId
+      ? (pinnedModel?.thinkingOptions?.find((option) => option.id === options.pinnedThinkingId) ?? {
+          id: options.pinnedThinkingId,
+          label: options.pinnedThinkingId,
+        })
+      : undefined) ?? pinnedModel?.thinkingOptions?.find((option) => option.isDefault);
   const thinkingEnabled = defaultThinking?.id !== "off";
   const reasoningEffort = thinkingEnabled && defaultThinking ? defaultThinking.id : "high";
 
@@ -340,7 +446,7 @@ export function buildManagedDshCordisYml(
     `  name: ${yamlString("@deepseek-ai/dsh-acp-demo")}`,
     `  config:`,
     `    provider: deepseek-official`,
-    `    model: ${yamlString(defaultModel?.id ?? "")}`,
+    `    model: ${yamlString(pinnedModel?.id ?? "")}`,
     // ChisaCode spawns several dsh-acp-demo processes per daemon (per-cwd
     // probes + sessions). The upstream composition owns a single-writer SQLite
     // query index under persistenceRoot: a shared path makes the second

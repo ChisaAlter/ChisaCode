@@ -465,9 +465,11 @@ function createRegistryEntry(
   // kimi/dsh construct lazily: building their client does sync disk/vendor work
   // (managed config materialization, npm-root resolution) that must not sit on
   // the daemon's cold-start path, and neither can serve metadata faster than
-  // their profile/gateway model configuration already does.
+  // their profile/gateway model configuration already does. The check uses the
+  // derived root, so gateway faces (`<gateway>-dsh`) inherit the same law.
+  const lazilyConstructedRoot = resolved.derivedFromProviderId ?? resolved.definition.id;
   const shouldCreateMetadataClientEagerly =
-    resolved.definition.id !== "kimi" && resolved.definition.id !== "dsh";
+    lazilyConstructedRoot !== "kimi" && lazilyConstructedRoot !== "dsh";
   const modelClient = shouldCreateMetadataClientEagerly ? resolved.createBaseClient(logger) : null;
   const getModelClient = () => modelClient ?? resolved.createBaseClient(logger);
 

@@ -199,7 +199,7 @@ npm i -g @deepseek-ai/dsh@next @deepseek-ai/dsh-acp-demo@next
 
 Behavior notes:
 
-- Upstream's ACP surface is automation-only: no runtime model or mode switching, no MCP pass-through, no rewind/session-load. Model selection is pinned per launch (v4 Pro / v4 Flash from the default catalog); switching models takes effect on the next session.
+- Upstream's ACP surface is automation-only: no runtime model or mode switching mid-turn, no MCP pass-through, no rewind/session-load. ChisaCode respects your selected model + thinking per spawn: session creation rewrites the composition so the chosen model runs immediately (no agent restart dance needed).
 - ChisaCode materializes an isolated composition under `$CHISACODE_HOME/provider-runtime/dsh/` with its own session index per process; your `$DSH_HOME` credentials and settings are not modified.
 - A missing key fails the turn with an explicit credential error instead of hanging.
 - Verified contract details and version pins live in `docs/dsh-upstream-contract.md`.

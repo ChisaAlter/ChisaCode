@@ -18,7 +18,6 @@ import { beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 import { buildProviderRegistry } from "../agent/provider-registry.js";
 import type { AgentClient } from "../agent/agent-sdk-types.js";
 import { DaemonClient } from "../test-utils/daemon-client.js";
-import { createMessageCollector, type MessageCollector } from "../test-utils/message-collector.js";
 import {
   createTestChisaCodeDaemon,
   type TestChisaCodeDaemon,
@@ -27,7 +26,6 @@ import { isDshHarnessInstalled, isProviderAvailable } from "./agent-configs.js";
 import { fetchTimelineItems } from "./test-utils/rewind-helpers.js";
 
 const DSH_FLASH_MODELS = [{ id: "deepseek-v4-flash", label: "DeepSeek V4 Flash", isDefault: true }];
-const TURN_TIMEOUT_MS = 180_000;
 
 function tmpCwd(): string {
   return mkdtempSync(path.join(tmpdir(), "daemon-real-dsh-"));
@@ -50,6 +48,9 @@ async function launchDshDaemon(options: { scrubApiKey: boolean }): Promise<DshHa
   const keyBackup = process.env.DEEPSEEK_API_KEY;
   if (options.scrubApiKey) {
     delete process.env.DEEPSEEK_API_KEY;
+    // Scrub the file-backed credential path too: ~/.dsh/.credentials.yaml left
+    // by `dsh web` would otherwise turn the missing-key gate into a pass.
+    process.env.DSH_HOME = path.join(chisacodeHome, "dsh-home-empty");
   }
 
   const logger = pino({ level: "warn" });
@@ -85,6 +86,7 @@ async function launchDshDaemon(options: { scrubApiKey: boolean }): Promise<DshHa
       } else {
         process.env.DEEPSEEK_API_KEY = keyBackup;
       }
+      delete process.env.DSH_HOME;
     },
   };
 }
@@ -115,22 +117,18 @@ describe("daemon E2E (real dsh) — transport without credentials", () => {
     }
   });
 
-  test("surfaces a clean missing-credential error for a prompt", async () => {
+  test("surfaces a clean missing-credential error at create time", async () => {
     const harness = await launchDshDaemon({ scrubApiKey: true });
-    const collector = createMessageCollector(harness.client);
     try {
-      const agent = await harness.client.createAgent({
-        cwd: tmpCwd(),
-        title: "dsh-real-no-key",
-        provider: "dsh",
-        model: "deepseek-v4-flash",
-      });
-
-      await waitForManagedComposition(harness);
-      await harness.client.sendMessage(agent.id, "Reply exactly: DSH_E2E_PONG");
-      await expectMissingKeyEvidence(collector);
+      await expect(
+        harness.client.createAgent({
+          cwd: tmpCwd(),
+          title: "dsh-real-no-key",
+          provider: "dsh",
+          model: "deepseek-v4-flash",
+        }),
+      ).rejects.toThrow(/尚未配置 API 密钥|DEEPSEEK_API_KEY/i);
     } finally {
-      collector.unsubscribe();
       await closeDshDaemon(harness);
     }
   }, 240_000);
@@ -142,14 +140,6 @@ describe("daemon E2E (real dsh) — transport without credentials", () => {
  * waitForFinish cannot resolve here; the streamed text is the user-visible
  * failure surface.
  */
-async function expectMissingKeyEvidence(collector: MessageCollector): Promise<void> {
-  await vi.waitFor(
-    () => {
-      expect(JSON.stringify(collector.messages)).toMatch(/no API key|MISSING_CREDENTIAL/i);
-    },
-    { timeout: TURN_TIMEOUT_MS },
-  );
-}
 
 describe("daemon E2E (real dsh) — prompt round trip", () => {
   let canRun = false;
