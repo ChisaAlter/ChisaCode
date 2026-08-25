@@ -320,3 +320,78 @@ root-caused. Three were **product defects** the tests correctly caught; the rest
   auth"; instead it was repurposed to prove the buffered frame is still decrypted and
   routed through hello processing (the original regression it guarded), with the
   auth-gate log as the observable.
+
+## 7. Execution log — CI red triage batch (2026-08-25, third pass)
+
+Scope: the five red jobs on run 32861110015 (head `43bad26`), plus the Phase 3 items
+(audit fingerprint line-independence, zh-CN sweep for desktop-updates).
+
+### 7.1 Product defect found (fixed in product code)
+
+1. **Sidebar callouts never rendered.** `SidebarCalloutSlot` — the mount point for app
+   update banners, worktree-setup progress, and the Rosetta warning — was dropped from
+   `left-sidebar.tsx` in the June 2026 desktop layout rework. Callout sources kept
+   publishing into the context, but nothing rendered them. Re-mounted the slot above
+   `SidebarFooter` in both the mobile and desktop sidebar variants. Caught by
+   `desktop-updates.spec.ts` (`update-callout` never visible) in desktop-chain-tests —
+   the "release-feed mock" hypothesis was wrong; the mock worked, the UI slot was gone.
+
+### 7.2 Test/harness debt fixed
+
+- **`model-catalog.e2e.test.ts` asserted real catalogs against injected fakes.** After
+  defect 2 of §6.1 (discovery routes through injected clients), the default daemon test
+  context's fakes became the model source, so "OpenCode model IDs contain `/`" failed.
+  The three real-catalog tests now pass `agentClients: {}` (real discovery) and gate on
+  the provider binary being installed.
+- **`live-preferences.e2e.test.ts` needed thinkingOptions on fake models.** This test
+  exercises internal daemon plumbing (live thinking switch), so the right fix was to
+  give `FakeAgentClient` models `thinkingOptions`/`defaultThinkingOptionId` — not to
+  demand a real provider.
+- **`git-operations.e2e.test.ts` teardown wrote an untracked file inside the
+  worktree**, which `git worktree remove` (no `--force`, by product contract) refuses.
+  The terminal marker now lands outside the worktree, and the bootstrap predicate waits
+  for it so archive is only attempted after the terminal actually ran.
+- **knowledge-graph-drift**: committed graphs contained `packages/relay/.wrangler/tmp`
+  throwaway bundles (present locally when the relay dev server has run, absent in CI's
+  clean regeneration). `.wrangler` added to the generator's `IGNORE_DIRS`; graphs
+  regenerated.
+- **`desktop-packaged-slices.script.ts` hard-coded `ChisaCode-Setup-1.0.2-x64.zip`**;
+  the 1.0.3 version bump made the packaged gate throw "no packaged build zip" right
+  after the workflow built a fresh artifact. The script now globs
+  `ChisaCode-Setup-*.zip` (preferring `-x64`, newest first).
+- **zh-CN copy drift (desktop-updates)**: localization helpers extracted to
+  `e2e/helpers/localized-text.ts` (shared by `settings.ts`); `desktop-updates.ts`
+  assertions now use `localizedRegex` and accept the hard-coded zh-CN dialog copy.
+- **test-audit fingerprints are now line-independent** (baseline v3): keys are
+  `check::file::trimmed-line-content#occurrence` instead of `check::file:line`, so
+  editing unrelated code above a finding no longer produces false "new debt" failures.
+  Verified both directions: line shift above an existing finding passes; a genuinely
+  new `vi.mock` line still fails.
+
+### 7.3 server-tests (windows-latest) classification — pre-existing platform debt
+
+The Windows job is also red on the `cn-main` baseline run (32816581763), so it is not
+a merge-gate regression for PR #33. The PR-run failures split into:
+
+- **Cross-platform causes fixed in this batch** (model-catalog `/`, OpenCode
+  thinkingOptions, git-operations teardown) — expected to turn green on both OSes.
+- **EBUSY temp-dir cleanup** (14 occurrences, `daemon-e2e-*`/`daemon-client-*` temp
+  dirs): teardown removes temp dirs while daemon child processes still hold handles.
+  Windows-only file-lock debt; needs retry-with-backoff cleanup or explicit child
+  shutdown before `rm`.
+- **8.3 short-path mismatches** (`C:\Users\RUNNER~1` vs `C:\Users\runneradmin`):
+  path-containment assertions compare short and long forms of the same path. Needs a
+  `realpath`-normalizing comparison helper in the daemon test context.
+
+Both Windows-only buckets are tracked in the roadmap; they are not addressed by this
+batch (no Windows surface available here to verify a fix).
+
+### 7.4 Environment-gated jobs (honest status, not fake green)
+
+- `desktop-packaged-electron`: the zip-name bug above is fixed, but the job still needs
+  a Windows runner artifact to verify end-to-end. Unverified on a real packaged
+  surface.
+- `android-maestro-tests` / `playwright`: not reproducible in this environment;
+  classified per §3.1, left to CI.
+- M5/S1 verification (§3.2/§3.3) remains blocked on a packaged desktop surface; no
+  verification claimed.
