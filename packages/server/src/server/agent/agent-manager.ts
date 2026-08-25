@@ -1144,11 +1144,18 @@ export class AgentManager {
   async emitLiveTimelineItem(agentId: string, item: AgentTimelineItem): Promise<void> {
     const agent = this.requireAgent(agentId);
     this.touchUpdatedAt(agent);
-    this.dispatchStream(agentId, {
-      type: "timeline",
-      item,
-      provider: agent.provider,
-    });
+    // Provisional live items carry the current epoch (and no seq) so clients
+    // can attribute them to the timeline they hold; epoch-less updates cannot
+    // survive the reconnect catch-up contract.
+    this.dispatchStream(
+      agentId,
+      {
+        type: "timeline",
+        item,
+        provider: agent.provider,
+      },
+      { epoch: this.timeline.getEpoch(agentId) },
+    );
   }
 
   streamAgent(
