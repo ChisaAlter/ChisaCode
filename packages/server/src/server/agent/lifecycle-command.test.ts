@@ -191,7 +191,7 @@ describe("agent lifecycle commands", () => {
       updateAgentCommand({ agentManager: manager }, { agentId: "agent-1", name: "   " }),
     ).resolves.toEqual({
       accepted: false,
-      error: "Nothing to update (provide name and/or labels)",
+      error: "Nothing to update (provide name, labels, and/or regenerateTitle)",
     });
 
     expect(storage.upserts).toHaveLength(0);
