@@ -743,7 +743,7 @@ describe("Codex app-server provider", () => {
     );
   });
 
-  test("resumeSession does not replace a persisted Codex thread when app-server resume fails", async () => {
+  test("resumeSession defers the resume and the first turn fails without replacing the thread", async () => {
     const threadRequests: string[] = [];
     const appServer = createFakeCodexAppServer({
       "thread/loaded/list": () => {
@@ -762,20 +762,11 @@ describe("Codex app-server provider", () => {
         threadRequests.push("thread/read");
         return { thread: { turns: [] } };
       },
-      getUserSavedConfig: () => {
-        threadRequests.push("getUserSavedConfig");
-        return { config: {} };
-      },
-      "config/read": () => {
-        threadRequests.push("config/read");
-        return { config: {} };
-      },
-      "model/list": () => {
-        threadRequests.push("model/list");
-        return {
-          data: [{ id: "gpt-5.4", isDefault: true, defaultReasoningEffort: "medium" }],
-        };
-      },
+      getUserSavedConfig: () => ({ config: {} }),
+      "config/read": () => ({ config: {} }),
+      "model/list": () => ({
+        data: [{ id: "gpt-5.4", isDefault: true, defaultReasoningEffort: "medium" }],
+      }),
     });
     const provider = new CodexAppServerAgentClient(createTestLogger());
     castInternals<{ goalsEnabledPromise: Promise<boolean> | null }>(provider).goalsEnabledPromise =
@@ -787,37 +778,31 @@ describe("Codex app-server provider", () => {
       provider,
     ).spawnAppServer = async () => appServer.child;
 
-    const outcome = await Promise.race([
-      provider
-        .resumeSession({
-          sessionId: "archived-thread-id",
-          metadata: {
-            cwd: "/tmp/codex-question-test",
-            modeId: "auto",
-            model: "gpt-5.4",
-          },
-        })
-        .then(
-          () => "resolved" as const,
-          (error) => {
-            expect(error).toBeInstanceOf(Error);
-            expect((error as Error).message).toContain(
-              "no tool-call found for thread id archived-thread-id",
-            );
-            return "rejected" as const;
-          },
-        ),
-      new Promise<"timed_out">((resolve) => setTimeout(() => resolve("timed_out"), 500)),
-    ]);
+    // Resume is deferred off the critical path: resumeSession resolves without
+    // touching the app-server, and the resume failure surfaces on first use.
+    const session = await provider.resumeSession({
+      sessionId: "archived-thread-id",
+      metadata: {
+        cwd: "/tmp/codex-question-test",
+        modeId: "auto",
+        model: "gpt-5.4",
+      },
+    });
+    expect(threadRequests).toEqual([]);
 
-    if (outcome === "timed_out") {
-      appServer.child.kill("SIGTERM");
-      throw new Error(`resumeSession timed out; thread requests: ${threadRequests.join(", ")}`);
+    try {
+      await expect(session.startTurn("hello")).rejects.toThrow(
+        "no tool-call found for thread id archived-thread-id",
+      );
+
+      expect(threadRequests).toContain("thread/loaded/list");
+      expect(threadRequests).toContain("thread/resume");
+      // The persisted thread must not be silently replaced by a fresh one.
+      expect(threadRequests).not.toContain("thread/start");
+      appServer.assertNoErrors();
+    } finally {
+      await session.close();
     }
-
-    expect(threadRequests).toEqual(["thread/loaded/list", "thread/resume"]);
-    expect(outcome).toBe("rejected");
-    appServer.assertNoErrors();
   });
 
   test("lists repo skills using WorkspaceGitService repo-root resolution", async () => {

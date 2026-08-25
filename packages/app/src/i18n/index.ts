@@ -796,6 +796,8 @@ export const resources = {
           archivingSubtitle: "请稍候，正在归档此智能体。",
           createTimeout: "创建对话超时，消息已保留，请重试",
           createMissingAgentId: "创建响应缺少对话 ID，请重试",
+          createErrorDshMissingApiKey:
+            "DeepSeek Harness 尚未配置 API 密钥：请在运行主机服务的环境中设置 DEEPSEEK_API_KEY 后重试（本次请求未发出）。",
           createMissingWorkspaceKey: "无法定位工作区，消息已保留，请重试",
           autoSubmitRestored: "自动发送未能完成，消息已恢复到输入框，请点击发送",
         },
@@ -2762,6 +2764,8 @@ export const resources = {
           createTimeout:
             "Timed out creating the conversation; your message is preserved, please retry",
           createMissingAgentId: "Create response missing conversation id; please retry",
+          createErrorDshMissingApiKey:
+            "DeepSeek Harness has no API key configured: set DEEPSEEK_API_KEY in the environment the host service runs in, then retry (nothing was sent).",
           createMissingWorkspaceKey:
             "Cannot resolve the workspace; your message is preserved, please retry",
           autoSubmitRestored:

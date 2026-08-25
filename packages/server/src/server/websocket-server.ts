@@ -1356,13 +1356,13 @@ export class VoiceAssistantWebSocketServer {
         daemonStatusRpc: true,
         // COMPAT(terminalRestoreModes): added in v0.1.81, remove gate after 2026-11-23.
         "terminal-restore-modes": true,
-        // COMPAT(rewind): added in v0.1.X, drop the gate when floor >= v0.1.X.
+        // COMPAT(rewind): added no later than v1.0.0 (2026-06-15); drop the gate no earlier than 2026-12-15 when client/daemon floor >= v1.0.0.
         rewind: true,
         // COMPAT(checkoutRefresh): added in v0.1.86, remove gate after 2026-11-29.
         checkoutRefresh: true,
-        // COMPAT(agentSkillManagement): added in v0.1.X, remove gate when all clients support it.
+        // COMPAT(agentSkillManagement): added no later than v1.0.0 (2026-06-15); drop the gate no earlier than 2026-12-15 when client/daemon floor >= v1.0.0.
         agentSkillManagement: true,
-        // COMPAT(agentMcpServerManagement): added in v0.1.X, remove gate when all clients support it.
+        // COMPAT(agentMcpServerManagement): added no later than v1.0.0 (2026-06-15); drop the gate no earlier than 2026-12-15 when client/daemon floor >= v1.0.0.
         agentMcpServerManagement: true,
         // COMPAT(generativeUiWireCapability): added in v0.1.101; remove the gate no earlier than 2027-01-11 when client/daemon floor >= v0.1.101.
         generativeUi: true,

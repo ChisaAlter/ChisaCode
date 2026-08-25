@@ -810,12 +810,25 @@ function WorkspaceScreenContent({
   const sessionAgents = useSessionStore(
     (state) => state.sessions[normalizedServerId]?.agents ?? null,
   );
+  const isActiveTargetAgentPinned = useWorkspaceLayoutStore((state) =>
+    persistenceKey && activeTargetAgentId
+      ? (state.pinnedAgentIdsByWorkspace[persistenceKey]?.has(activeTargetAgentId) ?? false)
+      : false,
+  );
   const activeAgentStillExists = useMemo(() => {
     if (!activeTargetAgentId || !hasHydratedAgents) {
       return true;
     }
+    // Pinned agents (archived sessions reopened from Sessions navigate with
+    // pin=true) are not in the live agents map — the agent panel renders them
+    // from agentDetails, so the slot must not be cleared for them. Unpinned
+    // agents missing from the live map (deleted/archived elsewhere) still
+    // clear the slot.
+    if (isActiveTargetAgentPinned) {
+      return true;
+    }
     return sessionAgents?.has(activeTargetAgentId) ?? false;
-  }, [activeTargetAgentId, hasHydratedAgents, sessionAgents]);
+  }, [activeTargetAgentId, hasHydratedAgents, isActiveTargetAgentPinned, sessionAgents]);
 
   useEffect(() => {
     if (persistenceKey && activeTargetAgentId && hasHydratedAgents && !activeAgentStillExists) {

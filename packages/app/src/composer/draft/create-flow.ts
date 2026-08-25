@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useReducer } from "react";
 import type { ComposerAttachment } from "@/attachments/types";
 import { splitComposerAttachmentsForSubmit } from "@/composer/attachments/submit";
 import { appI18n } from "@/i18n";
+import { resolveAgentCreateErrorMessage } from "@/utils/agent-create-errors";
 import { useCreateFlowStore } from "@/stores/create-flow-store";
 import { useSessionStore } from "@/stores/session-store";
 import {
@@ -331,7 +332,10 @@ export function useDraftAgentCreateFlow<TDraftAgent, TCreateResult>({
           });
         }
       } catch (error) {
-        const resolved = error instanceof Error ? error : new Error("Failed to create agent");
+        const rawError = error instanceof Error ? error : new Error("Failed to create agent");
+        // Known daemon error codes (e.g. DSH_MISSING_API_KEY) render localized
+        // copy; unknown failures keep the daemon-provided message.
+        const resolved = new Error(resolveAgentCreateErrorMessage(rawError));
         // Remove optimistic sidebar projection if create never produced a real
         // agent. The row is keyed by the preallocated agent id, not the draft id.
         const pending = useCreateFlowStore.getState().pendingByDraftId[draftId];

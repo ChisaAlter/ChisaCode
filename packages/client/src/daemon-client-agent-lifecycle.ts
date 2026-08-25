@@ -86,6 +86,22 @@ export type AgentRefreshedStatusPayload = ReturnType<
   typeof AgentRefreshedStatusPayloadSchema.parse
 >;
 
+/**
+ * Agent create/import failure surfaced by the daemon. Carries the daemon's
+ * optional stable `code` (e.g. `DSH_MISSING_API_KEY`) so clients can localize
+ * known failures instead of displaying the raw daemon message.
+ */
+export class AgentCreateError extends Error {
+  /** Stable machine-readable failure code from the daemon, when provided. */
+  readonly code?: string;
+
+  constructor(message: string, code?: string) {
+    super(message);
+    this.name = "AgentCreateError";
+    this.code = code;
+  }
+}
+
 type FetchAgentPayload = DaemonCommandResponsePayload<"fetch_agent_response">;
 type ArchiveAgentPayload = DaemonCommandResponsePayload<"agent_archived">;
 type RenameProjectPayload = DaemonCommandResponsePayload<"project.rename.response">;
@@ -166,7 +182,7 @@ export class AgentLifecycleClient {
       },
     });
     if (status.status === "agent_create_failed") {
-      throw new Error(status.error);
+      throw new AgentCreateError(status.error, status.errorCode);
     }
     // Attach the daemon-provided project placement (when present) so callers can
     // place the created agent under the correct sidebar directory immediately.
@@ -292,7 +308,7 @@ export class AgentLifecycleClient {
       },
     });
     if (status.status === "agent_create_failed") {
-      throw new Error(status.error);
+      throw new AgentCreateError(status.error, status.errorCode);
     }
     return status.agent;
   }

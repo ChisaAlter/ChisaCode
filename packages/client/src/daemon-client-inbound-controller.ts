@@ -166,6 +166,14 @@ export class DaemonClientInboundController {
   }
 
   handle(rawData: unknown): void {
+    // Frame kind is detected by content (opcode sniff), never by the delivered
+    // JS type: over the relay, binary protocol frames whose bytes are valid
+    // UTF-8 arrive as *strings* (the E2EE codec reconstructs frame type via a
+    // UTF-8 heuristic — see the frame-type contract note in @chisacode/relay
+    // crypto.ts decrypt). asUint8Array re-encodes strings to UTF-8 bytes,
+    // which is lossless for valid UTF-8, so the sniff below still sees the
+    // original frame bytes. JSON text can never be misrouted: it starts with
+    // "{" (0x7b), which is outside the binary opcode space.
     const rawBytes = asUint8Array(rawData);
     if (rawBytes && this.tryHandleBinaryFrame(rawBytes)) {
       return;

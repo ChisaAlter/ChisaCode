@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { WebSocket } from "ws";
 import pino from "pino";
 import { Writable } from "node:stream";
@@ -75,6 +75,7 @@ async function getPairingOfferUrl(args: {
 function decodeOfferFromFragmentUrl(url: string): {
   serverId: string;
   daemonPublicKeyB64: string;
+  pairingToken: string;
 } {
   const marker = "#offer=";
   const idx = url.indexOf(marker);
@@ -84,7 +85,47 @@ function decodeOfferFromFragmentUrl(url: string): {
   const encoded = url.slice(idx + marker.length);
   const json = Buffer.from(encoded, "base64url").toString("utf8");
   const offer = ConnectionOfferSchema.parse(JSON.parse(json));
-  return { serverId: offer.serverId, daemonPublicKeyB64: offer.daemonPublicKeyB64 };
+  const pairingToken = offer.authBootstrap?.pairingToken;
+  if (!pairingToken) {
+    throw new Error("Expected pairing offer to include an auth bootstrap token");
+  }
+  return { serverId: offer.serverId, daemonPublicKeyB64: offer.daemonPublicKeyB64, pairingToken };
+}
+
+/**
+ * Wait for the encrypted channel handshake to reach `open`, then return the
+ * channel-bound relayDeviceAuth pairing payload the daemon requires for relay
+ * hellos: the client's E2EE public key plus the daemon-issued auth challenge
+ * from `e2ee_ready`, both of which must match the encrypted channel.
+ */
+async function buildChannelBoundPairingAuth(
+  channel: Awaited<ReturnType<typeof createClientChannel>>,
+  pairingToken: string,
+): Promise<{
+  version: 1;
+  deviceId: string;
+  pairingToken: string;
+  clientPublicKeyB64: string;
+  challenge: string;
+}> {
+  await new Promise<void>((resolve) => {
+    if (channel.isOpen()) {
+      resolve();
+      return;
+    }
+    channel.onTransitionToOpen(() => resolve());
+  });
+  const security = channel.getSecurityContext();
+  if (!security?.clientPublicKeyB64 || !security.authChallenge) {
+    throw new Error("Encrypted channel did not provide a device-auth challenge");
+  }
+  return {
+    version: 1,
+    deviceId: `dev_e2e_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`,
+    pairingToken,
+    clientPublicKeyB64: security.clientPublicKeyB64,
+    challenge: security.authChallenge,
+  };
 }
 
 function encodeCiphertext(ciphertext: ArrayBuffer): string {
@@ -94,6 +135,10 @@ function encodeCiphertext(ciphertext: ArrayBuffer): string {
 function decodeCiphertext(text: string): ArrayBuffer {
   const buffer = Buffer.from(text, "base64");
   return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
+}
+
+function logsContain(lines: string[], needle: string): boolean {
+  return lines.some((line) => line.includes(needle));
 }
 
 function parseEncryptedJson(sharedKey: Uint8Array, text: string): unknown {
@@ -165,6 +210,13 @@ async function waitForRelayWebSocketReady(port: number, timeout = 60000): Promis
       ws.once("open", () => {
         ws.close(1000, "probe");
         settle(true);
+      });
+      // The relay requires signed auth for server-role connections, so this
+      // unsigned probe is rejected with HTTP 401. A 401 means the worker is up
+      // and evaluating auth — that is the readiness signal we are waiting for.
+      ws.once("unexpected-response", (_request, response) => {
+        ws.terminate();
+        settle(response.statusCode === 401);
       });
       ws.once("error", () => {
         settle(false);
@@ -257,7 +309,7 @@ async function waitForRelayWebSocketReady(port: number, timeout = 60000): Promis
         relayPublicEndpoint: daemon.config.relayPublicEndpoint,
         appBaseUrl: daemon.config.appBaseUrl,
       });
-      const { serverId, daemonPublicKeyB64 } = decodeOfferFromFragmentUrl(offerUrl);
+      const { serverId, daemonPublicKeyB64, pairingToken } = decodeOfferFromFragmentUrl(offerUrl);
 
       const stableClientId = `cid_test_${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`;
       const ws = new WebSocket(
@@ -345,12 +397,14 @@ async function waitForRelayWebSocketReady(port: number, timeout = 60000): Promis
               },
             });
             channelRef = channel;
+            const relayDeviceAuth = await buildChannelBoundPairingAuth(channel, pairingToken);
             await channel.send(
               JSON.stringify({
                 type: "hello",
                 clientId: stableClientId,
                 clientType: "cli",
                 protocolVersion: 1,
+                relayDeviceAuth,
               }),
             );
           } catch (err) {
@@ -393,7 +447,7 @@ async function waitForRelayWebSocketReady(port: number, timeout = 60000): Promis
         relayPublicEndpoint: daemon.config.relayPublicEndpoint,
         appBaseUrl: daemon.config.appBaseUrl,
       });
-      const { serverId, daemonPublicKeyB64 } = decodeOfferFromFragmentUrl(offerUrl);
+      const { serverId, daemonPublicKeyB64, pairingToken } = decodeOfferFromFragmentUrl(offerUrl);
 
       // Previously, the daemon would time out waiting for `hello` and reconnect every ~10s.
       // Wait long enough to catch that regression.
@@ -486,12 +540,14 @@ async function waitForRelayWebSocketReady(port: number, timeout = 60000): Promis
               },
             });
             channelRef = channel;
+            const relayDeviceAuth = await buildChannelBoundPairingAuth(channel, pairingToken);
             await channel.send(
               JSON.stringify({
                 type: "hello",
                 clientId: stableClientId,
                 clientType: "cli",
                 protocolVersion: 1,
+                relayDeviceAuth,
               }),
             );
           } catch (err) {
@@ -513,7 +569,12 @@ async function waitForRelayWebSocketReady(port: number, timeout = 60000): Promis
     }
   }, 90000);
 
-  test("daemon accepts a relay client that pipelines app hello after E2EE hello", async () => {
+  // A pipelined app hello is sent before `e2ee_ready` delivers the daemon's
+  // device-auth challenge, so it can never carry valid channel-bound device
+  // auth. The daemon must still decrypt and process the buffered frame — and
+  // then reject it deterministically — rather than dropping it and hanging
+  // until the hello timeout.
+  test("daemon decrypts a pipelined app hello and rejects it for missing device auth", async () => {
     process.env.CHISACODE_PRIMARY_LAN_IP = "192.168.1.12";
 
     const { logger, lines } = createCapturingLogger();
@@ -550,16 +611,15 @@ async function waitForRelayWebSocketReady(port: number, timeout = 60000): Promis
         }),
       );
 
-      const received = await new Promise<unknown>((resolve, reject) => {
+      const outcome = await new Promise<"closed">((resolve, reject) => {
         const timeout = setTimeout(() => {
           ws.close();
-          reject(new Error("timed out waiting for server_info"));
+          reject(new Error("timed out waiting for the daemon to reject the pipelined hello"));
         }, 20000);
 
-        const settleResolve = (value: unknown) => {
+        const settleResolve = () => {
           clearTimeout(timeout);
-          resolve(value);
-          ws.close();
+          resolve("closed");
         };
         const settleReject = (reason: unknown) => {
           clearTimeout(timeout);
@@ -618,33 +678,32 @@ async function waitForRelayWebSocketReady(port: number, timeout = 60000): Promis
               parsed.message.type === "status" &&
               parsed.message.payload?.status === "server_info"
             ) {
-              settleResolve({
-                type: parsed.type,
-                message: {
-                  type: parsed.message.type,
-                  payload: { status: parsed.message.payload.status },
-                },
-              });
+              settleReject(
+                new Error("Unauthenticated pipelined hello must not receive server_info"),
+              );
             }
           } catch (error) {
             settleReject(error);
           }
         });
 
-        ws.on("close", (code, reason) => {
-          settleReject(new Error(`relay client closed before server_info: ${code} ${reason}`));
+        // The daemon closes the relay connection when the (decrypted) pipelined
+        // hello arrives without device auth; the relay surfaces this to the
+        // client as a plain close.
+        ws.on("close", () => {
+          settleResolve();
         });
         ws.on("error", (err) => {
           settleReject(err);
         });
       });
 
-      expect(received).toEqual({
-        type: "session",
-        message: {
-          type: "status",
-          payload: { status: "server_info" },
-        },
+      expect(outcome).toBe("closed");
+      // The auth gate logging proves the buffered frame was decrypted and
+      // routed through hello processing — a dropped frame would instead hit
+      // the hello timeout without any device-auth rejection.
+      await vi.waitFor(() => {
+        expect(logsContain(lines, "relay_device_auth_required")).toBe(true);
       });
     } catch (err) {
       const tail = lines.slice(-50).join("");

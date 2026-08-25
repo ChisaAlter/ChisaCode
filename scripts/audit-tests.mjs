@@ -35,6 +35,9 @@ const checks = [
     id: "fixedWait",
     description: "fixed sleeps and waitForTimeout",
     pattern: /(?<!\.)\bsetTimeout\s*\(|\b(?:waitForTimeout|sleep)\s*\(/g,
+    // setTimeout(fn) / setTimeout(fn, 0) is a tick deferral (event-ordering in
+    // fakes), not a fixed sleep — only non-zero delays are debt.
+    accept: (text, match) => !isZeroDelaySetTimeout(text, match),
   },
   {
     id: "weakAssertion",
@@ -48,8 +51,91 @@ const checks = [
   },
 ];
 
-function findingKey(checkId, filePath, line) {
-  return `${checkId}::${filePath.replaceAll("\\", "/")}:${line}`;
+/**
+ * Fingerprints are line-number-independent: they key on the trimmed text of
+ * the matched line plus an occurrence ordinal for duplicate lines. Editing
+ * unrelated code above a finding no longer produces a false "new debt"
+ * failure; only genuinely new matched lines (or edits to a debt line itself)
+ * create new fingerprints. Content is capped so pathological lines stay
+ * readable in the baseline file.
+ */
+const FINGERPRINT_CONTENT_MAX = 160;
+
+function findingKey(checkId, filePath, lineText, occurrence) {
+  const normalized = lineText.trim().slice(0, FINGERPRINT_CONTENT_MAX);
+  return `${checkId}::${filePath.replaceAll("\\", "/")}::${normalized}#${occurrence}`;
+}
+
+/**
+ * Returns true when a matched `setTimeout(` call passes no delay or a literal
+ * `0` delay, i.e. a next-tick deferral rather than a fixed sleep. Scans from
+ * the opening paren with a small tokenizer that balances parens and skips
+ * string/template literals and comments so nested callbacks parse correctly.
+ * Unparseable calls (unterminated, dynamic) conservatively count as debt.
+ */
+function isZeroDelaySetTimeout(text, match) {
+  if (!match[0].includes("setTimeout")) return false;
+  const openParen = text.indexOf("(", match.index);
+  if (openParen === -1) return false;
+  let depth = 0;
+  let lastTopLevelComma = -1;
+  let i = openParen;
+  while (i < text.length) {
+    const ch = text[i];
+    const skipTo = skipNonCode(text, i);
+    if (skipTo !== -1) {
+      i = skipTo;
+      continue;
+    }
+    if (ch === "(" || ch === "[" || ch === "{") depth += 1;
+    if (ch === ")" || ch === "]" || ch === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        const lastArgStart = lastTopLevelComma === -1 ? openParen + 1 : lastTopLevelComma + 1;
+        const lastArg = text.slice(lastArgStart, i).trim();
+        // No comma at depth 1 means a single callback argument (no delay).
+        return lastTopLevelComma === -1 || lastArg === "0";
+      }
+    }
+    if (ch === "," && depth === 1) lastTopLevelComma = i;
+    i += 1;
+  }
+  return false;
+}
+
+/**
+ * If `start` sits on a string/template literal or a comment, returns the index
+ * just past it; otherwise returns -1.
+ */
+function skipNonCode(text, start) {
+  const ch = text[start];
+  if (ch === '"' || ch === "'" || ch === "`") {
+    return skipStringLiteral(text, start);
+  }
+  if (ch === "/" && text[start + 1] === "/") {
+    const eol = text.indexOf("\n", start);
+    return eol === -1 ? text.length : eol + 1;
+  }
+  if (ch === "/" && text[start + 1] === "*") {
+    const end = text.indexOf("*/", start + 2);
+    return end === -1 ? text.length : end + 2;
+  }
+  return -1;
+}
+
+function skipStringLiteral(text, start) {
+  const quote = text[start];
+  let i = start + 1;
+  while (i < text.length) {
+    if (text[i] === "\\") {
+      i += 2;
+      continue;
+    }
+    if (text[i] === quote) return i + 1;
+    if (quote !== "`" && text[i] === "\n") return i + 1;
+    i += 1;
+  }
+  return text.length;
 }
 
 const ignoredDirs = new Set([
@@ -93,17 +179,25 @@ function scanFile(file) {
   for (let i = 0; i < text.length; i++) {
     if (text.charCodeAt(i) === 10) lineStarts.push(i + 1);
   }
+  const occurrenceCounts = new Map();
   for (const check of checks) {
     check.pattern.lastIndex = 0;
     for (;;) {
       const match = check.pattern.exec(text);
       if (!match) break;
+      if (check.accept && !check.accept(text, match)) continue;
       const line = upperBound(lineStarts, match.index);
+      const lineStart = lineStarts[line - 1];
+      const lineEnd = line < lineStarts.length ? lineStarts[line] - 1 : text.length;
+      const lineText = text.slice(lineStart, lineEnd).replace(/\r$/, "");
+      const occurrenceKey = `${check.id}::${relativePath}::${lineText.trim().slice(0, FINGERPRINT_CONTENT_MAX)}`;
+      const occurrence = occurrenceCounts.get(occurrenceKey) ?? 0;
+      occurrenceCounts.set(occurrenceKey, occurrence + 1);
       findings.push({
         check: check.id,
         file: relativePath,
         line,
-        key: findingKey(check.id, relativePath, line),
+        key: findingKey(check.id, relativePath, lineText, occurrence),
       });
     }
   }
@@ -143,9 +237,9 @@ if (shouldUpdate) {
     baselinePath,
     JSON.stringify(
       {
-        version: 2,
+        version: 3,
         description:
-          "Baseline for test debt audit. CI fails on new finding fingerprints or when totals rise above counts. Fingerprints prevent debt migration between files.",
+          "Baseline for test debt audit. CI fails on new finding fingerprints or when totals rise above counts. Fingerprints key on matched line content (not line numbers), so unrelated edits above a finding do not create false positives.",
         counts: summary,
         fingerprints,
       },

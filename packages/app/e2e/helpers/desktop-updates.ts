@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { expect, type Page } from "@playwright/test";
 import { openSettings } from "./app";
 import { getE2EDaemonPort } from "./daemon-port";
+import { localizedRegex } from "./localized-text";
 import { openSettingsHost } from "./settings";
 
 interface DaemonApiStatus {
@@ -225,11 +226,11 @@ export async function expectUpdateBanner(page: Page, version: string): Promise<v
 }
 
 export async function clickInstallUpdate(page: Page): Promise<void> {
-  await page.getByRole("button", { name: "Install & restart" }).click();
+  await page.getByRole("button", { name: localizedRegex("Install & restart") }).click();
 }
 
 export async function expectInstallInProgress(page: Page): Promise<void> {
-  await expect(page.getByRole("button", { name: "Installing..." })).toBeVisible();
+  await expect(page.getByRole("button", { name: localizedRegex("Installing...") })).toBeVisible();
 }
 
 /**
@@ -241,7 +242,7 @@ export async function expectInstallInProgress(page: Page): Promise<void> {
 export async function interceptDaemonManagementConfirmDialog(
   page: Page,
 ): Promise<ConfirmDialogCall> {
-  await page.getByRole("switch", { name: "Manage built-in daemon" }).click();
+  await daemonManagementSwitch(page).click();
   await page.waitForFunction(() => !!window.__capturedDialogCall, { timeout: 5_000 });
   return page.evaluate(() => window.__capturedDialogCall!);
 }
@@ -250,20 +251,27 @@ export async function toggleDaemonManagement(
   page: Page,
   _action: "enable" | "disable",
 ): Promise<void> {
-  await page.getByRole("switch", { name: "Manage built-in daemon" }).click();
+  await daemonManagementSwitch(page).click();
 }
 
 export function expectDaemonManagementConfirmDialog(args: ConfirmDialogCall): void {
-  expect(args.title).toBe("Pause built-in daemon");
-  expect(args.message).toContain("stop the built-in daemon immediately");
+  // The confirm dialog copy is hard-coded zh-CN in
+  // use-built-in-daemon-management.ts; accept the historical English copy too
+  // so the assertion survives a future i18n extraction.
+  expect(args.title).toMatch(/^(Pause built-in daemon|暂停内置 daemon)$/);
+  expect(args.message).toMatch(/stop the built-in daemon immediately|立即停止内置 daemon/);
 }
 
 export async function expectDaemonManagementEnabled(page: Page): Promise<void> {
-  await expect(page.getByRole("switch", { name: "Manage built-in daemon" })).toBeChecked();
+  await expect(daemonManagementSwitch(page)).toBeChecked();
 }
 
 export async function expectDaemonManagementDisabled(page: Page): Promise<void> {
-  await expect(page.getByRole("switch", { name: "Manage built-in daemon" })).not.toBeChecked();
+  await expect(daemonManagementSwitch(page)).not.toBeChecked();
+}
+
+function daemonManagementSwitch(page: Page) {
+  return page.getByRole("switch", { name: localizedRegex("Manage built-in daemon") });
 }
 
 /**

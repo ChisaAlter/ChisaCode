@@ -5,6 +5,7 @@ import {
   BranchAlreadyCheckedOutError,
   createWorktree as createWorktreePrimitive,
   deriveWorktreeProjectHash,
+  getChisaCodeWorktreesRoot,
   deleteChisaCodeWorktree,
   getScriptConfigs,
   getWorktreeSetupCommands,
@@ -677,7 +678,10 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
         cwd: repoDir,
       });
 
-      const expectedWorktreePath = join(chisacodeHome, "worktrees", "test-repo", "fail-test");
+      const expectedWorktreePath = join(
+        await getChisaCodeWorktreesRoot(repoDir, chisacodeHome),
+        "fail-test",
+      );
 
       await expect(
         createLegacyWorktreeForTest({
@@ -707,7 +711,10 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
         { cwd: repoDir },
       );
 
-      const expectedWorktreePath = join(chisacodeHome, "worktrees", "test-repo", "recover-test");
+      const expectedWorktreePath = join(
+        await getChisaCodeWorktreesRoot(repoDir, chisacodeHome),
+        "recover-test",
+      );
       await expect(
         createLegacyWorktreeForTest({
           branchName: "main",

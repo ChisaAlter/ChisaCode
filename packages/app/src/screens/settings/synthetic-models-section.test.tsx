@@ -366,6 +366,7 @@ vi.mock("@/runtime/host-runtime", () => ({
   }),
 }));
 
+import { buildModelGatewayProviderIdList } from "@/screens/settings/custom-model-providers";
 import { SyntheticModelsSection } from "@/screens/settings/synthetic-models-section";
 
 function makeConfig(): MutableDaemonConfig {
@@ -552,13 +553,9 @@ describe("SyntheticModelsSection", () => {
     });
 
     expect(patchConfigMock).toHaveBeenCalledTimes(1);
-    expect(refreshProvidersMock).toHaveBeenCalledWith([
-      "zai-claude",
-      "zai-codex",
-      "zai-opencode",
-      "zai-pi",
-      "zai-kimi",
-    ]);
+    // Derive from the same source of truth the section uses so adding a new
+    // built-in gateway face does not silently break this expectation.
+    expect(refreshProvidersMock).toHaveBeenCalledWith(buildModelGatewayProviderIdList("zai"));
     expect(patchConfigMock.mock.calls[0]?.[0]).toMatchObject({
       modelGateways: {
         zai: {

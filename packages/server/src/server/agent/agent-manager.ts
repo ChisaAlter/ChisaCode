@@ -153,6 +153,13 @@ export interface AgentManagerOptions {
   mcpBaseUrl?: string;
   appendSystemPrompt?: string;
   /**
+   * Daemon-owned directory for project-context TOC caches (normally
+   * `$CHISACODE_HOME/context`). When omitted the context is rebuilt on demand
+   * without writing a cache. Must never point inside a user workspace: cache
+   * writes in a repo cwd dirty `git status` and break `git worktree remove`.
+   */
+  projectContextCacheDir?: string;
+  /**
    * Optional model-list cache for default model resolution during launch config
    * normalization. Avoids throwaway provider process spawns when a snapshot is warm.
    */
@@ -433,6 +440,7 @@ export class AgentManager {
       appendSystemPrompt: options.appendSystemPrompt ?? "",
       logger: this.logger,
       mcpBaseUrl: options.mcpBaseUrl ?? null,
+      projectContextCacheDir: options.projectContextCacheDir ?? null,
       providers: this.providers,
       resolveCachedModels: options.resolveCachedModels,
       resolveMcpServers: options.resolveMcpServers,
@@ -1136,11 +1144,18 @@ export class AgentManager {
   async emitLiveTimelineItem(agentId: string, item: AgentTimelineItem): Promise<void> {
     const agent = this.requireAgent(agentId);
     this.touchUpdatedAt(agent);
-    this.dispatchStream(agentId, {
-      type: "timeline",
-      item,
-      provider: agent.provider,
-    });
+    // Provisional live items carry the current epoch (and no seq) so clients
+    // can attribute them to the timeline they hold; epoch-less updates cannot
+    // survive the reconnect catch-up contract.
+    this.dispatchStream(
+      agentId,
+      {
+        type: "timeline",
+        item,
+        provider: agent.provider,
+      },
+      { epoch: this.timeline.getEpoch(agentId) },
+    );
   }
 
   streamAgent(

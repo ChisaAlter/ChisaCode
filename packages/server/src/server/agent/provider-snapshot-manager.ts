@@ -687,9 +687,10 @@ export class ProviderSnapshotManager {
     await Promise.allSettled(
       options.providers.map((provider) => {
         const existingLoad = this.getProviderLoad(options.cwd, provider);
-        if (existingLoad) {
+        if (existingLoad && !options.force) {
           // Already probing in this scope — join it instead of consuming a
-          // probe slot for a duplicate.
+          // probe slot for a duplicate. Forced refreshes must supersede the
+          // in-flight load so its (possibly stale) result cannot win.
           return existingLoad.promise;
         }
         return this.withProbeSlot(() => this.loadProvider({ ...options, provider }));
@@ -731,12 +732,13 @@ export class ProviderSnapshotManager {
     }
 
     const existingLoad = this.getProviderLoad(options.cwd, options.provider);
-    if (existingLoad) {
+    if (existingLoad && !options.force) {
       // A probe is already in flight for this provider in this scope. Reuse it
       // instead of running a parallel availability check and model fetch — the
       // in-flight load emits its result through the same snapshot entry.
-      // refreshSettingsSnapshot clears cached loads before forcing, so explicit
-      // settings refreshes still start a fresh probe.
+      // Forced loads fall through: setProviderLoad replaces the current load
+      // pointer, so the superseded probe's writes fail the
+      // isCurrentProviderLoad guard and the latest refresh wins.
       return existingLoad.promise;
     }
 
@@ -845,10 +847,21 @@ export class ProviderSnapshotManager {
       }
 
       try {
+        // Injected clients (ChisaCodeDaemonConfig.agentClients) own the whole
+        // provider surface. The registry's fetchModels/fetchModes close over the
+        // real provider runtime (e.g. codex spawns a throwaway app-server), so
+        // routing discovery through them would bypass the injection seam and
+        // fail on hosts without the real binary even though the injected client
+        // is fully functional.
+        const injectedClient = this.extraClients[provider];
         const [models, modes] = await withTimeout(
           Promise.all([
-            definition.fetchModels({ cwd, force }),
-            definition.fetchModes({ cwd, force }),
+            injectedClient
+              ? injectedClient.listModels({ cwd, force })
+              : definition.fetchModels({ cwd, force }),
+            injectedClient
+              ? (injectedClient.listModes?.({ cwd, force }) ?? Promise.resolve(definition.modes))
+              : definition.fetchModes({ cwd, force }),
           ]),
           this.refreshTimeoutMs,
           `Timed out refreshing ${definition.label} after ${this.refreshTimeoutMs}ms`,

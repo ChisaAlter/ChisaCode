@@ -63,8 +63,11 @@ function createExtraClient(
     async resumeSession() {
       throw new Error("not implemented");
     },
+    // Injected clients own model discovery (refreshProvider routes through
+    // listModels when an extra client is present), so the default fake must
+    // surface at least one model for snapshots to reach "ready" with models.
     async listModels(_options: ListModelsOptions) {
-      return [] as AgentModelDefinition[];
+      return [{ id: "test-model", label: "Test model", isDefault: true }] as AgentModelDefinition[];
     },
     async isAvailable() {
       return false;

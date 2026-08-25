@@ -59,6 +59,18 @@ const boundaries: AnimatedStyleBoundary[] = [
     file: "../components/ui/floating.tsx",
     variables: ["inlineFrameStyle"],
   },
+  // The mobile branches mount only on compact layouts (e.g. a 390px web
+  // viewport), where a Unistyles registered style inside an Animated.View
+  // style array crashes Reanimated's CSSManager at componentDidMount with
+  // "an empty object is not a valid style value".
+  {
+    file: "../components/left-sidebar.tsx",
+    variables: ["backdropStyle", "mobileSidebarStyle", "desktopSidebarStyle"],
+  },
+  {
+    file: "../components/explorer-sidebar.tsx",
+    variables: ["backdropCombinedStyle", "mobileSidebarStyle", "desktopSidebarStyle"],
+  },
 ];
 
 function readSource(file: string): string {
