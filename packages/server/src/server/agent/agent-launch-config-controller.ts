@@ -18,12 +18,18 @@ import type {
 } from "./agent-sdk-types.js";
 import type { EffectiveMcpServersResult } from "./mcp-server-management.js";
 import type { AgentProviderController } from "./agent-provider-controller.js";
-import { loadProjectContext } from "../project-context.js";
+import { buildProjectContext, loadProjectContext } from "../project-context.js";
 
 interface AgentLaunchConfigControllerOptions {
   appendSystemPrompt: string;
   logger: Logger;
   mcpBaseUrl: string | null;
+  /**
+   * Daemon-owned cache directory for project-context TOCs. Must live outside
+   * user workspaces (writing into a repo cwd dirties `git status` and makes
+   * `git worktree remove` fail on archive). Null disables the on-disk cache.
+   */
+  projectContextCacheDir: string | null;
   providers: Pick<AgentProviderController, "getClient">;
   /**
    * Optional cache lookup for default model resolution. When present and non-empty,
@@ -54,6 +60,7 @@ export class AgentLaunchConfigController {
   private readonly companionMcpTokens = new Map<string, CompanionMcpTokenEntry>();
   private readonly logger: Logger;
   private mcpBaseUrl: string | null;
+  private readonly projectContextCacheDir: string | null;
   private readonly providers: Pick<AgentProviderController, "getClient">;
   private readonly resolveCachedModels: AgentLaunchConfigControllerOptions["resolveCachedModels"];
   private readonly resolveMcpServers: AgentLaunchConfigControllerOptions["resolveMcpServers"];
@@ -63,6 +70,7 @@ export class AgentLaunchConfigController {
     this.appendSystemPrompt = options.appendSystemPrompt;
     this.logger = options.logger;
     this.mcpBaseUrl = options.mcpBaseUrl;
+    this.projectContextCacheDir = options.projectContextCacheDir;
     this.providers = options.providers;
     this.resolveCachedModels = options.resolveCachedModels;
     this.resolveMcpServers = options.resolveMcpServers;
@@ -278,7 +286,9 @@ export class AgentLaunchConfigController {
   private resolveProjectContextToc(cwd: string | undefined): string {
     if (!cwd) return "";
     try {
-      const context = loadProjectContext(cwd, resolve(cwd, ".chisacode-context"));
+      const context = this.projectContextCacheDir
+        ? loadProjectContext(cwd, this.projectContextCacheDir)
+        : buildProjectContext(cwd);
       if (context.toc) {
         let toc = context.toc;
         if (Buffer.byteLength(toc, "utf8") > AgentLaunchConfigController.MAX_TOC_BYTES) {
