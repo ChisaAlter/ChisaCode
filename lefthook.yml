@@ -6,6 +6,10 @@ pre-commit:
       exclude:
         - "package-lock.json"
         - "**/package-lock.json"
+        # Generated knowledge graphs are oxfmt-ignored; passing only ignored
+        # files makes oxfmt --check exit non-zero with "no target file".
+        - "docs/knowledge-graphs/**"
+        - "docs/modules/**/knowledge-graph.json"
       run: npm run format:check:files -- {staged_files}
     - name: lint
       glob: "*.{js,jsx,ts,tsx}"
