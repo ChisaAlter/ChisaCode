@@ -44,10 +44,17 @@
   - **desktop-tests**：daemon-manager 版本测试从 package.json 动态读版本；**产品修复**——`opener.isAllowedLocalPath` 用 `win32.isAbsolute || posix.isAbsolute` 支持跨平台绝对路径；opener 测试 mock 补 `resolveMainAppSenderValidationOptions`。
   - **playwright**：`openSessions` 改直接路由导航（sidebar testID 已非导航控件、点击静默无效）；`createIdleAgent` 改用 mock provider（CI 无 opencode）；archive-tab 用例适配单 slot workspace（多 tab UI 已移除）；**产品修复**——workspace slot 存在性检查补 pinned 判定，从 Sessions 重开归档会话不再被清回新会话页；agent-stream-ui 发送重试的成功判据改为 `user-message` testid（裸文本会匹配未发送的草稿导致误判成功）——trace 证实 composer 在新 workspace 快照就绪前 1-2 秒窗口内拒发是设计行为；`waitForContentGrowth` poll 放宽到 30s。本地定向 Playwright 3+4 用例全绿。
   - **M2 减债（fixedWait）**：`scripts/audit-tests.mjs` fixedWait 检测排除 `setTimeout(...,0)` 零延迟 defer（33 处假阳性），基线 229→196；`create-flow.test.ts` 固定 20ms sleep 改确定性 promise 释放。
+- **第五批（2026-08-25，同分支追加，M6 client 补课第一批 + e2e helper 完整性）**：
+  - **设计文档**：[docs/testing/client-e2e-test-hardening-plan-2026-08-25.md](../testing/client-e2e-test-hardening-plan-2026-08-25.md)——M6 用例矩阵（reconnect R1-R7 / demux B1-B6）、E2E Helper Integrity 根因与修复模式、S1/M5/merge 验证门禁 runbook、四阶段执行计划、对抗性审查记录。
+  - **M6 reconnect 边缘矩阵**（`daemon-client-reconnect.test.ts` +5、`daemon-client-connection-controller.test.ts` +3）：hello-ack 丢失→connect 超时重试后原 promise 仍 resolve；in-flight RPC 掉线即时拒绝（不悬挂到 10s 请求超时）；error/close 风暴只武装一个重连 timer 且僵尸事件被忽略；退避 `min(base·2^n,max)` 封顶 + 成功后 attempt 归零；运行时 `setReconnectEnabled` 开关往返；liveness 单次超时容忍/连续两次重连/入站活动清零计数；裸 Transport error 250ms 去抖单次 reset。36/36 绿。
+  - **M6 demux/binary 边界**（`daemon-client-inbound-controller.test.ts` +7）：file-transfer 帧走 relay UTF-8 string 路径；file opcode 先于 terminal 解码；JSON bytes（0x7b）不分岔进 binary；非法帧静默丢弃后流继续；malformed/schema-invalid JSON 丢弃并告警；pong 双路径解析 liveness。
+  - **E2E helper 完整性扫描（186 个 testID 全量交叉校验）**：修复 `settings-host-local-marker`（7 月侧栏改版丢失 testID，恢复到 local dot 上，对应真实 CI 红点 settings-host-page:85）；`expectHostNoLocalOnlyRows` 语义修正——loopback 直连主机现按产品定义视为本机（`resolveLocalDaemonServerId`），pair-device 行合法出现，spec 改为 `expectLoopbackHostLocalRows`；删除 `helpers/app.ts` 中引用已删 UI 的死 helper（setWorkingDirectory/selectModel/selectMode/selectProvider/createAgent\* 等，无 spec 引用）；`helpers/settings.ts` 全部英文断言改 `localizedRegex`（应用默认 zh-CN，`createAppI18n("zh-CN")`，是 playwright ~30 个红点的主根因）。
+  - **假绿防护**：新增 `packages/app/src/testing/e2e-testid-integrity.test.ts`——静态扫描 e2e 引用的 testID（exact/prefix）与 src/desktop 源码（字面量/模板前缀/后缀组合）交叉校验，带 justification 白名单（rename-modal 后缀组合、settle/snooze 缺席断言）；UI 改名/删 testID 时秒级失败而非烧 90 分钟 playwright。
+  - **未完成登记**：其余 spec 的 zh-CN 文案漂移（desktop-updates/composer-attachments/bottom-sheet-reopen/new-workspace/projects-settings 等 ~13 文件）为 Phase 3；client-slash-commands 的 /quit 导航期望依赖 172cb6ad 产品修复在新 CI run 的裁决，未重复改。
 - **登记未做（后续批次）**：
   - **M2 测试反模式止增**：`scripts/test-audit-baseline.json` 的 moduleMock 303 / conditionalSkip 105 / weakAssertion 349 等历史债按包拆减债批次，第四批仅修 fixedWait 假阳性与 1 个最痛文件。
   - **M5 Electron Provider Settings smoke**：需要真实打包 Electron 表面，cloud 环境无法执行；待有打包环境时按 `test:desktop-packaged` 门禁补一条 Provider Settings 冒烟用例。**未验证**。
-  - **M6 client 测试补课**：本批新增 inbound-controller demux 测试属于第一优先级（静默失败路径）的一小步；第三批补重连退避抖动 3 用例（纯函数 + fake-timer 计时）；binary 编码边界的系统性补课仍待做。
+  - **M6 client 测试补课**：第五批已落地 reconnect R1-R7 + demux B1-B6 系统性矩阵（见上），设计与剩余项见 [docs/testing/client-e2e-test-hardening-plan-2026-08-25.md](../testing/client-e2e-test-hardening-plan-2026-08-25.md)；binary 编码字节级边界此前已由 `daemon-client-binary-frames.test.ts` 覆盖。
   - **L1 god-file 拆分**：不在本批范围（仅在小步安全时进行），维持既有 Provider God-File 拆分计划。
 
 ### Soft Home 发送对齐 T3：待在所选目录 + 顶栏先显示分支（2026-08-13）
