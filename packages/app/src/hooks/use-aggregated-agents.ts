@@ -1,4 +1,4 @@
-import { useMemo, useCallback, useSyncExternalStore } from "react";
+import { useMemo, useCallback, useRef, useSyncExternalStore } from "react";
 import { useShallow } from "zustand/shallow";
 import { useSessionStore } from "@/stores/session-store";
 import type { AgentDirectoryEntry } from "@/types/agent-directory";
@@ -67,11 +67,48 @@ function compareAggregatedAgents(left: AggregatedAgent, right: AggregatedAgent):
   return getActivityTime(right) - getActivityTime(left);
 }
 
+interface AggregatedAgentCacheEntry {
+  serverId: string;
+  serverLabel: string;
+  wrapper: AggregatedAgent;
+}
+
+/**
+ * Creates an identity cache for aggregated-agent wrappers. Session-store
+ * agent objects keep their identity across unrelated updates (setAgents
+ * copies the map but reuses unchanged values), so reusing the wrapper for an
+ * unchanged agent lets downstream memoized consumers (sidebar rows, derived
+ * thread models) skip work when another agent streams.
+ * @returns A function mirroring toAggregatedAgent with identity reuse
+ */
+export function createAggregatedAgentCache(): (input: {
+  agent: Agent;
+  serverId: string;
+  serverLabel: string;
+}) => AggregatedAgent {
+  const cache = new WeakMap<Agent, AggregatedAgentCacheEntry>();
+  return (input) => {
+    const cached = cache.get(input.agent);
+    if (cached && cached.serverId === input.serverId && cached.serverLabel === input.serverLabel) {
+      return cached.wrapper;
+    }
+    const wrapper = toAggregatedAgent(input);
+    cache.set(input.agent, {
+      serverId: input.serverId,
+      serverLabel: input.serverLabel,
+      wrapper,
+    });
+    return wrapper;
+  };
+}
+
 function buildAggregatedAgentsResult(input: {
   hosts: readonly AggregatedHostInfo[];
   sessionAgents: Record<string, Map<string, Agent> | undefined>;
   includeArchived: boolean;
+  aggregate?: (input: { agent: Agent; serverId: string; serverLabel: string }) => AggregatedAgent;
 }): Pick<AggregatedAgentsResult, "agents" | "isLoading" | "isInitialLoad" | "isRevalidating"> {
+  const aggregate = input.aggregate ?? toAggregatedAgent;
   const allAgents: AggregatedAgent[] = [];
   const serverLabelById = new Map(input.hosts.map((host) => [host.serverId, host.label] as const));
 
@@ -84,7 +121,7 @@ function buildAggregatedAgentsResult(input: {
       if (!input.includeArchived && agent.archivedAt) {
         continue;
       }
-      allAgents.push(toAggregatedAgent({ agent, serverId, serverLabel }));
+      allAgents.push(aggregate({ agent, serverId, serverLabel }));
     }
   }
 
@@ -130,6 +167,9 @@ export function useAggregatedAgents(options?: {
     runtime.refreshAllAgentDirectories();
   }, [runtime]);
 
+  const aggregateCacheRef = useRef<ReturnType<typeof createAggregatedAgentCache> | null>(null);
+  aggregateCacheRef.current ??= createAggregatedAgentCache();
+
   const result = useMemo(() => {
     // runtimeVersion is referenced so the memo recomputes when runtime state changes.
     void runtimeVersion;
@@ -141,6 +181,7 @@ export function useAggregatedAgents(options?: {
       })),
       sessionAgents,
       includeArchived,
+      aggregate: aggregateCacheRef.current ?? undefined,
     });
   }, [daemons, includeArchived, runtime, runtimeVersion, sessionAgents]);
 
