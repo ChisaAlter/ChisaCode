@@ -4,7 +4,7 @@ import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { createMCPClient } from "@ai-sdk/mcp";
 import pino from "pino";
 
@@ -390,6 +390,9 @@ describe("agent MCP end-to-end (offline)", () => {
 
     let agentId: string | null = null;
     try {
+      // Since the non-blocking first-send change, create_agent returns after
+      // session construction without waiting for the initial turn; the turn is
+      // dispatched in the background and completes on its own.
       const result = await client.callTool({
         name: "create_agent",
         args: {
@@ -402,17 +405,24 @@ describe("agent MCP end-to-end (offline)", () => {
         },
       });
 
+      expect(result.isError).not.toBe(true);
       const payload = getStructuredContent(result);
       agentId = typeof payload?.agentId === "string" ? payload.agentId : null;
       expect(agentId).toBeTruthy();
-      expect(payload?.status).toBe("running");
+
+      const waitResult = await client.callTool({
+        name: "wait_for_agent",
+        args: { agentId },
+      });
+      const waitPayload = getStructuredContent(waitResult);
+      expect(waitPayload?.status).toBe("idle");
 
       const statusResult = await client.callTool({
         name: "get_agent_status",
         args: { agentId },
       });
       const statusPayload = getStructuredContent(statusResult);
-      expect(statusPayload?.status).toBe("running");
+      expect(statusPayload?.status).toBe("idle");
     } finally {
       if (agentId) {
         await client.callTool({ name: "kill_agent", args: { agentId } });
@@ -425,7 +435,7 @@ describe("agent MCP end-to-end (offline)", () => {
     }
   }, 30_000);
 
-  test("create_agent propagates initial-turn start failure instead of returning success", async () => {
+  test("create_agent surfaces an initial-turn start failure as an error-state agent", async () => {
     class StartTurnFailureSession implements AgentSession {
       readonly provider = "codex" as const;
       readonly id = "mcp-start-turn-failure-session";
@@ -515,6 +525,10 @@ describe("agent MCP end-to-end (offline)", () => {
         return true;
       }
 
+      async listModels() {
+        return [{ id: "gpt-5.4-mini", label: "GPT-5.4 mini", isDefault: true }];
+      }
+
       async createSession(_config: AgentSessionConfig): Promise<AgentSession> {
         return new StartTurnFailureSession();
       }
@@ -552,7 +566,11 @@ describe("agent MCP end-to-end (offline)", () => {
 
     const client = await createMcpClient(`http://127.0.0.1:${port}/mcp/agents`);
 
+    let agentId: string | null = null;
     try {
+      // Since the non-blocking first-send change, create_agent resolves after
+      // session construction; a failed initial turn is reported asynchronously
+      // by transitioning the agent to the error state.
       const result = await client.callTool({
         name: "create_agent",
         args: {
@@ -565,13 +583,22 @@ describe("agent MCP end-to-end (offline)", () => {
         },
       });
 
-      expect(result.isError).toBe(true);
-      const contentItem = result.content?.[0];
-      const contentText: string | undefined =
-        contentItem != null && typeof contentItem === "object"
-          ? Reflect.get(contentItem, "text")
-          : undefined;
-      expect(contentText ?? "").toContain("Initial turn failed to start");
+      expect(result.isError).not.toBe(true);
+      const payload = getStructuredContent(result);
+      agentId = typeof payload?.agentId === "string" ? payload.agentId : null;
+      expect(agentId).toBeTruthy();
+
+      await vi.waitFor(
+        async () => {
+          const statusResult = await client.callTool({
+            name: "get_agent_status",
+            args: { agentId },
+          });
+          const statusPayload = getStructuredContent(statusResult);
+          expect(statusPayload?.status).toBe("error");
+        },
+        { timeout: 15_000, interval: 250 },
+      );
     } finally {
       await client.close();
       await daemon.stop();

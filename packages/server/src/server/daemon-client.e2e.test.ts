@@ -14,6 +14,7 @@ import {
   DaemonClient,
 } from "./test-utils/index.js";
 import { createTestChisaCodeDaemon } from "./test-utils/chisacode-daemon.js";
+import { createMessageCollector } from "./test-utils/message-collector.js";
 import { getFullAccessConfig, getAskModeConfig } from "./daemon-e2e/agent-configs.js";
 import { parsePcm16MonoWav, wordSimilarity } from "./test-utils/dictation-e2e.js";
 import { withTimeout } from "../utils/promise-timeout.js";
@@ -228,7 +229,10 @@ test("createAgent without an initial prompt returns an idle snapshot", async () 
   }
 });
 
-test("createAgent with background initialPrompt returns a running snapshot before turn completion", async () => {
+// Since the non-blocking first-send change, createAgent resolves after session
+// construction without waiting for the initial turn to start; the turn is
+// dispatched fire-and-forget and its lifecycle arrives via subscription events.
+test("createAgent with background initialPrompt resolves immediately and runs the turn in the background", async () => {
   const daemon = await createTestChisaCodeDaemon();
   const client = new DaemonClient({
     url: `ws://127.0.0.1:${daemon.port}/ws`,
@@ -238,6 +242,9 @@ test("createAgent with background initialPrompt returns a running snapshot befor
   try {
     await client.connect();
     await client.fetchAgents({ subscribe: { subscriptionId: "create-background-prompt" } });
+    // Attach before createAgent so every upsert/stream event for the new agent
+    // is recorded even when the fast fake turn finishes before we can poll.
+    const collector = createMessageCollector(client);
 
     const agent = await client.createAgent({
       provider: "codex",
@@ -248,10 +255,7 @@ test("createAgent with background initialPrompt returns a running snapshot befor
       initialPrompt: "Run exactly: sleep 30",
     });
 
-    expect(agent.status).toBe("running");
-
-    const fetchedWhileRunning = await client.fetchAgent(agent.id);
-    expect(fetchedWhileRunning?.agent.status).toBe("running");
+    expect(agent.id).toBeTruthy();
 
     await vi.waitFor(
       async () => {
@@ -260,13 +264,32 @@ test("createAgent with background initialPrompt returns a running snapshot befor
       },
       { timeout: 5000, interval: 100 },
     );
+
+    // The background turn actually ran: the subscription observed the running
+    // lifecycle and the turn completing.
+    const sawRunningUpsert = collector.messages.some(
+      (message) =>
+        message.type === "agent_update" &&
+        message.payload.kind === "upsert" &&
+        message.payload.agent.id === agent.id &&
+        message.payload.agent.status === "running",
+    );
+    const sawTurnCompleted = collector.messages.some(
+      (message) =>
+        message.type === "agent_stream" &&
+        message.payload.agentId === agent.id &&
+        message.payload.event.type === "turn_completed",
+    );
+    expect(sawRunningUpsert).toBe(true);
+    expect(sawTurnCompleted).toBe(true);
+    collector.unsubscribe();
   } finally {
     await client.close();
     await daemon.close();
   }
 }, 30000);
 
-test("createAgent fails when the initial turn cannot start", async () => {
+test("createAgent surfaces an initial-turn start failure as an error-state agent", async () => {
   class StartTurnFailureSession implements AgentSession {
     readonly provider = "codex" as const;
     readonly id = "start-turn-failure-session";
@@ -354,6 +377,10 @@ test("createAgent fails when the initial turn cannot start", async () => {
       return true;
     }
 
+    async listModels() {
+      return [{ id: "gpt-5.4-mini", label: "GPT-5.4 mini", isDefault: true }];
+    }
+
     async createSession(_config: AgentSessionConfig): Promise<AgentSession> {
       return new StartTurnFailureSession();
     }
@@ -375,16 +402,26 @@ test("createAgent fails when the initial turn cannot start", async () => {
     await client.connect();
     await client.fetchAgents({ subscribe: { subscriptionId: "create-start-failure" } });
 
-    await expect(
-      client.createAgent({
-        provider: "codex",
-        cwd: tmpCwd(),
-        title: "Start failure agent",
-        modeId: "full-access",
-        model: "gpt-5.4-mini",
-        initialPrompt: "Run exactly: sleep 30",
-      }),
-    ).rejects.toThrow("Initial turn failed to start");
+    // Since the non-blocking first-send change, createAgent resolves after
+    // session construction; the initial-turn start failure is reported through
+    // stream events and lands the agent in the error state instead of failing
+    // the create call.
+    const agent = await client.createAgent({
+      provider: "codex",
+      cwd: tmpCwd(),
+      title: "Start failure agent",
+      modeId: "full-access",
+      model: "gpt-5.4-mini",
+      initialPrompt: "Run exactly: sleep 30",
+    });
+    expect(agent.id).toBeTruthy();
+
+    const errored = await client.waitForAgentUpsert(
+      agent.id,
+      (snapshot) => snapshot.status === "error",
+      5_000,
+    );
+    expect(errored.status).toBe("error");
   } finally {
     await client.close();
     await daemon.close();
