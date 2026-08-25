@@ -58,11 +58,16 @@ export async function waitForContentGrowth(
   page: Page,
   previousContentHeight: number,
 ): Promise<ScrollMetrics> {
+  // Mock streams emit chunks on a multi-second cadence and CI machines run
+  // under load; the default 10s poll window is marginal, so wait longer.
   await expect
-    .poll(async () => {
-      const metrics = await readScrollMetrics(page);
-      return metrics.contentHeight;
-    })
+    .poll(
+      async () => {
+        const metrics = await readScrollMetrics(page);
+        return metrics.contentHeight;
+      },
+      { timeout: 30_000 },
+    )
     .toBeGreaterThan(previousContentHeight);
   return readScrollMetrics(page);
 }
