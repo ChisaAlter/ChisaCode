@@ -57,6 +57,8 @@
   - **产品修复 3（live 时间线丢 epoch）**：`emitLiveTimelineItem` 派发 `agent_stream` 附带 `timeline.getEpoch(agentId)`，修复 worktree-setup 进度等 provisional 条目在重连后无法归属当前 epoch。`timeline-reconnect-contract.e2e.test.ts` 捕获。
   - **spec 债重对齐**：create 类 4 个用例改 fire-and-forget 契约（create 即返、初轮失败→error 态 agent）；wait-for-idle rapid-fire 按事务替换契约断言时序无关不变量（1-3 个终态、末个必 completed）；relay 三用例适配 device-auth 强制（happy path 携带 channel-bound 凭据、readiness 认 401、pipelined-hello 断言拒绝契约 `relay_device_auth_required`）。
   - **验证**：6 个受影响 e2e 文件 + provider-snapshot/launch-config/project-context 单测逐文件本地绿；全仓 typecheck、改动文件 lint/format 绿。
+  - **CI 卫生红点**（同批修复）：cli-tests shard 2——`34-relay-device-store.test.ts` 是 Vitest 文件但数字前缀命名使 harness 按 tsx 脚本直跑（`runner.config` undefined 崩溃），移至 `packages/cli/src/utils/relay-device-store.test.ts`（约定：数字前缀=脚本、src 单测=Vitest）；test-audit——9 个"新"指纹全部为本分支编辑导致的行号漂移（与 cn-main 逐一比对确认零新增债务），按脚本既定流程刷新基线且 weakAssertion 净 -1（本轮新写断言用精确断言不用 toBeTruthy）；knowledge-graph-drift——重新生成 9 个模块图。**登记系统性问题**：audit 指纹按 `类别::文件:行号` 键控，无关编辑的行号漂移会误报"新增债务"，后续批次可改为内容哈希或行无关指纹。
+  - **残余红点（非本环境可修）**：desktop-packaged-electron / android-maestro-tests 需打包/模拟器 runner；desktop-chain-tests 的 desktop-updates 集群失败模式为 `update-callout` 永不出现（auto-updater 日志 "release feed not found"，chain harness 的 feed mock 问题，属 Phase 3 desktop-updates 清单）。
 - **登记未做（后续批次）**：
   - **M2 测试反模式止增**：`scripts/test-audit-baseline.json` 的 moduleMock 303 / conditionalSkip 105 / weakAssertion 349 等历史债按包拆减债批次，第四批仅修 fixedWait 假阳性与 1 个最痛文件。
   - **M5 Electron Provider Settings smoke**：需要真实打包 Electron 表面，cloud 环境无法执行；待有打包环境时按 `test:desktop-packaged` 门禁补一条 Provider Settings 冒烟用例。**未验证**。
