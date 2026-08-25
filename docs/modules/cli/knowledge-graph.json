@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "generatedAt": "2026-08-22T09:09:45.491Z",
+  "generatedAt": "2026-08-25T11:07:52.056Z",
   "generator": "scripts/generate-modular-knowledge-graphs.mjs",
   "module": {
     "id": "cli",
@@ -39,7 +39,11 @@
       "support": 8
     },
     "internalImportEdges": 460,
-    "workspaceDependencies": ["client", "protocol", "server"],
+    "workspaceDependencies": [
+      "client",
+      "protocol",
+      "server"
+    ],
     "externalDependencies": [
       "@clack/prompts",
       "chalk",
@@ -74,7 +78,9 @@
       "type": "config",
       "path": "packages/cli/package.json",
       "lines": 51,
-      "imports": ["node:fs"]
+      "imports": [
+        "node:fs"
+      ]
     },
     {
       "id": "file:packages/cli/README.md",
@@ -88,14 +94,24 @@
       "type": "test",
       "path": "packages/cli/src/classify.test.ts",
       "lines": 189,
-      "imports": ["./classify.js", "node:fs", "node:os", "node:path", "vitest"]
+      "imports": [
+        "./classify.js",
+        "node:fs",
+        "node:os",
+        "node:path",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/cli/src/classify.ts",
       "type": "source",
       "path": "packages/cli/src/classify.ts",
       "lines": 71,
-      "imports": ["node:fs", "node:os", "node:path"]
+      "imports": [
+        "node:fs",
+        "node:os",
+        "node:path"
+      ]
     },
     {
       "id": "file:packages/cli/src/cli.ts",
@@ -201,7 +217,10 @@
       "type": "test",
       "path": "packages/cli/src/commands/agent/import.test.ts",
       "lines": 60,
-      "imports": ["./import.js", "vitest"]
+      "imports": [
+        "./import.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/cli/src/commands/agent/import.ts",
@@ -280,7 +299,10 @@
       "type": "test",
       "path": "packages/cli/src/commands/agent/ls.test.ts",
       "lines": 34,
-      "imports": ["./ls.js", "vitest"]
+      "imports": [
+        "./ls.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/cli/src/commands/agent/ls.ts",
@@ -376,7 +398,11 @@
       "type": "source",
       "path": "packages/cli/src/commands/agent/update.ts",
       "lines": 183,
-      "imports": ["../../output/index.js", "../../utils/client.js", "commander"]
+      "imports": [
+        "../../output/index.js",
+        "../../utils/client.js",
+        "commander"
+      ]
     },
     {
       "id": "file:packages/cli/src/commands/agent/wait.ts",
@@ -397,14 +423,24 @@
       "type": "source",
       "path": "packages/cli/src/commands/chat/create.ts",
       "lines": 32,
-      "imports": ["../../output/index.js", "./schema.js", "./shared.js", "commander"]
+      "imports": [
+        "../../output/index.js",
+        "./schema.js",
+        "./shared.js",
+        "commander"
+      ]
     },
     {
       "id": "file:packages/cli/src/commands/chat/delete.ts",
       "type": "source",
       "path": "packages/cli/src/commands/chat/delete.ts",
       "lines": 25,
-      "imports": ["../../output/index.js", "./schema.js", "./shared.js", "commander"]
+      "imports": [
+        "../../output/index.js",
+        "./schema.js",
+        "./shared.js",
+        "commander"
+      ]
     },
     {
       "id": "file:packages/cli/src/commands/chat/index.ts",
@@ -430,35 +466,57 @@
       "type": "source",
       "path": "packages/cli/src/commands/chat/inspect.ts",
       "lines": 25,
-      "imports": ["../../output/index.js", "./schema.js", "./shared.js", "commander"]
+      "imports": [
+        "../../output/index.js",
+        "./schema.js",
+        "./shared.js",
+        "commander"
+      ]
     },
     {
       "id": "file:packages/cli/src/commands/chat/ls.ts",
       "type": "source",
       "path": "packages/cli/src/commands/chat/ls.ts",
       "lines": 24,
-      "imports": ["../../output/index.js", "./schema.js", "./shared.js", "commander"]
+      "imports": [
+        "../../output/index.js",
+        "./schema.js",
+        "./shared.js",
+        "commander"
+      ]
     },
     {
       "id": "file:packages/cli/src/commands/chat/post.ts",
       "type": "source",
       "path": "packages/cli/src/commands/chat/post.ts",
       "lines": 44,
-      "imports": ["../../output/index.js", "./schema.js", "./shared.js", "commander"]
+      "imports": [
+        "../../output/index.js",
+        "./schema.js",
+        "./shared.js",
+        "commander"
+      ]
     },
     {
       "id": "file:packages/cli/src/commands/chat/read.ts",
       "type": "source",
       "path": "packages/cli/src/commands/chat/read.ts",
       "lines": 61,
-      "imports": ["../../output/index.js", "./schema.js", "./shared.js", "commander"]
+      "imports": [
+        "../../output/index.js",
+        "./schema.js",
+        "./shared.js",
+        "commander"
+      ]
     },
     {
       "id": "file:packages/cli/src/commands/chat/schema.ts",
       "type": "source",
       "path": "packages/cli/src/commands/chat/schema.ts",
       "lines": 129,
-      "imports": ["../../output/index.js"]
+      "imports": [
+        "../../output/index.js"
+      ]
     },
     {
       "id": "file:packages/cli/src/commands/chat/shared.ts",
@@ -477,14 +535,23 @@
       "type": "source",
       "path": "packages/cli/src/commands/chat/wait.ts",
       "lines": 48,
-      "imports": ["../../output/index.js", "./schema.js", "./shared.js", "commander"]
+      "imports": [
+        "../../output/index.js",
+        "./schema.js",
+        "./shared.js",
+        "commander"
+      ]
     },
     {
       "id": "file:packages/cli/src/commands/daemon/diagnostics.test.ts",
       "type": "test",
       "path": "packages/cli/src/commands/daemon/diagnostics.test.ts",
       "lines": 51,
-      "imports": ["./diagnostics.js", "commander", "vitest"]
+      "imports": [
+        "./diagnostics.js",
+        "commander",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/cli/src/commands/daemon/diagnostics.ts",
@@ -568,14 +635,22 @@
       "type": "source",
       "path": "packages/cli/src/commands/daemon/restart.ts",
       "lines": 134,
-      "imports": ["../../i18n.js", "../../output/index.js", "./local-daemon.js", "commander"]
+      "imports": [
+        "../../i18n.js",
+        "../../output/index.js",
+        "./local-daemon.js",
+        "commander"
+      ]
     },
     {
       "id": "file:packages/cli/src/commands/daemon/runtime-toolchain.ts",
       "type": "source",
       "path": "packages/cli/src/commands/daemon/runtime-toolchain.ts",
       "lines": 107,
-      "imports": ["@chisacode/server", "node:os"]
+      "imports": [
+        "@chisacode/server",
+        "node:os"
+      ]
     },
     {
       "id": "file:packages/cli/src/commands/daemon/set-password.ts",
@@ -627,7 +702,12 @@
       "type": "source",
       "path": "packages/cli/src/commands/daemon/stop.ts",
       "lines": 92,
-      "imports": ["../../i18n.js", "../../output/index.js", "./local-daemon.js", "commander"]
+      "imports": [
+        "../../i18n.js",
+        "../../output/index.js",
+        "./local-daemon.js",
+        "commander"
+      ]
     },
     {
       "id": "file:packages/cli/src/commands/loop/index.ts",
@@ -690,7 +770,11 @@
       "type": "test",
       "path": "packages/cli/src/commands/loop/run.test.ts",
       "lines": 90,
-      "imports": ["./run.js", "./types.js", "vitest"]
+      "imports": [
+        "./run.js",
+        "./types.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/cli/src/commands/loop/run.ts",
@@ -749,7 +833,12 @@
       "type": "source",
       "path": "packages/cli/src/commands/open.ts",
       "lines": 102,
-      "imports": ["@chisacode/server", "node:fs", "node:os", "node:path"]
+      "imports": [
+        "@chisacode/server",
+        "node:fs",
+        "node:os",
+        "node:path"
+      ]
     },
     {
       "id": "file:packages/cli/src/commands/permit/allow.ts",
@@ -825,7 +914,11 @@
       "type": "test",
       "path": "packages/cli/src/commands/preset/ls.test.ts",
       "lines": 63,
-      "imports": ["./ls.js", "commander", "vitest"]
+      "imports": [
+        "./ls.js",
+        "commander",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/cli/src/commands/preset/ls.ts",
@@ -861,7 +954,11 @@
       "type": "test",
       "path": "packages/cli/src/commands/provider/inspect.test.ts",
       "lines": 107,
-      "imports": ["./inspect.js", "commander", "vitest"]
+      "imports": [
+        "./inspect.js",
+        "commander",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/cli/src/commands/provider/inspect.ts",
@@ -881,7 +978,11 @@
       "type": "test",
       "path": "packages/cli/src/commands/provider/ls.test.ts",
       "lines": 185,
-      "imports": ["./ls.js", "commander", "vitest"]
+      "imports": [
+        "./ls.js",
+        "commander",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/cli/src/commands/provider/ls.ts",
@@ -902,14 +1003,22 @@
       "type": "source",
       "path": "packages/cli/src/commands/provider/models.ts",
       "lines": 94,
-      "imports": ["../../output/index.js", "../../utils/client.js", "commander"]
+      "imports": [
+        "../../output/index.js",
+        "../../utils/client.js",
+        "commander"
+      ]
     },
     {
       "id": "file:packages/cli/src/commands/provider/tooling.test.ts",
       "type": "test",
       "path": "packages/cli/src/commands/provider/tooling.test.ts",
       "lines": 87,
-      "imports": ["./tooling.js", "commander", "vitest"]
+      "imports": [
+        "./tooling.js",
+        "commander",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/cli/src/commands/provider/tooling.ts",
@@ -929,14 +1038,23 @@
       "type": "source",
       "path": "packages/cli/src/commands/schedule/create.ts",
       "lines": 64,
-      "imports": ["../../output/index.js", "./schema.js", "./shared.js", "commander"]
+      "imports": [
+        "../../output/index.js",
+        "./schema.js",
+        "./shared.js",
+        "commander"
+      ]
     },
     {
       "id": "file:packages/cli/src/commands/schedule/delete.ts",
       "type": "source",
       "path": "packages/cli/src/commands/schedule/delete.ts",
       "lines": 48,
-      "imports": ["../../output/index.js", "./shared.js", "commander"]
+      "imports": [
+        "../../output/index.js",
+        "./shared.js",
+        "commander"
+      ]
     },
     {
       "id": "file:packages/cli/src/commands/schedule/index.ts",
@@ -964,56 +1082,93 @@
       "type": "source",
       "path": "packages/cli/src/commands/schedule/inspect.ts",
       "lines": 37,
-      "imports": ["../../output/index.js", "./schema.js", "./shared.js", "commander"]
+      "imports": [
+        "../../output/index.js",
+        "./schema.js",
+        "./shared.js",
+        "commander"
+      ]
     },
     {
       "id": "file:packages/cli/src/commands/schedule/logs.ts",
       "type": "source",
       "path": "packages/cli/src/commands/schedule/logs.ts",
       "lines": 32,
-      "imports": ["../../output/index.js", "./schema.js", "./shared.js", "commander"]
+      "imports": [
+        "../../output/index.js",
+        "./schema.js",
+        "./shared.js",
+        "commander"
+      ]
     },
     {
       "id": "file:packages/cli/src/commands/schedule/ls.ts",
       "type": "source",
       "path": "packages/cli/src/commands/schedule/ls.ts",
       "lines": 33,
-      "imports": ["../../output/index.js", "./schema.js", "./shared.js", "commander"]
+      "imports": [
+        "../../output/index.js",
+        "./schema.js",
+        "./shared.js",
+        "commander"
+      ]
     },
     {
       "id": "file:packages/cli/src/commands/schedule/pause.ts",
       "type": "source",
       "path": "packages/cli/src/commands/schedule/pause.ts",
       "lines": 34,
-      "imports": ["../../output/index.js", "./schema.js", "./shared.js", "commander"]
+      "imports": [
+        "../../output/index.js",
+        "./schema.js",
+        "./shared.js",
+        "commander"
+      ]
     },
     {
       "id": "file:packages/cli/src/commands/schedule/resume.ts",
       "type": "source",
       "path": "packages/cli/src/commands/schedule/resume.ts",
       "lines": 34,
-      "imports": ["../../output/index.js", "./schema.js", "./shared.js", "commander"]
+      "imports": [
+        "../../output/index.js",
+        "./schema.js",
+        "./shared.js",
+        "commander"
+      ]
     },
     {
       "id": "file:packages/cli/src/commands/schedule/run-once.ts",
       "type": "source",
       "path": "packages/cli/src/commands/schedule/run-once.ts",
       "lines": 34,
-      "imports": ["../../output/index.js", "./schema.js", "./shared.js", "commander"]
+      "imports": [
+        "../../output/index.js",
+        "./schema.js",
+        "./shared.js",
+        "commander"
+      ]
     },
     {
       "id": "file:packages/cli/src/commands/schedule/schema.ts",
       "type": "source",
       "path": "packages/cli/src/commands/schedule/schema.ts",
       "lines": 92,
-      "imports": ["../../output/index.js", "./shared.js", "./types.js"]
+      "imports": [
+        "../../output/index.js",
+        "./shared.js",
+        "./types.js"
+      ]
     },
     {
       "id": "file:packages/cli/src/commands/schedule/shared.test.ts",
       "type": "test",
       "path": "packages/cli/src/commands/schedule/shared.test.ts",
       "lines": 233,
-      "imports": ["./shared.js", "vitest"]
+      "imports": [
+        "./shared.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/cli/src/commands/schedule/shared.ts",
@@ -1040,28 +1195,45 @@
       "type": "source",
       "path": "packages/cli/src/commands/schedule/update.ts",
       "lines": 67,
-      "imports": ["../../output/index.js", "./schema.js", "./shared.js", "commander"]
+      "imports": [
+        "../../output/index.js",
+        "./schema.js",
+        "./shared.js",
+        "commander"
+      ]
     },
     {
       "id": "file:packages/cli/src/commands/speech/index.ts",
       "type": "source",
       "path": "packages/cli/src/commands/speech/index.ts",
       "lines": 7,
-      "imports": ["../../i18n.js", "commander"]
+      "imports": [
+        "../../i18n.js",
+        "commander"
+      ]
     },
     {
       "id": "file:packages/cli/src/commands/terminal/capture.ts",
       "type": "source",
       "path": "packages/cli/src/commands/terminal/capture.ts",
       "lines": 100,
-      "imports": ["../../output/render.js", "./shared.js", "commander"]
+      "imports": [
+        "../../output/render.js",
+        "./shared.js",
+        "commander"
+      ]
     },
     {
       "id": "file:packages/cli/src/commands/terminal/create.ts",
       "type": "source",
       "path": "packages/cli/src/commands/terminal/create.ts",
       "lines": 42,
-      "imports": ["../../output/index.js", "./schema.js", "./shared.js", "commander"]
+      "imports": [
+        "../../output/index.js",
+        "./schema.js",
+        "./shared.js",
+        "commander"
+      ]
     },
     {
       "id": "file:packages/cli/src/commands/terminal/index.ts",
@@ -1085,42 +1257,66 @@
       "type": "source",
       "path": "packages/cli/src/commands/terminal/kill.ts",
       "lines": 52,
-      "imports": ["../../output/index.js", "./schema.js", "./shared.js", "commander"]
+      "imports": [
+        "../../output/index.js",
+        "./schema.js",
+        "./shared.js",
+        "commander"
+      ]
     },
     {
       "id": "file:packages/cli/src/commands/terminal/ls.ts",
       "type": "source",
       "path": "packages/cli/src/commands/terminal/ls.ts",
       "lines": 40,
-      "imports": ["../../output/index.js", "./schema.js", "./shared.js", "commander"]
+      "imports": [
+        "../../output/index.js",
+        "./schema.js",
+        "./shared.js",
+        "commander"
+      ]
     },
     {
       "id": "file:packages/cli/src/commands/terminal/schema.ts",
       "type": "source",
       "path": "packages/cli/src/commands/terminal/schema.ts",
       "lines": 45,
-      "imports": ["../../output/index.js"]
+      "imports": [
+        "../../output/index.js"
+      ]
     },
     {
       "id": "file:packages/cli/src/commands/terminal/send-keys.ts",
       "type": "source",
       "path": "packages/cli/src/commands/terminal/send-keys.ts",
       "lines": 100,
-      "imports": ["../../output/render.js", "./shared.js", "commander"]
+      "imports": [
+        "../../output/render.js",
+        "./shared.js",
+        "commander"
+      ]
     },
     {
       "id": "file:packages/cli/src/commands/terminal/shared.ts",
       "type": "source",
       "path": "packages/cli/src/commands/terminal/shared.ts",
       "lines": 88,
-      "imports": ["../../output/index.js", "../../utils/client.js"]
+      "imports": [
+        "../../output/index.js",
+        "../../utils/client.js"
+      ]
     },
     {
       "id": "file:packages/cli/src/commands/usage/clear.ts",
       "type": "source",
       "path": "packages/cli/src/commands/usage/clear.ts",
       "lines": 68,
-      "imports": ["../../i18n.js", "../../output/index.js", "../../utils/client.js", "commander"]
+      "imports": [
+        "../../i18n.js",
+        "../../output/index.js",
+        "../../utils/client.js",
+        "commander"
+      ]
     },
     {
       "id": "file:packages/cli/src/commands/usage/export.ts",
@@ -1184,14 +1380,20 @@
       "type": "test",
       "path": "packages/cli/src/commands/worktree/create-input.test.ts",
       "lines": 80,
-      "imports": ["./create-input.js", "vitest"]
+      "imports": [
+        "./create-input.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/cli/src/commands/worktree/create-input.ts",
       "type": "source",
       "path": "packages/cli/src/commands/worktree/create-input.ts",
       "lines": 105,
-      "imports": ["../../output/index.js", "@chisacode/client/internal/daemon-client"]
+      "imports": [
+        "../../output/index.js",
+        "@chisacode/client/internal/daemon-client"
+      ]
     },
     {
       "id": "file:packages/cli/src/commands/worktree/create.ts",
@@ -1242,7 +1444,11 @@
       "type": "test",
       "path": "packages/cli/src/i18n.test.ts",
       "lines": 51,
-      "imports": ["./cli", "./output/render", "vitest"]
+      "imports": [
+        "./cli",
+        "./output/render",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/cli/src/i18n.ts",
@@ -1256,14 +1462,22 @@
       "type": "source",
       "path": "packages/cli/src/index.ts",
       "lines": 41,
-      "imports": ["./run.js", "./utils/errors.js"]
+      "imports": [
+        "./run.js",
+        "./utils/errors.js"
+      ]
     },
     {
       "id": "file:packages/cli/src/output/collapse.test.ts",
       "type": "test",
       "path": "packages/cli/src/output/collapse.test.ts",
       "lines": 55,
-      "imports": ["./json", "./types", "./yaml", "vitest"]
+      "imports": [
+        "./json",
+        "./types",
+        "./yaml",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/cli/src/output/index.ts",
@@ -1285,14 +1499,18 @@
       "type": "source",
       "path": "packages/cli/src/output/json.ts",
       "lines": 45,
-      "imports": ["./types.js"]
+      "imports": [
+        "./types.js"
+      ]
     },
     {
       "id": "file:packages/cli/src/output/quiet.ts",
       "type": "source",
       "path": "packages/cli/src/output/quiet.ts",
       "lines": 25,
-      "imports": ["./types.js"]
+      "imports": [
+        "./types.js"
+      ]
     },
     {
       "id": "file:packages/cli/src/output/render.ts",
@@ -1315,7 +1533,10 @@
       "type": "source",
       "path": "packages/cli/src/output/table.ts",
       "lines": 183,
-      "imports": ["./types.js", "chalk"]
+      "imports": [
+        "./types.js",
+        "chalk"
+      ]
     },
     {
       "id": "file:packages/cli/src/output/types.ts",
@@ -1329,35 +1550,58 @@
       "type": "source",
       "path": "packages/cli/src/output/with-output.ts",
       "lines": 111,
-      "imports": ["../i18n.js", "./render.js", "./types.js", "commander"]
+      "imports": [
+        "../i18n.js",
+        "./render.js",
+        "./types.js",
+        "commander"
+      ]
     },
     {
       "id": "file:packages/cli/src/output/yaml.ts",
       "type": "source",
       "path": "packages/cli/src/output/yaml.ts",
       "lines": 46,
-      "imports": ["./types.js", "yaml"]
+      "imports": [
+        "./types.js",
+        "yaml"
+      ]
     },
     {
       "id": "file:packages/cli/src/run.test.ts",
       "type": "test",
       "path": "packages/cli/src/run.test.ts",
       "lines": 49,
-      "imports": ["./run", "node:fs", "node:os", "node:path", "vitest"]
+      "imports": [
+        "./run",
+        "node:fs",
+        "node:os",
+        "node:path",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/cli/src/run.ts",
       "type": "source",
       "path": "packages/cli/src/run.ts",
       "lines": 48,
-      "imports": ["./classify.js", "./cli.js", "./commands/open.js"]
+      "imports": [
+        "./classify.js",
+        "./cli.js",
+        "./commands/open.js"
+      ]
     },
     {
       "id": "file:packages/cli/src/utils/client-id.ts",
       "type": "source",
       "path": "packages/cli/src/utils/client-id.ts",
       "lines": 46,
-      "imports": ["node:crypto", "node:fs/promises", "node:os", "node:path"]
+      "imports": [
+        "node:crypto",
+        "node:fs/promises",
+        "node:os",
+        "node:path"
+      ]
     },
     {
       "id": "file:packages/cli/src/utils/client.ts",
@@ -1381,14 +1625,20 @@
       "type": "source",
       "path": "packages/cli/src/utils/command-options.ts",
       "lines": 21,
-      "imports": ["../i18n.js", "commander"]
+      "imports": [
+        "../i18n.js",
+        "commander"
+      ]
     },
     {
       "id": "file:packages/cli/src/utils/duration.test.ts",
       "type": "test",
       "path": "packages/cli/src/utils/duration.test.ts",
       "lines": 40,
-      "imports": ["./duration", "vitest"]
+      "imports": [
+        "./duration",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/cli/src/utils/duration.ts",
@@ -1416,140 +1666,252 @@
       "type": "test",
       "path": "packages/cli/src/utils/provider-model.test.ts",
       "lines": 38,
-      "imports": ["./provider-model.js", "vitest"]
+      "imports": [
+        "./provider-model.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/cli/src/utils/provider-model.ts",
       "type": "source",
       "path": "packages/cli/src/utils/provider-model.ts",
       "lines": 74,
-      "imports": ["../i18n.js", "../output/index.js"]
+      "imports": [
+        "../i18n.js",
+        "../output/index.js"
+      ]
     },
     {
       "id": "file:packages/cli/src/utils/timeline.ts",
       "type": "source",
       "path": "packages/cli/src/utils/timeline.ts",
       "lines": 19,
-      "imports": ["@chisacode/client/internal/daemon-client", "@chisacode/protocol/agent-types"]
+      "imports": [
+        "@chisacode/client/internal/daemon-client",
+        "@chisacode/protocol/agent-types"
+      ]
     },
     {
       "id": "file:packages/cli/src/version.ts",
       "type": "source",
       "path": "packages/cli/src/version.ts",
       "lines": 16,
-      "imports": ["../package.json", "node:module"]
+      "imports": [
+        "../package.json",
+        "node:module"
+      ]
     },
     {
       "id": "file:packages/cli/tests/01-foundation.test.ts",
       "type": "test",
       "path": "packages/cli/tests/01-foundation.test.ts",
       "lines": 56,
-      "imports": ["./helpers/zx-path-compat.ts", "zx"]
+      "imports": [
+        "./helpers/zx-path-compat.ts",
+        "zx"
+      ]
     },
     {
       "id": "file:packages/cli/tests/02-output.test.ts",
       "type": "test",
       "path": "packages/cli/tests/02-output.test.ts",
       "lines": 322,
-      "imports": ["../src/i18n.js", "../src/output/index.js", "node:assert"]
+      "imports": [
+        "../src/i18n.js",
+        "../src/output/index.js",
+        "node:assert"
+      ]
     },
     {
       "id": "file:packages/cli/tests/03-daemon.test.ts",
       "type": "test",
       "path": "packages/cli/tests/03-daemon.test.ts",
       "lines": 133,
-      "imports": ["./helpers/local-cli.ts", "fs/promises", "node:assert", "os", "path"]
+      "imports": [
+        "./helpers/local-cli.ts",
+        "fs/promises",
+        "node:assert",
+        "os",
+        "path"
+      ]
     },
     {
       "id": "file:packages/cli/tests/04-agent-ls.test.ts",
       "type": "test",
       "path": "packages/cli/tests/04-agent-ls.test.ts",
       "lines": 174,
-      "imports": ["./helpers/local-cli.ts", "fs/promises", "node:assert", "os", "path"]
+      "imports": [
+        "./helpers/local-cli.ts",
+        "fs/promises",
+        "node:assert",
+        "os",
+        "path"
+      ]
     },
     {
       "id": "file:packages/cli/tests/05-agent-run.test.ts",
       "type": "test",
       "path": "packages/cli/tests/05-agent-run.test.ts",
       "lines": 265,
-      "imports": ["./helpers/local-cli.ts", "fs/promises", "node:assert", "os", "path"]
+      "imports": [
+        "./helpers/local-cli.ts",
+        "fs/promises",
+        "node:assert",
+        "os",
+        "path"
+      ]
     },
     {
       "id": "file:packages/cli/tests/06-agent-send.test.ts",
       "type": "test",
       "path": "packages/cli/tests/06-agent-send.test.ts",
       "lines": 212,
-      "imports": ["./helpers/zx-path-compat.ts", "fs/promises", "node:assert", "os", "path", "zx"]
+      "imports": [
+        "./helpers/zx-path-compat.ts",
+        "fs/promises",
+        "node:assert",
+        "os",
+        "path",
+        "zx"
+      ]
     },
     {
       "id": "file:packages/cli/tests/07-agent-stop.test.ts",
       "type": "test",
       "path": "packages/cli/tests/07-agent-stop.test.ts",
       "lines": 139,
-      "imports": ["./helpers/zx-path-compat.ts", "fs/promises", "node:assert", "os", "path", "zx"]
+      "imports": [
+        "./helpers/zx-path-compat.ts",
+        "fs/promises",
+        "node:assert",
+        "os",
+        "path",
+        "zx"
+      ]
     },
     {
       "id": "file:packages/cli/tests/08-agent-logs.test.ts",
       "type": "test",
       "path": "packages/cli/tests/08-agent-logs.test.ts",
       "lines": 154,
-      "imports": ["./helpers/zx-path-compat.ts", "fs/promises", "node:assert", "os", "path", "zx"]
+      "imports": [
+        "./helpers/zx-path-compat.ts",
+        "fs/promises",
+        "node:assert",
+        "os",
+        "path",
+        "zx"
+      ]
     },
     {
       "id": "file:packages/cli/tests/09-agent-inspect.test.ts",
       "type": "test",
       "path": "packages/cli/tests/09-agent-inspect.test.ts",
       "lines": 164,
-      "imports": ["./helpers/zx-path-compat.ts", "fs/promises", "node:assert", "os", "path", "zx"]
+      "imports": [
+        "./helpers/zx-path-compat.ts",
+        "fs/promises",
+        "node:assert",
+        "os",
+        "path",
+        "zx"
+      ]
     },
     {
       "id": "file:packages/cli/tests/10-agent-mode.test.ts",
       "type": "test",
       "path": "packages/cli/tests/10-agent-mode.test.ts",
       "lines": 142,
-      "imports": ["./helpers/zx-path-compat.ts", "fs/promises", "node:assert", "os", "path", "zx"]
+      "imports": [
+        "./helpers/zx-path-compat.ts",
+        "fs/promises",
+        "node:assert",
+        "os",
+        "path",
+        "zx"
+      ]
     },
     {
       "id": "file:packages/cli/tests/11-agent-archive.test.ts",
       "type": "test",
       "path": "packages/cli/tests/11-agent-archive.test.ts",
       "lines": 125,
-      "imports": ["./helpers/zx-path-compat.ts", "fs/promises", "node:assert", "os", "path", "zx"]
+      "imports": [
+        "./helpers/zx-path-compat.ts",
+        "fs/promises",
+        "node:assert",
+        "os",
+        "path",
+        "zx"
+      ]
     },
     {
       "id": "file:packages/cli/tests/11-agent-wait.test.ts",
       "type": "test",
       "path": "packages/cli/tests/11-agent-wait.test.ts",
       "lines": 188,
-      "imports": ["./helpers/zx-path-compat.ts", "fs/promises", "node:assert", "os", "path", "zx"]
+      "imports": [
+        "./helpers/zx-path-compat.ts",
+        "fs/promises",
+        "node:assert",
+        "os",
+        "path",
+        "zx"
+      ]
     },
     {
       "id": "file:packages/cli/tests/12-permit-ls.test.ts",
       "type": "test",
       "path": "packages/cli/tests/12-permit-ls.test.ts",
       "lines": 110,
-      "imports": ["./helpers/zx-path-compat.ts", "fs/promises", "node:assert", "os", "path", "zx"]
+      "imports": [
+        "./helpers/zx-path-compat.ts",
+        "fs/promises",
+        "node:assert",
+        "os",
+        "path",
+        "zx"
+      ]
     },
     {
       "id": "file:packages/cli/tests/13-permit-allow-deny.test.ts",
       "type": "test",
       "path": "packages/cli/tests/13-permit-allow-deny.test.ts",
       "lines": 178,
-      "imports": ["./helpers/zx-path-compat.ts", "fs/promises", "node:assert", "os", "path", "zx"]
+      "imports": [
+        "./helpers/zx-path-compat.ts",
+        "fs/promises",
+        "node:assert",
+        "os",
+        "path",
+        "zx"
+      ]
     },
     {
       "id": "file:packages/cli/tests/14-worktree.test.ts",
       "type": "test",
       "path": "packages/cli/tests/14-worktree.test.ts",
       "lines": 172,
-      "imports": ["./helpers/zx-path-compat.ts", "fs/promises", "node:assert", "os", "path", "zx"]
+      "imports": [
+        "./helpers/zx-path-compat.ts",
+        "fs/promises",
+        "node:assert",
+        "os",
+        "path",
+        "zx"
+      ]
     },
     {
       "id": "file:packages/cli/tests/15-provider.test.ts",
       "type": "test",
       "path": "packages/cli/tests/15-provider.test.ts",
       "lines": 386,
-      "imports": ["./helpers/test-daemon.ts", "node:assert", "node:fs/promises", "node:path"]
+      "imports": [
+        "./helpers/test-daemon.ts",
+        "node:assert",
+        "node:fs/promises",
+        "node:path"
+      ]
     },
     {
       "id": "file:packages/cli/tests/16-agent-update.test.ts",
@@ -1586,28 +1948,43 @@
       "type": "test",
       "path": "packages/cli/tests/18-local-daemon-utils.test.ts",
       "lines": 54,
-      "imports": ["../src/commands/daemon/local-daemon.js", "node:assert"]
+      "imports": [
+        "../src/commands/daemon/local-daemon.js",
+        "node:assert"
+      ]
     },
     {
       "id": "file:packages/cli/tests/19-errors-utils.test.ts",
       "type": "test",
       "path": "packages/cli/tests/19-errors-utils.test.ts",
       "lines": 23,
-      "imports": ["../src/utils/errors.js", "node:assert"]
+      "imports": [
+        "../src/utils/errors.js",
+        "node:assert"
+      ]
     },
     {
       "id": "file:packages/cli/tests/20-worktree-ls-paths.test.ts",
       "type": "test",
       "path": "packages/cli/tests/20-worktree-ls-paths.test.ts",
       "lines": 45,
-      "imports": ["../src/commands/worktree/ls.js", "node:assert", "node:os", "node:path"]
+      "imports": [
+        "../src/commands/worktree/ls.js",
+        "node:assert",
+        "node:os",
+        "node:path"
+      ]
     },
     {
       "id": "file:packages/cli/tests/21-run-output-schema-helper.test.ts",
       "type": "test",
       "path": "packages/cli/tests/21-run-output-schema-helper.test.ts",
       "lines": 127,
-      "imports": ["../src/commands/agent/run.ts", "../src/utils/provider-model.ts", "node:assert"]
+      "imports": [
+        "../src/commands/agent/run.ts",
+        "../src/utils/provider-model.ts",
+        "node:assert"
+      ]
     },
     {
       "id": "file:packages/cli/tests/22-daemon-stop-supervisor.test.ts",
@@ -1678,7 +2055,11 @@
       "type": "test",
       "path": "packages/cli/tests/26-daemon-launch-supervision.test.ts",
       "lines": 108,
-      "imports": ["node:assert", "node:fs/promises", "node:path"]
+      "imports": [
+        "node:assert",
+        "node:fs/promises",
+        "node:path"
+      ]
     },
     {
       "id": "file:packages/cli/tests/27-agent-delete.test.ts",
@@ -1714,28 +2095,42 @@
       "type": "test",
       "path": "packages/cli/tests/29-agent-id-resolution.test.ts",
       "lines": 45,
-      "imports": ["../src/utils/client.js", "node:assert"]
+      "imports": [
+        "../src/utils/client.js",
+        "node:assert"
+      ]
     },
     {
       "id": "file:packages/cli/tests/30-chat.test.ts",
       "type": "test",
       "path": "packages/cli/tests/30-chat.test.ts",
       "lines": 105,
-      "imports": ["./helpers/test-daemon.ts", "node:assert", "node:fs/promises"]
+      "imports": [
+        "./helpers/test-daemon.ts",
+        "node:assert",
+        "node:fs/promises"
+      ]
     },
     {
       "id": "file:packages/cli/tests/30-cwd-filter-paths.test.ts",
       "type": "test",
       "path": "packages/cli/tests/30-cwd-filter-paths.test.ts",
       "lines": 214,
-      "imports": ["../src/utils/paths.ts", "node:assert"]
+      "imports": [
+        "../src/utils/paths.ts",
+        "node:assert"
+      ]
     },
     {
       "id": "file:packages/cli/tests/31-loop-schedule.test.ts",
       "type": "test",
       "path": "packages/cli/tests/31-loop-schedule.test.ts",
       "lines": 205,
-      "imports": ["./helpers/test-daemon.ts", "node:assert", "node:fs/promises"]
+      "imports": [
+        "./helpers/test-daemon.ts",
+        "node:assert",
+        "node:fs/promises"
+      ]
     },
     {
       "id": "file:packages/cli/tests/32-daemon-set-password.test.ts",
@@ -1787,28 +2182,40 @@
       "type": "test",
       "path": "packages/cli/tests/e2e/agent-lifecycle.test.ts",
       "lines": 272,
-      "imports": ["../helpers/test-daemon.ts", "node:assert"]
+      "imports": [
+        "../helpers/test-daemon.ts",
+        "node:assert"
+      ]
     },
     {
       "id": "file:packages/cli/tests/e2e/agent-send.test.ts",
       "type": "test",
       "path": "packages/cli/tests/e2e/agent-send.test.ts",
       "lines": 202,
-      "imports": ["../helpers/test-daemon.ts", "node:assert"]
+      "imports": [
+        "../helpers/test-daemon.ts",
+        "node:assert"
+      ]
     },
     {
       "id": "file:packages/cli/tests/e2e/opencode-invalid-model.test.ts",
       "type": "test",
       "path": "packages/cli/tests/e2e/opencode-invalid-model.test.ts",
       "lines": 78,
-      "imports": ["../helpers/test-daemon.ts", "node:assert"]
+      "imports": [
+        "../helpers/test-daemon.ts",
+        "node:assert"
+      ]
     },
     {
       "id": "file:packages/cli/tests/e2e/permissions.test.ts",
       "type": "test",
       "path": "packages/cli/tests/e2e/permissions.test.ts",
       "lines": 310,
-      "imports": ["../helpers/test-daemon.ts", "node:assert"]
+      "imports": [
+        "../helpers/test-daemon.ts",
+        "node:assert"
+      ]
     },
     {
       "id": "file:packages/cli/tests/e2e/relay-host.test.ts",
@@ -1836,63 +2243,98 @@
       "type": "test",
       "path": "packages/cli/tests/e2e/run-output-schema.test.ts",
       "lines": 136,
-      "imports": ["../helpers/test-daemon.ts", "node:assert"]
+      "imports": [
+        "../helpers/test-daemon.ts",
+        "node:assert"
+      ]
     },
     {
       "id": "file:packages/cli/tests/helpers/local-cli.ts",
       "type": "support",
       "path": "packages/cli/tests/helpers/local-cli.ts",
       "lines": 42,
-      "imports": ["node:child_process", "node:path"]
+      "imports": [
+        "node:child_process",
+        "node:path"
+      ]
     },
     {
       "id": "file:packages/cli/tests/helpers/network.ts",
       "type": "support",
       "path": "packages/cli/tests/helpers/network.ts",
       "lines": 33,
-      "imports": ["node:net"]
+      "imports": [
+        "node:net"
+      ]
     },
     {
       "id": "file:packages/cli/tests/helpers/test-daemon.ts",
       "type": "support",
       "path": "packages/cli/tests/helpers/test-daemon.ts",
       "lines": 467,
-      "imports": ["./network.ts", "child_process", "fs", "fs/promises", "os", "path"]
+      "imports": [
+        "./network.ts",
+        "child_process",
+        "fs",
+        "fs/promises",
+        "os",
+        "path"
+      ]
     },
     {
       "id": "file:packages/cli/tests/helpers/zx-path-compat.ts",
       "type": "support",
       "path": "packages/cli/tests/helpers/zx-path-compat.ts",
       "lines": 21,
-      "imports": ["zx"]
+      "imports": [
+        "zx"
+      ]
     },
     {
       "id": "file:packages/cli/tests/run-all.ts",
       "type": "support",
       "path": "packages/cli/tests/run-all.ts",
       "lines": 403,
-      "imports": ["child_process", "fs/promises", "node:module", "os", "path", "url", "zx"]
+      "imports": [
+        "child_process",
+        "fs/promises",
+        "node:module",
+        "os",
+        "path",
+        "url",
+        "zx"
+      ]
     },
     {
       "id": "file:packages/cli/tests/setup.ts",
       "type": "support",
       "path": "packages/cli/tests/setup.ts",
       "lines": 186,
-      "imports": ["./helpers/zx-path-compat.ts", "fs/promises", "os", "path", "zx"]
+      "imports": [
+        "./helpers/zx-path-compat.ts",
+        "fs/promises",
+        "os",
+        "path",
+        "zx"
+      ]
     },
     {
       "id": "file:packages/cli/tests/tmp/opencode-simple.ts",
       "type": "support",
       "path": "packages/cli/tests/tmp/opencode-simple.ts",
       "lines": 30,
-      "imports": ["../helpers/test-daemon.js"]
+      "imports": [
+        "../helpers/test-daemon.js"
+      ]
     },
     {
       "id": "file:packages/cli/tests/tmp/opencode-structured-debug.ts",
       "type": "support",
       "path": "packages/cli/tests/tmp/opencode-structured-debug.ts",
       "lines": 51,
-      "imports": ["../helpers/test-daemon.ts"]
+      "imports": [
+        "../helpers/test-daemon.ts"
+      ]
     },
     {
       "id": "file:packages/cli/tsconfig.json",

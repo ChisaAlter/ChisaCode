@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "generatedAt": "2026-08-22T09:09:45.623Z",
+  "generatedAt": "2026-08-25T11:07:52.106Z",
   "generator": "scripts/generate-modular-knowledge-graphs.mjs",
   "module": {
     "id": "protocol",
@@ -280,7 +280,9 @@
       "type": "config",
       "path": "packages/protocol/package.json",
       "lines": 259,
-      "imports": ["node:fs"]
+      "imports": [
+        "node:fs"
+      ]
     },
     {
       "id": "file:packages/protocol/README.md",
@@ -294,7 +296,10 @@
       "type": "test",
       "path": "packages/protocol/src/agent-attention-notification.test.ts",
       "lines": 98,
-      "imports": ["./agent-attention-notification.js", "vitest"]
+      "imports": [
+        "./agent-attention-notification.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/protocol/src/agent-attention-notification.ts",
@@ -308,7 +313,11 @@
       "type": "test",
       "path": "packages/protocol/src/agent-feature-schemas.test.ts",
       "lines": 180,
-      "imports": ["./messages.js", "./provider/messages.js", "vitest"]
+      "imports": [
+        "./messages.js",
+        "./provider/messages.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/protocol/src/agent-labels.ts",
@@ -329,28 +338,39 @@
       "type": "test",
       "path": "packages/protocol/src/agent-presets.test.ts",
       "lines": 9,
-      "imports": ["./agent-presets.js", "vitest"]
+      "imports": [
+        "./agent-presets.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/protocol/src/agent-presets.ts",
       "type": "source",
       "path": "packages/protocol/src/agent-presets.ts",
       "lines": 61,
-      "imports": ["zod/v3"]
+      "imports": [
+        "zod/v3"
+      ]
     },
     {
       "id": "file:packages/protocol/src/agent-state-bucket.test.ts",
       "type": "test",
       "path": "packages/protocol/src/agent-state-bucket.test.ts",
       "lines": 93,
-      "imports": ["./agent-state-bucket.js", "vitest"]
+      "imports": [
+        "./agent-state-bucket.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/protocol/src/agent-state-bucket.ts",
       "type": "source",
       "path": "packages/protocol/src/agent-state-bucket.ts",
       "lines": 56,
-      "imports": ["./agent-lifecycle.js", "./messages.js"]
+      "imports": [
+        "./agent-lifecycle.js",
+        "./messages.js"
+      ]
     },
     {
       "id": "file:packages/protocol/src/agent-title-limits.ts",
@@ -364,42 +384,62 @@
       "type": "source",
       "path": "packages/protocol/src/agent-types.ts",
       "lines": 564,
-      "imports": ["./agent-labels.js", "./agent/attachments.js"]
+      "imports": [
+        "./agent-labels.js",
+        "./agent/attachments.js"
+      ]
     },
     {
       "id": "file:packages/protocol/src/agent/attachments.test.ts",
       "type": "test",
       "path": "packages/protocol/src/agent/attachments.test.ts",
       "lines": 33,
-      "imports": ["../messages.js", "./attachments.js", "vitest"]
+      "imports": [
+        "../messages.js",
+        "./attachments.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/protocol/src/agent/attachments.ts",
       "type": "source",
       "path": "packages/protocol/src/agent/attachments.ts",
       "lines": 86,
-      "imports": ["zod/v3"]
+      "imports": [
+        "zod/v3"
+      ]
     },
     {
       "id": "file:packages/protocol/src/agent/extensions.test.ts",
       "type": "test",
       "path": "packages/protocol/src/agent/extensions.test.ts",
       "lines": 74,
-      "imports": ["../messages.js", "./extensions.js", "vitest"]
+      "imports": [
+        "../messages.js",
+        "./extensions.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/protocol/src/agent/extensions.ts",
       "type": "source",
       "path": "packages/protocol/src/agent/extensions.ts",
       "lines": 438,
-      "imports": ["../provider-manifest.js", "zod/v3"]
+      "imports": [
+        "../provider-manifest.js",
+        "zod/v3"
+      ]
     },
     {
       "id": "file:packages/protocol/src/agent/messages.test.ts",
       "type": "test",
       "path": "packages/protocol/src/agent/messages.test.ts",
       "lines": 256,
-      "imports": ["../messages.js", "./messages.js", "vitest"]
+      "imports": [
+        "../messages.js",
+        "./messages.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/protocol/src/agent/messages.ts",
@@ -424,13 +464,17 @@
       "type": "test",
       "path": "packages/protocol/src/agent/state.test.ts",
       "lines": 113,
-      "imports": ["../messages.js", "./state.js", "vitest"]
+      "imports": [
+        "../messages.js",
+        "./state.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/protocol/src/agent/state.ts",
       "type": "source",
       "path": "packages/protocol/src/agent/state.ts",
-      "lines": 463,
+      "lines": 466,
       "imports": [
         "../agent-labels.js",
         "../agent-lifecycle.js",
@@ -447,7 +491,11 @@
       "type": "test",
       "path": "packages/protocol/src/automation/messages.test.ts",
       "lines": 58,
-      "imports": ["../messages.js", "./messages.js", "vitest"]
+      "imports": [
+        "../messages.js",
+        "./messages.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/protocol/src/automation/messages.ts",
@@ -466,56 +514,84 @@
       "type": "test",
       "path": "packages/protocol/src/binary-frames/demux.test.ts",
       "lines": 54,
-      "imports": ["./index.js", "vitest"]
+      "imports": [
+        "./index.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/protocol/src/binary-frames/demux.ts",
       "type": "source",
       "path": "packages/protocol/src/binary-frames/demux.ts",
-      "lines": 36,
-      "imports": ["./file-transfer.js", "./terminal.js"]
+      "lines": 48,
+      "imports": [
+        "./file-transfer.js",
+        "./terminal.js"
+      ]
     },
     {
       "id": "file:packages/protocol/src/binary-frames/file-transfer.test.ts",
       "type": "test",
       "path": "packages/protocol/src/binary-frames/file-transfer.test.ts",
       "lines": 155,
-      "imports": ["./index.js", "vitest"]
+      "imports": [
+        "./index.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/protocol/src/binary-frames/file-transfer.ts",
       "type": "source",
       "path": "packages/protocol/src/binary-frames/file-transfer.ts",
       "lines": 167,
-      "imports": ["./terminal.js", "zod/v3"]
+      "imports": [
+        "./terminal.js",
+        "zod/v3"
+      ]
     },
     {
       "id": "file:packages/protocol/src/binary-frames/index.ts",
       "type": "source",
       "path": "packages/protocol/src/binary-frames/index.ts",
       "lines": 4,
-      "imports": ["./demux.js", "./file-transfer.js", "./terminal.js"]
+      "imports": [
+        "./demux.js",
+        "./file-transfer.js",
+        "./terminal.js"
+      ]
     },
     {
       "id": "file:packages/protocol/src/binary-frames/terminal.test.ts",
       "type": "test",
       "path": "packages/protocol/src/binary-frames/terminal.test.ts",
       "lines": 115,
-      "imports": ["./index.js", "vitest"]
+      "imports": [
+        "./index.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/protocol/src/binary-frames/terminal.ts",
       "type": "source",
       "path": "packages/protocol/src/binary-frames/terminal.ts",
       "lines": 134,
-      "imports": ["../messages.js", "zod/v3"]
+      "imports": [
+        "../messages.js",
+        "zod/v3"
+      ]
     },
     {
       "id": "file:packages/protocol/src/branch-slug.test.ts",
       "type": "test",
       "path": "packages/protocol/src/branch-slug.test.ts",
       "lines": 52,
-      "imports": ["./branch-slug.js", "node:fs", "node:path", "node:url", "vitest"]
+      "imports": [
+        "./branch-slug.js",
+        "node:fs",
+        "node:path",
+        "node:url",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/protocol/src/branch-slug.ts",
@@ -529,56 +605,81 @@
       "type": "test",
       "path": "packages/protocol/src/chat/rpc-schemas.test.ts",
       "lines": 24,
-      "imports": ["./rpc-schemas.js", "vitest"]
+      "imports": [
+        "./rpc-schemas.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/protocol/src/chat/rpc-schemas.ts",
       "type": "source",
       "path": "packages/protocol/src/chat/rpc-schemas.ts",
       "lines": 120,
-      "imports": ["./types.js", "zod/v3"]
+      "imports": [
+        "./types.js",
+        "zod/v3"
+      ]
     },
     {
       "id": "file:packages/protocol/src/chat/types.ts",
       "type": "source",
       "path": "packages/protocol/src/chat/types.ts",
       "lines": 31,
-      "imports": ["zod/v3"]
+      "imports": [
+        "zod/v3"
+      ]
     },
     {
       "id": "file:packages/protocol/src/checkout/messages.test.ts",
       "type": "test",
       "path": "packages/protocol/src/checkout/messages.test.ts",
       "lines": 56,
-      "imports": ["../messages.js", "./messages.js", "vitest"]
+      "imports": [
+        "../messages.js",
+        "./messages.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/protocol/src/checkout/messages.ts",
       "type": "source",
       "path": "packages/protocol/src/checkout/messages.ts",
       "lines": 796,
-      "imports": ["zod/v3"]
+      "imports": [
+        "zod/v3"
+      ]
     },
     {
       "id": "file:packages/protocol/src/chisacode-config-schema.test.ts",
       "type": "test",
       "path": "packages/protocol/src/chisacode-config-schema.test.ts",
       "lines": 158,
-      "imports": ["@chisacode/protocol/chisacode-config-schema", "vitest"]
+      "imports": [
+        "@chisacode/protocol/chisacode-config-schema",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/protocol/src/chisacode-config-schema.ts",
       "type": "config",
       "path": "packages/protocol/src/chisacode-config-schema.ts",
       "lines": 99,
-      "imports": ["zod/v3"]
+      "imports": [
+        "zod/v3"
+      ]
     },
     {
       "id": "file:packages/protocol/src/cindy-exports.test.ts",
       "type": "test",
       "path": "packages/protocol/src/cindy-exports.test.ts",
       "lines": 35,
-      "imports": ["./client-capabilities.js", "node:fs", "node:path", "node:url", "vitest"]
+      "imports": [
+        "./client-capabilities.js",
+        "node:fs",
+        "node:path",
+        "node:url",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/protocol/src/cindy/messages.ts",
@@ -607,21 +708,30 @@
       "type": "test",
       "path": "packages/protocol/src/connection-offer.test.ts",
       "lines": 96,
-      "imports": ["./connection-offer.js", "vitest"]
+      "imports": [
+        "./connection-offer.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/protocol/src/connection-offer.ts",
       "type": "source",
       "path": "packages/protocol/src/connection-offer.ts",
       "lines": 68,
-      "imports": ["./relay-device-auth.js", "zod/v3"]
+      "imports": [
+        "./relay-device-auth.js",
+        "zod/v3"
+      ]
     },
     {
       "id": "file:packages/protocol/src/daemon-endpoints.test.ts",
       "type": "test",
       "path": "packages/protocol/src/daemon-endpoints.test.ts",
       "lines": 214,
-      "imports": ["./daemon-endpoints.js", "vitest"]
+      "imports": [
+        "./daemon-endpoints.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/protocol/src/daemon-endpoints.ts",
@@ -635,7 +745,11 @@
       "type": "test",
       "path": "packages/protocol/src/daemon/messages.test.ts",
       "lines": 85,
-      "imports": ["../messages.js", "./messages.js", "vitest"]
+      "imports": [
+        "../messages.js",
+        "./messages.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/protocol/src/daemon/messages.ts",
@@ -661,7 +775,10 @@
       "type": "test",
       "path": "packages/protocol/src/generative-ui/component-manifest.test.ts",
       "lines": 61,
-      "imports": ["./component-manifest.js", "vitest"]
+      "imports": [
+        "./component-manifest.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/protocol/src/generative-ui/component-manifest.ts",
@@ -675,14 +792,20 @@
       "type": "test",
       "path": "packages/protocol/src/generative-ui/rpc-schemas.test.ts",
       "lines": 170,
-      "imports": ["./rpc-schemas.js", "@chisacode/protocol/messages", "vitest"]
+      "imports": [
+        "./rpc-schemas.js",
+        "@chisacode/protocol/messages",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/protocol/src/generative-ui/rpc-schemas.ts",
       "type": "source",
       "path": "packages/protocol/src/generative-ui/rpc-schemas.ts",
       "lines": 51,
-      "imports": ["zod/v3"]
+      "imports": [
+        "zod/v3"
+      ]
     },
     {
       "id": "file:packages/protocol/src/git-remote.ts",
@@ -696,14 +819,18 @@
       "type": "source",
       "path": "packages/protocol/src/goal/rpc-schemas.ts",
       "lines": 126,
-      "imports": ["zod/v3"]
+      "imports": [
+        "zod/v3"
+      ]
     },
     {
       "id": "file:packages/protocol/src/host-connection-schema.ts",
       "type": "source",
       "path": "packages/protocol/src/host-connection-schema.ts",
       "lines": 13,
-      "imports": ["zod/v3"]
+      "imports": [
+        "zod/v3"
+      ]
     },
     {
       "id": "file:packages/protocol/src/importable-providers.ts",
@@ -717,7 +844,9 @@
       "type": "source",
       "path": "packages/protocol/src/learn/rpc-schemas.ts",
       "lines": 165,
-      "imports": ["zod/v3"]
+      "imports": [
+        "zod/v3"
+      ]
     },
     {
       "id": "file:packages/protocol/src/literal-union.ts",
@@ -731,91 +860,135 @@
       "type": "source",
       "path": "packages/protocol/src/loop/rpc-schemas.ts",
       "lines": 196,
-      "imports": ["@chisacode/protocol/provider-manifest", "zod/v3"]
+      "imports": [
+        "@chisacode/protocol/provider-manifest",
+        "zod/v3"
+      ]
     },
     {
       "id": "file:packages/protocol/src/messages.attachments.test.ts",
       "type": "test",
       "path": "packages/protocol/src/messages.attachments.test.ts",
       "lines": 328,
-      "imports": ["./messages.js", "vitest"]
+      "imports": [
+        "./messages.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/protocol/src/messages.checkout-pr-schema.test.ts",
       "type": "test",
       "path": "packages/protocol/src/messages.checkout-pr-schema.test.ts",
       "lines": 190,
-      "imports": ["./messages.js", "vitest"]
+      "imports": [
+        "./messages.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/protocol/src/messages.create-agent-client-message-id.test.ts",
       "type": "test",
       "path": "packages/protocol/src/messages.create-agent-client-message-id.test.ts",
       "lines": 57,
-      "imports": ["./messages", "@chisacode/protocol/agent-title-limits", "vitest"]
+      "imports": [
+        "./messages",
+        "@chisacode/protocol/agent-title-limits",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/protocol/src/messages.create-agent-worktree-autoarchive.test.ts",
       "type": "test",
       "path": "packages/protocol/src/messages.create-agent-worktree-autoarchive.test.ts",
       "lines": 94,
-      "imports": ["./agent-labels.js", "./messages.js", "vitest"]
+      "imports": [
+        "./agent-labels.js",
+        "./messages.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/protocol/src/messages.list-commands.test.ts",
       "type": "test",
       "path": "packages/protocol/src/messages.list-commands.test.ts",
       "lines": 53,
-      "imports": ["./messages.js", "vitest"]
+      "imports": [
+        "./messages.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/protocol/src/messages.providers-snapshot.test.ts",
       "type": "test",
       "path": "packages/protocol/src/messages.providers-snapshot.test.ts",
       "lines": 247,
-      "imports": ["./messages.js", "./provider/messages.js", "vitest"]
+      "imports": [
+        "./messages.js",
+        "./provider/messages.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/protocol/src/messages.pull-request-timeline.test.ts",
       "type": "test",
       "path": "packages/protocol/src/messages.pull-request-timeline.test.ts",
       "lines": 282,
-      "imports": ["./messages.js", "vitest", "zod/v3"]
+      "imports": [
+        "./messages.js",
+        "vitest",
+        "zod/v3"
+      ]
     },
     {
       "id": "file:packages/protocol/src/messages.rename-entities.test.ts",
       "type": "test",
       "path": "packages/protocol/src/messages.rename-entities.test.ts",
       "lines": 141,
-      "imports": ["./messages.js", "vitest", "zod/v3"]
+      "imports": [
+        "./messages.js",
+        "vitest",
+        "zod/v3"
+      ]
     },
     {
       "id": "file:packages/protocol/src/messages.stream-parsing.test.ts",
       "type": "test",
       "path": "packages/protocol/src/messages.stream-parsing.test.ts",
       "lines": 406,
-      "imports": ["./messages.js", "vitest"]
+      "imports": [
+        "./messages.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/protocol/src/messages.terminal-restore.test.ts",
       "type": "test",
       "path": "packages/protocol/src/messages.terminal-restore.test.ts",
       "lines": 62,
-      "imports": ["./messages.js", "vitest"]
+      "imports": [
+        "./messages.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/protocol/src/messages.test.ts",
       "type": "test",
       "path": "packages/protocol/src/messages.test.ts",
       "lines": 570,
-      "imports": ["./messages.js", "vitest"]
+      "imports": [
+        "./messages.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/protocol/src/messages.tool-call-schema.test.ts",
       "type": "test",
       "path": "packages/protocol/src/messages.tool-call-schema.test.ts",
       "lines": 199,
-      "imports": ["./messages.js", "vitest"]
+      "imports": [
+        "./messages.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/protocol/src/messages.ts",
@@ -848,21 +1021,31 @@
       "type": "test",
       "path": "packages/protocol/src/messages.workspaces.test.ts",
       "lines": 775,
-      "imports": ["./messages.js", "./provider/messages.js", "vitest", "zod/v3"]
+      "imports": [
+        "./messages.js",
+        "./provider/messages.js",
+        "vitest",
+        "zod/v3"
+      ]
     },
     {
       "id": "file:packages/protocol/src/migration/rpc-schemas.ts",
       "type": "source",
       "path": "packages/protocol/src/migration/rpc-schemas.ts",
       "lines": 74,
-      "imports": ["zod/v3"]
+      "imports": [
+        "zod/v3"
+      ]
     },
     {
       "id": "file:packages/protocol/src/package-exports.test.ts",
       "type": "test",
       "path": "packages/protocol/src/package-exports.test.ts",
       "lines": 125,
-      "imports": ["../package.json", "vitest"]
+      "imports": [
+        "../package.json",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/protocol/src/path-utils.ts",
@@ -876,98 +1059,142 @@
       "type": "source",
       "path": "packages/protocol/src/project-context/rpc-schemas.ts",
       "lines": 78,
-      "imports": ["zod/v3"]
+      "imports": [
+        "zod/v3"
+      ]
     },
     {
       "id": "file:packages/protocol/src/provider-config.ts",
       "type": "config",
       "path": "packages/protocol/src/provider-config.ts",
       "lines": 367,
-      "imports": ["./agent-types.js", "./provider-manifest.js", "zod/v3"]
+      "imports": [
+        "./agent-types.js",
+        "./provider-manifest.js",
+        "zod/v3"
+      ]
     },
     {
       "id": "file:packages/protocol/src/provider-manifest.test.ts",
       "type": "test",
       "path": "packages/protocol/src/provider-manifest.test.ts",
       "lines": 23,
-      "imports": ["./importable-providers.js", "./provider-manifest.js", "vitest"]
+      "imports": [
+        "./importable-providers.js",
+        "./provider-manifest.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/protocol/src/provider-manifest.ts",
       "type": "source",
       "path": "packages/protocol/src/provider-manifest.ts",
       "lines": 297,
-      "imports": ["./agent-types.js", "zod/v3"]
+      "imports": [
+        "./agent-types.js",
+        "zod/v3"
+      ]
     },
     {
       "id": "file:packages/protocol/src/provider/messages.test.ts",
       "type": "test",
       "path": "packages/protocol/src/provider/messages.test.ts",
       "lines": 107,
-      "imports": ["../messages.js", "./messages.js", "vitest"]
+      "imports": [
+        "../messages.js",
+        "./messages.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/protocol/src/provider/messages.ts",
       "type": "source",
       "path": "packages/protocol/src/provider/messages.ts",
       "lines": 504,
-      "imports": ["../agent-types.js", "../provider-manifest.js", "zod/v3"]
+      "imports": [
+        "../agent-types.js",
+        "../provider-manifest.js",
+        "zod/v3"
+      ]
     },
     {
       "id": "file:packages/protocol/src/relay-device-auth.test.ts",
       "type": "test",
       "path": "packages/protocol/src/relay-device-auth.test.ts",
       "lines": 77,
-      "imports": ["./connection-offer.js", "./relay-device-auth.js", "vitest"]
+      "imports": [
+        "./connection-offer.js",
+        "./relay-device-auth.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/protocol/src/relay-device-auth.ts",
       "type": "source",
       "path": "packages/protocol/src/relay-device-auth.ts",
       "lines": 97,
-      "imports": ["zod/v3"]
+      "imports": [
+        "zod/v3"
+      ]
     },
     {
       "id": "file:packages/protocol/src/schedule/rpc-schemas.test.ts",
       "type": "test",
       "path": "packages/protocol/src/schedule/rpc-schemas.test.ts",
       "lines": 18,
-      "imports": ["./rpc-schemas.js", "vitest"]
+      "imports": [
+        "./rpc-schemas.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/protocol/src/schedule/rpc-schemas.ts",
       "type": "source",
       "path": "packages/protocol/src/schedule/rpc-schemas.ts",
       "lines": 184,
-      "imports": ["./types.js", "zod/v3"]
+      "imports": [
+        "./types.js",
+        "zod/v3"
+      ]
     },
     {
       "id": "file:packages/protocol/src/schedule/types.ts",
       "type": "source",
       "path": "packages/protocol/src/schedule/types.ts",
       "lines": 118,
-      "imports": ["@chisacode/protocol/provider-manifest", "zod/v3"]
+      "imports": [
+        "@chisacode/protocol/provider-manifest",
+        "zod/v3"
+      ]
     },
     {
       "id": "file:packages/protocol/src/snapshot/rpc-schemas.ts",
       "type": "source",
       "path": "packages/protocol/src/snapshot/rpc-schemas.ts",
       "lines": 114,
-      "imports": ["zod/v3"]
+      "imports": [
+        "zod/v3"
+      ]
     },
     {
       "id": "file:packages/protocol/src/team/rpc-schemas.ts",
       "type": "source",
       "path": "packages/protocol/src/team/rpc-schemas.ts",
       "lines": 231,
-      "imports": ["@chisacode/protocol/provider-manifest", "zod/v3"]
+      "imports": [
+        "@chisacode/protocol/provider-manifest",
+        "zod/v3"
+      ]
     },
     {
       "id": "file:packages/protocol/src/terminal-input-mode.test.ts",
       "type": "test",
       "path": "packages/protocol/src/terminal-input-mode.test.ts",
       "lines": 82,
-      "imports": ["./terminal-input-mode.js", "vitest"]
+      "imports": [
+        "./terminal-input-mode.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/protocol/src/terminal-input-mode.ts",
@@ -981,56 +1208,78 @@
       "type": "test",
       "path": "packages/protocol/src/terminal-key-input.test.ts",
       "lines": 58,
-      "imports": ["./terminal-key-input.js", "vitest"]
+      "imports": [
+        "./terminal-key-input.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/protocol/src/terminal-key-input.ts",
       "type": "source",
       "path": "packages/protocol/src/terminal-key-input.ts",
       "lines": 234,
-      "imports": ["./terminal-input-mode.js"]
+      "imports": [
+        "./terminal-input-mode.js"
+      ]
     },
     {
       "id": "file:packages/protocol/src/terminal-snapshot.ts",
       "type": "source",
       "path": "packages/protocol/src/terminal-snapshot.ts",
       "lines": 206,
-      "imports": ["./terminal/messages.js"]
+      "imports": [
+        "./terminal/messages.js"
+      ]
     },
     {
       "id": "file:packages/protocol/src/terminal-stream-protocol.test.ts",
       "type": "test",
       "path": "packages/protocol/src/terminal-stream-protocol.test.ts",
       "lines": 37,
-      "imports": ["./binary-frames/index.js", "./terminal-stream-protocol.js", "vitest"]
+      "imports": [
+        "./binary-frames/index.js",
+        "./terminal-stream-protocol.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/protocol/src/terminal-stream-protocol.ts",
       "type": "source",
       "path": "packages/protocol/src/terminal-stream-protocol.ts",
       "lines": 2,
-      "imports": ["./binary-frames/terminal.js"]
+      "imports": [
+        "./binary-frames/terminal.js"
+      ]
     },
     {
       "id": "file:packages/protocol/src/terminal/messages.test.ts",
       "type": "test",
       "path": "packages/protocol/src/terminal/messages.test.ts",
       "lines": 51,
-      "imports": ["../messages.js", "./messages.js", "vitest"]
+      "imports": [
+        "../messages.js",
+        "./messages.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/protocol/src/terminal/messages.ts",
       "type": "source",
       "path": "packages/protocol/src/terminal/messages.ts",
       "lines": 273,
-      "imports": ["zod/v3"]
+      "imports": [
+        "zod/v3"
+      ]
     },
     {
       "id": "file:packages/protocol/src/tool-call-display.test.ts",
       "type": "test",
       "path": "packages/protocol/src/tool-call-display.test.ts",
       "lines": 204,
-      "imports": ["./tool-call-display.js", "vitest"]
+      "imports": [
+        "./tool-call-display.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/protocol/src/tool-call-display.ts",
@@ -1055,35 +1304,51 @@
       "type": "test",
       "path": "packages/protocol/src/usage/messages.test.ts",
       "lines": 123,
-      "imports": ["../messages.js", "./messages.js", "vitest"]
+      "imports": [
+        "../messages.js",
+        "./messages.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/protocol/src/usage/messages.ts",
       "type": "source",
       "path": "packages/protocol/src/usage/messages.ts",
       "lines": 118,
-      "imports": ["zod/v3"]
+      "imports": [
+        "zod/v3"
+      ]
     },
     {
       "id": "file:packages/protocol/src/voice/messages.test.ts",
       "type": "test",
       "path": "packages/protocol/src/voice/messages.test.ts",
       "lines": 135,
-      "imports": ["../messages.js", "./messages.js", "vitest"]
+      "imports": [
+        "../messages.js",
+        "./messages.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/protocol/src/voice/messages.ts",
       "type": "source",
       "path": "packages/protocol/src/voice/messages.ts",
       "lines": 213,
-      "imports": ["zod/v3"]
+      "imports": [
+        "zod/v3"
+      ]
     },
     {
       "id": "file:packages/protocol/src/workspace/messages.test.ts",
       "type": "test",
       "path": "packages/protocol/src/workspace/messages.test.ts",
       "lines": 54,
-      "imports": ["../messages.js", "./messages.js", "vitest"]
+      "imports": [
+        "../messages.js",
+        "./messages.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/protocol/src/workspace/messages.ts",
