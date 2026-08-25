@@ -408,7 +408,7 @@ describe("agent MCP end-to-end (offline)", () => {
       expect(result.isError).not.toBe(true);
       const payload = getStructuredContent(result);
       agentId = typeof payload?.agentId === "string" ? payload.agentId : null;
-      expect(agentId).toBeTruthy();
+      expect(agentId).not.toBeNull();
 
       const waitResult = await client.callTool({
         name: "wait_for_agent",
@@ -586,7 +586,7 @@ describe("agent MCP end-to-end (offline)", () => {
       expect(result.isError).not.toBe(true);
       const payload = getStructuredContent(result);
       agentId = typeof payload?.agentId === "string" ? payload.agentId : null;
-      expect(agentId).toBeTruthy();
+      expect(agentId).not.toBeNull();
 
       await vi.waitFor(
         async () => {

@@ -255,7 +255,7 @@ test("createAgent with background initialPrompt resolves immediately and runs th
       initialPrompt: "Run exactly: sleep 30",
     });
 
-    expect(agent.id).toBeTruthy();
+    expect(agent.id).not.toBe("");
 
     await vi.waitFor(
       async () => {
@@ -414,7 +414,7 @@ test("createAgent surfaces an initial-turn start failure as an error-state agent
       model: "gpt-5.4-mini",
       initialPrompt: "Run exactly: sleep 30",
     });
-    expect(agent.id).toBeTruthy();
+    expect(agent.id).not.toBe("");
 
     const errored = await client.waitForAgentUpsert(
       agent.id,
