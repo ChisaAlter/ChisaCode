@@ -20,6 +20,14 @@
   - **M7 relay string/binary 隐式契约**：decrypt UTF-8 启发式 ↔ 双端 opcode 嗅探链条补交叉引用注释（relay crypto/channel、server relay-transport、client inbound controller、protocol demux）；新增 `packages/relay/src/e2ee-frame-type.test.ts`（4 用例：valid-UTF-8 binary 字节级往返、invalid-UTF-8 ArrayBuffer 往返、JSON 直通、opcode 与 0x7b 不相交）与 `packages/client/src/daemon-client-inbound-controller.test.ts`（string 投递的 terminal frame 正确路由）。线格式未动。
   - **M4 静默 catch（选择性）**：agent-storage 项目目录 readdir 失败（会静默丢整目录 agents）补 warn；acp-agent `isAvailable` 吞错补 debug。全仓 280 处不做机械改动。
   - **L3 dsh 中文硬编码错误**：改为 `DshCredentialsError`（stable name + `DSH_MISSING_API_KEY` code），用户可见消息保持不变以兼容旧客户端。
+- **第二批（2026-08-25，同分支追加，dsh 收尾）**：
+  - **凭证文档矛盾**：`docs/custom-providers.md` 与 `docs/dsh-upstream-contract.md` §4 改为与代码一致的 env-only `DEEPSEEK_API_KEY` 预检口径（`.credentials.yaml` 不作为 ChisaCode 凭证源；如未来支持须先实机验证 adapter 读取）。完成。
+  - **错误 code 端到端 i18n**：server `toAgentCreateWireError` 把典型化 provider code（`DSH_MISSING_API_KEY`）送上 `agent_create_failed.errorCode`；client 抛 `AgentCreateError`（带 `code`）；app `resolveAgentCreateErrorMessage` 按 code 映射 zh/en i18n（`panels.agent.createErrorDshMissingApiKey`），未知 code 回退 daemon 消息。server 硬编码中文消息保留以兼容旧客户端。三层各有单测。完成（真机 UI 展示未验证）。
+  - **dsh 版本探测**：`GenericACPAgentClient.buildVersionProbe` 可覆写；`DshAgentClient` 受管 launch 用 `dsh --version`（`dsh-acp-demo --version` 上游不存在，契约 §10），replace 覆写保持通用探测。含 2 单测。完成（真机诊断面板未验证）。
+  - **DSH_SNAPSHOT 剥离**：`createProviderEnvSpec` 的 PARENT_SESSION_ENV_VARS 增加 `DSH_SNAPSHOT`（契约 §2「不得透传」），provider env/overlay/进程 env 三来源统一剥离；单测覆盖。完成。
+  - **acp-provider-catalog dsh command 雷区**：dsh 条目移除 `command` 字段（受管 `--config` launch 不可被 replace 覆写），`AcpProviderCatalogEntry.command` 转 optional，`buildAcpProviderConfigPatch` 无 command 不写 command；测试补 dsh patch 形状断言。完成。
+  - **上游复验机制**：`docs/dsh-upstream-contract.md` 新增 §9 复验节奏（检测/复验/写回/联动四步）；`docs/release.md` Stable 检查单挂"dsh 上游契约复验"项（release skills 走该检查单自动生效）。刻意不做自动联网探测。完成。
+  - **文档收尾**：`docs/architecture.md` ASCII 架构图补 DeepSeek Harness 列（provider 列表/表格第一批已补）。完成。
 - **登记未做（后续批次）**：
   - **M2 测试反模式止增**：`scripts/test-audit-baseline.json` 的 moduleMock 303 / conditionalSkip 105 / weakAssertion 349 等历史债按包拆减债批次，本批未动基线。
   - **M5 Electron Provider Settings smoke**：需要真实打包 Electron 表面，cloud 环境无法执行；待有打包环境时按 `test:desktop-packaged` 门禁补一条 Provider Settings 冒烟用例。**未验证**。
