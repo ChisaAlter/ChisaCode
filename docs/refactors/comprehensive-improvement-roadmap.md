@@ -34,8 +34,18 @@
   - **App：聚合 agent 包装身份缓存**：`useAggregatedAgents` 每次任一 store 变化都为全部 agent 新建 `AggregatedAgent` 包装对象，击穿下游全部 memo。新增 `createAggregatedAgentCache`（WeakMap keyed by 底层 Agent + serverId/serverLabel 校验），hook 内 ref 持有；单测覆盖复用/重建。完成。
   - **App：SidebarV2 行渲染最小化**：`SidebarV2Row` 未 memo 且 `rowHandlers`/thread 对象每渲染重建，任一 agent 事件重渲染所有行。改动：`SidebarV2Row` 包 `React.memo`；`agent-adapter.ts` 新增 `createSidebarThreadCache`（agent+workspace hint 双身份校验）；`SidebarV2.tsx` 行回调改 ref-backed 每 id 稳定工厂；`useSidebarV2BulkActions` 回调与 capabilities 身份稳定化。纯 memo 化，无布局改动（不触发 HTML 原型门）。单测覆盖 thread 缓存复用/失效。完成（真机滚动帧率未实测，标注未验证）。
   - **Client：重连退避加性抖动**：多客户端（app/CLI/MCP/relay）被同一次 daemon 重启断开后按相同指数表同步重试。新增纯函数 `computeReconnectDelayMs`（确定性 `min(base·2^n, max)` + 0–25% 加性抖动，超 cap 后仍保留抖动防止顶格同步）与 `reconnect.jitterRandom` 可注入随机源（0 时严格还原旧行为）；既有精确计时测试注入零随机，新增 3 用例（确定性表、抖动上界/cap、注入随机源计时）。完成。
+- **第四批（2026-08-25，同分支追加，cn-main CI 修绿专项）**：
+  - **诊断口径**：`gh run view --log` 逐 job 复现近 10 次 cn-main 全红 run 的每个失败 job，本地重跑定位根因后修复；覆盖 lint（lockfile-lint + kg drift + format）、server-tests、app-tests、cli-tests shard3、desktop-tests、playwright 六类。
+  - **lockfile-lint**：`expo-secure-store@57.0.1` 的 `resolved` 指向 npmmirror（本地代理写入），改回 registry.npmjs.org（integrity 不变）。
+  - **knowledge-graph drift 门禁**：`generate-modular-knowledge-graphs.mjs` 输出含 `generatedAt` 时间戳导致每次重生成必 drift；移除时间戳使生成确定化，并把生成 JSON 从 oxfmt/lefthook 排除。
+  - **server-tests 全部本地复现修复**：wire-compat fake 补 `getHydrationState/getHydrationPromise`；session 测试对齐 checkout-status 缓存后的 `getSnapshot(includeGitHub:false)` 语义；relay-transport metadata 扩展字段；agent-metadata-generator 补 providerSnapshotManager stub + `setGeneratedTitle({force})`；lifecycle-command 错误文案；codex resume 延迟 connect 契约；tree-kill signalCode 断言；worktree posix 路径改为从 `getChisaCodeWorktreesRoot` 推导。**产品修复 ×2**：`provider-snapshot-manager` force 刷新不再 join 过期 in-flight load；`workspace-mutation-coordinator.canonicalize` 对 Windows 风格路径在 POSIX 上用 `win32.resolve` 确定化。
+  - **app-tests**：settings 两个 gateway 测试改为从 `buildModelGatewayProviderIdList` 派生期望；`agent-directory-sync` 重写合并语义——fetch 全量替换目录、按 `fetchStartedAt` + create-flow 乐观保护集保留本地新 agent（**产品修复**：daemon 已删 agent 不再本地复活）。
+  - **cli-tests shard3（relay-host）**：**产品修复**——daemon 默认要求 relay device auth 后 CLI `--host <offer-url>` 全断（4401）。新增 `FileRelayDeviceCredentialStore`（0600 JSON 凭证store）+ `resolveRelayOfferDeviceAuth`；`connectViaRelayOffer` 先用存储凭证、失败回退 offer pairing token 重试一次、成功后持久化新凭证；e2e probe 用 token 认证且为 CLI 生成独立 offer（token 一次性）。新增 `34-relay-device-store.test.ts`。
+  - **desktop-tests**：daemon-manager 版本测试从 package.json 动态读版本；**产品修复**——`opener.isAllowedLocalPath` 用 `win32.isAbsolute || posix.isAbsolute` 支持跨平台绝对路径；opener 测试 mock 补 `resolveMainAppSenderValidationOptions`。
+  - **playwright**：`openSessions` 改直接路由导航（sidebar testID 已非导航控件、点击静默无效）；`createIdleAgent` 改用 mock provider（CI 无 opencode）；archive-tab 用例适配单 slot workspace（多 tab UI 已移除）；**产品修复**——workspace slot 存在性检查补 pinned 判定，从 Sessions 重开归档会话不再被清回新会话页；agent-stream-ui 发送重试的成功判据改为 `user-message` testid（裸文本会匹配未发送的草稿导致误判成功）——trace 证实 composer 在新 workspace 快照就绪前 1-2 秒窗口内拒发是设计行为；`waitForContentGrowth` poll 放宽到 30s。本地定向 Playwright 3+4 用例全绿。
+  - **M2 减债（fixedWait）**：`scripts/audit-tests.mjs` fixedWait 检测排除 `setTimeout(...,0)` 零延迟 defer（33 处假阳性），基线 229→196；`create-flow.test.ts` 固定 20ms sleep 改确定性 promise 释放。
 - **登记未做（后续批次）**：
-  - **M2 测试反模式止增**：`scripts/test-audit-baseline.json` 的 moduleMock 303 / conditionalSkip 105 / weakAssertion 349 等历史债按包拆减债批次，本批未动基线。
+  - **M2 测试反模式止增**：`scripts/test-audit-baseline.json` 的 moduleMock 303 / conditionalSkip 105 / weakAssertion 349 等历史债按包拆减债批次，第四批仅修 fixedWait 假阳性与 1 个最痛文件。
   - **M5 Electron Provider Settings smoke**：需要真实打包 Electron 表面，cloud 环境无法执行；待有打包环境时按 `test:desktop-packaged` 门禁补一条 Provider Settings 冒烟用例。**未验证**。
   - **M6 client 测试补课**：本批新增 inbound-controller demux 测试属于第一优先级（静默失败路径）的一小步；第三批补重连退避抖动 3 用例（纯函数 + fake-timer 计时）；binary 编码边界的系统性补课仍待做。
   - **L1 god-file 拆分**：不在本批范围（仅在小步安全时进行），维持既有 Provider God-File 拆分计划。
@@ -389,7 +399,7 @@
 - **后续**：当前基线仍包含 moduleMock 303、conditionalSkip 105、weakAssertion 349、processEnvMutation 151 等历史债；后续改动不得增加，并应按包拆成独立减债批次逐步下调基线。
 - **远端复核**：首次实际触发 `cn-main` CI 后发现 npm 11 生成的 lockfile 删除了 desktop 精确依赖 `@types/node@24.6.0` / `undici-types@7.13.0`，导致 Node 22/npm 10 的所有 `npm ci` job 在测试前失败；同时 TruffleHog 重复传入 `--no-update`，Nix hash workflow 在 GitHub App secret 缺失时直接失败。
 - **解决补充**：使用 CI 同代 npm 10 重新生成完整跨平台 lockfile；移除重复 TruffleHog 参数；Nix workflow 在 App secret 未配置时回退到具备最小 `contents: write` 权限的 `GITHUB_TOKEN`。
-- **状态**：修复中；本地 npm 10 `ci --dry-run`、test-audit、lockfile-lint 和 workflow YAML 解析均退出 0，等待远端 CI 复验后关闭。**2026-08-25 核对**：远端 `cn-main` CI 至今未出现绿色 run（近 10 次 push run 全部 failure/cancelled，含 2026-08-13 的 `chore(release): cut 1.0.3`），标题里的"完成"仅指本地门禁校准，远端复验事实上从未通过——该条不能视为 done，需要专门一轮把 cn-main CI 修绿后再关闭。
+- **状态**：修复中；本地 npm 10 `ci --dry-run`、test-audit、lockfile-lint 和 workflow YAML 解析均退出 0，等待远端 CI 复验后关闭。**2026-08-25 核对**：远端 `cn-main` CI 至今未出现绿色 run（近 10 次 push run 全部 failure/cancelled，含 2026-08-13 的 `chore(release): cut 1.0.3`），标题里的"完成"仅指本地门禁校准，远端复验事实上从未通过——该条不能视为 done，需要专门一轮把 cn-main CI 修绿后再关闭。**2026-08-25 第四批（`cursor/audit-fixes-2026-08-25-7503`）已系统性逐 job 修复**：lint（lockfile/kg drift）、server-tests、app-tests、cli shard3（relay device auth 产品修复）、desktop-tests、playwright 六类失败全部本地复现修复（详见上方"全量审查修复批次 2026-08-25 第四批"），待 PR CI 复验后关闭本条。
 
 ### 全项目代码审查修复批次（2026-07-05 起执行）
 
