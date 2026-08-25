@@ -19,6 +19,7 @@ import { computeClientRelayDeviceAuthProof } from "./relay-device-credentials.js
 
 const DEFAULT_RECONNECT_BASE_DELAY_MS = 1_500;
 const DEFAULT_RECONNECT_MAX_DELAY_MS = 30_000;
+const RECONNECT_JITTER_RATIO = 0.25;
 const DEFAULT_CONNECT_TIMEOUT_MS = 15_000;
 const DEFAULT_LIVENESS_TIMEOUT_MS = 5_000;
 const LIVENESS_FAILURE_RECONNECT_THRESHOLD = 2;
@@ -84,6 +85,8 @@ export interface DaemonClientConfig {
     enabled?: boolean;
     baseDelayMs?: number;
     maxDelayMs?: number;
+    /** Injectable random source in [0, 1) for backoff jitter; defaults to Math.random. */
+    jitterRandom?: () => number;
   };
   runtimeMetricsIntervalMs?: number;
   runtimeMetricsWindowMs?: number;
@@ -636,9 +639,12 @@ export class DaemonConnectionController {
 
   private armReconnectTimer(): void {
     const attempt = this.reconnectAttempt;
-    const baseDelay = this.config.reconnect?.baseDelayMs ?? DEFAULT_RECONNECT_BASE_DELAY_MS;
-    const maxDelay = this.config.reconnect?.maxDelayMs ?? DEFAULT_RECONNECT_MAX_DELAY_MS;
-    const delay = Math.min(baseDelay * 2 ** attempt, maxDelay);
+    const delay = computeReconnectDelayMs({
+      attempt,
+      baseDelayMs: this.config.reconnect?.baseDelayMs ?? DEFAULT_RECONNECT_BASE_DELAY_MS,
+      maxDelayMs: this.config.reconnect?.maxDelayMs ?? DEFAULT_RECONNECT_MAX_DELAY_MS,
+      random: this.config.reconnect?.jitterRandom,
+    });
     this.reconnectAttempt = attempt + 1;
     this.reconnectTimeout = setTimeout(() => {
       this.reconnectTimeout = null;
@@ -757,6 +763,33 @@ export class DaemonConnectionController {
       }
     }
   }
+}
+
+/**
+ * Computes the reconnect delay for a given attempt using capped exponential
+ * backoff plus additive decorrelated jitter.
+ *
+ * The deterministic component is `min(baseDelayMs * 2^attempt, maxDelayMs)`.
+ * On top of that, up to 25% of the deterministic delay is added as jitter so
+ * that multiple clients (app, CLI, MCP, relay) disconnected by the same daemon
+ * restart do not retry in synchronized bursts. With `random` returning 0 the
+ * result is exactly the deterministic delay.
+ * @param input.attempt Zero-based reconnect attempt number
+ * @param input.baseDelayMs Base delay for the exponential schedule
+ * @param input.maxDelayMs Cap applied to the deterministic component
+ * @param input.random Random source in [0, 1); defaults to Math.random
+ * @returns Delay in milliseconds before the next reconnect attempt
+ */
+export function computeReconnectDelayMs(input: {
+  attempt: number;
+  baseDelayMs: number;
+  maxDelayMs: number;
+  random?: () => number;
+}): number {
+  const random = input.random ?? Math.random;
+  const deterministic = Math.min(input.baseDelayMs * 2 ** input.attempt, input.maxDelayMs);
+  const jitter = Math.floor(deterministic * RECONNECT_JITTER_RATIO * random());
+  return deterministic + jitter;
 }
 
 function normalizePassword(value: string | undefined): string | null {
