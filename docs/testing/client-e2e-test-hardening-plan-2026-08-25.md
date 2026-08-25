@@ -1,6 +1,6 @@
 # Client Test Hardening & E2E Helper Integrity Plan (2026-08-25)
 
-Status: **Phase 1 in progress** (branch `cursor/audit-fixes-2026-08-25-7503`, PR [#33](https://github.com/ChisaAlter/ChisaCode/pull/33)).
+Status: **Phases 0-2 landed; server-e2e triage batch landed (§6)** (branch `cursor/audit-fixes-2026-08-25-7503`, PR [#33](https://github.com/ChisaAlter/ChisaCode/pull/33)).
 
 This document is the design artifact for the next delivery batch after the cn-main
 CI green-up work. It covers four tracks:
@@ -258,3 +258,65 @@ Revisions made after self-review:
 6. **Scope honesty**: the zh-CN copy sweep across all 16 affected specs is too large to
    land verified in one round; it is explicitly Phase 3 with the settings cluster done
    first (highest failure density), rather than pretending a full sweep.
+
+## 6. Execution log — server-e2e triage batch (2026-08-25, second pass)
+
+All 15 server-tests e2e failures from run 32840669563 were reproduced locally and
+root-caused. Three were **product defects** the tests correctly caught; the rest were
+**spec debt** (tests asserting behavior that deliberate product changes had replaced).
+
+### 6.1 Product defects found by the failing tests (fixed in this batch)
+
+1. **Project-context cache polluted user repos.** `AgentLaunchConfigController` cached
+   the project-context TOC in `<cwd>/.chisacode-context/`, dirtying `git status` in
+   every repo an agent ran in and breaking `git worktree remove` (worktrees never
+   "clean"). Fix: new `projectContextCacheDir` option threaded from `bootstrap.ts`
+   (`$CHISACODE_HOME/context/`); without it the controller builds the TOC without
+   writing a cache. Caught by `git-operations.e2e.test.ts`.
+2. **Provider snapshot warm-up bypassed injected clients.**
+   `ProviderSnapshotManager.refreshProvider` always called the registry's
+   `fetchModels`/`fetchModes`, which close over the real provider runtime — so a daemon
+   configured with injected `agentClients` (tests, embedders) still spawned/looked for
+   the real codex binary and failed discovery. Fix: when an `extraClients` entry exists
+   for the provider, discovery routes through its `listModels`/`listModes` (mode
+   fallback: static `definition.modes`). Caught by `agent-mcp.e2e.test.ts`.
+3. **Live provisional timeline items lost their epoch.** `emitLiveTimelineItem`
+   dispatched `agent_stream` items without the timeline epoch, so clients could not
+   attribute worktree-setup progress (and any live provisional item) to the current
+   history epoch after a reconnect. Fix: attach `timeline.getEpoch(agentId)` to the
+   dispatch metadata. Caught by `timeline-reconnect-contract.e2e.test.ts`.
+
+### 6.2 Spec debt realigned to current product contracts
+
+- **Fire-and-forget initial turn** (contract change in the non-blocking first-send
+  work): `create_agent`/`createAgent` now resolves after session construction; the
+  initial turn runs in the background and failures surface as an **error-state agent**,
+  not a rejected create call. Realigned: two tests in `agent-mcp.e2e.test.ts`, two in
+  `daemon-client.e2e.test.ts` (fakes gained a minimal `listModels` for defect-2's
+  contract).
+- **Transactional turn replacement**: `sendMessage` during a running turn cancels and
+  replaces it, and a send arriving while a replacement is still pending supersedes that
+  pending run before it ever becomes a turn. The rapid-fire test in
+  `wait-for-idle.e2e.test.ts` now asserts the timing-independent invariant (1-3
+  terminal turn events, final one `turn_completed`) instead of "3 completed turns".
+- **Relay device auth** (SECURITY.md relay hardening): server-role relay connections
+  must present channel-bound signed credentials. `relay-transport.e2e.test.ts` now
+  builds `relayDeviceAuth` from the pairing offer for the two happy-path tests, treats
+  the worker's HTTP 401 as the readiness signal, and the pipelined-hello test asserts
+  the **rejection** contract (close + `relay_device_auth_required` log) instead of an
+  unauthenticated success.
+
+### 6.3 Adversarial notes for this batch
+
+- The rapid-fire realignment initially asserted "exactly 3 terminal events"; a local
+  failure (2 events) exposed the pending-run supersession path, and the assertion was
+  rewritten to the invariant that actually holds under all timings — not loosened to
+  "anything passes" (the final event must still be a completion).
+- Defect 2's fix changed the injected-client contract, which broke a
+  `provider-snapshot-manager.test.ts` fixture whose default fake `listModels` returned
+  `[]`; the fixture now returns a model, documented inline, rather than adding a
+  product-side fallback to registry discovery (which would have re-opened the bypass).
+- The pipelined-hello relay test could have been deleted as "obsolete under device
+  auth"; instead it was repurposed to prove the buffered frame is still decrypted and
+  routed through hello processing (the original regression it guarded), with the
+  auth-gate log as the observable.
