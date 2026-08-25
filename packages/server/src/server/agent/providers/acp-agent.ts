@@ -439,7 +439,11 @@ export class ACPAgentClient implements AgentClient {
     try {
       await this.resolveLaunchCommand();
       return true;
-    } catch {
+    } catch (error) {
+      // Availability probes run often, so keep this at debug — but do log it:
+      // a provider silently vanishing from the picker is otherwise
+      // undiagnosable without attaching a debugger.
+      this.logger.debug({ err: error, provider: this.provider }, "acp_provider_unavailable");
       return false;
     }
   }
