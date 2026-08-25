@@ -51,8 +51,19 @@ const checks = [
   },
 ];
 
-function findingKey(checkId, filePath, line) {
-  return `${checkId}::${filePath.replaceAll("\\", "/")}:${line}`;
+/**
+ * Fingerprints are line-number-independent: they key on the trimmed text of
+ * the matched line plus an occurrence ordinal for duplicate lines. Editing
+ * unrelated code above a finding no longer produces a false "new debt"
+ * failure; only genuinely new matched lines (or edits to a debt line itself)
+ * create new fingerprints. Content is capped so pathological lines stay
+ * readable in the baseline file.
+ */
+const FINGERPRINT_CONTENT_MAX = 160;
+
+function findingKey(checkId, filePath, lineText, occurrence) {
+  const normalized = lineText.trim().slice(0, FINGERPRINT_CONTENT_MAX);
+  return `${checkId}::${filePath.replaceAll("\\", "/")}::${normalized}#${occurrence}`;
 }
 
 /**
@@ -168,6 +179,7 @@ function scanFile(file) {
   for (let i = 0; i < text.length; i++) {
     if (text.charCodeAt(i) === 10) lineStarts.push(i + 1);
   }
+  const occurrenceCounts = new Map();
   for (const check of checks) {
     check.pattern.lastIndex = 0;
     for (;;) {
@@ -175,11 +187,17 @@ function scanFile(file) {
       if (!match) break;
       if (check.accept && !check.accept(text, match)) continue;
       const line = upperBound(lineStarts, match.index);
+      const lineStart = lineStarts[line - 1];
+      const lineEnd = line < lineStarts.length ? lineStarts[line] - 1 : text.length;
+      const lineText = text.slice(lineStart, lineEnd).replace(/\r$/, "");
+      const occurrenceKey = `${check.id}::${relativePath}::${lineText.trim().slice(0, FINGERPRINT_CONTENT_MAX)}`;
+      const occurrence = occurrenceCounts.get(occurrenceKey) ?? 0;
+      occurrenceCounts.set(occurrenceKey, occurrence + 1);
       findings.push({
         check: check.id,
         file: relativePath,
         line,
-        key: findingKey(check.id, relativePath, line),
+        key: findingKey(check.id, relativePath, lineText, occurrence),
       });
     }
   }
@@ -219,9 +237,9 @@ if (shouldUpdate) {
     baselinePath,
     JSON.stringify(
       {
-        version: 2,
+        version: 3,
         description:
-          "Baseline for test debt audit. CI fails on new finding fingerprints or when totals rise above counts. Fingerprints prevent debt migration between files.",
+          "Baseline for test debt audit. CI fails on new finding fingerprints or when totals rise above counts. Fingerprints key on matched line content (not line numbers), so unrelated edits above a finding do not create false positives.",
         counts: summary,
         fingerprints,
       },
