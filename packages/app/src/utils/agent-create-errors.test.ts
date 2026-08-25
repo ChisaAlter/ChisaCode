@@ -23,4 +23,8 @@ describe("resolveAgentCreateErrorMessage", () => {
     expect(resolveAgentCreateErrorMessage(new Error("plain failure"))).toBe("plain failure");
     expect(resolveAgentCreateErrorMessage(codedError("numeric code", 42))).toBe("numeric code");
   });
+
+  it("normalizes non-Error throws like toErrorMessage", () => {
+    expect(resolveAgentCreateErrorMessage("string failure")).toBe("string failure");
+  });
 });

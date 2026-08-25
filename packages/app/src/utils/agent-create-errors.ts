@@ -1,4 +1,5 @@
 import { appI18n } from "@/i18n";
+import { toErrorMessage } from "@/utils/error-messages";
 
 /**
  * Stable daemon create-failure codes mapped to localized i18n keys. The daemon
@@ -15,13 +16,15 @@ const CREATE_ERROR_CODE_I18N_KEYS: Record<string, string> = {
  * @param error The create failure thrown by the daemon client
  * @returns Localized copy for known error codes, otherwise the raw message
  */
-export function resolveAgentCreateErrorMessage(error: Error): string {
-  const code = Reflect.get(error, "code");
-  if (typeof code === "string") {
-    const key = CREATE_ERROR_CODE_I18N_KEYS[code];
-    if (key) {
-      return appI18n.t(key);
+export function resolveAgentCreateErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    const code = Reflect.get(error, "code");
+    if (typeof code === "string") {
+      const key = CREATE_ERROR_CODE_I18N_KEYS[code];
+      if (key) {
+        return appI18n.t(key);
+      }
     }
   }
-  return error.message;
+  return toErrorMessage(error);
 }
