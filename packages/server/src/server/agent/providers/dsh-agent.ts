@@ -17,7 +17,7 @@ import type {
 } from "../agent-sdk-types.js";
 import { normalizeAgentModelDefinition } from "../agent-sdk-types.js";
 import type { ProviderProfileModel, ProviderRuntimeSettings } from "../provider-launch-config.js";
-import { GenericACPAgentClient } from "./generic-acp-agent.js";
+import { GenericACPAgentClient, type CommandInvocation } from "./generic-acp-agent.js";
 
 /**
  * Upstream contract reference: docs/dsh-upstream-contract.md (module 0 gate).
@@ -202,6 +202,19 @@ export class DshAgentClient extends GenericACPAgentClient {
   override async listModels(options: ListModelsOptions): Promise<AgentModelDefinition[]> {
     const discovered = await super.listModels(options);
     return withDefaultDshModels(discovered);
+  }
+
+  /**
+   * `dsh-acp-demo --version` does not exist (ERR_PARSE_ARGS_UNKNOWN_OPTION,
+   * docs/dsh-upstream-contract.md §10), so the diagnostic probes the sibling
+   * `dsh` binary, which prints a bare semver. Replace-mode command overrides
+   * keep the generic probe against the user's own launcher.
+   */
+  protected override buildVersionProbe(): CommandInvocation {
+    if (this.command[0] !== DSH_BINARY) {
+      return super.buildVersionProbe();
+    }
+    return { command: "dsh", args: ["--version"] };
   }
 }
 

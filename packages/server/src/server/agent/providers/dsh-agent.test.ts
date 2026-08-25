@@ -203,6 +203,26 @@ describe("DshAgentClient launch", () => {
     });
   });
 
+  test("version probe uses the sibling dsh binary for managed launches", () => {
+    makeHome();
+    const client = new DshAgentClient({ logger: createTestLogger(), models: [] });
+    // `dsh-acp-demo --version` throws ERR_PARSE_ARGS_UNKNOWN_OPTION upstream
+    // (contract §10); the diagnostic must probe `dsh --version` instead.
+    expect(client["buildVersionProbe"]()).toEqual({ command: "dsh", args: ["--version"] });
+  });
+
+  test("version probe keeps the generic behavior for replace-mode overrides", () => {
+    makeHome();
+    const client = new DshAgentClient({
+      logger: createTestLogger(),
+      runtimeSettings: {
+        command: { mode: "replace", argv: ["custom-acp", "--flag"] },
+      },
+      models: [],
+    });
+    expect(client["buildVersionProbe"]()).toEqual({ command: "custom-acp", args: ["--version"] });
+  });
+
   test("gateway env passes through untouched", () => {
     makeHome();
     const client = new DshAgentClient({
