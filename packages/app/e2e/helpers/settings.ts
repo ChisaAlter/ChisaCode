@@ -12,14 +12,30 @@ const SECTION_LABELS = {
   about: "About",
 } as const;
 
+// The app renders zh-CN by default (createAppI18n("zh-CN") in
+// packages/app/src/i18n/index.ts), so every copy assertion must accept both
+// the English and the Chinese variant of the string it targets.
 const LOCALIZED_TEXT = {
   General: ["General", "通用"],
-  Usage: ["Usage", "用量统计"],
+  // The detail header reuses the sidebar section label ("用量"), while the
+  // usage page body title is "用量统计" — accept both.
+  Usage: ["Usage", "用量统计", "用量"],
   Diagnostics: ["Diagnostics", "诊断"],
   About: ["About", "关于"],
   Theme: ["Theme", "主题"],
   "Play test": ["Play test", "播放测试"],
   "GitHub releases": ["GitHub releases", "GitHub 版本"],
+  Connections: ["Connections", "连接"],
+  "Add connection": ["Add connection", "添加连接"],
+  "Direct connection": ["Direct connection", "直接连接"],
+  "Paste pairing link": ["Paste pairing link", "粘贴配对链接"],
+  "Inject ChisaCode tools": ["Inject ChisaCode tools", "注入ChisaCode工具"],
+  Back: ["Back", "返回"],
+  "Open menu": ["Open menu", "打开菜单"],
+  Hosts: ["Hosts", "主机"],
+  Providers: ["Providers", "提供商"],
+  "Pair device": ["Pair device", "配对设备"],
+  Daemon: ["Daemon", "守护进程"],
 } as const;
 
 export type SettingsSection = keyof typeof SECTION_LABELS | "projects";
@@ -52,7 +68,7 @@ export async function expectSettingsHeader(page: Page, title: string): Promise<v
 
 export async function openAddHostFlow(page: Page): Promise<void> {
   await page.getByTestId("settings-add-host").click();
-  await expect(page.getByText("Add connection", { exact: true })).toBeVisible();
+  await expect(page.getByText(localizedRegex("Add connection")).first()).toBeVisible();
 }
 
 export async function selectHostConnectionType(
@@ -60,7 +76,7 @@ export async function selectHostConnectionType(
   type: "direct" | "relay",
 ): Promise<void> {
   const label = type === "direct" ? "Direct connection" : "Paste pairing link";
-  await page.getByRole("button", { name: label }).click();
+  await page.getByRole("button", { name: localizedRegex(label) }).click();
 }
 
 export async function toggleHostAdvanced(page: Page): Promise<void> {
@@ -69,7 +85,10 @@ export async function toggleHostAdvanced(page: Page): Promise<void> {
 
 export async function openCompactSettings(page: Page): Promise<void> {
   await expect(page).toHaveURL(/\/h\/|\/welcome/, { timeout: 15000 });
-  await page.getByRole("button", { name: "Open menu", exact: true }).first().click();
+  await page
+    .getByRole("button", { name: localizedRegex("Open menu") })
+    .first()
+    .click();
   const settingsButton = page.locator('[data-testid="sidebar-settings"]:visible').first();
   await expect(settingsButton).toBeVisible();
   await settingsButton.click();
@@ -80,8 +99,8 @@ export async function openCompactSettings(page: Page): Promise<void> {
 export async function expectCompactSettingsList(page: Page): Promise<void> {
   await expect(page).toHaveURL(/\/settings(?:\?.*)?$/);
   await expect(page.getByTestId("settings-sidebar")).toBeVisible();
-  await expect(page.getByText("Theme", { exact: true })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Play test" })).toHaveCount(0);
+  await expect(page.getByText(localizedRegex("Theme"))).toHaveCount(0);
+  await expect(page.getByRole("button", { name: localizedRegex("Play test") })).toHaveCount(0);
   await expect(page.locator('[data-testid^="settings-host-page-"]')).toHaveCount(0);
 }
 
@@ -104,11 +123,11 @@ export async function expectSettingsSidebarSections(
 }
 
 export async function goBackInSettings(page: Page): Promise<void> {
-  await page.getByRole("button", { name: "Back", exact: true }).click();
+  await page.getByRole("button", { name: localizedRegex("Back") }).click();
 }
 
 export async function expectSettingsBackButton(page: Page): Promise<void> {
-  await expect(page.getByRole("button", { name: "Back", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: localizedRegex("Back") })).toBeVisible();
 }
 
 export async function clickSettingsBackToWorkspace(page: Page): Promise<void> {
@@ -134,8 +153,12 @@ export async function openCompactSettingsHost(page: Page): Promise<void> {
 }
 
 export async function expectAddHostMethodOptions(page: Page): Promise<void> {
-  await expect(page.getByRole("button", { name: "Direct connection" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Paste pairing link" })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: localizedRegex("Direct connection") }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: localizedRegex("Paste pairing link") }),
+  ).toBeVisible();
 }
 
 export async function fillDirectHostUri(page: Page, uri: string): Promise<void> {
@@ -201,7 +224,7 @@ export async function expectHostLabelEditMode(page: Page, expectedLabel: string)
 export async function expectHostConnectionsCard(page: Page, port: string): Promise<void> {
   const card = page.getByTestId("host-page-connections-card");
   await expect(card).toBeVisible();
-  await expect(page.getByText("Connections", { exact: true })).toBeVisible();
+  await expect(page.getByText(localizedRegex("Connections")).first()).toBeVisible();
   await expect(
     card.getByText(new RegExp(`TCP \\((localhost|127\\.0\\.0\\.1):${port}\\)`)),
   ).toBeVisible();
@@ -210,7 +233,9 @@ export async function expectHostConnectionsCard(page: Page, port: string): Promi
 export async function expectHostInjectMcpCard(page: Page): Promise<void> {
   const card = page.getByTestId("host-page-inject-mcp-card");
   await expect(card).toBeVisible();
-  await expect(card.getByRole("switch", { name: "Inject ChisaCode tools" })).toBeVisible();
+  await expect(
+    card.getByRole("switch", { name: localizedRegex("Inject ChisaCode tools") }),
+  ).toBeVisible();
 }
 
 export async function expectHostActionCards(page: Page): Promise<void> {
@@ -236,16 +261,26 @@ export async function expectHostNoLocalOnlyRows(page: Page): Promise<void> {
   await expect(page.getByTestId("host-page-daemon-lifecycle-card")).toHaveCount(0);
 }
 
+/**
+ * Loopback direct-TCP hosts resolve as the local daemon
+ * (resolveLocalDaemonServerId), so the pair-device row renders even in the
+ * browser, while the daemon lifecycle card remains Electron-only.
+ */
+export async function expectLoopbackHostLocalRows(page: Page): Promise<void> {
+  await expect(page.getByTestId("host-page-pair-device-row")).toBeVisible();
+  await expect(page.getByTestId("host-page-daemon-lifecycle-card")).toHaveCount(0);
+}
+
 export async function expectRetiredSidebarSectionsAbsent(page: Page): Promise<void> {
   const sidebar = page.getByTestId("settings-sidebar");
   await expect(sidebar).toBeVisible();
-  await expect(sidebar.getByRole("button", { name: "Hosts", exact: true })).toHaveCount(0);
-  await expect(sidebar.getByRole("button", { name: "Providers", exact: true })).toHaveCount(0);
-  await expect(sidebar.getByRole("button", { name: "Pair device", exact: true })).toHaveCount(0);
-  await expect(sidebar.getByRole("button", { name: "Daemon", exact: true })).toHaveCount(0);
-  await expect(sidebar.getByRole("button", { name: "General", exact: true })).toBeVisible();
-  await expect(sidebar.getByRole("button", { name: "Diagnostics", exact: true })).toBeVisible();
-  await expect(sidebar.getByRole("button", { name: "About", exact: true })).toBeVisible();
+  await expect(sidebar.getByRole("button", { name: localizedRegex("Hosts") })).toHaveCount(0);
+  await expect(sidebar.getByRole("button", { name: localizedRegex("Providers") })).toHaveCount(0);
+  await expect(sidebar.getByRole("button", { name: localizedRegex("Pair device") })).toHaveCount(0);
+  await expect(sidebar.getByRole("button", { name: localizedRegex("Daemon") })).toHaveCount(0);
+  await expect(sidebar.getByRole("button", { name: localizedRegex("General") })).toBeVisible();
+  await expect(sidebar.getByRole("button", { name: localizedRegex("Diagnostics") })).toBeVisible();
+  await expect(sidebar.getByRole("button", { name: localizedRegex("About") })).toBeVisible();
 }
 
 export async function expectHostPageVisible(page: Page, serverId: string): Promise<void> {
@@ -260,8 +295,9 @@ export async function expectLocalHostEntryFirst(page: Page, serverId: string): P
     `settings-host-entry-${serverId}`,
   );
   const localHostEntry = page.getByTestId(`settings-host-entry-${serverId}`);
+  // The July sidebar redesign replaced the "Local" text badge with an
+  // unlabeled dot; the dot carries the semantic marker testID.
   await expect(localHostEntry.getByTestId("settings-host-local-marker")).toBeVisible();
-  await expect(localHostEntry.getByText("Local", { exact: true })).toBeVisible();
 }
 
 function localizedAlternatives(text: string): string[] {
