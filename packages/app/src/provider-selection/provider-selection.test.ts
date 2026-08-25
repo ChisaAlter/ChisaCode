@@ -172,7 +172,7 @@ describe("combined model selector data", () => {
   });
 
   it("groups gateway models under every generated agent provider", () => {
-    const agentIds = ["claude", "codex", "opencode", "pi", "kimi", "grokbuild"];
+    const agentIds = ["claude", "codex", "opencode", "pi", "kimi", "grokbuild", "dsh"];
     const entries = [
       ...agentIds.map((provider) =>
         snapshotEntry({

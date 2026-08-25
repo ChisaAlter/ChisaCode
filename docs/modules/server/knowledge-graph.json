@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "generatedAt": "2026-08-10T08:52:02.160Z",
+  "generatedAt": "2026-08-22T09:09:46.405Z",
   "generator": "scripts/generate-modular-knowledge-graphs.mjs",
   "module": {
     "id": "server",
@@ -58,15 +58,15 @@
     }
   },
   "stats": {
-    "files": 849,
+    "files": 856,
     "categories": {
+      "config": 28,
       "docs": 4,
-      "config": 27,
       "support": 15,
-      "test": 357,
-      "source": 446
+      "test": 361,
+      "source": 448
     },
-    "internalImportEdges": 2712,
+    "internalImportEdges": 2733,
     "workspaceDependencies": ["client", "highlight", "protocol", "relay"],
     "externalDependencies": [
       "@agentclientprotocol/sdk",
@@ -129,6 +129,13 @@
     "unresolvedInternalImports": 0
   },
   "nodes": [
+    {
+      "id": "file:packages/server/.chisacode-context/725466058f949b06.json",
+      "type": "config",
+      "path": "packages/server/.chisacode-context/725466058f949b06.json",
+      "lines": 8,
+      "imports": []
+    },
     {
       "id": "file:packages/server/AGENTS.md",
       "type": "docs",
@@ -720,9 +727,10 @@
       "id": "file:packages/server/src/server/agent/agent-manager.test.ts",
       "type": "test",
       "path": "packages/server/src/server/agent/agent-manager.test.ts",
-      "lines": 6654,
+      "lines": 6689,
       "imports": [
         "../../test-utils/test-logger.js",
+        "../workspace-mutation-coordinator.js",
         "./agent-manager.js",
         "./agent-prompt.js",
         "./agent-sdk-types.js",
@@ -747,7 +755,7 @@
       "id": "file:packages/server/src/server/agent/agent-manager.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/agent-manager.ts",
-      "lines": 1511,
+      "lines": 1552,
       "imports": [
         "../../terminal/terminal-manager.js",
         "../git-snapshot.js",
@@ -1255,7 +1263,7 @@
       "id": "file:packages/server/src/server/agent/agent-turn-event-controller.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/agent-turn-event-controller.ts",
-      "lines": 257,
+      "lines": 258,
       "imports": [
         "../usage/usage-store.js",
         "./agent-manager.js",
@@ -1263,6 +1271,7 @@
         "./agent-sdk-types.js",
         "./agent-session-state-controller.js",
         "./agent-timeline-controller.js",
+        "./providers/claude/user-facing-error-text.js",
         "pino"
       ]
     },
@@ -1392,7 +1401,7 @@
       "id": "file:packages/server/src/server/agent/create-agent/create.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/create-agent/create.ts",
-      "lines": 515,
+      "lines": 523,
       "imports": [
         "../../../terminal/terminal-manager.js",
         "../../chisacode-worktree-service.js",
@@ -1544,14 +1553,14 @@
       "id": "file:packages/server/src/server/agent/mcp-server-management.test.ts",
       "type": "test",
       "path": "packages/server/src/server/agent/mcp-server-management.test.ts",
-      "lines": 191,
+      "lines": 192,
       "imports": ["./mcp-server-management.js", "@chisacode/protocol/messages", "vitest"]
     },
     {
       "id": "file:packages/server/src/server/agent/mcp-server-management.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/mcp-server-management.ts",
-      "lines": 446,
+      "lines": 448,
       "imports": [
         "./agent-sdk-types.js",
         "@chisacode/protocol/messages",
@@ -1787,7 +1796,7 @@
       "id": "file:packages/server/src/server/agent/provider-registry.test.ts",
       "type": "test",
       "path": "packages/server/src/server/agent/provider-registry.test.ts",
-      "lines": 1829,
+      "lines": 1937,
       "imports": [
         "../../test-utils/test-logger.js",
         "../../utils/executable.js",
@@ -1800,7 +1809,7 @@
       "id": "file:packages/server/src/server/agent/provider-registry.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/provider-registry.ts",
-      "lines": 1263,
+      "lines": 1305,
       "imports": [
         "../ssh-transport.js",
         "../workspace-git-service.js",
@@ -1809,6 +1818,7 @@
         "./provider-launch-config.js",
         "./providers/claude/agent.js",
         "./providers/codex-app-server-agent.js",
+        "./providers/dsh-agent.js",
         "./providers/generic-acp-agent.js",
         "./providers/grok-build-agent.js",
         "./providers/kimi-code-agent.js",
@@ -1840,7 +1850,7 @@
       "id": "file:packages/server/src/server/agent/provider-snapshot-manager.test.ts",
       "type": "test",
       "path": "packages/server/src/server/agent/provider-snapshot-manager.test.ts",
-      "lines": 604,
+      "lines": 839,
       "imports": [
         "../../test-utils/test-logger.js",
         "./agent-sdk-types.js",
@@ -1853,7 +1863,7 @@
       "id": "file:packages/server/src/server/agent/provider-snapshot-manager.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/provider-snapshot-manager.ts",
-      "lines": 1188,
+      "lines": 1263,
       "imports": [
         "../../utils/path.js",
         "../../utils/promise-timeout.js",
@@ -1875,14 +1885,14 @@
       "id": "file:packages/server/src/server/agent/provider-tooling.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/provider-tooling.ts",
-      "lines": 194,
+      "lines": 202,
       "imports": ["../../utils/spawn.js", "./agent-sdk-types.js", "./provider-launch-config.js"]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/acp-agent.test.ts",
       "type": "test",
       "path": "packages/server/src/server/agent/providers/acp-agent.test.ts",
-      "lines": 1584,
+      "lines": 1729,
       "imports": [
         "../../../test-utils/test-logger.js",
         "../../../utils/spawn.js",
@@ -1902,7 +1912,7 @@
       "id": "file:packages/server/src/server/agent/providers/acp-agent.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/providers/acp-agent.ts",
-      "lines": 927,
+      "lines": 979,
       "imports": [
         "../agent-sdk-types.js",
         "../provider-launch-config.js",
@@ -1984,7 +1994,7 @@
       "id": "file:packages/server/src/server/agent/providers/acp/process-runtime.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/providers/acp/process-runtime.ts",
-      "lines": 209,
+      "lines": 219,
       "imports": [
         "../../../../utils/spawn.js",
         "../../provider-launch-config.js",
@@ -2244,7 +2254,7 @@
       "id": "file:packages/server/src/server/agent/providers/claude/agent.test.ts",
       "type": "test",
       "path": "packages/server/src/server/agent/providers/claude/agent.test.ts",
-      "lines": 1963,
+      "lines": 1989,
       "imports": [
         "../../../../test-utils/test-logger.js",
         "../../../../utils/executable.js",
@@ -2540,13 +2550,14 @@
       "id": "file:packages/server/src/server/agent/providers/claude/session-history.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/providers/claude/session-history.ts",
-      "lines": 330,
+      "lines": 338,
       "imports": [
         "../../agent-sdk-types.js",
         "../../provider-history-timestamps.js",
         "./client.js",
         "./history-converter.js",
         "./sdk-types-mapping.js",
+        "./user-facing-error-text.js",
         "@anthropic-ai/claude-agent-sdk",
         "node:fs",
         "node:path"
@@ -2613,14 +2624,14 @@
       "id": "file:packages/server/src/server/agent/providers/claude/task-notification-tool-call.test.ts",
       "type": "test",
       "path": "packages/server/src/server/agent/providers/claude/task-notification-tool-call.test.ts",
-      "lines": 89,
+      "lines": 140,
       "imports": ["./task-notification-tool-call.js", "vitest"]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/claude/task-notification-tool-call.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/providers/claude/task-notification-tool-call.ts",
-      "lines": 365,
+      "lines": 390,
       "imports": ["../../agent-sdk-types.js", "node:crypto", "zod/v3"]
     },
     {
@@ -2641,8 +2652,12 @@
       "id": "file:packages/server/src/server/agent/providers/claude/timeline-assembler.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/providers/claude/timeline-assembler.ts",
-      "lines": 326,
-      "imports": ["../../agent-sdk-types.js", "@anthropic-ai/claude-agent-sdk"]
+      "lines": 330,
+      "imports": [
+        "../../agent-sdk-types.js",
+        "./user-facing-error-text.js",
+        "@anthropic-ai/claude-agent-sdk"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/claude/tool-call-detail-parser.ts",
@@ -2683,6 +2698,20 @@
         "@chisacode/protocol/tool-name-normalization",
         "zod/v3"
       ]
+    },
+    {
+      "id": "file:packages/server/src/server/agent/providers/claude/user-facing-error-text.test.ts",
+      "type": "test",
+      "path": "packages/server/src/server/agent/providers/claude/user-facing-error-text.test.ts",
+      "lines": 43,
+      "imports": ["./user-facing-error-text.js", "vitest"]
+    },
+    {
+      "id": "file:packages/server/src/server/agent/providers/claude/user-facing-error-text.ts",
+      "type": "source",
+      "path": "packages/server/src/server/agent/providers/claude/user-facing-error-text.ts",
+      "lines": 124,
+      "imports": []
     },
     {
       "id": "file:packages/server/src/server/agent/providers/codex-app-server-agent.e2e.test.ts",
@@ -3425,6 +3454,39 @@
       "imports": ["../../../utils/spawn.js", "../provider-launch-config.js"]
     },
     {
+      "id": "file:packages/server/src/server/agent/providers/dsh-agent.test.ts",
+      "type": "test",
+      "path": "packages/server/src/server/agent/providers/dsh-agent.test.ts",
+      "lines": 275,
+      "imports": [
+        "../../../test-utils/test-logger.js",
+        "./dsh-agent.js",
+        "node:fs",
+        "node:os",
+        "node:path",
+        "node:url",
+        "vitest"
+      ]
+    },
+    {
+      "id": "file:packages/server/src/server/agent/providers/dsh-agent.ts",
+      "type": "source",
+      "path": "packages/server/src/server/agent/providers/dsh-agent.ts",
+      "lines": 410,
+      "imports": [
+        "../agent-sdk-types.js",
+        "../provider-launch-config.js",
+        "./generic-acp-agent.js",
+        "node:child_process",
+        "node:crypto",
+        "node:fs",
+        "node:os",
+        "node:path",
+        "node:url",
+        "pino"
+      ]
+    },
+    {
       "id": "file:packages/server/src/server/agent/providers/generic-acp-agent.diagnostic.test.ts",
       "type": "test",
       "path": "packages/server/src/server/agent/providers/generic-acp-agent.diagnostic.test.ts",
@@ -3447,7 +3509,7 @@
       "id": "file:packages/server/src/server/agent/providers/generic-acp-agent.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/providers/generic-acp-agent.ts",
-      "lines": 331,
+      "lines": 338,
       "imports": [
         "../agent-sdk-types.js",
         "../provider-launch-config.js",
@@ -4514,7 +4576,7 @@
       "id": "file:packages/server/src/server/agent/skills-management.test.ts",
       "type": "test",
       "path": "packages/server/src/server/agent/skills-management.test.ts",
-      "lines": 103,
+      "lines": 104,
       "imports": [
         "./skills-management.js",
         "@chisacode/protocol/messages",
@@ -4528,7 +4590,7 @@
       "id": "file:packages/server/src/server/agent/skills-management.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/skills-management.ts",
-      "lines": 556,
+      "lines": 566,
       "imports": [
         "./agent-sdk-types.js",
         "@chisacode/protocol/messages",
@@ -4703,7 +4765,7 @@
       "id": "file:packages/server/src/server/agent/vision-fallback.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/vision-fallback.ts",
-      "lines": 359,
+      "lines": 368,
       "imports": ["./agent-sdk-types.js", "./provider-launch-config.js", "pino"]
     },
     {
@@ -4823,7 +4885,7 @@
       "id": "file:packages/server/src/server/bootstrap-model-gateway.test.ts",
       "type": "test",
       "path": "packages/server/src/server/bootstrap-model-gateway.test.ts",
-      "lines": 255,
+      "lines": 578,
       "imports": ["./test-utils/chisacode-daemon.js", "node:http", "vitest"]
     },
     {
@@ -4864,7 +4926,7 @@
       "id": "file:packages/server/src/server/bootstrap.ts",
       "type": "source",
       "path": "packages/server/src/server/bootstrap.ts",
-      "lines": 1598,
+      "lines": 1669,
       "imports": [
         "../services/github-service.js",
         "../terminal/terminal-manager-factory.js",
@@ -4918,6 +4980,7 @@
         "./websocket-server.js",
         "./workspace-archive-service.js",
         "./workspace-git-service.js",
+        "./workspace-mutation-coordinator.js",
         "./workspace-reconciliation-service.js",
         "./workspace-registry-bootstrap.js",
         "./workspace-registry.js",
@@ -4933,6 +4996,9 @@
         "node:crypto",
         "node:os",
         "node:path",
+        "node:stream",
+        "node:stream/promises",
+        "node:stream/web",
         "pino"
       ]
     },
@@ -5074,7 +5140,7 @@
       "id": "file:packages/server/src/server/chisacode-worktree-archive-service.ts",
       "type": "source",
       "path": "packages/server/src/server/chisacode-worktree-archive-service.ts",
-      "lines": 280,
+      "lines": 297,
       "imports": [
         "../services/github-service.js",
         "../terminal/terminal-manager.js",
@@ -5269,7 +5335,7 @@
       "id": "file:packages/server/src/server/daemon-e2e/agent-configs.ts",
       "type": "config",
       "path": "packages/server/src/server/daemon-e2e/agent-configs.ts",
-      "lines": 141,
+      "lines": 158,
       "imports": [
         "../../utils/executable.js",
         "dotenv",
@@ -5517,6 +5583,26 @@
         "node:fs",
         "node:os",
         "node:path",
+        "vitest"
+      ]
+    },
+    {
+      "id": "file:packages/server/src/server/daemon-e2e/dsh-session.real.e2e.test.ts",
+      "type": "test",
+      "path": "packages/server/src/server/daemon-e2e/dsh-session.real.e2e.test.ts",
+      "lines": 220,
+      "imports": [
+        "../agent/agent-sdk-types.js",
+        "../agent/provider-registry.js",
+        "../test-utils/chisacode-daemon.js",
+        "../test-utils/daemon-client.js",
+        "../test-utils/message-collector.js",
+        "./agent-configs.js",
+        "./test-utils/rewind-helpers.js",
+        "node:fs",
+        "node:os",
+        "node:path",
+        "pino",
         "vitest"
       ]
     },
@@ -6639,14 +6725,14 @@
       "id": "file:packages/server/src/server/model-gateway/model-gateway.test.ts",
       "type": "test",
       "path": "packages/server/src/server/model-gateway/model-gateway.test.ts",
-      "lines": 1868,
+      "lines": 1943,
       "imports": ["./model-gateway.js", "@chisacode/protocol/provider-config", "vitest"]
     },
     {
       "id": "file:packages/server/src/server/model-gateway/model-gateway.ts",
       "type": "source",
       "path": "packages/server/src/server/model-gateway/model-gateway.ts",
-      "lines": 2766,
+      "lines": 2793,
       "imports": ["@chisacode/protocol/provider-config", "node:crypto"]
     },
     {
@@ -6905,7 +6991,7 @@
       "id": "file:packages/server/src/server/relay-transport.ts",
       "type": "source",
       "path": "packages/server/src/server/relay-transport.ts",
-      "lines": 738,
+      "lines": 750,
       "imports": [
         "./websocket-limits.js",
         "./websocket-server.js",
@@ -7161,10 +7247,17 @@
       ]
     },
     {
+      "id": "file:packages/server/src/server/session-handlers/agent-lifecycle-handler.test.ts",
+      "type": "test",
+      "path": "packages/server/src/server/session-handlers/agent-lifecycle-handler.test.ts",
+      "lines": 86,
+      "imports": ["./agent-lifecycle-handler.js", "vitest"]
+    },
+    {
       "id": "file:packages/server/src/server/session-handlers/agent-lifecycle-handler.ts",
       "type": "source",
       "path": "packages/server/src/server/session-handlers/agent-lifecycle-handler.ts",
-      "lines": 1488,
+      "lines": 1612,
       "imports": [
         "../agent/agent-manager.js",
         "../agent/agent-prompt.js",
@@ -7208,7 +7301,7 @@
       "id": "file:packages/server/src/server/session-handlers/checkout-git-handler.ts",
       "type": "source",
       "path": "packages/server/src/server/session-handlers/checkout-git-handler.ts",
-      "lines": 1026,
+      "lines": 1032,
       "imports": [
         "../../services/github-service.js",
         "../../utils/checkout-git.js",
@@ -7401,7 +7494,7 @@
       "id": "file:packages/server/src/server/session-handlers/session-context.ts",
       "type": "source",
       "path": "packages/server/src/server/session-handlers/session-context.ts",
-      "lines": 427,
+      "lines": 428,
       "imports": [
         "../../services/github-service.js",
         "../../terminal/terminal-manager.js",
@@ -7575,7 +7668,7 @@
       "id": "file:packages/server/src/server/session.create-agent-worktree-autoarchive.e2e.test.ts",
       "type": "test",
       "path": "packages/server/src/server/session.create-agent-worktree-autoarchive.e2e.test.ts",
-      "lines": 275,
+      "lines": 337,
       "imports": [
         "./daemon-e2e/agent-configs.js",
         "./messages.js",
@@ -8622,7 +8715,7 @@
       "id": "file:packages/server/src/server/websocket-server.ts",
       "type": "source",
       "path": "packages/server/src/server/websocket-server.ts",
-      "lines": 2238,
+      "lines": 2254,
       "imports": [
         "../services/github-service.js",
         "../terminal/terminal-manager.js",
@@ -8791,7 +8884,7 @@
       "id": "file:packages/server/src/server/workspace-git-checkout-observation-authority.ts",
       "type": "source",
       "path": "packages/server/src/server/workspace-git-checkout-observation-authority.ts",
-      "lines": 293,
+      "lines": 308,
       "imports": [
         "../utils/checkout-git.js",
         "./workspace-git-repository-fetch-authority.js",
@@ -8881,7 +8974,7 @@
       "id": "file:packages/server/src/server/workspace-git-service.primitive.test.ts",
       "type": "test",
       "path": "packages/server/src/server/workspace-git-service.primitive.test.ts",
-      "lines": 1801,
+      "lines": 1837,
       "imports": [
         "../services/github-service.js",
         "../test-utils/platform.js",
@@ -8900,7 +8993,7 @@
       "id": "file:packages/server/src/server/workspace-git-service.test.ts",
       "type": "test",
       "path": "packages/server/src/server/workspace-git-service.test.ts",
-      "lines": 1073,
+      "lines": 1090,
       "imports": [
         "../services/github-service.js",
         "../test-utils/platform.js",
@@ -8917,7 +9010,7 @@
       "id": "file:packages/server/src/server/workspace-git-service.ts",
       "type": "source",
       "path": "packages/server/src/server/workspace-git-service.ts",
-      "lines": 707,
+      "lines": 723,
       "imports": [
         "../services/github-service.js",
         "../utils/checkout-git.js",
@@ -8971,14 +9064,14 @@
       "id": "file:packages/server/src/server/workspace-mutation-coordinator.test.ts",
       "type": "test",
       "path": "packages/server/src/server/workspace-mutation-coordinator.test.ts",
-      "lines": 109,
+      "lines": 196,
       "imports": ["./workspace-mutation-coordinator.js", "vitest"]
     },
     {
       "id": "file:packages/server/src/server/workspace-mutation-coordinator.ts",
       "type": "source",
       "path": "packages/server/src/server/workspace-mutation-coordinator.ts",
-      "lines": 250,
+      "lines": 385,
       "imports": ["node:crypto", "node:path"]
     },
     {
@@ -9321,7 +9414,7 @@
       "id": "file:packages/server/src/server/worktree-session.test.ts",
       "type": "test",
       "path": "packages/server/src/server/worktree-session.test.ts",
-      "lines": 2198,
+      "lines": 2256,
       "imports": [
         "../services/github-service.js",
         "../terminal/terminal-manager.js",
@@ -9334,6 +9427,7 @@
         "./chisacode-worktree-service.js",
         "./messages.js",
         "./workspace-git-service.js",
+        "./workspace-mutation-coordinator.js",
         "./workspace-registry.js",
         "./worktree-session.js",
         "node:child_process",
@@ -9448,7 +9542,7 @@
       "id": "file:packages/server/src/services/github-service.ts",
       "type": "source",
       "path": "packages/server/src/services/github-service.ts",
-      "lines": 905,
+      "lines": 906,
       "imports": [
         "../utils/executable.js",
         "../utils/github-remote.js",
@@ -9545,7 +9639,7 @@
       "id": "file:packages/server/src/terminal/terminal-manager-factory.ts",
       "type": "source",
       "path": "packages/server/src/terminal/terminal-manager-factory.ts",
-      "lines": 7,
+      "lines": 10,
       "imports": ["./terminal-manager.js", "./worker-terminal-manager.js"]
     },
     {
@@ -9721,7 +9815,7 @@
       "id": "file:packages/server/src/terminal/worker-terminal-manager.test.ts",
       "type": "test",
       "path": "packages/server/src/terminal/worker-terminal-manager.test.ts",
-      "lines": 341,
+      "lines": 368,
       "imports": [
         "./terminal-manager.js",
         "./terminal-worker-protocol.js",
@@ -9739,7 +9833,7 @@
       "id": "file:packages/server/src/terminal/worker-terminal-manager.ts",
       "type": "source",
       "path": "packages/server/src/terminal/worker-terminal-manager.ts",
-      "lines": 643,
+      "lines": 663,
       "imports": [
         "./terminal-capture.js",
         "./terminal-manager.js",
@@ -10369,7 +10463,7 @@
       "id": "file:packages/server/src/utils/worktree.posix.test.ts",
       "type": "test",
       "path": "packages/server/src/utils/worktree.posix.test.ts",
-      "lines": 1148,
+      "lines": 1178,
       "imports": [
         "../test-utils/platform.js",
         "./worktree",
@@ -10387,14 +10481,14 @@
       "id": "file:packages/server/src/utils/worktree.test.ts",
       "type": "test",
       "path": "packages/server/src/utils/worktree.test.ts",
-      "lines": 274,
-      "imports": ["./worktree", "child_process", "fs", "os", "path", "vitest"]
+      "lines": 339,
+      "imports": ["./worktree", "child_process", "fs", "node:fs", "os", "path", "vitest"]
     },
     {
       "id": "file:packages/server/src/utils/worktree.ts",
       "type": "source",
       "path": "packages/server/src/utils/worktree.ts",
-      "lines": 1457,
+      "lines": 1418,
       "imports": [
         "../server/chisacode-env.js",
         "../server/chisacode-home.js",
@@ -11324,6 +11418,12 @@
       "target": "file:packages/server/src/test-utils/test-logger.ts",
       "type": "imports",
       "specifier": "../../test-utils/test-logger.js"
+    },
+    {
+      "source": "file:packages/server/src/server/agent/agent-manager.test.ts",
+      "target": "file:packages/server/src/server/workspace-mutation-coordinator.ts",
+      "type": "imports",
+      "specifier": "../workspace-mutation-coordinator.js"
     },
     {
       "source": "file:packages/server/src/server/agent/agent-manager.test.ts",
@@ -12428,6 +12528,12 @@
       "target": "file:packages/server/src/server/agent/agent-timeline-controller.ts",
       "type": "imports",
       "specifier": "./agent-timeline-controller.js"
+    },
+    {
+      "source": "file:packages/server/src/server/agent/agent-turn-event-controller.ts",
+      "target": "file:packages/server/src/server/agent/providers/claude/user-facing-error-text.ts",
+      "type": "imports",
+      "specifier": "./providers/claude/user-facing-error-text.js"
     },
     {
       "source": "file:packages/server/src/server/agent/agent-wait-controller.ts",
@@ -13568,6 +13674,12 @@
       "target": "file:packages/server/src/server/agent/providers/codex-app-server-agent.ts",
       "type": "imports",
       "specifier": "./providers/codex-app-server-agent.js"
+    },
+    {
+      "source": "file:packages/server/src/server/agent/provider-registry.ts",
+      "target": "file:packages/server/src/server/agent/providers/dsh-agent.ts",
+      "type": "imports",
+      "specifier": "./providers/dsh-agent.js"
     },
     {
       "source": "file:packages/server/src/server/agent/provider-registry.ts",
@@ -14740,6 +14852,12 @@
       "specifier": "./sdk-types-mapping.js"
     },
     {
+      "source": "file:packages/server/src/server/agent/providers/claude/session-history.ts",
+      "target": "file:packages/server/src/server/agent/providers/claude/user-facing-error-text.ts",
+      "type": "imports",
+      "specifier": "./user-facing-error-text.js"
+    },
+    {
       "source": "file:packages/server/src/server/agent/providers/claude/session-identity.ts",
       "target": "file:packages/server/src/server/agent/agent-sdk-types.ts",
       "type": "imports",
@@ -14926,6 +15044,12 @@
       "specifier": "../../agent-sdk-types.js"
     },
     {
+      "source": "file:packages/server/src/server/agent/providers/claude/timeline-assembler.ts",
+      "target": "file:packages/server/src/server/agent/providers/claude/user-facing-error-text.ts",
+      "type": "imports",
+      "specifier": "./user-facing-error-text.js"
+    },
+    {
       "source": "file:packages/server/src/server/agent/providers/claude/tool-call-detail-parser.ts",
       "target": "file:packages/server/src/server/agent/agent-sdk-types.ts",
       "type": "imports",
@@ -14978,6 +15102,12 @@
       "target": "module:protocol",
       "type": "depends_on",
       "specifier": "@chisacode/protocol/tool-name-normalization"
+    },
+    {
+      "source": "file:packages/server/src/server/agent/providers/claude/user-facing-error-text.test.ts",
+      "target": "file:packages/server/src/server/agent/providers/claude/user-facing-error-text.ts",
+      "type": "imports",
+      "specifier": "./user-facing-error-text.js"
     },
     {
       "source": "file:packages/server/src/server/agent/providers/codex-app-server-agent.e2e.test.ts",
@@ -16304,6 +16434,36 @@
       "target": "file:packages/server/src/server/agent/provider-launch-config.ts",
       "type": "imports",
       "specifier": "../provider-launch-config.js"
+    },
+    {
+      "source": "file:packages/server/src/server/agent/providers/dsh-agent.test.ts",
+      "target": "file:packages/server/src/test-utils/test-logger.ts",
+      "type": "imports",
+      "specifier": "../../../test-utils/test-logger.js"
+    },
+    {
+      "source": "file:packages/server/src/server/agent/providers/dsh-agent.test.ts",
+      "target": "file:packages/server/src/server/agent/providers/dsh-agent.ts",
+      "type": "imports",
+      "specifier": "./dsh-agent.js"
+    },
+    {
+      "source": "file:packages/server/src/server/agent/providers/dsh-agent.ts",
+      "target": "file:packages/server/src/server/agent/agent-sdk-types.ts",
+      "type": "imports",
+      "specifier": "../agent-sdk-types.js"
+    },
+    {
+      "source": "file:packages/server/src/server/agent/providers/dsh-agent.ts",
+      "target": "file:packages/server/src/server/agent/provider-launch-config.ts",
+      "type": "imports",
+      "specifier": "../provider-launch-config.js"
+    },
+    {
+      "source": "file:packages/server/src/server/agent/providers/dsh-agent.ts",
+      "target": "file:packages/server/src/server/agent/providers/generic-acp-agent.ts",
+      "type": "imports",
+      "specifier": "./generic-acp-agent.js"
     },
     {
       "source": "file:packages/server/src/server/agent/providers/generic-acp-agent.diagnostic.test.ts",
@@ -18947,6 +19107,12 @@
     },
     {
       "source": "file:packages/server/src/server/bootstrap.ts",
+      "target": "file:packages/server/src/server/workspace-mutation-coordinator.ts",
+      "type": "imports",
+      "specifier": "./workspace-mutation-coordinator.js"
+    },
+    {
+      "source": "file:packages/server/src/server/bootstrap.ts",
       "target": "file:packages/server/src/server/workspace-reconciliation-service.ts",
       "type": "imports",
       "specifier": "./workspace-reconciliation-service.js"
@@ -19832,6 +19998,48 @@
       "target": "module:protocol",
       "type": "depends_on",
       "specifier": "@chisacode/protocol/messages"
+    },
+    {
+      "source": "file:packages/server/src/server/daemon-e2e/dsh-session.real.e2e.test.ts",
+      "target": "file:packages/server/src/server/agent/agent-sdk-types.ts",
+      "type": "imports",
+      "specifier": "../agent/agent-sdk-types.js"
+    },
+    {
+      "source": "file:packages/server/src/server/daemon-e2e/dsh-session.real.e2e.test.ts",
+      "target": "file:packages/server/src/server/agent/provider-registry.ts",
+      "type": "imports",
+      "specifier": "../agent/provider-registry.js"
+    },
+    {
+      "source": "file:packages/server/src/server/daemon-e2e/dsh-session.real.e2e.test.ts",
+      "target": "file:packages/server/src/server/test-utils/chisacode-daemon.ts",
+      "type": "imports",
+      "specifier": "../test-utils/chisacode-daemon.js"
+    },
+    {
+      "source": "file:packages/server/src/server/daemon-e2e/dsh-session.real.e2e.test.ts",
+      "target": "file:packages/server/src/server/test-utils/daemon-client.ts",
+      "type": "imports",
+      "specifier": "../test-utils/daemon-client.js"
+    },
+    {
+      "source": "file:packages/server/src/server/daemon-e2e/dsh-session.real.e2e.test.ts",
+      "target": "file:packages/server/src/server/test-utils/message-collector.ts",
+      "type": "imports",
+      "specifier": "../test-utils/message-collector.js"
+    },
+    {
+      "source": "file:packages/server/src/server/daemon-e2e/dsh-session.real.e2e.test.ts",
+      "target": "file:packages/server/src/server/daemon-e2e/agent-configs.ts",
+      "type": "imports",
+      "specifier": "./agent-configs.js"
+    },
+    {
+      "source": "file:packages/server/src/server/daemon-e2e/dsh-session.real.e2e.test.ts",
+      "target": "file:packages/server/src/server/daemon-e2e/test-utils/rewind-helpers.ts",
+      "type": "imports",
+      "specifier": "./test-utils/rewind-helpers.js"
     },
     {
       "source": "file:packages/server/src/server/daemon-e2e/file-download.e2e.test.ts",
@@ -22196,6 +22404,12 @@
       "target": "module:protocol",
       "type": "depends_on",
       "specifier": "@chisacode/protocol/client-capabilities"
+    },
+    {
+      "source": "file:packages/server/src/server/session-handlers/agent-lifecycle-handler.test.ts",
+      "target": "file:packages/server/src/server/session-handlers/agent-lifecycle-handler.ts",
+      "type": "imports",
+      "specifier": "./agent-lifecycle-handler.js"
     },
     {
       "source": "file:packages/server/src/server/session-handlers/agent-lifecycle-handler.ts",
@@ -26450,6 +26664,12 @@
       "target": "file:packages/server/src/server/workspace-git-service.ts",
       "type": "imports",
       "specifier": "./workspace-git-service.js"
+    },
+    {
+      "source": "file:packages/server/src/server/worktree-session.test.ts",
+      "target": "file:packages/server/src/server/workspace-mutation-coordinator.ts",
+      "type": "imports",
+      "specifier": "./workspace-mutation-coordinator.js"
     },
     {
       "source": "file:packages/server/src/server/worktree-session.test.ts",

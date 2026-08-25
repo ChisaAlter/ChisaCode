@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "generatedAt": "2026-08-10T08:52:01.365Z",
+  "generatedAt": "2026-08-22T09:09:45.623Z",
   "generator": "scripts/generate-modular-knowledge-graphs.mjs",
   "module": {
     "id": "protocol",
@@ -398,14 +398,14 @@
       "id": "file:packages/protocol/src/agent/messages.test.ts",
       "type": "test",
       "path": "packages/protocol/src/agent/messages.test.ts",
-      "lines": 152,
+      "lines": 256,
       "imports": ["../messages.js", "./messages.js", "vitest"]
     },
     {
       "id": "file:packages/protocol/src/agent/messages.ts",
       "type": "source",
       "path": "packages/protocol/src/agent/messages.ts",
-      "lines": 784,
+      "lines": 797,
       "imports": [
         "../agent-labels.js",
         "../agent-presets.js",
@@ -882,21 +882,21 @@
       "id": "file:packages/protocol/src/provider-config.ts",
       "type": "config",
       "path": "packages/protocol/src/provider-config.ts",
-      "lines": 365,
+      "lines": 367,
       "imports": ["./agent-types.js", "./provider-manifest.js", "zod/v3"]
     },
     {
       "id": "file:packages/protocol/src/provider-manifest.test.ts",
       "type": "test",
       "path": "packages/protocol/src/provider-manifest.test.ts",
-      "lines": 22,
+      "lines": 23,
       "imports": ["./importable-providers.js", "./provider-manifest.js", "vitest"]
     },
     {
       "id": "file:packages/protocol/src/provider-manifest.ts",
       "type": "source",
       "path": "packages/protocol/src/provider-manifest.ts",
-      "lines": 278,
+      "lines": 297,
       "imports": ["./agent-types.js", "zod/v3"]
     },
     {

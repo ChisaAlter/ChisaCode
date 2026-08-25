@@ -129,6 +129,7 @@ const THOUGHT_COLLAPSE_PROVIDER_COVERAGE = [
   "pi",
   "kimi",
   "grokbuild",
+  "dsh",
   "mock",
   "mock-slow",
 ] as const;
@@ -503,7 +504,9 @@ describe("collapseCompletedTurnThoughtsForDisplay", () => {
     });
   });
 
-  it.each(["mock" as const, "mock-slow" as const])(
+  // dsh joins this bucket: its transport emits only committed blocks (no
+  // reasoning deltas, no tool frames), so pure text turns never yield thoughts.
+  it.each(["mock" as const, "mock-slow" as const, "dsh" as const])(
     "does not create an empty thought summary for %s assistant-only turns",
     (provider) => {
       const items = [
@@ -531,6 +534,7 @@ describe("collapseCompletedTurnThoughtsForDisplay", () => {
       "pi",
       "kimi",
       "grokbuild",
+      "dsh",
       "mock",
       "mock-slow",
     ]);

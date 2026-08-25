@@ -17,7 +17,7 @@ Everything beyond the [supported providers](/docs/supported-providers) lives und
 
 Provider IDs must be lowercase alphanumeric with hyphens (`/^[a-z][a-z0-9-]*$/`). Every custom entry needs `extends` (a first-class provider ID or `"acp"`) and a `label`.
 
-Current first-class provider IDs are `claude`, `codex`, `opencode`, `pi`, `kimi`, and `grokbuild`.
+Current first-class provider IDs are `claude`, `codex`, `opencode`, `pi`, `kimi`, `grokbuild`, and `dsh` (DeepSeek Harness).
 
 The examples below are a quick tour. The full, up-to-date reference is on GitHub: [docs/custom-providers.md](https://github.com/ChisaAlter/ChisaCode/blob/main/docs/custom-providers.md).
 

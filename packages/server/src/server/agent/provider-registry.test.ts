@@ -30,6 +30,12 @@ const mockState = vi.hoisted(() => {
         providerId?: string;
         label?: string;
       }>,
+      dsh: [] as Array<{
+        runtimeSettings?: unknown;
+        providerId?: string;
+        label?: string;
+        models?: unknown[];
+      }>,
       genericAcp: [] as Array<{
         command: string[];
         env?: Record<string, string>;
@@ -46,6 +52,7 @@ const mockState = vi.hoisted(() => {
       this.constructorArgs.pi = [];
       this.constructorArgs.kimi = [];
       this.constructorArgs.grokbuild = [];
+      this.constructorArgs.dsh = [];
       this.constructorArgs.genericAcp = [];
       this.isCommandAvailable.mockReset();
       this.isCommandAvailable.mockImplementation(async (_command: string) => false);
@@ -336,6 +343,56 @@ vi.mock("./providers/grok-build-agent.js", () => ({
   },
 }));
 
+vi.mock("./providers/dsh-agent.js", () => ({
+  DshAgentClient: class DshAgentClient {
+    readonly capabilities = {
+      supportsStreaming: true,
+      supportsSessionPersistence: true,
+      supportsDynamicModes: true,
+      supportsMcpServers: true,
+      supportsReasoningStream: true,
+      supportsToolInvocations: true,
+    };
+    readonly provider = "dsh";
+    readonly runtimeSettings?: unknown;
+
+    constructor(options: {
+      runtimeSettings?: unknown;
+      providerId?: string;
+      label?: string;
+      models?: unknown[];
+    }) {
+      this.runtimeSettings = options.runtimeSettings;
+      mockState.constructorArgs.dsh.push({
+        runtimeSettings: options.runtimeSettings,
+        providerId: options.providerId,
+        label: options.label,
+        models: options.models,
+      });
+    }
+
+    async createSession(): Promise<never> {
+      throw new Error("not implemented");
+    }
+
+    async resumeSession(): Promise<never> {
+      throw new Error("not implemented");
+    }
+
+    async listModels(): Promise<AgentModelDefinition[]> {
+      return mockState.runtimeModels.get(this.provider) ?? [];
+    }
+
+    async listModes(): Promise<[]> {
+      return [];
+    }
+
+    async isAvailable(): Promise<boolean> {
+      return true;
+    }
+  },
+}));
+
 vi.mock("./providers/generic-acp-agent.js", () => ({
   GenericACPAgentClient: class GenericACPAgentClient {
     readonly capabilities = {
@@ -464,6 +521,7 @@ test("builds registry with no overrides in built-in manifest order", () => {
     "pi",
     "kimi",
     "grokbuild",
+    "dsh",
   ]);
 });
 
@@ -486,6 +544,23 @@ test("grokbuild client uses the Grok Build ACP launcher", () => {
       },
       env: { XAI_API_KEY: "secret" },
     },
+  });
+});
+
+test("dsh client uses the DeepSeek Harness ACP launcher with default identity", () => {
+  const registry = buildProviderRegistry(logger, {
+    providerOverrides: {
+      dsh: {
+        env: { DEEPSEEK_API_KEY: "secret" },
+      },
+    },
+  });
+
+  expect(registry.dsh.createClient(logger).provider).toBe("dsh");
+  expect(mockState.constructorArgs.dsh.at(-1)).toMatchObject({
+    providerId: "dsh",
+    label: "DeepSeek Harness",
+    runtimeSettings: { env: { DEEPSEEK_API_KEY: "secret" } },
   });
 });
 
@@ -945,6 +1020,27 @@ test("model gateway materializes provider entries for all built-in agents", asyn
       },
     ],
   });
+
+  // dsh faces build lazily (see the createRegistryEntry lazy note); drive one
+  // materialization explicitly instead of relying on cold-start construction.
+  registry["zai-dsh"].createClient(logger);
+  const dshGatewayArgs = mockState.constructorArgs.dsh.find((entry) => {
+    const env =
+      typeof entry.runtimeSettings === "object" && entry.runtimeSettings !== null
+        ? Reflect.get(entry.runtimeSettings, "env")
+        : undefined;
+    return env?.DEEPSEEK_BASE_URL === "http://127.0.0.1:6767/api/model-gateways/zai/v1";
+  });
+  expect(dshGatewayArgs).toMatchObject({
+    providerId: "zai-dsh",
+    label: "ZAI DeepSeek",
+    runtimeSettings: {
+      env: {
+        DEEPSEEK_API_KEY: "internal-token",
+        DEEPSEEK_BASE_URL: "http://127.0.0.1:6767/api/model-gateways/zai/v1",
+      },
+    },
+  });
 });
 
 test("resolveGatewayAgentFaces narrows faces by protocolPreset", () => {
@@ -962,6 +1058,7 @@ test("resolveGatewayAgentFaces narrows faces by protocolPreset", () => {
     pi: false,
     kimi: false,
     grokbuild: false,
+    dsh: false,
   });
 
   expect(
@@ -976,6 +1073,7 @@ test("resolveGatewayAgentFaces narrows faces by protocolPreset", () => {
     pi: true,
     kimi: true,
     grokbuild: true,
+    dsh: true,
   });
 
   expect(
@@ -991,6 +1089,7 @@ test("resolveGatewayAgentFaces narrows faces by protocolPreset", () => {
     pi: true,
     kimi: true,
     grokbuild: true,
+    dsh: true,
   });
 });
 
@@ -1001,6 +1100,7 @@ const ALL_GATEWAY_FACES = {
   pi: true,
   kimi: true,
   grokbuild: true,
+  dsh: true,
 } as const;
 
 test("resolveGatewayAgentFaces supplyScope all wins over preset and legacy fields", () => {
@@ -1024,6 +1124,7 @@ test("resolveGatewayAgentFaces supplyScope matched narrows by protocolPreset", (
     pi: false,
     kimi: false,
     grokbuild: false,
+    dsh: false,
   });
 
   expect(resolveGatewayAgentFaces({ supplyScope: "matched", protocolPreset: "codex" })).toEqual({
@@ -1033,6 +1134,7 @@ test("resolveGatewayAgentFaces supplyScope matched narrows by protocolPreset", (
     pi: false,
     kimi: false,
     grokbuild: false,
+    dsh: false,
   });
 
   // openai + matched → the 4 OpenAI-family faces only
@@ -1043,9 +1145,10 @@ test("resolveGatewayAgentFaces supplyScope matched narrows by protocolPreset", (
     pi: true,
     kimi: true,
     grokbuild: true,
+    dsh: true,
   });
 
-  // matched + preset "all" covers every protocol → all six faces
+  // matched + preset "all" covers every protocol → all seven faces
   expect(resolveGatewayAgentFaces({ supplyScope: "matched", protocolPreset: "all" })).toEqual(
     ALL_GATEWAY_FACES,
   );
@@ -1064,6 +1167,7 @@ test("resolveGatewayAgentFaces supplyScope matched without preset falls back to 
     pi: true,
     kimi: true,
     grokbuild: true,
+    dsh: true,
   });
 
   expect(
@@ -1092,6 +1196,7 @@ test("resolveGatewayAgentFaces supplyScope wins over conflicting attachToAllAgen
     pi: false,
     kimi: false,
     grokbuild: false,
+    dsh: false,
   });
 
   // all + attachToAllAgents=false → all wins
@@ -1106,12 +1211,18 @@ test("resolveGatewayAgentFaces supplyScope wins over conflicting attachToAllAgen
 
 test("matched openai supply scope materializes only the OpenAI-family candidate faces", () => {
   // Vision fallback and model pickers rely on the materialized face set; the
-  // matched+openai scope must expose exactly the four OpenAI-family faces.
+  // matched+openai scope must expose exactly the five OpenAI-family faces.
   const faces = resolveGatewayAgentFaces({ supplyScope: "matched", protocolPreset: "openai" });
   const providerIds = Object.entries(faces)
     .filter(([, enabled]) => enabled)
     .map(([face]) => `vision-${face}`);
-  expect(providerIds).toEqual(["vision-opencode", "vision-pi", "vision-kimi", "vision-grokbuild"]);
+  expect(providerIds).toEqual([
+    "vision-opencode",
+    "vision-pi",
+    "vision-kimi",
+    "vision-grokbuild",
+    "vision-dsh",
+  ]);
   expect(providerIds).not.toContain("vision-claude");
   expect(providerIds).not.toContain("vision-codex");
 });

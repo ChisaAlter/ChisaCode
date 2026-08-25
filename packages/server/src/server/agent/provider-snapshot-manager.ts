@@ -1127,6 +1127,7 @@ const PROVIDER_ENV_KEYS: Record<string, string[]> = {
     "GROK_MODELS_BASE_URL",
     "GROK_DEFAULT_SELECTED_PERMISSION",
   ],
+  dsh: ["DEEPSEEK_API_KEY", "DEEPSEEK_BASE_URL", "DSH_HOME", "DSH_PERMISSION_MODE"],
 };
 
 function collectProviderEnvPresence(

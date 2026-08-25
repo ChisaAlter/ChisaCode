@@ -1015,7 +1015,7 @@ export const resources = {
         supplyMatched: "仅匹配协议",
         attachToAllAgents: "挂到全部 Agent",
         attachToAllAgentsSubtitle:
-          "经网关协议转换，供给 Claude / Codex / OpenCode / Pi / Kimi Code / Grok Build 全部 Agent",
+          "经网关协议转换，供给 Claude / Codex / OpenCode / Pi / Kimi Code / Grok Build / DeepSeek Harness 全部 Agent",
         attachToAllAgentsHint:
           "开启后经网关协议转换供给全部 Agent；网关场景下部分服务端工具（如 Claude WebSearch）因需原生后端可能不可用。",
         legacySupplyScopeHint: "旧版本 daemon 不支持供给范围设置，当前按全部 Agent 处理。",
@@ -3000,7 +3000,7 @@ export const resources = {
         supplyMatched: "Matched protocol only",
         attachToAllAgents: "Attach to all agents",
         attachToAllAgentsSubtitle:
-          "Supplies Claude / Codex / OpenCode / Pi / Kimi Code / Grok Build via gateway protocol conversion",
+          "Supplies Claude / Codex / OpenCode / Pi / Kimi Code / Grok Build / DeepSeek Harness via gateway protocol conversion",
         attachToAllAgentsHint:
           "Exposes this model to all agents via gateway conversion. Some server-side tools (e.g. Claude WebSearch) may be unavailable under the gateway because they require a native backend.",
         legacySupplyScopeHint:

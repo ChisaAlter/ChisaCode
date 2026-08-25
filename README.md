@@ -26,14 +26,15 @@ Default GitHub Release artifacts are **Windows desktop** and the **Android APK**
 
 Provider IDs come from `packages/protocol/src/provider-manifest.ts`:
 
-| ID          | Label      | Runtime ChisaCode expects |
-| ----------- | ---------- | ------------------------- |
-| `claude`    | Claude     | `claude` CLI              |
-| `codex`     | Codex      | `codex` CLI               |
-| `opencode`  | OpenCode   | `opencode` CLI / server   |
-| `pi`        | Pi         | `pi` CLI                  |
-| `kimi`      | Kimi Code  | `kimi acp` CLI            |
-| `grokbuild` | Grok Build | `grok agent stdio`        |
+| ID          | Label            | Runtime ChisaCode expects                                                                          |
+| ----------- | ---------------- | -------------------------------------------------------------------------------------------------- |
+| `claude`    | Claude           | `claude` CLI                                                                                       |
+| `codex`     | Codex            | `codex` CLI                                                                                        |
+| `opencode`  | OpenCode         | `opencode` CLI / server                                                                            |
+| `pi`        | Pi               | `pi` CLI                                                                                           |
+| `kimi`      | Kimi Code        | `kimi acp` CLI                                                                                     |
+| `grokbuild` | Grok Build       | `grok agent stdio`                                                                                 |
+| `dsh`       | DeepSeek Harness | `dsh-acp-demo` ACP transport (`@deepseek-ai/dsh` + `@deepseek-ai/dsh-acp-demo`, pinned rc channel) |
 
 Custom providers live under `agents.providers` in `$CHISACODE_HOME/config.json`. Each custom entry must `extends` one of the IDs above, or `extends: "acp"` for a generic Agent Client Protocol command. See [custom providers](docs/custom-providers.md).
 

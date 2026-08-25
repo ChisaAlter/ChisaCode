@@ -38,6 +38,7 @@ import { ClaudeAgentClient } from "./providers/claude/agent.js";
 import { CodexAppServerAgentClient } from "./providers/codex-app-server-agent.js";
 import { KimiCodeAgentClient } from "./providers/kimi-code-agent.js";
 import { GrokBuildAgentClient } from "./providers/grok-build-agent.js";
+import { DshAgentClient } from "./providers/dsh-agent.js";
 import { OpenCodeAgentClient } from "./providers/opencode-agent.js";
 import { PiRpcAgentClient } from "./providers/pi/agent.js";
 import { GenericACPAgentClient } from "./providers/generic-acp-agent.js";
@@ -153,6 +154,14 @@ const PROVIDER_CLIENT_FACTORIES: Record<string, ProviderClientFactory> = {
       runtimeSettings,
       providerId: options?.customProvider?.id,
       label: options?.customProvider?.label,
+      models: [...(options?.profileModels ?? []), ...(options?.additionalModels ?? [])],
+    }),
+  dsh: (logger, runtimeSettings, options) =>
+    new DshAgentClient({
+      logger,
+      runtimeSettings,
+      providerId: options?.customProvider?.id ?? "dsh",
+      label: options?.customProvider?.label ?? "DeepSeek Harness",
       models: [...(options?.profileModels ?? []), ...(options?.additionalModels ?? [])],
     }),
   mock: (logger) => new MockLoadTestAgentClient(logger),
@@ -453,7 +462,14 @@ function createRegistryEntry(
   provider: AgentProvider,
   resolved: ResolvedProvider,
 ): ProviderDefinition {
-  const shouldCreateMetadataClientEagerly = resolved.definition.id !== "kimi";
+  // kimi/dsh construct lazily: building their client does sync disk/vendor work
+  // (managed config materialization, npm-root resolution) that must not sit on
+  // the daemon's cold-start path, and neither can serve metadata faster than
+  // their profile/gateway model configuration already does. The check uses the
+  // derived root, so gateway faces (`<gateway>-dsh`) inherit the same law.
+  const lazilyConstructedRoot = resolved.derivedFromProviderId ?? resolved.definition.id;
+  const shouldCreateMetadataClientEagerly =
+    lazilyConstructedRoot !== "kimi" && lazilyConstructedRoot !== "dsh";
   const modelClient = shouldCreateMetadataClientEagerly ? resolved.createBaseClient(logger) : null;
   const getModelClient = () => modelClient ?? resolved.createBaseClient(logger);
 
@@ -809,7 +825,7 @@ function buildAllGatewayProviderModels(
   );
 }
 
-type GatewayAgentFace = "claude" | "codex" | "opencode" | "pi" | "kimi" | "grokbuild";
+type GatewayAgentFace = "claude" | "codex" | "opencode" | "pi" | "kimi" | "grokbuild" | "dsh";
 
 type GatewayAgentFaceFlags = Record<GatewayAgentFace, boolean>;
 
@@ -882,6 +898,20 @@ function gatewayProviderOverride(params: {
       enabled: gateway.enabled !== false,
     };
   }
+  if (extendsProvider === "dsh") {
+    return {
+      extends: "dsh",
+      label: params.label,
+      env: {
+        DEEPSEEK_API_KEY: token,
+        // The dsh-deepseek adapter appends `/chat/completions` to the base URL;
+        // serve chat completions under `<routeBase>/v1` like the kimi face.
+        DEEPSEEK_BASE_URL: `${routeBase}/v1`,
+      },
+      models,
+      enabled: gateway.enabled !== false,
+    };
+  }
   if (extendsProvider === "opencode") {
     const configPath = writeOpenCodeCompatibleGatewayConfig({
       gatewayId: gateway.id,
@@ -918,9 +948,9 @@ function gatewayProviderOverride(params: {
  *
  * Closed-set semantics for `supplyScope` (mirrored by the app read path in
  * `custom-model-providers.ts`):
- * - `supplyScope === "all"` → all 6 faces, regardless of preset/attachToAllAgents
+ * - `supplyScope === "all"` → all 7 faces, regardless of preset/attachToAllAgents
  * - `supplyScope === "matched"` → narrowed by protocolPreset
- *   (claude → 1, codex → 1, openai → 4, all → 6); without a preset, falls back
+ *   (claude → 1, codex → 1, openai → 5, all → 7); without a preset, falls back
  *   to legacy upstream inference below
  * - `supplyScope` omitted → legacy behavior: `attachToAllAgents === true` or
  *   `protocolPreset === "all"` → all 6 faces; preset narrows; no preset infers
@@ -985,6 +1015,7 @@ function allFaces(): GatewayAgentFaceFlags {
     pi: true,
     kimi: true,
     grokbuild: true,
+    dsh: true,
   };
 }
 
@@ -996,6 +1027,7 @@ function noneFaces(): GatewayAgentFaceFlags {
     pi: false,
     kimi: false,
     grokbuild: false,
+    dsh: false,
   };
 }
 
@@ -1014,6 +1046,7 @@ function openaiFamilyFaces(): GatewayAgentFaceFlags {
     pi: true,
     kimi: true,
     grokbuild: true,
+    dsh: true,
   };
 }
 
@@ -1145,6 +1178,17 @@ function materializeGatewayProviderOverrides(
       labelSuffix: "Grok Build",
       models: buildAllGatewayProviderModels(gateway, {
         models: gateway.generatedModels?.grokbuild,
+      }),
+    });
+  }
+  if (faces.dsh) {
+    registerGatewayFaceOverride({
+      ...shared,
+      face: "dsh",
+      extendsProvider: "dsh",
+      labelSuffix: "DeepSeek",
+      models: buildAllGatewayProviderModels(gateway, {
+        models: gateway.generatedModels?.dsh,
       }),
     });
   }

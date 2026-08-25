@@ -53,6 +53,10 @@ const PROVIDER_HINT_OVERRIDES: Record<
   opencode: {
     mcp: true,
   },
+  // dsh's ACP transport advertises no session/load; resume stays unsupported.
+  dsh: {
+    resume: false,
+  },
 };
 
 const PROVIDER_HINT_ALIASES: Record<string, readonly string[]> = {
@@ -62,6 +66,7 @@ const PROVIDER_HINT_ALIASES: Record<string, readonly string[]> = {
   goose: ["goose"],
   cline: ["cline"],
   cursor: ["cursor"],
+  dsh: ["dsh", "deepseek-harness"],
 };
 
 function normalizeProviderId(provider: string | null | undefined): string {

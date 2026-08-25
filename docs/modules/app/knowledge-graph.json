@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "generatedAt": "2026-08-10T08:52:01.112Z",
+  "generatedAt": "2026-08-22T09:09:45.368Z",
   "generator": "scripts/generate-modular-knowledge-graphs.mjs",
   "module": {
     "id": "app",
@@ -48,15 +48,15 @@
     }
   },
   "stats": {
-    "files": 1286,
+    "files": 1326,
     "categories": {
-      "config": 41,
-      "test": 397,
-      "support": 62,
+      "config": 42,
+      "test": 409,
+      "support": 77,
       "docs": 2,
-      "source": 784
+      "source": 796
     },
-    "internalImportEdges": 3498,
+    "internalImportEdges": 3603,
     "workspaceDependencies": ["client", "expo-two-way-audio", "highlight", "protocol"],
     "externalDependencies": [
       "@dnd-kit/core",
@@ -108,6 +108,7 @@
       "expo-linking",
       "expo-notifications",
       "expo-router",
+      "expo-secure-store",
       "expo-sharing",
       "fast-deep-equal",
       "fmt",
@@ -163,7 +164,7 @@
       "id": "file:packages/app/app.config.js",
       "type": "config",
       "path": "packages/app/app.config.js",
-      "lines": 180,
+      "lines": 181,
       "imports": ["./package.json", "node:fs", "node:path"]
     },
     {
@@ -281,6 +282,100 @@
       ]
     },
     {
+      "id": "file:packages/app/e2e/desktop-conversation-switch-width.script.ts",
+      "type": "support",
+      "path": "packages/app/e2e/desktop-conversation-switch-width.script.ts",
+      "lines": 532,
+      "imports": [
+        "./helpers/node-ws-factory",
+        "./helpers/workspace",
+        "node:child_process",
+        "node:crypto",
+        "node:fs",
+        "node:net",
+        "node:os",
+        "node:path",
+        "node:url",
+        "playwright"
+      ]
+    },
+    {
+      "id": "file:packages/app/e2e/desktop-draft-send-gate.script.ts",
+      "type": "support",
+      "path": "packages/app/e2e/desktop-draft-send-gate.script.ts",
+      "lines": 746,
+      "imports": [
+        "../src/utils/host-routes",
+        "./helpers/node-ws-factory",
+        "./helpers/workspace",
+        "node:child_process",
+        "node:crypto",
+        "node:fs",
+        "node:net",
+        "node:os",
+        "node:path",
+        "node:url",
+        "playwright"
+      ]
+    },
+    {
+      "id": "file:packages/app/e2e/desktop-dsh-provider-gate.script.ts",
+      "type": "support",
+      "path": "packages/app/e2e/desktop-dsh-provider-gate.script.ts",
+      "lines": 394,
+      "imports": [
+        "../src/utils/host-routes",
+        "./helpers/workspace",
+        "node:child_process",
+        "node:crypto",
+        "node:fs",
+        "node:net",
+        "node:os",
+        "node:path",
+        "node:url",
+        "playwright"
+      ]
+    },
+    {
+      "id": "file:packages/app/e2e/desktop-first-send-gateway-verify.script.ts",
+      "type": "support",
+      "path": "packages/app/e2e/desktop-first-send-gateway-verify.script.ts",
+      "lines": 689,
+      "imports": [
+        "../src/utils/host-routes",
+        "./helpers/node-ws-factory",
+        "./helpers/workspace",
+        "@playwright/test",
+        "node:child_process",
+        "node:crypto",
+        "node:fs",
+        "node:net",
+        "node:os",
+        "node:path",
+        "node:url",
+        "playwright"
+      ]
+    },
+    {
+      "id": "file:packages/app/e2e/desktop-packaged-sidebar-shelf.script.ts",
+      "type": "support",
+      "path": "packages/app/e2e/desktop-packaged-sidebar-shelf.script.ts",
+      "lines": 499,
+      "imports": [
+        "./helpers/mock-agent",
+        "./helpers/node-ws-factory",
+        "./helpers/workspace",
+        "node:child_process",
+        "node:crypto",
+        "node:fs",
+        "node:net",
+        "node:os",
+        "node:path",
+        "node:url",
+        "playwright"
+      ]
+    },
+    {
       "id": "file:packages/app/e2e/desktop-packaged-slices.script.ts",
       "type": "support",
       "path": "packages/app/e2e/desktop-packaged-slices.script.ts",
@@ -289,6 +384,113 @@
         "./helpers/agent-bottom-anchor",
         "./helpers/composer",
         "./helpers/mock-agent",
+        "./helpers/node-ws-factory",
+        "./helpers/workspace",
+        "@playwright/test",
+        "node:child_process",
+        "node:crypto",
+        "node:fs",
+        "node:net",
+        "node:os",
+        "node:path",
+        "node:url",
+        "playwright"
+      ]
+    },
+    {
+      "id": "file:packages/app/e2e/desktop-provider-first-round.script.ts",
+      "type": "support",
+      "path": "packages/app/e2e/desktop-provider-first-round.script.ts",
+      "lines": 316,
+      "imports": ["node:child_process", "node:fs", "node:net", "node:os", "node:path", "playwright"]
+    },
+    {
+      "id": "file:packages/app/e2e/desktop-provider-probe-gate.script.ts",
+      "type": "support",
+      "path": "packages/app/e2e/desktop-provider-probe-gate.script.ts",
+      "lines": 494,
+      "imports": ["node:child_process", "node:fs", "node:net", "node:os", "node:path", "playwright"]
+    },
+    {
+      "id": "file:packages/app/e2e/desktop-selected-hover-stable.script.ts",
+      "type": "support",
+      "path": "packages/app/e2e/desktop-selected-hover-stable.script.ts",
+      "lines": 367,
+      "imports": [
+        "./helpers/node-ws-factory",
+        "./helpers/workspace",
+        "node:child_process",
+        "node:crypto",
+        "node:fs",
+        "node:net",
+        "node:os",
+        "node:path",
+        "node:url",
+        "playwright"
+      ]
+    },
+    {
+      "id": "file:packages/app/e2e/desktop-selection-text-width.script.ts",
+      "type": "support",
+      "path": "packages/app/e2e/desktop-selection-text-width.script.ts",
+      "lines": 462,
+      "imports": [
+        "./helpers/mock-agent",
+        "./helpers/node-ws-factory",
+        "./helpers/workspace",
+        "node:child_process",
+        "node:crypto",
+        "node:fs",
+        "node:net",
+        "node:os",
+        "node:path",
+        "node:url",
+        "playwright"
+      ]
+    },
+    {
+      "id": "file:packages/app/e2e/desktop-selection-typography.script.ts",
+      "type": "support",
+      "path": "packages/app/e2e/desktop-selection-typography.script.ts",
+      "lines": 530,
+      "imports": [
+        "./helpers/node-ws-factory",
+        "./helpers/workspace",
+        "node:child_process",
+        "node:crypto",
+        "node:fs",
+        "node:net",
+        "node:os",
+        "node:path",
+        "node:url",
+        "playwright"
+      ]
+    },
+    {
+      "id": "file:packages/app/e2e/desktop-sidebar-optimistic-observe.script.ts",
+      "type": "support",
+      "path": "packages/app/e2e/desktop-sidebar-optimistic-observe.script.ts",
+      "lines": 286,
+      "imports": [
+        "../src/utils/host-routes",
+        "./helpers/node-ws-factory",
+        "./helpers/workspace",
+        "@playwright/test",
+        "node:crypto",
+        "node:fs",
+        "node:os",
+        "node:path",
+        "node:url",
+        "playwright"
+      ]
+    },
+    {
+      "id": "file:packages/app/e2e/desktop-sidebar-single-row.script.ts",
+      "type": "support",
+      "path": "packages/app/e2e/desktop-sidebar-single-row.script.ts",
+      "lines": 462,
+      "imports": [
+        "../src/utils/host-routes",
         "./helpers/node-ws-factory",
         "./helpers/workspace",
         "@playwright/test",
@@ -326,11 +528,64 @@
       ]
     },
     {
+      "id": "file:packages/app/e2e/desktop-status-drift-probe.script.ts",
+      "type": "support",
+      "path": "packages/app/e2e/desktop-status-drift-probe.script.ts",
+      "lines": 286,
+      "imports": [
+        "./helpers/node-ws-factory",
+        "./helpers/workspace",
+        "node:child_process",
+        "node:crypto",
+        "node:fs",
+        "node:net",
+        "node:os",
+        "node:path",
+        "node:url",
+        "playwright"
+      ]
+    },
+    {
       "id": "file:packages/app/e2e/desktop-updates.spec.ts",
       "type": "test",
       "path": "packages/app/e2e/desktop-updates.spec.ts",
       "lines": 145,
       "imports": ["./fixtures", "./helpers/app", "./helpers/desktop-updates", "./helpers/server-id"]
+    },
+    {
+      "id": "file:packages/app/e2e/desktop-user-facing-error-text.script.ts",
+      "type": "support",
+      "path": "packages/app/e2e/desktop-user-facing-error-text.script.ts",
+      "lines": 323,
+      "imports": [
+        "../src/utils/host-routes",
+        "./helpers/node-ws-factory",
+        "./helpers/workspace",
+        "node:child_process",
+        "node:crypto",
+        "node:fs",
+        "node:net",
+        "node:os",
+        "node:path",
+        "node:url",
+        "playwright"
+      ]
+    },
+    {
+      "id": "file:packages/app/e2e/draft-send-regression.spec.ts",
+      "type": "test",
+      "path": "packages/app/e2e/draft-send-regression.spec.ts",
+      "lines": 186,
+      "imports": [
+        "./fixtures",
+        "./helpers/app",
+        "./helpers/archive-tab",
+        "./helpers/launcher",
+        "./helpers/new-workspace",
+        "./helpers/server-id",
+        "./helpers/workspace",
+        "./helpers/workspace-ui"
+      ]
     },
     {
       "id": "file:packages/app/e2e/file-explorer-collapse.spec.ts",
@@ -496,7 +751,7 @@
       "id": "file:packages/app/e2e/helpers/new-workspace.ts",
       "type": "support",
       "path": "packages/app/e2e/helpers/new-workspace.ts",
-      "lines": 403,
+      "lines": 406,
       "imports": [
         "./app",
         "./daemon-client-loader",
@@ -648,7 +903,7 @@
       "id": "file:packages/app/e2e/helpers/workspace-setup.ts",
       "type": "support",
       "path": "packages/app/e2e/helpers/workspace-setup.ts",
-      "lines": 317,
+      "lines": 324,
       "imports": [
         "../../src/utils/host-routes",
         "./app",
@@ -665,7 +920,7 @@
       "id": "file:packages/app/e2e/helpers/workspace-ui.ts",
       "type": "support",
       "path": "packages/app/e2e/helpers/workspace-ui.ts",
-      "lines": 231,
+      "lines": 340,
       "imports": ["./app", "@/utils/host-routes", "@playwright/test"]
     },
     {
@@ -812,7 +1067,7 @@
       "id": "file:packages/app/e2e/sidebar-workspace-rename.spec.ts",
       "type": "test",
       "path": "packages/app/e2e/sidebar-workspace-rename.spec.ts",
-      "lines": 37,
+      "lines": 46,
       "imports": [
         "./fixtures",
         "./helpers/app",
@@ -825,7 +1080,7 @@
       "id": "file:packages/app/e2e/sidebar-workspace.spec.ts",
       "type": "test",
       "path": "packages/app/e2e/sidebar-workspace.spec.ts",
-      "lines": 121,
+      "lines": 126,
       "imports": [
         "./fixtures",
         "./helpers/app",
@@ -974,7 +1229,7 @@
       "id": "file:packages/app/e2e/workspace-navigation-regression.spec.ts",
       "type": "test",
       "path": "packages/app/e2e/workspace-navigation-regression.spec.ts",
-      "lines": 378,
+      "lines": 445,
       "imports": [
         "./fixtures",
         "./helpers/app",
@@ -984,6 +1239,7 @@
         "./helpers/seed-client",
         "./helpers/server-id",
         "./helpers/settings",
+        "./helpers/terminal-dsl",
         "./helpers/workspace-ui",
         "@/utils/host-routes",
         "@playwright/test"
@@ -1046,6 +1302,13 @@
       "path": "packages/app/eslint.config.js",
       "lines": 11,
       "imports": ["eslint-config-expo/flat", "eslint/config"]
+    },
+    {
+      "id": "file:packages/app/expo-env.d.ts",
+      "type": "support",
+      "path": "packages/app/expo-env.d.ts",
+      "lines": 3,
+      "imports": []
     },
     {
       "id": "file:packages/app/global.d.ts",
@@ -1292,7 +1555,7 @@
       "id": "file:packages/app/package.json",
       "type": "config",
       "path": "packages/app/package.json",
-      "lines": 141,
+      "lines": 143,
       "imports": ["node:fs"]
     },
     {
@@ -1441,7 +1704,7 @@
       "id": "file:packages/app/src/agent-stream/layout.test.ts",
       "type": "test",
       "path": "packages/app/src/agent-stream/layout.test.ts",
-      "lines": 407,
+      "lines": 406,
       "imports": [
         "./layout",
         "./strategy",
@@ -1455,7 +1718,7 @@
       "id": "file:packages/app/src/agent-stream/layout.ts",
       "type": "source",
       "path": "packages/app/src/agent-stream/layout.ts",
-      "lines": 331,
+      "lines": 328,
       "imports": ["./spacing", "./strategy", "@/timeline/turn-time", "@/types/stream"]
     },
     {
@@ -1664,14 +1927,13 @@
       "id": "file:packages/app/src/agent-stream/turn-footer.tsx",
       "type": "source",
       "path": "packages/app/src/agent-stream/turn-footer.tsx",
-      "lines": 120,
+      "lines": 101,
       "imports": [
         "./layout",
         "./running-turn-footer",
         "./strategy",
         "./turn-footer-layout",
         "@/components/message",
-        "@/timeline/turn-time",
         "@/types/stream",
         "react",
         "react-native",
@@ -1682,7 +1944,7 @@
       "id": "file:packages/app/src/agent-stream/view.tsx",
       "type": "source",
       "path": "packages/app/src/agent-stream/view.tsx",
-      "lines": 1511,
+      "lines": 1508,
       "imports": [
         "./bottom-anchor-controller",
         "./layout",
@@ -1782,7 +2044,7 @@
       "id": "file:packages/app/src/app/_layout/AppContainer.tsx",
       "type": "source",
       "path": "packages/app/src/app/_layout/AppContainer.tsx",
-      "lines": 234,
+      "lines": 244,
       "imports": [
         "./MobileGesture",
         "@/components/command-center",
@@ -1825,7 +2087,7 @@
       "id": "file:packages/app/src/app/_layout/AppShell.tsx",
       "type": "source",
       "path": "packages/app/src/app/_layout/AppShell.tsx",
-      "lines": 214,
+      "lines": 204,
       "imports": [
         "./AppContainer",
         "./BootstrapProvider",
@@ -1834,7 +2096,6 @@
         "@/contexts/horizontal-scroll-context",
         "@/contexts/sidebar-animation-context",
         "@/runtime/host-runtime",
-        "@/stores/workspace-layout-store",
         "@/styles/theme",
         "@/utils/host-routes",
         "@/utils/host-runtime-bootstrap",
@@ -2633,7 +2894,7 @@
       "id": "file:packages/app/src/components/branch-switcher.tsx",
       "type": "source",
       "path": "packages/app/src/components/branch-switcher.tsx",
-      "lines": 200,
+      "lines": 207,
       "imports": [
         "@/components/headers/screen-title",
         "@/components/ui/combobox",
@@ -2641,6 +2902,7 @@
         "@/contexts/toast-context",
         "@/hooks/use-branch-switcher",
         "@/runtime/host-runtime",
+        "@/screens/new-workspace-branch-picker",
         "@/styles/theme",
         "@tanstack/react-query",
         "lucide-react-native",
@@ -2713,7 +2975,7 @@
       "id": "file:packages/app/src/components/combined-model-selector.tsx",
       "type": "source",
       "path": "packages/app/src/components/combined-model-selector.tsx",
-      "lines": 1112,
+      "lines": 1276,
       "imports": [
         "@/components/adaptive-modal-sheet",
         "@/components/combined-model-selector-state",
@@ -2774,7 +3036,7 @@
       "id": "file:packages/app/src/components/conversation-aspect-column.tsx",
       "type": "source",
       "path": "packages/app/src/components/conversation-aspect-column.tsx",
-      "lines": 84,
+      "lines": 91,
       "imports": [
         "@/constants/layout",
         "@/styles/workbench-surface-roles",
@@ -3387,6 +3649,13 @@
       "imports": ["react-native-svg"]
     },
     {
+      "id": "file:packages/app/src/components/icons/dsh-icon.tsx",
+      "type": "source",
+      "path": "packages/app/src/components/icons/dsh-icon.tsx",
+      "lines": 13,
+      "imports": ["react-native-svg"]
+    },
+    {
       "id": "file:packages/app/src/components/icons/editor-app-icons.tsx",
       "type": "source",
       "path": "packages/app/src/components/icons/editor-app-icons.tsx",
@@ -3526,7 +3795,7 @@
       "id": "file:packages/app/src/components/left-sidebar.tsx",
       "type": "source",
       "path": "packages/app/src/components/left-sidebar.tsx",
-      "lines": 1841,
+      "lines": 2153,
       "imports": [
         "./sidebar-agent-list-skeleton",
         "./sidebar-session-list",
@@ -3542,10 +3811,12 @@
         "@/hooks/use-archive-agent",
         "@/hooks/use-open-project-picker",
         "@/runtime/host-runtime",
+        "@/sidebar-v2/store",
         "@/stores/last-draft-directory-store",
         "@/stores/panel-store",
         "@/stores/session-store",
         "@/stores/session-store-hooks",
+        "@/stores/sidebar-order-store",
         "@/styles/theme",
         "@/utils/active-host",
         "@/utils/daemons",
@@ -3555,6 +3826,7 @@
         "@/utils/navigate-to-agent",
         "@/utils/sidebar-animation-state",
         "@/utils/sidebar-session-source",
+        "@/utils/sidebar-view-switcher-layout",
         "expo-router",
         "lucide-react-native",
         "react",
@@ -3782,7 +4054,7 @@
       "id": "file:packages/app/src/components/message.tsx",
       "type": "source",
       "path": "packages/app/src/components/message.tsx",
-      "lines": 2222,
+      "lines": 2085,
       "imports": [
         "./expandable-badge",
         "./message-compaction-label",
@@ -3959,24 +4231,25 @@
       "id": "file:packages/app/src/components/provider-icon-name.test.ts",
       "type": "test",
       "path": "packages/app/src/components/provider-icon-name.test.ts",
-      "lines": 30,
+      "lines": 36,
       "imports": ["./provider-icon-name", "vitest"]
     },
     {
       "id": "file:packages/app/src/components/provider-icon-name.ts",
       "type": "source",
       "path": "packages/app/src/components/provider-icon-name.ts",
-      "lines": 57,
+      "lines": 66,
       "imports": []
     },
     {
       "id": "file:packages/app/src/components/provider-icons.ts",
       "type": "source",
       "path": "packages/app/src/components/provider-icons.ts",
-      "lines": 38,
+      "lines": 40,
       "imports": [
         "@/components/icons/claude-icon",
         "@/components/icons/codex-icon",
+        "@/components/icons/dsh-icon",
         "@/components/icons/kimi-icon",
         "@/components/icons/opencode-icon",
         "@/components/icons/pi-icon",
@@ -4232,7 +4505,7 @@
       "id": "file:packages/app/src/components/sidebar-session-list.test.tsx",
       "type": "test",
       "path": "packages/app/src/components/sidebar-session-list.test.tsx",
-      "lines": 1421,
+      "lines": 1580,
       "imports": [
         "@/components/sidebar-session-list",
         "@/hooks/use-aggregated-agents",
@@ -4246,12 +4519,13 @@
       "id": "file:packages/app/src/components/sidebar-session-list.tsx",
       "type": "source",
       "path": "packages/app/src/components/sidebar-session-list.tsx",
-      "lines": 2481,
+      "lines": 2898,
       "imports": [
         "@/components/draggable-list",
         "@/components/provider-icons",
         "@/components/rename-modal",
         "@/components/sidebar-session-presentation",
+        "@/components/sidebar-status-view",
         "@/components/themed-icon-host",
         "@/components/ui/agent-status-indicator",
         "@/components/ui/button",
@@ -4264,6 +4538,10 @@
         "@/hooks/agent-history-query-key",
         "@/hooks/use-aggregated-agents",
         "@/hooks/use-archive-agent",
+        "@/sidebar-v2/agent-adapter",
+        "@/sidebar-v2/presentation",
+        "@/sidebar-v2/snooze",
+        "@/sidebar-v2/store",
         "@/stores/draft-keys",
         "@/stores/session-store",
         "@/stores/sidebar-order-store",
@@ -4274,6 +4552,7 @@
         "@/utils/host-routes",
         "@/utils/left-sidebar-drafts",
         "@/utils/navigate-to-agent",
+        "@/utils/sidebar-agent-label-cache",
         "@/utils/sidebar-session-groups",
         "@tanstack/react-query",
         "expo-clipboard",
@@ -4298,6 +4577,52 @@
       "path": "packages/app/src/components/sidebar-session-presentation.ts",
       "lines": 26,
       "imports": []
+    },
+    {
+      "id": "file:packages/app/src/components/sidebar-status-view.test.tsx",
+      "type": "test",
+      "path": "packages/app/src/components/sidebar-status-view.test.tsx",
+      "lines": 389,
+      "imports": [
+        "@/components/sidebar-status-view",
+        "@/hooks/use-aggregated-agents",
+        "@/utils/navigate-to-agent",
+        "@testing-library/react",
+        "react",
+        "vitest"
+      ]
+    },
+    {
+      "id": "file:packages/app/src/components/sidebar-status-view.tsx",
+      "type": "source",
+      "path": "packages/app/src/components/sidebar-status-view.tsx",
+      "lines": 1644,
+      "imports": [
+        "@/components/provider-icons",
+        "@/components/themed-icon-host",
+        "@/components/ui/button",
+        "@/components/ui/context-menu",
+        "@/components/ui/dropdown-menu",
+        "@/constants/layout",
+        "@/constants/platform",
+        "@/hooks/use-aggregated-agents",
+        "@/sidebar-v2/actions",
+        "@/sidebar-v2/agent-adapter",
+        "@/sidebar-v2/logic",
+        "@/sidebar-v2/presentation",
+        "@/sidebar-v2/projects",
+        "@/sidebar-v2/shelves",
+        "@/sidebar-v2/snooze",
+        "@/sidebar-v2/store",
+        "@/styles/theme",
+        "@/utils/agent-history-navigation",
+        "@/utils/navigate-to-agent",
+        "lucide-react-native",
+        "react",
+        "react-i18next",
+        "react-native",
+        "react-native-unistyles"
+      ]
     },
     {
       "id": "file:packages/app/src/components/sidebar-workspace-list.test.tsx",
@@ -5541,9 +5866,10 @@
       "id": "file:packages/app/src/composer/draft/create-flow.test.ts",
       "type": "test",
       "path": "packages/app/src/composer/draft/create-flow.test.ts",
-      "lines": 346,
+      "lines": 503,
       "imports": [
         "./create-flow",
+        "@/i18n",
         "@/stores/create-flow-store",
         "@/stores/session-store",
         "@/types/stream",
@@ -5556,10 +5882,11 @@
       "id": "file:packages/app/src/composer/draft/create-flow.ts",
       "type": "source",
       "path": "packages/app/src/composer/draft/create-flow.ts",
-      "lines": 405,
+      "lines": 509,
       "imports": [
         "@/attachments/types",
         "@/composer/attachments/submit",
+        "@/i18n",
         "@/stores/create-flow-store",
         "@/stores/session-store",
         "@/types/stream",
@@ -5669,14 +5996,14 @@
       "id": "file:packages/app/src/composer/draft/workspace-tab-core.ts",
       "type": "source",
       "path": "packages/app/src/composer/draft/workspace-tab-core.ts",
-      "lines": 96,
+      "lines": 128,
       "imports": ["@/provider-selection/provider-selection"]
     },
     {
       "id": "file:packages/app/src/composer/draft/workspace-tab.test.ts",
       "type": "test",
       "path": "packages/app/src/composer/draft/workspace-tab.test.ts",
-      "lines": 154,
+      "lines": 227,
       "imports": [
         "./workspace-tab-core",
         "@/screens/workspace/workspace-draft-agent-config",
@@ -5687,12 +6014,11 @@
       "id": "file:packages/app/src/composer/draft/workspace-tab.tsx",
       "type": "source",
       "path": "packages/app/src/composer/draft/workspace-tab.tsx",
-      "lines": 901,
+      "lines": 1009,
       "imports": [
         "@/agent-stream/view",
         "@/attachments/types",
         "@/attachments/workspace-attachments-store",
-        "@/components/conversation-aspect-column",
         "@/components/file-drop-zone",
         "@/composer",
         "@/composer/agent-controls/mode-control",
@@ -5707,16 +6033,19 @@
         "@/git/use-status-query",
         "@/hooks/use-agent-form-state",
         "@/hooks/use-keyboard-shift-style",
+        "@/i18n",
         "@/runtime/host-runtime",
         "@/screens/workspace/workspace-draft-agent-config",
         "@/screens/workspace/workspace-draft-pane-focus",
         "@/stores/create-flow-store",
         "@/stores/draft-keys",
+        "@/stores/draft-store",
         "@/stores/last-draft-directory-store",
         "@/stores/panel-store",
         "@/stores/session-store",
         "@/stores/session-store-hooks",
         "@/stores/workspace-draft-submission-store",
+        "@/stores/workspace-layout-store",
         "@/types/stream",
         "@/utils/encode-images",
         "@/utils/project-placement",
@@ -6284,7 +6613,7 @@
       "id": "file:packages/app/src/data/acp-provider-catalog.ts",
       "type": "source",
       "path": "packages/app/src/data/acp-provider-catalog.ts",
-      "lines": 61,
+      "lines": 69,
       "imports": []
     },
     {
@@ -7041,7 +7370,7 @@
       "id": "file:packages/app/src/git/actions-split-button.tsx",
       "type": "source",
       "path": "packages/app/src/git/actions-split-button.tsx",
-      "lines": 380,
+      "lines": 393,
       "imports": [
         "@/components/themed-icon-host",
         "@/components/ui/dropdown-menu",
@@ -7264,6 +7593,20 @@
       "imports": ["@chisacode/protocol/git-remote"]
     },
     {
+      "id": "file:packages/app/src/git/idle-git-button-label.test.ts",
+      "type": "test",
+      "path": "packages/app/src/git/idle-git-button-label.test.ts",
+      "lines": 15,
+      "imports": ["./idle-git-button-label", "vitest"]
+    },
+    {
+      "id": "file:packages/app/src/git/idle-git-button-label.ts",
+      "type": "source",
+      "path": "packages/app/src/git/idle-git-button-label.ts",
+      "lines": 8,
+      "imports": []
+    },
+    {
       "id": "file:packages/app/src/git/policy.test.ts",
       "type": "test",
       "path": "packages/app/src/git/policy.test.ts",
@@ -7398,14 +7741,14 @@
       "id": "file:packages/app/src/git/use-github-search-query.test.ts",
       "type": "test",
       "path": "packages/app/src/git/use-github-search-query.test.ts",
-      "lines": 43,
+      "lines": 44,
       "imports": ["./use-github-search-query", "vitest"]
     },
     {
       "id": "file:packages/app/src/git/use-github-search-query.ts",
       "type": "source",
       "path": "packages/app/src/git/use-github-search-query.ts",
-      "lines": 65,
+      "lines": 66,
       "imports": ["@chisacode/protocol/messages", "@tanstack/react-query"]
     },
     {
@@ -7451,7 +7794,7 @@
       "id": "file:packages/app/src/git/use-status-query.ts",
       "type": "source",
       "path": "packages/app/src/git/use-status-query.ts",
-      "lines": 92,
+      "lines": 93,
       "imports": [
         "./checkout-status-cache",
         "@/git/query-keys",
@@ -7464,11 +7807,12 @@
       "id": "file:packages/app/src/git/workspace-actions.tsx",
       "type": "source",
       "path": "packages/app/src/git/workspace-actions.tsx",
-      "lines": 95,
+      "lines": 106,
       "imports": [
         "@/components/icons/github-icon",
         "@/components/themed-icon-host",
         "@/git/actions-split-button",
+        "@/git/idle-git-button-label",
         "@/git/policy",
         "@/git/use-actions",
         "@/styles/theme",
@@ -7677,7 +8021,7 @@
       "id": "file:packages/app/src/hooks/use-acp-provider-catalog.test.ts",
       "type": "test",
       "path": "packages/app/src/hooks/use-acp-provider-catalog.test.ts",
-      "lines": 64,
+      "lines": 65,
       "imports": ["./use-acp-provider-catalog", "@/data/acp-provider-catalog", "vitest"]
     },
     {
@@ -7771,7 +8115,7 @@
       "id": "file:packages/app/src/hooks/use-agent-form-state.ts",
       "type": "source",
       "path": "packages/app/src/hooks/use-agent-form-state.ts",
-      "lines": 660,
+      "lines": 659,
       "imports": [
         "./use-form-preferences",
         "./use-providers-snapshot",
@@ -7966,14 +8310,22 @@
       "imports": ["@/components/ui/autocomplete-utils", "react"]
     },
     {
+      "id": "file:packages/app/src/hooks/use-branch-switcher.test.ts",
+      "type": "test",
+      "path": "packages/app/src/hooks/use-branch-switcher.test.ts",
+      "lines": 48,
+      "imports": ["./use-branch-switcher", "vitest"]
+    },
+    {
       "id": "file:packages/app/src/hooks/use-branch-switcher.ts",
       "type": "source",
       "path": "packages/app/src/hooks/use-branch-switcher.ts",
-      "lines": 182,
+      "lines": 216,
       "imports": [
         "@/components/toast-host",
         "@/components/ui/combobox",
         "@/git/query-keys",
+        "@/screens/new-workspace-branch-picker",
         "@/utils/confirm-dialog",
         "@chisacode/client/internal/daemon-client",
         "@tanstack/react-query",
@@ -8570,7 +8922,7 @@
       "id": "file:packages/app/src/hooks/use-providers-snapshot.test.ts",
       "type": "test",
       "path": "packages/app/src/hooks/use-providers-snapshot.test.ts",
-      "lines": 341,
+      "lines": 339,
       "imports": [
         "./use-providers-snapshot",
         "@chisacode/client/internal/daemon-client",
@@ -8583,7 +8935,7 @@
       "id": "file:packages/app/src/hooks/use-providers-snapshot.ts",
       "type": "source",
       "path": "packages/app/src/hooks/use-providers-snapshot.ts",
-      "lines": 286,
+      "lines": 282,
       "imports": [
         "@/hooks/providers-snapshot-query",
         "@/query/query-client",
@@ -8797,7 +9149,7 @@
       "id": "file:packages/app/src/i18n/index.ts",
       "type": "source",
       "path": "packages/app/src/i18n/index.ts",
-      "lines": 3990,
+      "lines": 4017,
       "imports": ["@/hooks/use-settings", "i18next", "react-i18next"]
     },
     {
@@ -8977,14 +9329,13 @@
       "id": "file:packages/app/src/panels/agent-panel.tsx",
       "type": "source",
       "path": "packages/app/src/panels/agent-panel.tsx",
-      "lines": 1837,
+      "lines": 1847,
       "imports": [
         "@/agent-stream/view",
         "@/attachments/types",
         "@/attachments/workspace-attachments-store",
         "@/client-slash-commands",
         "@/components/archived-agent-callout",
-        "@/components/conversation-aspect-column",
         "@/components/file-drop-zone",
         "@/components/provider-icons",
         "@/components/rewind/composer-restore",
@@ -9026,6 +9377,7 @@
         "@/utils/sidebar-agent-state",
         "@/workspace/file-open",
         "@chisacode/client/internal/daemon-client",
+        "@chisacode/protocol/messages",
         "@tanstack/react-query",
         "lucide-react-native",
         "react",
@@ -9196,7 +9548,7 @@
       "id": "file:packages/app/src/provider-selection/provider-selection.test.ts",
       "type": "test",
       "path": "packages/app/src/provider-selection/provider-selection.test.ts",
-      "lines": 682,
+      "lines": 754,
       "imports": [
         "./provider-selection",
         "@chisacode/protocol/agent-types",
@@ -9208,7 +9560,7 @@
       "id": "file:packages/app/src/provider-selection/provider-selection.ts",
       "type": "source",
       "path": "packages/app/src/provider-selection/provider-selection.ts",
-      "lines": 487,
+      "lines": 515,
       "imports": [
         "@/hooks/use-agent-commands-query",
         "@/hooks/use-form-preferences",
@@ -9249,7 +9601,7 @@
       "id": "file:packages/app/src/provider-selection/resolve-agent-form.test.ts",
       "type": "test",
       "path": "packages/app/src/provider-selection/resolve-agent-form.test.ts",
-      "lines": 1110,
+      "lines": 1138,
       "imports": [
         "./resolve-agent-form",
         "@/utils/provider-definitions",
@@ -9262,7 +9614,7 @@
       "id": "file:packages/app/src/provider-selection/resolve-agent-form.ts",
       "type": "source",
       "path": "packages/app/src/provider-selection/resolve-agent-form.ts",
-      "lines": 672,
+      "lines": 679,
       "imports": [
         "@/hooks/use-form-preferences",
         "@chisacode/protocol/agent-types",
@@ -9423,10 +9775,11 @@
       "id": "file:packages/app/src/runtime/host-runtime.ts",
       "type": "source",
       "path": "packages/app/src/runtime/host-runtime.ts",
-      "lines": 2366,
+      "lines": 2428,
       "imports": [
         "@/desktop/daemon/desktop-daemon",
         "@/desktop/daemon/desktop-daemon-transport",
+        "@/security/relay-device-secret-store",
         "@/stores/session-store",
         "@/types/host-connection",
         "@/utils/agent-directory-sync",
@@ -9456,6 +9809,20 @@
       "path": "packages/app/src/screens/agent/agent-ready-screen.bottom-anchor.test.ts",
       "lines": 71,
       "imports": ["./agent-ready-screen-bottom-anchor", "vitest"]
+    },
+    {
+      "id": "file:packages/app/src/screens/new-workspace-branch-picker.test.ts",
+      "type": "test",
+      "path": "packages/app/src/screens/new-workspace-branch-picker.test.ts",
+      "lines": 48,
+      "imports": ["./new-workspace-branch-picker", "vitest"]
+    },
+    {
+      "id": "file:packages/app/src/screens/new-workspace-branch-picker.ts",
+      "type": "source",
+      "path": "packages/app/src/screens/new-workspace-branch-picker.ts",
+      "lines": 42,
+      "imports": []
     },
     {
       "id": "file:packages/app/src/screens/new-workspace-default-directory.test.ts",
@@ -9518,6 +9885,20 @@
       "imports": ["@/composer/types", "@/stores/session-store", "@chisacode/protocol/messages"]
     },
     {
+      "id": "file:packages/app/src/screens/new-workspace-ensure.test.ts",
+      "type": "test",
+      "path": "packages/app/src/screens/new-workspace-ensure.test.ts",
+      "lines": 23,
+      "imports": ["./new-workspace-ensure", "vitest"]
+    },
+    {
+      "id": "file:packages/app/src/screens/new-workspace-ensure.ts",
+      "type": "source",
+      "path": "packages/app/src/screens/new-workspace-ensure.ts",
+      "lines": 23,
+      "imports": ["@/git/query-keys"]
+    },
+    {
       "id": "file:packages/app/src/screens/new-workspace-picker-item.test.ts",
       "type": "test",
       "path": "packages/app/src/screens/new-workspace-picker-item.test.ts",
@@ -9554,11 +9935,13 @@
       "id": "file:packages/app/src/screens/new-workspace-screen.tsx",
       "type": "source",
       "path": "packages/app/src/screens/new-workspace-screen.tsx",
-      "lines": 1710,
+      "lines": 1649,
       "imports": [
+        "./new-workspace-branch-picker",
         "./new-workspace-directory-options",
         "./new-workspace-draft-reset",
         "./new-workspace-empty",
+        "./new-workspace-ensure",
         "./new-workspace-picker-item",
         "./new-workspace-picker-state",
         "@/attachments/types",
@@ -9598,14 +9981,12 @@
         "@/utils/host-routes",
         "@/utils/shorten-path",
         "@/utils/workspace-navigation",
-        "@chisacode/client/internal/daemon-client",
         "@chisacode/protocol/agent-types",
         "@chisacode/protocol/branch-slug",
         "@chisacode/protocol/messages",
         "@tanstack/react-query",
         "expo-router",
         "lucide-react-native",
-        "mnemonic-id",
         "react",
         "react-i18next",
         "react-native",
@@ -9890,7 +10271,7 @@
       "id": "file:packages/app/src/screens/settings/custom-model-providers.test.ts",
       "type": "test",
       "path": "packages/app/src/screens/settings/custom-model-providers.test.ts",
-      "lines": 847,
+      "lines": 869,
       "imports": [
         "@/screens/settings/custom-model-providers",
         "@chisacode/protocol/messages",
@@ -9901,7 +10282,7 @@
       "id": "file:packages/app/src/screens/settings/custom-model-providers.ts",
       "type": "source",
       "path": "packages/app/src/screens/settings/custom-model-providers.ts",
-      "lines": 1192,
+      "lines": 1207,
       "imports": ["@chisacode/protocol/messages", "@chisacode/protocol/provider-config"]
     },
     {
@@ -10518,7 +10899,7 @@
       "id": "file:packages/app/src/screens/workspace/workbench-fidelity-style-boundaries.test.ts",
       "type": "test",
       "path": "packages/app/src/screens/workspace/workbench-fidelity-style-boundaries.test.ts",
-      "lines": 193,
+      "lines": 274,
       "imports": ["node:fs", "vitest"]
     },
     {
@@ -10532,8 +10913,9 @@
       "id": "file:packages/app/src/screens/workspace/workspace-center-column.tsx",
       "type": "source",
       "path": "packages/app/src/screens/workspace/workspace-center-column.tsx",
-      "lines": 360,
+      "lines": 336,
       "imports": [
+        "@/components/conversation-aspect-column",
         "@/components/headers/menu-header",
         "@/components/headers/screen-header",
         "@/constants/platform",
@@ -10658,7 +11040,7 @@
       "id": "file:packages/app/src/screens/workspace/workspace-header.tsx",
       "type": "source",
       "path": "packages/app/src/screens/workspace/workspace-header.tsx",
-      "lines": 1103,
+      "lines": 1114,
       "imports": [
         "@/components/branch-switcher",
         "@/components/desktop/desktop-sidebar-control",
@@ -10762,7 +11144,7 @@
       "id": "file:packages/app/src/screens/workspace/workspace-pane-content.tsx",
       "type": "source",
       "path": "packages/app/src/screens/workspace/workspace-pane-content.tsx",
-      "lines": 100,
+      "lines": 104,
       "imports": [
         "@/panels/pane-context",
         "@/panels/panel-registry",
@@ -10777,7 +11159,7 @@
       "id": "file:packages/app/src/screens/workspace/workspace-right-panel.tsx",
       "type": "source",
       "path": "packages/app/src/screens/workspace/workspace-right-panel.tsx",
-      "lines": 486,
+      "lines": 432,
       "imports": [
         "@/components/browser-pane",
         "@/components/file-explorer-pane",
@@ -10787,7 +11169,6 @@
         "@/git/diff-pane",
         "@/stores/panel-store",
         "@/styles/theme",
-        "@/utils/desktop-window",
         "lucide-react-native",
         "react",
         "react-i18next",
@@ -10830,7 +11211,7 @@
       "id": "file:packages/app/src/screens/workspace/workspace-screen.tsx",
       "type": "source",
       "path": "packages/app/src/screens/workspace/workspace-screen.tsx",
-      "lines": 1302,
+      "lines": 1316,
       "imports": [
         "@/components/error-boundary",
         "@/components/explorer-sidebar",
@@ -10864,6 +11245,7 @@
         "@/screens/workspace/workspace-environment-dock-model",
         "@/screens/workspace/workspace-environment-panel",
         "@/screens/workspace/workspace-environment-panel-model",
+        "@/screens/workspace/workspace-header",
         "@/screens/workspace/workspace-header-source",
         "@/screens/workspace/workspace-right-panel",
         "@/screens/workspace/workspace-route-state",
@@ -10984,6 +11366,45 @@
       "imports": ["@/utils/provider-command-templates"]
     },
     {
+      "id": "file:packages/app/src/security/relay-device-secret-store-core.ts",
+      "type": "source",
+      "path": "packages/app/src/security/relay-device-secret-store-core.ts",
+      "lines": 39,
+      "imports": []
+    },
+    {
+      "id": "file:packages/app/src/security/relay-device-secret-store.electron.ts",
+      "type": "source",
+      "path": "packages/app/src/security/relay-device-secret-store.electron.ts",
+      "lines": 46,
+      "imports": [
+        "./relay-device-secret-store-core",
+        "@/desktop/electron/invoke",
+        "@react-native-async-storage/async-storage"
+      ]
+    },
+    {
+      "id": "file:packages/app/src/security/relay-device-secret-store.native.ts",
+      "type": "source",
+      "path": "packages/app/src/security/relay-device-secret-store.native.ts",
+      "lines": 41,
+      "imports": ["./relay-device-secret-store-core", "expo-secure-store"]
+    },
+    {
+      "id": "file:packages/app/src/security/relay-device-secret-store.ts",
+      "type": "source",
+      "path": "packages/app/src/security/relay-device-secret-store.ts",
+      "lines": 10,
+      "imports": ["./relay-device-secret-store-core"]
+    },
+    {
+      "id": "file:packages/app/src/security/relay-device-secret-store.web.ts",
+      "type": "source",
+      "path": "packages/app/src/security/relay-device-secret-store.web.ts",
+      "lines": 8,
+      "imports": ["./relay-device-secret-store-core"]
+    },
+    {
       "id": "file:packages/app/src/sidebar-v2/actions.test.ts",
       "type": "test",
       "path": "packages/app/src/sidebar-v2/actions.test.ts",
@@ -11001,15 +11422,20 @@
       "id": "file:packages/app/src/sidebar-v2/agent-adapter.test.ts",
       "type": "test",
       "path": "packages/app/src/sidebar-v2/agent-adapter.test.ts",
-      "lines": 122,
+      "lines": 207,
       "imports": ["./agent-adapter", "@/hooks/use-aggregated-agents", "vitest"]
     },
     {
       "id": "file:packages/app/src/sidebar-v2/agent-adapter.ts",
       "type": "source",
       "path": "packages/app/src/sidebar-v2/agent-adapter.ts",
-      "lines": 261,
-      "imports": ["./shelves", "./snooze", "@/hooks/use-aggregated-agents"]
+      "lines": 281,
+      "imports": [
+        "./shelves",
+        "./snooze",
+        "@/hooks/use-aggregated-agents",
+        "@/utils/sidebar-session-groups"
+      ]
     },
     {
       "id": "file:packages/app/src/sidebar-v2/logic.test.ts",
@@ -11043,14 +11469,14 @@
       "id": "file:packages/app/src/sidebar-v2/projects.test.ts",
       "type": "test",
       "path": "packages/app/src/sidebar-v2/projects.test.ts",
-      "lines": 186,
+      "lines": 195,
       "imports": ["./projects", "@/stores/session-store", "vitest"]
     },
     {
       "id": "file:packages/app/src/sidebar-v2/projects.ts",
       "type": "source",
       "path": "packages/app/src/sidebar-v2/projects.ts",
-      "lines": 277,
+      "lines": 283,
       "imports": ["./logic", "@/stores/session-store"]
     },
     {
@@ -11071,7 +11497,7 @@
       "id": "file:packages/app/src/sidebar-v2/SidebarV2.tsx",
       "type": "source",
       "path": "packages/app/src/sidebar-v2/SidebarV2.tsx",
-      "lines": 1123,
+      "lines": 1144,
       "imports": [
         "./SidebarV2Row",
         "./SidebarV2ScopeMenu",
@@ -11092,6 +11518,8 @@
         "@/styles/theme",
         "@/utils/confirm-dialog",
         "@/utils/navigate-to-agent",
+        "@/utils/sidebar-agent-label-cache",
+        "@tanstack/react-query",
         "expo-clipboard",
         "lucide-react-native",
         "react",
@@ -11131,7 +11559,7 @@
       "id": "file:packages/app/src/sidebar-v2/SidebarV2Row.tsx",
       "type": "source",
       "path": "packages/app/src/sidebar-v2/SidebarV2Row.tsx",
-      "lines": 714,
+      "lines": 715,
       "imports": [
         "./SidebarV2BulkMenu",
         "./SidebarV2Menu",
@@ -11200,6 +11628,13 @@
       "path": "packages/app/src/sidebar-v2/snooze.ts",
       "lines": 449,
       "imports": []
+    },
+    {
+      "id": "file:packages/app/src/sidebar-v2/store.test.ts",
+      "type": "test",
+      "path": "packages/app/src/sidebar-v2/store.test.ts",
+      "lines": 130,
+      "imports": ["./snooze", "./store", "vitest"]
     },
     {
       "id": "file:packages/app/src/sidebar-v2/store.ts",
@@ -11304,7 +11739,7 @@
       "id": "file:packages/app/src/stores/draft-store/index.ts",
       "type": "source",
       "path": "packages/app/src/stores/draft-store/index.ts",
-      "lines": 384,
+      "lines": 437,
       "imports": [
         "./migration",
         "./state",
@@ -11332,6 +11767,20 @@
       "imports": ["./state", "@/attachments/types"]
     },
     {
+      "id": "file:packages/app/src/stores/draft-store/reserve-agent-id.test.ts",
+      "type": "test",
+      "path": "packages/app/src/stores/draft-store/reserve-agent-id.test.ts",
+      "lines": 33,
+      "imports": ["./state", "vitest"]
+    },
+    {
+      "id": "file:packages/app/src/stores/draft-store/reserve-store.test.ts",
+      "type": "test",
+      "path": "packages/app/src/stores/draft-store/reserve-store.test.ts",
+      "lines": 48,
+      "imports": ["./index", "vitest"]
+    },
+    {
       "id": "file:packages/app/src/stores/draft-store/state.test.ts",
       "type": "test",
       "path": "packages/app/src/stores/draft-store/state.test.ts",
@@ -11342,7 +11791,7 @@
       "id": "file:packages/app/src/stores/draft-store/state.ts",
       "type": "source",
       "path": "packages/app/src/stores/draft-store/state.ts",
-      "lines": 193,
+      "lines": 220,
       "imports": ["@/attachments/types", "@chisacode/protocol/messages"]
     },
     {
@@ -11594,14 +12043,14 @@
       "id": "file:packages/app/src/stores/sidebar-order-store.test.ts",
       "type": "test",
       "path": "packages/app/src/stores/sidebar-order-store.test.ts",
-      "lines": 151,
+      "lines": 168,
       "imports": ["./sidebar-order-store", "vitest"]
     },
     {
       "id": "file:packages/app/src/stores/sidebar-order-store.ts",
       "type": "source",
       "path": "packages/app/src/stores/sidebar-order-store.ts",
-      "lines": 261,
+      "lines": 284,
       "imports": ["@react-native-async-storage/async-storage", "zustand", "zustand/middleware"]
     },
     {
@@ -11674,14 +12123,14 @@
       "id": "file:packages/app/src/styles/markdown-styles.test.ts",
       "type": "test",
       "path": "packages/app/src/styles/markdown-styles.test.ts",
-      "lines": 67,
+      "lines": 96,
       "imports": ["./markdown-styles", "./theme", "vitest"]
     },
     {
       "id": "file:packages/app/src/styles/markdown-styles.ts",
       "type": "source",
       "path": "packages/app/src/styles/markdown-styles.ts",
-      "lines": 463,
+      "lines": 518,
       "imports": ["./theme", "@/constants/platform", "@/constants/theme"]
     },
     {
@@ -11709,14 +12158,14 @@
       "id": "file:packages/app/src/styles/theme.test.ts",
       "type": "test",
       "path": "packages/app/src/styles/theme.test.ts",
-      "lines": 254,
+      "lines": 270,
       "imports": ["./theme", "vitest"]
     },
     {
       "id": "file:packages/app/src/styles/theme.ts",
       "type": "source",
       "path": "packages/app/src/styles/theme.ts",
-      "lines": 911,
+      "lines": 921,
       "imports": ["@chisacode/highlight"]
     },
     {
@@ -12353,14 +12802,14 @@
       "id": "file:packages/app/src/utils/agent-grouping.test.ts",
       "type": "test",
       "path": "packages/app/src/utils/agent-grouping.test.ts",
-      "lines": 153,
+      "lines": 169,
       "imports": ["./agent-grouping", "@/hooks/use-aggregated-agents", "vitest"]
     },
     {
       "id": "file:packages/app/src/utils/agent-grouping.ts",
       "type": "source",
       "path": "packages/app/src/utils/agent-grouping.ts",
-      "lines": 427,
+      "lines": 466,
       "imports": ["@/hooks/use-aggregated-agents"]
     },
     {
@@ -12624,14 +13073,14 @@
       "id": "file:packages/app/src/utils/desktop-window.test.ts",
       "type": "test",
       "path": "packages/app/src/utils/desktop-window.test.ts",
-      "lines": 151,
+      "lines": 144,
       "imports": ["@/utils/desktop-window", "vitest"]
     },
     {
       "id": "file:packages/app/src/utils/desktop-window.ts",
       "type": "source",
       "path": "packages/app/src/utils/desktop-window.ts",
-      "lines": 165,
+      "lines": 157,
       "imports": [
         "@/constants/layout",
         "@/constants/platform",
@@ -13197,7 +13646,7 @@
       "id": "file:packages/app/src/utils/provider-capability-hints.ts",
       "type": "source",
       "path": "packages/app/src/utils/provider-capability-hints.ts",
-      "lines": 170,
+      "lines": 175,
       "imports": []
     },
     {
@@ -13274,15 +13723,20 @@
       "id": "file:packages/app/src/utils/selected-sidebar-agent.test.ts",
       "type": "test",
       "path": "packages/app/src/utils/selected-sidebar-agent.test.ts",
-      "lines": 23,
+      "lines": 74,
       "imports": ["./selected-sidebar-agent", "@/workspace-tabs/identity", "vitest"]
     },
     {
       "id": "file:packages/app/src/utils/selected-sidebar-agent.ts",
       "type": "source",
       "path": "packages/app/src/utils/selected-sidebar-agent.ts",
-      "lines": 24,
-      "imports": ["@/workspace-tabs/identity"]
+      "lines": 90,
+      "imports": [
+        "@/stores/create-flow-store",
+        "@/stores/workspace-layout-store",
+        "@/workspace-tabs/identity",
+        "react"
+      ]
     },
     {
       "id": "file:packages/app/src/utils/server-info-capabilities.test.ts",
@@ -13321,6 +13775,25 @@
       "path": "packages/app/src/utils/shorten-path.ts",
       "lines": 11,
       "imports": []
+    },
+    {
+      "id": "file:packages/app/src/utils/sidebar-agent-label-cache.test.ts",
+      "type": "test",
+      "path": "packages/app/src/utils/sidebar-agent-label-cache.test.ts",
+      "lines": 146,
+      "imports": [
+        "./sidebar-agent-label-cache",
+        "@/hooks/agent-history-query-key",
+        "@tanstack/react-query",
+        "vitest"
+      ]
+    },
+    {
+      "id": "file:packages/app/src/utils/sidebar-agent-label-cache.ts",
+      "type": "source",
+      "path": "packages/app/src/utils/sidebar-agent-label-cache.ts",
+      "lines": 196,
+      "imports": ["@/hooks/agent-history-query-key", "@tanstack/react-query"]
     },
     {
       "id": "file:packages/app/src/utils/sidebar-agent-state.test.ts",
@@ -13408,7 +13881,7 @@
       "id": "file:packages/app/src/utils/sidebar-session-groups.ts",
       "type": "source",
       "path": "packages/app/src/utils/sidebar-session-groups.ts",
-      "lines": 560,
+      "lines": 618,
       "imports": ["@/hooks/use-aggregated-agents"]
     },
     {
@@ -13446,11 +13919,37 @@
       "imports": ["./sidebar-project-row-model", "@/hooks/use-sidebar-workspaces-list"]
     },
     {
+      "id": "file:packages/app/src/utils/sidebar-view-switcher-layout.test.ts",
+      "type": "test",
+      "path": "packages/app/src/utils/sidebar-view-switcher-layout.test.ts",
+      "lines": 81,
+      "imports": ["./sidebar-view-switcher-layout", "vitest"]
+    },
+    {
+      "id": "file:packages/app/src/utils/sidebar-view-switcher-layout.ts",
+      "type": "source",
+      "path": "packages/app/src/utils/sidebar-view-switcher-layout.ts",
+      "lines": 111,
+      "imports": []
+    },
+    {
       "id": "file:packages/app/src/utils/sidebar-workspace-archive-redirect.ts",
       "type": "source",
       "path": "packages/app/src/utils/sidebar-workspace-archive-redirect.ts",
       "lines": 22,
       "imports": ["@/stores/session-store", "@/utils/workspace-archive-redirect", "expo-router"]
+    },
+    {
+      "id": "file:packages/app/src/utils/sidebar-worktree-home-grouping.test.ts",
+      "type": "test",
+      "path": "packages/app/src/utils/sidebar-worktree-home-grouping.test.ts",
+      "lines": 215,
+      "imports": [
+        "./agent-grouping",
+        "./sidebar-session-groups",
+        "@/hooks/use-aggregated-agents",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/app/src/utils/split-markdown-blocks.ts",
@@ -13916,6 +14415,13 @@
       ]
     },
     {
+      "id": "file:packages/app/test-results/.last-run.json",
+      "type": "config",
+      "path": "packages/app/test-results/.last-run.json",
+      "lines": 4,
+      "imports": []
+    },
+    {
       "id": "file:packages/app/test-stubs/react-native-safe-area-context.js",
       "type": "support",
       "path": "packages/app/test-stubs/react-native-safe-area-context.js",
@@ -14267,6 +14773,84 @@
       "specifier": "./helpers/mock-agent"
     },
     {
+      "source": "file:packages/app/e2e/desktop-conversation-switch-width.script.ts",
+      "target": "file:packages/app/e2e/helpers/node-ws-factory.ts",
+      "type": "imports",
+      "specifier": "./helpers/node-ws-factory"
+    },
+    {
+      "source": "file:packages/app/e2e/desktop-conversation-switch-width.script.ts",
+      "target": "file:packages/app/e2e/helpers/workspace.ts",
+      "type": "imports",
+      "specifier": "./helpers/workspace"
+    },
+    {
+      "source": "file:packages/app/e2e/desktop-draft-send-gate.script.ts",
+      "target": "file:packages/app/src/utils/host-routes.ts",
+      "type": "imports",
+      "specifier": "../src/utils/host-routes"
+    },
+    {
+      "source": "file:packages/app/e2e/desktop-draft-send-gate.script.ts",
+      "target": "file:packages/app/e2e/helpers/node-ws-factory.ts",
+      "type": "imports",
+      "specifier": "./helpers/node-ws-factory"
+    },
+    {
+      "source": "file:packages/app/e2e/desktop-draft-send-gate.script.ts",
+      "target": "file:packages/app/e2e/helpers/workspace.ts",
+      "type": "imports",
+      "specifier": "./helpers/workspace"
+    },
+    {
+      "source": "file:packages/app/e2e/desktop-dsh-provider-gate.script.ts",
+      "target": "file:packages/app/src/utils/host-routes.ts",
+      "type": "imports",
+      "specifier": "../src/utils/host-routes"
+    },
+    {
+      "source": "file:packages/app/e2e/desktop-dsh-provider-gate.script.ts",
+      "target": "file:packages/app/e2e/helpers/workspace.ts",
+      "type": "imports",
+      "specifier": "./helpers/workspace"
+    },
+    {
+      "source": "file:packages/app/e2e/desktop-first-send-gateway-verify.script.ts",
+      "target": "file:packages/app/src/utils/host-routes.ts",
+      "type": "imports",
+      "specifier": "../src/utils/host-routes"
+    },
+    {
+      "source": "file:packages/app/e2e/desktop-first-send-gateway-verify.script.ts",
+      "target": "file:packages/app/e2e/helpers/node-ws-factory.ts",
+      "type": "imports",
+      "specifier": "./helpers/node-ws-factory"
+    },
+    {
+      "source": "file:packages/app/e2e/desktop-first-send-gateway-verify.script.ts",
+      "target": "file:packages/app/e2e/helpers/workspace.ts",
+      "type": "imports",
+      "specifier": "./helpers/workspace"
+    },
+    {
+      "source": "file:packages/app/e2e/desktop-packaged-sidebar-shelf.script.ts",
+      "target": "file:packages/app/e2e/helpers/mock-agent.ts",
+      "type": "imports",
+      "specifier": "./helpers/mock-agent"
+    },
+    {
+      "source": "file:packages/app/e2e/desktop-packaged-sidebar-shelf.script.ts",
+      "target": "file:packages/app/e2e/helpers/node-ws-factory.ts",
+      "type": "imports",
+      "specifier": "./helpers/node-ws-factory"
+    },
+    {
+      "source": "file:packages/app/e2e/desktop-packaged-sidebar-shelf.script.ts",
+      "target": "file:packages/app/e2e/helpers/workspace.ts",
+      "type": "imports",
+      "specifier": "./helpers/workspace"
+    },
+    {
       "source": "file:packages/app/e2e/desktop-packaged-slices.script.ts",
       "target": "file:packages/app/e2e/helpers/agent-bottom-anchor.ts",
       "type": "imports",
@@ -14297,6 +14881,84 @@
       "specifier": "./helpers/workspace"
     },
     {
+      "source": "file:packages/app/e2e/desktop-selected-hover-stable.script.ts",
+      "target": "file:packages/app/e2e/helpers/node-ws-factory.ts",
+      "type": "imports",
+      "specifier": "./helpers/node-ws-factory"
+    },
+    {
+      "source": "file:packages/app/e2e/desktop-selected-hover-stable.script.ts",
+      "target": "file:packages/app/e2e/helpers/workspace.ts",
+      "type": "imports",
+      "specifier": "./helpers/workspace"
+    },
+    {
+      "source": "file:packages/app/e2e/desktop-selection-text-width.script.ts",
+      "target": "file:packages/app/e2e/helpers/mock-agent.ts",
+      "type": "imports",
+      "specifier": "./helpers/mock-agent"
+    },
+    {
+      "source": "file:packages/app/e2e/desktop-selection-text-width.script.ts",
+      "target": "file:packages/app/e2e/helpers/node-ws-factory.ts",
+      "type": "imports",
+      "specifier": "./helpers/node-ws-factory"
+    },
+    {
+      "source": "file:packages/app/e2e/desktop-selection-text-width.script.ts",
+      "target": "file:packages/app/e2e/helpers/workspace.ts",
+      "type": "imports",
+      "specifier": "./helpers/workspace"
+    },
+    {
+      "source": "file:packages/app/e2e/desktop-selection-typography.script.ts",
+      "target": "file:packages/app/e2e/helpers/node-ws-factory.ts",
+      "type": "imports",
+      "specifier": "./helpers/node-ws-factory"
+    },
+    {
+      "source": "file:packages/app/e2e/desktop-selection-typography.script.ts",
+      "target": "file:packages/app/e2e/helpers/workspace.ts",
+      "type": "imports",
+      "specifier": "./helpers/workspace"
+    },
+    {
+      "source": "file:packages/app/e2e/desktop-sidebar-optimistic-observe.script.ts",
+      "target": "file:packages/app/src/utils/host-routes.ts",
+      "type": "imports",
+      "specifier": "../src/utils/host-routes"
+    },
+    {
+      "source": "file:packages/app/e2e/desktop-sidebar-optimistic-observe.script.ts",
+      "target": "file:packages/app/e2e/helpers/node-ws-factory.ts",
+      "type": "imports",
+      "specifier": "./helpers/node-ws-factory"
+    },
+    {
+      "source": "file:packages/app/e2e/desktop-sidebar-optimistic-observe.script.ts",
+      "target": "file:packages/app/e2e/helpers/workspace.ts",
+      "type": "imports",
+      "specifier": "./helpers/workspace"
+    },
+    {
+      "source": "file:packages/app/e2e/desktop-sidebar-single-row.script.ts",
+      "target": "file:packages/app/src/utils/host-routes.ts",
+      "type": "imports",
+      "specifier": "../src/utils/host-routes"
+    },
+    {
+      "source": "file:packages/app/e2e/desktop-sidebar-single-row.script.ts",
+      "target": "file:packages/app/e2e/helpers/node-ws-factory.ts",
+      "type": "imports",
+      "specifier": "./helpers/node-ws-factory"
+    },
+    {
+      "source": "file:packages/app/e2e/desktop-sidebar-single-row.script.ts",
+      "target": "file:packages/app/e2e/helpers/workspace.ts",
+      "type": "imports",
+      "specifier": "./helpers/workspace"
+    },
+    {
       "source": "file:packages/app/e2e/desktop-slices.script.ts",
       "target": "file:packages/app/e2e/helpers/agent-bottom-anchor.ts",
       "type": "imports",
@@ -14322,6 +14984,18 @@
     },
     {
       "source": "file:packages/app/e2e/desktop-slices.script.ts",
+      "target": "file:packages/app/e2e/helpers/workspace.ts",
+      "type": "imports",
+      "specifier": "./helpers/workspace"
+    },
+    {
+      "source": "file:packages/app/e2e/desktop-status-drift-probe.script.ts",
+      "target": "file:packages/app/e2e/helpers/node-ws-factory.ts",
+      "type": "imports",
+      "specifier": "./helpers/node-ws-factory"
+    },
+    {
+      "source": "file:packages/app/e2e/desktop-status-drift-probe.script.ts",
       "target": "file:packages/app/e2e/helpers/workspace.ts",
       "type": "imports",
       "specifier": "./helpers/workspace"
@@ -14349,6 +15023,72 @@
       "target": "file:packages/app/e2e/helpers/server-id.ts",
       "type": "imports",
       "specifier": "./helpers/server-id"
+    },
+    {
+      "source": "file:packages/app/e2e/desktop-user-facing-error-text.script.ts",
+      "target": "file:packages/app/src/utils/host-routes.ts",
+      "type": "imports",
+      "specifier": "../src/utils/host-routes"
+    },
+    {
+      "source": "file:packages/app/e2e/desktop-user-facing-error-text.script.ts",
+      "target": "file:packages/app/e2e/helpers/node-ws-factory.ts",
+      "type": "imports",
+      "specifier": "./helpers/node-ws-factory"
+    },
+    {
+      "source": "file:packages/app/e2e/desktop-user-facing-error-text.script.ts",
+      "target": "file:packages/app/e2e/helpers/workspace.ts",
+      "type": "imports",
+      "specifier": "./helpers/workspace"
+    },
+    {
+      "source": "file:packages/app/e2e/draft-send-regression.spec.ts",
+      "target": "file:packages/app/e2e/fixtures.ts",
+      "type": "imports",
+      "specifier": "./fixtures"
+    },
+    {
+      "source": "file:packages/app/e2e/draft-send-regression.spec.ts",
+      "target": "file:packages/app/e2e/helpers/app.ts",
+      "type": "imports",
+      "specifier": "./helpers/app"
+    },
+    {
+      "source": "file:packages/app/e2e/draft-send-regression.spec.ts",
+      "target": "file:packages/app/e2e/helpers/archive-tab.ts",
+      "type": "imports",
+      "specifier": "./helpers/archive-tab"
+    },
+    {
+      "source": "file:packages/app/e2e/draft-send-regression.spec.ts",
+      "target": "file:packages/app/e2e/helpers/launcher.ts",
+      "type": "imports",
+      "specifier": "./helpers/launcher"
+    },
+    {
+      "source": "file:packages/app/e2e/draft-send-regression.spec.ts",
+      "target": "file:packages/app/e2e/helpers/new-workspace.ts",
+      "type": "imports",
+      "specifier": "./helpers/new-workspace"
+    },
+    {
+      "source": "file:packages/app/e2e/draft-send-regression.spec.ts",
+      "target": "file:packages/app/e2e/helpers/server-id.ts",
+      "type": "imports",
+      "specifier": "./helpers/server-id"
+    },
+    {
+      "source": "file:packages/app/e2e/draft-send-regression.spec.ts",
+      "target": "file:packages/app/e2e/helpers/workspace.ts",
+      "type": "imports",
+      "specifier": "./helpers/workspace"
+    },
+    {
+      "source": "file:packages/app/e2e/draft-send-regression.spec.ts",
+      "target": "file:packages/app/e2e/helpers/workspace-ui.ts",
+      "type": "imports",
+      "specifier": "./helpers/workspace-ui"
     },
     {
       "source": "file:packages/app/e2e/file-explorer-collapse.spec.ts",
@@ -15486,6 +16226,12 @@
     },
     {
       "source": "file:packages/app/e2e/workspace-navigation-regression.spec.ts",
+      "target": "file:packages/app/e2e/helpers/terminal-dsl.ts",
+      "type": "imports",
+      "specifier": "./helpers/terminal-dsl"
+    },
+    {
+      "source": "file:packages/app/e2e/workspace-navigation-regression.spec.ts",
       "target": "file:packages/app/e2e/helpers/workspace-ui.ts",
       "type": "imports",
       "specifier": "./helpers/workspace-ui"
@@ -16086,12 +16832,6 @@
     },
     {
       "source": "file:packages/app/src/agent-stream/turn-footer.tsx",
-      "target": "file:packages/app/src/timeline/turn-time.ts",
-      "type": "imports",
-      "specifier": "@/timeline/turn-time"
-    },
-    {
-      "source": "file:packages/app/src/agent-stream/turn-footer.tsx",
       "target": "file:packages/app/src/types/stream.ts",
       "type": "imports",
       "specifier": "@/types/stream"
@@ -16611,12 +17351,6 @@
       "target": "file:packages/app/src/runtime/host-runtime.ts",
       "type": "imports",
       "specifier": "@/runtime/host-runtime"
-    },
-    {
-      "source": "file:packages/app/src/app/_layout/AppShell.tsx",
-      "target": "file:packages/app/src/stores/workspace-layout-store.ts",
-      "type": "imports",
-      "specifier": "@/stores/workspace-layout-store"
     },
     {
       "source": "file:packages/app/src/app/_layout/AppShell.tsx",
@@ -18084,6 +18818,12 @@
     },
     {
       "source": "file:packages/app/src/components/branch-switcher.tsx",
+      "target": "file:packages/app/src/screens/new-workspace-branch-picker.ts",
+      "type": "imports",
+      "specifier": "@/screens/new-workspace-branch-picker"
+    },
+    {
+      "source": "file:packages/app/src/components/branch-switcher.tsx",
       "target": "file:packages/app/src/styles/theme.ts",
       "type": "imports",
       "specifier": "@/styles/theme"
@@ -19506,6 +20246,12 @@
     },
     {
       "source": "file:packages/app/src/components/left-sidebar.tsx",
+      "target": "file:packages/app/src/sidebar-v2/store.ts",
+      "type": "imports",
+      "specifier": "@/sidebar-v2/store"
+    },
+    {
+      "source": "file:packages/app/src/components/left-sidebar.tsx",
       "target": "file:packages/app/src/stores/last-draft-directory-store.ts",
       "type": "imports",
       "specifier": "@/stores/last-draft-directory-store"
@@ -19527,6 +20273,12 @@
       "target": "file:packages/app/src/stores/session-store-hooks/index.ts",
       "type": "imports",
       "specifier": "@/stores/session-store-hooks"
+    },
+    {
+      "source": "file:packages/app/src/components/left-sidebar.tsx",
+      "target": "file:packages/app/src/stores/sidebar-order-store.ts",
+      "type": "imports",
+      "specifier": "@/stores/sidebar-order-store"
     },
     {
       "source": "file:packages/app/src/components/left-sidebar.tsx",
@@ -19581,6 +20333,12 @@
       "target": "file:packages/app/src/utils/sidebar-session-source.ts",
       "type": "imports",
       "specifier": "@/utils/sidebar-session-source"
+    },
+    {
+      "source": "file:packages/app/src/components/left-sidebar.tsx",
+      "target": "file:packages/app/src/utils/sidebar-view-switcher-layout.ts",
+      "type": "imports",
+      "specifier": "@/utils/sidebar-view-switcher-layout"
     },
     {
       "source": "file:packages/app/src/components/liquid-neon-backdrop-style.test.ts",
@@ -20292,6 +21050,12 @@
     },
     {
       "source": "file:packages/app/src/components/provider-icons.ts",
+      "target": "file:packages/app/src/components/icons/dsh-icon.tsx",
+      "type": "imports",
+      "specifier": "@/components/icons/dsh-icon"
+    },
+    {
+      "source": "file:packages/app/src/components/provider-icons.ts",
       "target": "file:packages/app/src/components/icons/kimi-icon.tsx",
       "type": "imports",
       "specifier": "@/components/icons/kimi-icon"
@@ -20640,6 +21404,12 @@
     },
     {
       "source": "file:packages/app/src/components/sidebar-session-list.tsx",
+      "target": "file:packages/app/src/components/sidebar-status-view.tsx",
+      "type": "imports",
+      "specifier": "@/components/sidebar-status-view"
+    },
+    {
+      "source": "file:packages/app/src/components/sidebar-session-list.tsx",
       "target": "file:packages/app/src/components/themed-icon-host.tsx",
       "type": "imports",
       "specifier": "@/components/themed-icon-host"
@@ -20712,6 +21482,30 @@
     },
     {
       "source": "file:packages/app/src/components/sidebar-session-list.tsx",
+      "target": "file:packages/app/src/sidebar-v2/agent-adapter.ts",
+      "type": "imports",
+      "specifier": "@/sidebar-v2/agent-adapter"
+    },
+    {
+      "source": "file:packages/app/src/components/sidebar-session-list.tsx",
+      "target": "file:packages/app/src/sidebar-v2/presentation.ts",
+      "type": "imports",
+      "specifier": "@/sidebar-v2/presentation"
+    },
+    {
+      "source": "file:packages/app/src/components/sidebar-session-list.tsx",
+      "target": "file:packages/app/src/sidebar-v2/snooze.ts",
+      "type": "imports",
+      "specifier": "@/sidebar-v2/snooze"
+    },
+    {
+      "source": "file:packages/app/src/components/sidebar-session-list.tsx",
+      "target": "file:packages/app/src/sidebar-v2/store.ts",
+      "type": "imports",
+      "specifier": "@/sidebar-v2/store"
+    },
+    {
+      "source": "file:packages/app/src/components/sidebar-session-list.tsx",
       "target": "file:packages/app/src/stores/draft-keys.ts",
       "type": "imports",
       "specifier": "@/stores/draft-keys"
@@ -20772,6 +21566,12 @@
     },
     {
       "source": "file:packages/app/src/components/sidebar-session-list.tsx",
+      "target": "file:packages/app/src/utils/sidebar-agent-label-cache.ts",
+      "type": "imports",
+      "specifier": "@/utils/sidebar-agent-label-cache"
+    },
+    {
+      "source": "file:packages/app/src/components/sidebar-session-list.tsx",
       "target": "file:packages/app/src/utils/sidebar-session-groups.ts",
       "type": "imports",
       "specifier": "@/utils/sidebar-session-groups"
@@ -20781,6 +21581,138 @@
       "target": "file:packages/app/src/components/sidebar-session-presentation.ts",
       "type": "imports",
       "specifier": "./sidebar-session-presentation"
+    },
+    {
+      "source": "file:packages/app/src/components/sidebar-status-view.test.tsx",
+      "target": "file:packages/app/src/components/sidebar-status-view.tsx",
+      "type": "imports",
+      "specifier": "@/components/sidebar-status-view"
+    },
+    {
+      "source": "file:packages/app/src/components/sidebar-status-view.test.tsx",
+      "target": "file:packages/app/src/hooks/use-aggregated-agents.ts",
+      "type": "imports",
+      "specifier": "@/hooks/use-aggregated-agents"
+    },
+    {
+      "source": "file:packages/app/src/components/sidebar-status-view.test.tsx",
+      "target": "file:packages/app/src/utils/navigate-to-agent/index.ts",
+      "type": "imports",
+      "specifier": "@/utils/navigate-to-agent"
+    },
+    {
+      "source": "file:packages/app/src/components/sidebar-status-view.tsx",
+      "target": "file:packages/app/src/components/provider-icons.ts",
+      "type": "imports",
+      "specifier": "@/components/provider-icons"
+    },
+    {
+      "source": "file:packages/app/src/components/sidebar-status-view.tsx",
+      "target": "file:packages/app/src/components/themed-icon-host.tsx",
+      "type": "imports",
+      "specifier": "@/components/themed-icon-host"
+    },
+    {
+      "source": "file:packages/app/src/components/sidebar-status-view.tsx",
+      "target": "file:packages/app/src/components/ui/button.tsx",
+      "type": "imports",
+      "specifier": "@/components/ui/button"
+    },
+    {
+      "source": "file:packages/app/src/components/sidebar-status-view.tsx",
+      "target": "file:packages/app/src/components/ui/context-menu.tsx",
+      "type": "imports",
+      "specifier": "@/components/ui/context-menu"
+    },
+    {
+      "source": "file:packages/app/src/components/sidebar-status-view.tsx",
+      "target": "file:packages/app/src/components/ui/dropdown-menu.tsx",
+      "type": "imports",
+      "specifier": "@/components/ui/dropdown-menu"
+    },
+    {
+      "source": "file:packages/app/src/components/sidebar-status-view.tsx",
+      "target": "file:packages/app/src/constants/layout.ts",
+      "type": "imports",
+      "specifier": "@/constants/layout"
+    },
+    {
+      "source": "file:packages/app/src/components/sidebar-status-view.tsx",
+      "target": "file:packages/app/src/constants/platform.ts",
+      "type": "imports",
+      "specifier": "@/constants/platform"
+    },
+    {
+      "source": "file:packages/app/src/components/sidebar-status-view.tsx",
+      "target": "file:packages/app/src/hooks/use-aggregated-agents.ts",
+      "type": "imports",
+      "specifier": "@/hooks/use-aggregated-agents"
+    },
+    {
+      "source": "file:packages/app/src/components/sidebar-status-view.tsx",
+      "target": "file:packages/app/src/sidebar-v2/actions.ts",
+      "type": "imports",
+      "specifier": "@/sidebar-v2/actions"
+    },
+    {
+      "source": "file:packages/app/src/components/sidebar-status-view.tsx",
+      "target": "file:packages/app/src/sidebar-v2/agent-adapter.ts",
+      "type": "imports",
+      "specifier": "@/sidebar-v2/agent-adapter"
+    },
+    {
+      "source": "file:packages/app/src/components/sidebar-status-view.tsx",
+      "target": "file:packages/app/src/sidebar-v2/logic.ts",
+      "type": "imports",
+      "specifier": "@/sidebar-v2/logic"
+    },
+    {
+      "source": "file:packages/app/src/components/sidebar-status-view.tsx",
+      "target": "file:packages/app/src/sidebar-v2/presentation.ts",
+      "type": "imports",
+      "specifier": "@/sidebar-v2/presentation"
+    },
+    {
+      "source": "file:packages/app/src/components/sidebar-status-view.tsx",
+      "target": "file:packages/app/src/sidebar-v2/projects.ts",
+      "type": "imports",
+      "specifier": "@/sidebar-v2/projects"
+    },
+    {
+      "source": "file:packages/app/src/components/sidebar-status-view.tsx",
+      "target": "file:packages/app/src/sidebar-v2/shelves.ts",
+      "type": "imports",
+      "specifier": "@/sidebar-v2/shelves"
+    },
+    {
+      "source": "file:packages/app/src/components/sidebar-status-view.tsx",
+      "target": "file:packages/app/src/sidebar-v2/snooze.ts",
+      "type": "imports",
+      "specifier": "@/sidebar-v2/snooze"
+    },
+    {
+      "source": "file:packages/app/src/components/sidebar-status-view.tsx",
+      "target": "file:packages/app/src/sidebar-v2/store.ts",
+      "type": "imports",
+      "specifier": "@/sidebar-v2/store"
+    },
+    {
+      "source": "file:packages/app/src/components/sidebar-status-view.tsx",
+      "target": "file:packages/app/src/styles/theme.ts",
+      "type": "imports",
+      "specifier": "@/styles/theme"
+    },
+    {
+      "source": "file:packages/app/src/components/sidebar-status-view.tsx",
+      "target": "file:packages/app/src/utils/agent-history-navigation.ts",
+      "type": "imports",
+      "specifier": "@/utils/agent-history-navigation"
+    },
+    {
+      "source": "file:packages/app/src/components/sidebar-status-view.tsx",
+      "target": "file:packages/app/src/utils/navigate-to-agent/index.ts",
+      "type": "imports",
+      "specifier": "@/utils/navigate-to-agent"
     },
     {
       "source": "file:packages/app/src/components/sidebar-workspace-list.test.tsx",
@@ -23160,6 +24092,12 @@
     },
     {
       "source": "file:packages/app/src/composer/draft/create-flow.test.ts",
+      "target": "file:packages/app/src/i18n/index.ts",
+      "type": "imports",
+      "specifier": "@/i18n"
+    },
+    {
+      "source": "file:packages/app/src/composer/draft/create-flow.test.ts",
       "target": "file:packages/app/src/stores/create-flow-store.ts",
       "type": "imports",
       "specifier": "@/stores/create-flow-store"
@@ -23193,6 +24131,12 @@
       "target": "file:packages/app/src/composer/attachments/submit.ts",
       "type": "imports",
       "specifier": "@/composer/attachments/submit"
+    },
+    {
+      "source": "file:packages/app/src/composer/draft/create-flow.ts",
+      "target": "file:packages/app/src/i18n/index.ts",
+      "type": "imports",
+      "specifier": "@/i18n"
     },
     {
       "source": "file:packages/app/src/composer/draft/create-flow.ts",
@@ -23400,12 +24344,6 @@
     },
     {
       "source": "file:packages/app/src/composer/draft/workspace-tab.tsx",
-      "target": "file:packages/app/src/components/conversation-aspect-column.tsx",
-      "type": "imports",
-      "specifier": "@/components/conversation-aspect-column"
-    },
-    {
-      "source": "file:packages/app/src/composer/draft/workspace-tab.tsx",
       "target": "file:packages/app/src/components/file-drop-zone.tsx",
       "type": "imports",
       "specifier": "@/components/file-drop-zone"
@@ -23490,6 +24428,12 @@
     },
     {
       "source": "file:packages/app/src/composer/draft/workspace-tab.tsx",
+      "target": "file:packages/app/src/i18n/index.ts",
+      "type": "imports",
+      "specifier": "@/i18n"
+    },
+    {
+      "source": "file:packages/app/src/composer/draft/workspace-tab.tsx",
       "target": "file:packages/app/src/runtime/host-runtime.ts",
       "type": "imports",
       "specifier": "@/runtime/host-runtime"
@@ -23520,6 +24464,12 @@
     },
     {
       "source": "file:packages/app/src/composer/draft/workspace-tab.tsx",
+      "target": "file:packages/app/src/stores/draft-store/index.ts",
+      "type": "imports",
+      "specifier": "@/stores/draft-store"
+    },
+    {
+      "source": "file:packages/app/src/composer/draft/workspace-tab.tsx",
       "target": "file:packages/app/src/stores/last-draft-directory-store.ts",
       "type": "imports",
       "specifier": "@/stores/last-draft-directory-store"
@@ -23547,6 +24497,12 @@
       "target": "file:packages/app/src/stores/workspace-draft-submission-store.ts",
       "type": "imports",
       "specifier": "@/stores/workspace-draft-submission-store"
+    },
+    {
+      "source": "file:packages/app/src/composer/draft/workspace-tab.tsx",
+      "target": "file:packages/app/src/stores/workspace-layout-store.ts",
+      "type": "imports",
+      "specifier": "@/stores/workspace-layout-store"
     },
     {
       "source": "file:packages/app/src/composer/draft/workspace-tab.tsx",
@@ -26387,6 +27343,12 @@
       "specifier": "@chisacode/protocol/git-remote"
     },
     {
+      "source": "file:packages/app/src/git/idle-git-button-label.test.ts",
+      "target": "file:packages/app/src/git/idle-git-button-label.ts",
+      "type": "imports",
+      "specifier": "./idle-git-button-label"
+    },
+    {
       "source": "file:packages/app/src/git/policy.test.ts",
       "target": "file:packages/app/src/git/policy.ts",
       "type": "imports",
@@ -26685,6 +27647,12 @@
       "target": "file:packages/app/src/git/actions-split-button.tsx",
       "type": "imports",
       "specifier": "@/git/actions-split-button"
+    },
+    {
+      "source": "file:packages/app/src/git/workspace-actions.tsx",
+      "target": "file:packages/app/src/git/idle-git-button-label.ts",
+      "type": "imports",
+      "specifier": "@/git/idle-git-button-label"
     },
     {
       "source": "file:packages/app/src/git/workspace-actions.tsx",
@@ -27425,6 +28393,12 @@
       "specifier": "@/components/ui/autocomplete-utils"
     },
     {
+      "source": "file:packages/app/src/hooks/use-branch-switcher.test.ts",
+      "target": "file:packages/app/src/hooks/use-branch-switcher.ts",
+      "type": "imports",
+      "specifier": "./use-branch-switcher"
+    },
+    {
       "source": "file:packages/app/src/hooks/use-branch-switcher.ts",
       "target": "file:packages/app/src/components/toast-host.tsx",
       "type": "imports",
@@ -27441,6 +28415,12 @@
       "target": "file:packages/app/src/git/query-keys.ts",
       "type": "imports",
       "specifier": "@/git/query-keys"
+    },
+    {
+      "source": "file:packages/app/src/hooks/use-branch-switcher.ts",
+      "target": "file:packages/app/src/screens/new-workspace-branch-picker.ts",
+      "type": "imports",
+      "specifier": "@/screens/new-workspace-branch-picker"
     },
     {
       "source": "file:packages/app/src/hooks/use-branch-switcher.ts",
@@ -28896,12 +29876,6 @@
     },
     {
       "source": "file:packages/app/src/panels/agent-panel.tsx",
-      "target": "file:packages/app/src/components/conversation-aspect-column.tsx",
-      "type": "imports",
-      "specifier": "@/components/conversation-aspect-column"
-    },
-    {
-      "source": "file:packages/app/src/panels/agent-panel.tsx",
       "target": "file:packages/app/src/components/file-drop-zone.tsx",
       "type": "imports",
       "specifier": "@/components/file-drop-zone"
@@ -29145,6 +30119,12 @@
       "target": "module:client",
       "type": "depends_on",
       "specifier": "@chisacode/client/internal/daemon-client"
+    },
+    {
+      "source": "module:app",
+      "target": "module:protocol",
+      "type": "depends_on",
+      "specifier": "@chisacode/protocol/messages"
     },
     {
       "source": "file:packages/app/src/panels/browser-panel.tsx",
@@ -29790,6 +30770,12 @@
     },
     {
       "source": "file:packages/app/src/runtime/host-runtime.ts",
+      "target": "file:packages/app/src/security/relay-device-secret-store.ts",
+      "type": "imports",
+      "specifier": "@/security/relay-device-secret-store"
+    },
+    {
+      "source": "file:packages/app/src/runtime/host-runtime.ts",
       "target": "file:packages/app/src/stores/session-store.ts",
       "type": "imports",
       "specifier": "@/stores/session-store"
@@ -29867,6 +30853,12 @@
       "specifier": "./agent-ready-screen-bottom-anchor"
     },
     {
+      "source": "file:packages/app/src/screens/new-workspace-branch-picker.test.ts",
+      "target": "file:packages/app/src/screens/new-workspace-branch-picker.ts",
+      "type": "imports",
+      "specifier": "./new-workspace-branch-picker"
+    },
+    {
       "source": "file:packages/app/src/screens/new-workspace-default-directory.test.ts",
       "target": "file:packages/app/src/screens/new-workspace-default-directory.ts",
       "type": "imports",
@@ -29939,6 +30931,18 @@
       "specifier": "@chisacode/protocol/messages"
     },
     {
+      "source": "file:packages/app/src/screens/new-workspace-ensure.test.ts",
+      "target": "file:packages/app/src/screens/new-workspace-ensure.ts",
+      "type": "imports",
+      "specifier": "./new-workspace-ensure"
+    },
+    {
+      "source": "file:packages/app/src/screens/new-workspace-ensure.ts",
+      "target": "file:packages/app/src/git/query-keys.ts",
+      "type": "imports",
+      "specifier": "@/git/query-keys"
+    },
+    {
       "source": "file:packages/app/src/screens/new-workspace-picker-item.test.ts",
       "target": "file:packages/app/src/screens/new-workspace-picker-item.ts",
       "type": "imports",
@@ -29994,6 +30998,12 @@
     },
     {
       "source": "file:packages/app/src/screens/new-workspace-screen.tsx",
+      "target": "file:packages/app/src/screens/new-workspace-branch-picker.ts",
+      "type": "imports",
+      "specifier": "./new-workspace-branch-picker"
+    },
+    {
+      "source": "file:packages/app/src/screens/new-workspace-screen.tsx",
       "target": "file:packages/app/src/screens/new-workspace-directory-options.ts",
       "type": "imports",
       "specifier": "./new-workspace-directory-options"
@@ -30009,6 +31019,12 @@
       "target": "file:packages/app/src/screens/new-workspace-empty.ts",
       "type": "imports",
       "specifier": "./new-workspace-empty"
+    },
+    {
+      "source": "file:packages/app/src/screens/new-workspace-screen.tsx",
+      "target": "file:packages/app/src/screens/new-workspace-ensure.ts",
+      "type": "imports",
+      "specifier": "./new-workspace-ensure"
     },
     {
       "source": "file:packages/app/src/screens/new-workspace-screen.tsx",
@@ -30243,12 +31259,6 @@
       "target": "file:packages/app/src/utils/workspace-navigation.ts",
       "type": "imports",
       "specifier": "@/utils/workspace-navigation"
-    },
-    {
-      "source": "module:app",
-      "target": "module:client",
-      "type": "depends_on",
-      "specifier": "@chisacode/client/internal/daemon-client"
     },
     {
       "source": "module:app",
@@ -32376,6 +33386,12 @@
     },
     {
       "source": "file:packages/app/src/screens/workspace/workspace-center-column.tsx",
+      "target": "file:packages/app/src/components/conversation-aspect-column.tsx",
+      "type": "imports",
+      "specifier": "@/components/conversation-aspect-column"
+    },
+    {
+      "source": "file:packages/app/src/screens/workspace/workspace-center-column.tsx",
       "target": "file:packages/app/src/components/headers/menu-header.tsx",
       "type": "imports",
       "specifier": "@/components/headers/menu-header"
@@ -32885,12 +33901,6 @@
       "specifier": "@/styles/theme"
     },
     {
-      "source": "file:packages/app/src/screens/workspace/workspace-right-panel.tsx",
-      "target": "file:packages/app/src/utils/desktop-window.ts",
-      "type": "imports",
-      "specifier": "@/utils/desktop-window"
-    },
-    {
       "source": "file:packages/app/src/screens/workspace/workspace-route-state-views.tsx",
       "target": "file:packages/app/src/components/ui/button.tsx",
       "type": "imports",
@@ -33135,6 +34145,12 @@
       "target": "file:packages/app/src/screens/workspace/workspace-environment-panel-model.ts",
       "type": "imports",
       "specifier": "@/screens/workspace/workspace-environment-panel-model"
+    },
+    {
+      "source": "file:packages/app/src/screens/workspace/workspace-screen.tsx",
+      "target": "file:packages/app/src/screens/workspace/workspace-header.tsx",
+      "type": "imports",
+      "specifier": "@/screens/workspace/workspace-header"
     },
     {
       "source": "file:packages/app/src/screens/workspace/workspace-screen.tsx",
@@ -33401,6 +34417,36 @@
       "specifier": "@/utils/provider-command-templates"
     },
     {
+      "source": "file:packages/app/src/security/relay-device-secret-store.electron.ts",
+      "target": "file:packages/app/src/security/relay-device-secret-store-core.ts",
+      "type": "imports",
+      "specifier": "./relay-device-secret-store-core"
+    },
+    {
+      "source": "file:packages/app/src/security/relay-device-secret-store.electron.ts",
+      "target": "file:packages/app/src/desktop/electron/invoke.ts",
+      "type": "imports",
+      "specifier": "@/desktop/electron/invoke"
+    },
+    {
+      "source": "file:packages/app/src/security/relay-device-secret-store.native.ts",
+      "target": "file:packages/app/src/security/relay-device-secret-store-core.ts",
+      "type": "imports",
+      "specifier": "./relay-device-secret-store-core"
+    },
+    {
+      "source": "file:packages/app/src/security/relay-device-secret-store.ts",
+      "target": "file:packages/app/src/security/relay-device-secret-store-core.ts",
+      "type": "imports",
+      "specifier": "./relay-device-secret-store-core"
+    },
+    {
+      "source": "file:packages/app/src/security/relay-device-secret-store.web.ts",
+      "target": "file:packages/app/src/security/relay-device-secret-store-core.ts",
+      "type": "imports",
+      "specifier": "./relay-device-secret-store-core"
+    },
+    {
       "source": "file:packages/app/src/sidebar-v2/actions.test.ts",
       "target": "file:packages/app/src/sidebar-v2/actions.ts",
       "type": "imports",
@@ -33453,6 +34499,12 @@
       "target": "file:packages/app/src/hooks/use-aggregated-agents.ts",
       "type": "imports",
       "specifier": "@/hooks/use-aggregated-agents"
+    },
+    {
+      "source": "file:packages/app/src/sidebar-v2/agent-adapter.ts",
+      "target": "file:packages/app/src/utils/sidebar-session-groups.ts",
+      "type": "imports",
+      "specifier": "@/utils/sidebar-session-groups"
     },
     {
       "source": "file:packages/app/src/sidebar-v2/logic.test.ts",
@@ -33627,6 +34679,12 @@
       "target": "file:packages/app/src/utils/navigate-to-agent/index.ts",
       "type": "imports",
       "specifier": "@/utils/navigate-to-agent"
+    },
+    {
+      "source": "file:packages/app/src/sidebar-v2/SidebarV2.tsx",
+      "target": "file:packages/app/src/utils/sidebar-agent-label-cache.ts",
+      "type": "imports",
+      "specifier": "@/utils/sidebar-agent-label-cache"
     },
     {
       "source": "file:packages/app/src/sidebar-v2/SidebarV2BulkMenu.tsx",
@@ -33809,6 +34867,18 @@
       "specifier": "./snooze"
     },
     {
+      "source": "file:packages/app/src/sidebar-v2/store.test.ts",
+      "target": "file:packages/app/src/sidebar-v2/snooze.ts",
+      "type": "imports",
+      "specifier": "./snooze"
+    },
+    {
+      "source": "file:packages/app/src/sidebar-v2/store.test.ts",
+      "target": "file:packages/app/src/sidebar-v2/store.ts",
+      "type": "imports",
+      "specifier": "./store"
+    },
+    {
       "source": "file:packages/app/src/sidebar-v2/store.ts",
       "target": "file:packages/app/src/sidebar-v2/snooze.ts",
       "type": "imports",
@@ -33987,6 +35057,18 @@
       "target": "file:packages/app/src/attachments/types.ts",
       "type": "imports",
       "specifier": "@/attachments/types"
+    },
+    {
+      "source": "file:packages/app/src/stores/draft-store/reserve-agent-id.test.ts",
+      "target": "file:packages/app/src/stores/draft-store/state.ts",
+      "type": "imports",
+      "specifier": "./state"
+    },
+    {
+      "source": "file:packages/app/src/stores/draft-store/reserve-store.test.ts",
+      "target": "file:packages/app/src/stores/draft-store/index.ts",
+      "type": "imports",
+      "specifier": "./index"
     },
     {
       "source": "file:packages/app/src/stores/draft-store/state.test.ts",
@@ -36186,6 +37268,18 @@
     },
     {
       "source": "file:packages/app/src/utils/selected-sidebar-agent.ts",
+      "target": "file:packages/app/src/stores/create-flow-store.ts",
+      "type": "imports",
+      "specifier": "@/stores/create-flow-store"
+    },
+    {
+      "source": "file:packages/app/src/utils/selected-sidebar-agent.ts",
+      "target": "file:packages/app/src/stores/workspace-layout-store.ts",
+      "type": "imports",
+      "specifier": "@/stores/workspace-layout-store"
+    },
+    {
+      "source": "file:packages/app/src/utils/selected-sidebar-agent.ts",
       "target": "file:packages/app/src/workspace-tabs/identity.ts",
       "type": "imports",
       "specifier": "@/workspace-tabs/identity"
@@ -36237,6 +37331,24 @@
       "target": "file:packages/app/src/utils/format-shortcut.ts",
       "type": "imports",
       "specifier": "@/utils/format-shortcut"
+    },
+    {
+      "source": "file:packages/app/src/utils/sidebar-agent-label-cache.test.ts",
+      "target": "file:packages/app/src/utils/sidebar-agent-label-cache.ts",
+      "type": "imports",
+      "specifier": "./sidebar-agent-label-cache"
+    },
+    {
+      "source": "file:packages/app/src/utils/sidebar-agent-label-cache.test.ts",
+      "target": "file:packages/app/src/hooks/agent-history-query-key.ts",
+      "type": "imports",
+      "specifier": "@/hooks/agent-history-query-key"
+    },
+    {
+      "source": "file:packages/app/src/utils/sidebar-agent-label-cache.ts",
+      "target": "file:packages/app/src/hooks/agent-history-query-key.ts",
+      "type": "imports",
+      "specifier": "@/hooks/agent-history-query-key"
     },
     {
       "source": "file:packages/app/src/utils/sidebar-agent-state.test.ts",
@@ -36371,6 +37483,12 @@
       "specifier": "@/hooks/use-sidebar-workspaces-list"
     },
     {
+      "source": "file:packages/app/src/utils/sidebar-view-switcher-layout.test.ts",
+      "target": "file:packages/app/src/utils/sidebar-view-switcher-layout.ts",
+      "type": "imports",
+      "specifier": "./sidebar-view-switcher-layout"
+    },
+    {
       "source": "file:packages/app/src/utils/sidebar-workspace-archive-redirect.ts",
       "target": "file:packages/app/src/stores/session-store.ts",
       "type": "imports",
@@ -36381,6 +37499,24 @@
       "target": "file:packages/app/src/utils/workspace-archive-redirect.ts",
       "type": "imports",
       "specifier": "@/utils/workspace-archive-redirect"
+    },
+    {
+      "source": "file:packages/app/src/utils/sidebar-worktree-home-grouping.test.ts",
+      "target": "file:packages/app/src/utils/agent-grouping.ts",
+      "type": "imports",
+      "specifier": "./agent-grouping"
+    },
+    {
+      "source": "file:packages/app/src/utils/sidebar-worktree-home-grouping.test.ts",
+      "target": "file:packages/app/src/utils/sidebar-session-groups.ts",
+      "type": "imports",
+      "specifier": "./sidebar-session-groups"
+    },
+    {
+      "source": "file:packages/app/src/utils/sidebar-worktree-home-grouping.test.ts",
+      "target": "file:packages/app/src/hooks/use-aggregated-agents.ts",
+      "type": "imports",
+      "specifier": "@/hooks/use-aggregated-agents"
     },
     {
       "source": "file:packages/app/src/utils/status-dot-color.ts",

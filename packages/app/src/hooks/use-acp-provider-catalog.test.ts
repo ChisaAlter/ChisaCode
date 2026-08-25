@@ -19,6 +19,7 @@ describe("provider catalog", () => {
       "pi",
       "kimi",
       "grokbuild",
+      "dsh",
     ]);
   });
 

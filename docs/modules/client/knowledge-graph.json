@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "generatedAt": "2026-08-10T08:52:01.260Z",
+  "generatedAt": "2026-08-22T09:09:45.519Z",
   "generator": "scripts/generate-modular-knowledge-graphs.mjs",
   "module": {
     "id": "client",
@@ -52,7 +52,7 @@
       "source": 30,
       "test": 18
     },
-    "internalImportEdges": 79,
+    "internalImportEdges": 80,
     "workspaceDependencies": ["protocol", "relay"],
     "externalDependencies": [
       "@chisacode/client",
@@ -154,7 +154,7 @@
       "id": "file:packages/client/src/daemon-client-agent-lifecycle.ts",
       "type": "source",
       "path": "packages/client/src/daemon-client-agent-lifecycle.ts",
-      "lines": 410,
+      "lines": 428,
       "imports": [
         "./daemon-client-command-transport.js",
         "@chisacode/protocol/agent-types",
@@ -267,9 +267,10 @@
       "id": "file:packages/client/src/daemon-client-connection-controller.ts",
       "type": "source",
       "path": "packages/client/src/daemon-client-connection-controller.ts",
-      "lines": 749,
+      "lines": 791,
       "imports": [
         "./daemon-client-transport.js",
+        "./relay-device-credentials.js",
         "@chisacode/protocol/client-capabilities",
         "@chisacode/protocol/daemon-endpoints",
         "@chisacode/protocol/messages"
@@ -322,7 +323,7 @@
       "id": "file:packages/client/src/daemon-client-public-api.test.ts",
       "type": "test",
       "path": "packages/client/src/daemon-client-public-api.test.ts",
-      "lines": 296,
+      "lines": 297,
       "imports": ["./index.js", "vitest"]
     },
     {
@@ -354,7 +355,7 @@
       "id": "file:packages/client/src/daemon-client-relay-e2ee-transport.ts",
       "type": "source",
       "path": "packages/client/src/daemon-client-relay-e2ee-transport.ts",
-      "lines": 207,
+      "lines": 208,
       "imports": [
         "./daemon-client-transport-types.js",
         "./daemon-client-transport-utils.js",
@@ -426,7 +427,7 @@
       "id": "file:packages/client/src/daemon-client-transport-types.ts",
       "type": "source",
       "path": "packages/client/src/daemon-client-transport-types.ts",
-      "lines": 40,
+      "lines": 47,
       "imports": []
     },
     {
@@ -487,7 +488,7 @@
       "id": "file:packages/client/src/daemon-client.test.ts",
       "type": "test",
       "path": "packages/client/src/daemon-client.test.ts",
-      "lines": 4267,
+      "lines": 4268,
       "imports": [
         "./daemon-client",
         "@chisacode/protocol/binary-frames/index",
@@ -500,7 +501,7 @@
       "id": "file:packages/client/src/daemon-client.ts",
       "type": "source",
       "path": "packages/client/src/daemon-client.ts",
-      "lines": 1835,
+      "lines": 1837,
       "imports": [
         "./daemon-client-agent-extension-commands.js",
         "./daemon-client-agent-interaction.js",
@@ -539,7 +540,7 @@
       "id": "file:packages/client/src/index.ts",
       "type": "source",
       "path": "packages/client/src/index.ts",
-      "lines": 590,
+      "lines": 592,
       "imports": ["./daemon-client.js", "@chisacode/protocol/messages"]
     },
     {
@@ -836,6 +837,12 @@
       "target": "file:packages/client/src/daemon-client-transport.ts",
       "type": "imports",
       "specifier": "./daemon-client-transport.js"
+    },
+    {
+      "source": "file:packages/client/src/daemon-client-connection-controller.ts",
+      "target": "file:packages/client/src/relay-device-credentials.ts",
+      "type": "imports",
+      "specifier": "./relay-device-credentials.js"
     },
     {
       "source": "module:client",

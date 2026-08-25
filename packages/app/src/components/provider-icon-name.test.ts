@@ -6,6 +6,7 @@ describe("resolveProviderIconName", () => {
     expect(resolveProviderIconName("claude")).toEqual({ kind: "builtin", id: "claude" });
     expect(resolveProviderIconName("codex")).toEqual({ kind: "builtin", id: "codex" });
     expect(resolveProviderIconName("grokbuild")).toEqual({ kind: "builtin", id: "grokbuild" });
+    expect(resolveProviderIconName("dsh")).toEqual({ kind: "builtin", id: "dsh" });
   });
 
   it("maps custom providers that extend a built-in family to that family's icon", () => {
@@ -19,6 +20,11 @@ describe("resolveProviderIconName", () => {
       kind: "builtin",
       id: "grokbuild",
     });
+    expect(resolveProviderIconName("mygw-dsh")).toEqual({ kind: "builtin", id: "dsh" });
+    // The gateway/model namespace must not be swallowed by the harness icon:
+    // a plain "deepseek" gateway stays neutral until its face suffix resolves.
+    expect(resolveProviderIconName("deepseek")).toEqual({ kind: "bot" });
+    expect(resolveProviderIconName("deepseek-codex")).toEqual({ kind: "builtin", id: "codex" });
   });
 
   it("falls back to the bot icon for unknown providers", () => {

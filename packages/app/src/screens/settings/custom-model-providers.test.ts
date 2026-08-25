@@ -90,6 +90,7 @@ describe("custom model provider helpers", () => {
             pi: "zai-pi",
             kimi: "zai-kimi",
             grokbuild: "zai-grokbuild",
+            dsh: "zai-dsh",
           },
           generatedModels: {
             opencode: [
@@ -132,6 +133,16 @@ describe("custom model provider helpers", () => {
               },
               { id: "glm-5-air", label: "glm-5-air" },
             ],
+            dsh: [
+              {
+                id: "glm-5",
+                label: "glm-5",
+                contextWindowMaxTokens: 200_000,
+                supportsImages: true,
+                isDefault: true,
+              },
+              { id: "glm-5-air", label: "glm-5-air" },
+            ],
           },
         },
       },
@@ -146,6 +157,7 @@ describe("custom model provider helpers", () => {
       piProviderId: "zai-pi",
       kimiProviderId: "zai-kimi",
       grokbuildProviderId: "zai-grokbuild",
+      dshProviderId: "zai-dsh",
     });
   });
 
@@ -233,12 +245,14 @@ describe("custom model provider helpers", () => {
             pi: "zai-pi",
             kimi: "zai-kimi",
             grokbuild: "zai-grokbuild",
+            dsh: "zai-dsh",
           },
           generatedModels: {
             opencode: [{ id: "openai/glm-5", label: "glm-5", isDefault: true }],
             pi: [{ id: "openai/glm-5", label: "glm-5", isDefault: true }],
             kimi: [{ id: "glm-5", label: "glm-5", isDefault: true }],
             grokbuild: [{ id: "glm-5", label: "glm-5", isDefault: true }],
+            dsh: [{ id: "glm-5", label: "glm-5", isDefault: true }],
           },
         },
       },
@@ -357,7 +371,7 @@ describe("custom model provider helpers", () => {
         thinkingOptions: [{ id: "default", label: "Thinking", isDefault: true }],
         protocolPreset: "openai",
         supplyScope: "matched",
-        providerIds: ["zai-opencode", "zai-pi", "zai-kimi", "zai-grokbuild"],
+        providerIds: ["zai-opencode", "zai-pi", "zai-kimi", "zai-grokbuild", "zai-dsh"],
         baseUrl: "https://api.z.ai/v1",
       },
       {
@@ -370,13 +384,13 @@ describe("custom model provider helpers", () => {
         thinkingMode: "off",
         protocolPreset: "openai",
         supplyScope: "matched",
-        providerIds: ["zai-opencode", "zai-pi", "zai-kimi", "zai-grokbuild"],
+        providerIds: ["zai-opencode", "zai-pi", "zai-kimi", "zai-grokbuild", "zai-dsh"],
         baseUrl: "https://api.z.ai/v1",
       },
     ]);
   });
 
-  it("flattens attachToAllAgents gateways into all six provider ids", () => {
+  it("flattens attachToAllAgents gateways into all seven provider ids", () => {
     const gateways = {
       deepseek: {
         id: "deepseek",
@@ -416,6 +430,7 @@ describe("custom model provider helpers", () => {
           "deepseek-pi",
           "deepseek-kimi",
           "deepseek-grokbuild",
+          "deepseek-dsh",
         ],
         baseUrl: "https://api.deepseek.com/v1",
       },
@@ -821,13 +836,20 @@ describe("custom model provider helpers", () => {
       "zai-pi",
       "zai-kimi",
       "zai-grokbuild",
+      "zai-dsh",
     ]);
 
     const matchedScope = buildModelGatewayProviderIdList("zai", {
       supplyScope: "matched",
       protocolPreset: "openai",
     });
-    expect(matchedScope).toEqual(["zai-opencode", "zai-pi", "zai-kimi", "zai-grokbuild"]);
+    expect(matchedScope).toEqual([
+      "zai-opencode",
+      "zai-pi",
+      "zai-kimi",
+      "zai-grokbuild",
+      "zai-dsh",
+    ]);
 
     const matchedClaude = buildModelGatewayProviderIdList("zai", {
       supplyScope: "matched",

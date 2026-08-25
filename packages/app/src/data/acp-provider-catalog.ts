@@ -57,4 +57,12 @@ export const ACP_PROVIDER_CATALOG: AcpProviderCatalogEntry[] = [
     installLink: "https://x.ai/cli",
     command: ["grok", "agent", "stdio"],
   },
+  {
+    id: "dsh",
+    title: "DeepSeek Harness",
+    description: "DeepSeek's official coding-agent harness via ACP (automation transport)",
+    version: "next",
+    installLink: "https://github.com/deepseek-ai/deepseek-harness",
+    command: ["dsh-acp-demo"],
+  },
 ];

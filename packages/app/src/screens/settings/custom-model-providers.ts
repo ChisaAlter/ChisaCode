@@ -213,6 +213,10 @@ function grokbuildProviderId(id: string): string {
   return `${id}-grokbuild`;
 }
 
+function dshProviderId(id: string): string {
+  return `${id}-dsh`;
+}
+
 function anthropicProviderId(id: string): string {
   return `${id}-anthropic`;
 }
@@ -228,6 +232,7 @@ export function buildModelGatewayProviderIds(id: string): {
   piProviderId: string;
   kimiProviderId: string;
   grokbuildProviderId: string;
+  dshProviderId: string;
 } {
   const normalizedId = normalizeSupplierId(id);
   return {
@@ -237,6 +242,7 @@ export function buildModelGatewayProviderIds(id: string): {
     piProviderId: piProviderId(normalizedId),
     kimiProviderId: kimiProviderId(normalizedId),
     grokbuildProviderId: grokbuildProviderId(normalizedId),
+    dshProviderId: dshProviderId(normalizedId),
   };
 }
 
@@ -251,7 +257,13 @@ function resolveProviderIdsForPreset(
     return [ids.codexProviderId];
   }
   if (protocolPreset === "openai") {
-    return [ids.opencodeProviderId, ids.piProviderId, ids.kimiProviderId, ids.grokbuildProviderId];
+    return [
+      ids.opencodeProviderId,
+      ids.piProviderId,
+      ids.kimiProviderId,
+      ids.grokbuildProviderId,
+      ids.dshProviderId,
+    ];
   }
   return null;
 }
@@ -272,6 +284,7 @@ export function buildModelGatewayProviderIdList(
     ids.piProviderId,
     ids.kimiProviderId,
     ids.grokbuildProviderId,
+    ids.dshProviderId,
   ];
   const presetIds = resolveProviderIdsForPreset(ids, options?.protocolPreset);
   if (options?.supplyScope === "all" || options?.protocolPreset === "all") {
@@ -1056,12 +1069,14 @@ export function buildSaveCustomModelProviderPatch(
       pi: ids.piProviderId,
       kimi: ids.kimiProviderId,
       grokbuild: ids.grokbuildProviderId,
+      dsh: ids.dshProviderId,
     },
     generatedModels: {
       opencode: normalizeOpenCodeModels(models),
       pi: normalizeOpenCodeModels(models),
       kimi: models,
       grokbuild: models,
+      dsh: models,
     },
   } satisfies ModelGatewayPatch;
 
