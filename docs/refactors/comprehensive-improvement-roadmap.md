@@ -28,10 +28,16 @@
   - **acp-provider-catalog dsh command 雷区**：dsh 条目移除 `command` 字段（受管 `--config` launch 不可被 replace 覆写），`AcpProviderCatalogEntry.command` 转 optional，`buildAcpProviderConfigPatch` 无 command 不写 command；测试补 dsh patch 形状断言。完成。
   - **上游复验机制**：`docs/dsh-upstream-contract.md` 新增 §9 复验节奏（检测/复验/写回/联动四步）；`docs/release.md` Stable 检查单挂"dsh 上游契约复验"项（release skills 走该检查单自动生效）。刻意不做自动联网探测。完成。
   - **文档收尾**：`docs/architecture.md` ASCII 架构图补 DeepSeek Harness 列（provider 列表/表格第一批已补）。完成。
+- **第三批（2026-08-25，同分支追加，性能与体验热点）**：
+  - **Server：workspace 描述符汇总按 cwd 限定**：`WorkspaceDirectory.buildDescriptorMap` 传入 `workspaceIds` 时原本仍调无参 `listAgentPayloads()` 为**全部** live+persisted agent 构建 payload（含 provider 投影/权限归并），而每个 `agent_state` 事件都会经 `publishAgentUpdate → emitWorkspaceUpdateForCwd` 走到这条路——重度用户存量数百 agent 时属流式期间的每事件全量重建。改动：`WorkspaceDirectoryDeps.listAgentPayloads` 增加可选 `scope.cwds`，`Session.listAgentPayloads` 按归一化 cwd 预过滤 live 快照与 persisted 记录（liveIds 去重仍以全量 live 计算避免复活已升级记录）；`buildDescriptorMap` 先取 workspace/project 记录算出目标 cwd 集合再取 agent。协议线格式未动。新增 `workspace-directory.test.ts` 3 用例（scoped 只构建目标 cwd、unscoped 全量、状态 rollup 正确）。完成。
+  - **Server：无订阅时跳过 workspace/agent 广播工作**：`WorkspaceUpdateController.emitUpdateForCwd` 在无 `subscription` 时（CLI/MCP 客户端常态）原本仍列 registry 并解析 workspace；现顶部早退。`publishAgentUpdate` 原本无条件构建 `AgentSnapshotPayload`；现仅 agent 订阅存在才构建，workspace 更新直接用 `agent.cwd`（`toAgentPayload` 为 passthrough，语义一致）。controller 测试补"无订阅零工作"用例。完成。
+  - **App：聚合 agent 包装身份缓存**：`useAggregatedAgents` 每次任一 store 变化都为全部 agent 新建 `AggregatedAgent` 包装对象，击穿下游全部 memo。新增 `createAggregatedAgentCache`（WeakMap keyed by 底层 Agent + serverId/serverLabel 校验），hook 内 ref 持有；单测覆盖复用/重建。完成。
+  - **App：SidebarV2 行渲染最小化**：`SidebarV2Row` 未 memo 且 `rowHandlers`/thread 对象每渲染重建，任一 agent 事件重渲染所有行。改动：`SidebarV2Row` 包 `React.memo`；`agent-adapter.ts` 新增 `createSidebarThreadCache`（agent+workspace hint 双身份校验）；`SidebarV2.tsx` 行回调改 ref-backed 每 id 稳定工厂；`useSidebarV2BulkActions` 回调与 capabilities 身份稳定化。纯 memo 化，无布局改动（不触发 HTML 原型门）。单测覆盖 thread 缓存复用/失效。完成（真机滚动帧率未实测，标注未验证）。
+  - **Client：重连退避加性抖动**：多客户端（app/CLI/MCP/relay）被同一次 daemon 重启断开后按相同指数表同步重试。新增纯函数 `computeReconnectDelayMs`（确定性 `min(base·2^n, max)` + 0–25% 加性抖动，超 cap 后仍保留抖动防止顶格同步）与 `reconnect.jitterRandom` 可注入随机源（0 时严格还原旧行为）；既有精确计时测试注入零随机，新增 3 用例（确定性表、抖动上界/cap、注入随机源计时）。完成。
 - **登记未做（后续批次）**：
   - **M2 测试反模式止增**：`scripts/test-audit-baseline.json` 的 moduleMock 303 / conditionalSkip 105 / weakAssertion 349 等历史债按包拆减债批次，本批未动基线。
   - **M5 Electron Provider Settings smoke**：需要真实打包 Electron 表面，cloud 环境无法执行；待有打包环境时按 `test:desktop-packaged` 门禁补一条 Provider Settings 冒烟用例。**未验证**。
-  - **M6 client 测试补课**：本批新增 inbound-controller demux 测试属于第一优先级（静默失败路径）的一小步；重连状态机与 binary 编码边界的系统性补课仍待做。
+  - **M6 client 测试补课**：本批新增 inbound-controller demux 测试属于第一优先级（静默失败路径）的一小步；第三批补重连退避抖动 3 用例（纯函数 + fake-timer 计时）；binary 编码边界的系统性补课仍待做。
   - **L1 god-file 拆分**：不在本批范围（仅在小步安全时进行），维持既有 Provider God-File 拆分计划。
 
 ### Soft Home 发送对齐 T3：待在所选目录 + 顶栏先显示分支（2026-08-13）
