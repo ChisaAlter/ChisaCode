@@ -9,6 +9,23 @@
 
 ## 进行中
 
+### 全量审查修复批次 2026-08-25（S1/S2/M1/M3/M4/M7/L3/L4）
+
+- **来源**：2026-08 全量代码审查结论（严重 S1/S2，中等 M1-M7，低 L1-L4），本批在 `cursor/audit-fixes-2026-08-25-7503` 落地。
+- **已完成**：
+  - **S1 Mobile web 390px 崩溃**：`left-sidebar.tsx` MobileSidebar 的 Animated×unistyles 违例修复 + 边界回归（见上方 2026-08-04 条目的 2026-08-25 修复记录；真实表面验证仍未做）。
+  - **S2 COMPAT 占位符**：protocol/server/app 共 8 处 `v0.1.X` 回填真实版本与移除日期；`scripts/guard.test.ts` 新增门禁禁止 `packages/*/src` 出现占位符（CI lint job 已跑 `test:guard`）。
+  - **M1 dsh execSync**：`npm root -g` 结果进程级缓存（含失败缓存），vendor 完整性仍按次检查以捕捉后装；注入式 resolver + 3 个单测。
+  - **M3/L4 文档矛盾**：根 CLAUDE.md hover 条款改为与 docs/hover.md 一致；server CLAUDE.md 去 Biome/全量测试残留、修 providers 路径；CLAUDE.md/architecture.md/product.md/glossary.md provider 列表补 dsh；本文件 "CI 门禁收尾" 条目状态漂移已修正（远端 CI 实际未绿）。
+  - **M7 relay string/binary 隐式契约**：decrypt UTF-8 启发式 ↔ 双端 opcode 嗅探链条补交叉引用注释（relay crypto/channel、server relay-transport、client inbound controller、protocol demux）；新增 `packages/relay/src/e2ee-frame-type.test.ts`（4 用例：valid-UTF-8 binary 字节级往返、invalid-UTF-8 ArrayBuffer 往返、JSON 直通、opcode 与 0x7b 不相交）与 `packages/client/src/daemon-client-inbound-controller.test.ts`（string 投递的 terminal frame 正确路由）。线格式未动。
+  - **M4 静默 catch（选择性）**：agent-storage 项目目录 readdir 失败（会静默丢整目录 agents）补 warn；acp-agent `isAvailable` 吞错补 debug。全仓 280 处不做机械改动。
+  - **L3 dsh 中文硬编码错误**：改为 `DshCredentialsError`（stable name + `DSH_MISSING_API_KEY` code），用户可见消息保持不变以兼容旧客户端。
+- **登记未做（后续批次）**：
+  - **M2 测试反模式止增**：`scripts/test-audit-baseline.json` 的 moduleMock 303 / conditionalSkip 105 / weakAssertion 349 等历史债按包拆减债批次，本批未动基线。
+  - **M5 Electron Provider Settings smoke**：需要真实打包 Electron 表面，cloud 环境无法执行；待有打包环境时按 `test:desktop-packaged` 门禁补一条 Provider Settings 冒烟用例。**未验证**。
+  - **M6 client 测试补课**：本批新增 inbound-controller demux 测试属于第一优先级（静默失败路径）的一小步；重连状态机与 binary 编码边界的系统性补课仍待做。
+  - **L1 god-file 拆分**：不在本批范围（仅在小步安全时进行），维持既有 Provider God-File 拆分计划。
+
 ### Soft Home 发送对齐 T3：待在所选目录 + 顶栏先显示分支（2026-08-13）
 
 - **问题**：首页发送先问 GitHub、再默默建隐藏工作区；顶栏「正在检查仓库」等远程；干净同步时露出 `git.actionUpToDate`。T3 / 上游 Paseo 默认都在所选目录开聊。
@@ -75,7 +92,7 @@
 - **问题**：桌面 Chrome 以 390x844 视口打开 app 即触发错误边界——`[Reanimated] Invalid value for "unistyles_*": an empty object is not a valid style value.`，`AnimatedComponent.componentDidMount` → `CSSManager.update` 抛错，整屏替换为错误边界（"出错了"）。桌面 1280x720 视口正常。已确认与 e2e 迁移无关（stash 全部迁移改动后仍复现，hash 随 bundle 变化）
 - **影响范围**：`packages/app` 移动/紧凑路径下的 Animated 组件 + unistyles 空样式规则；疑似 compact 分支某个 `Animated.*` 的 style 数组含空 unistyles 规则（`unistyles_*` className 值为 `{}`）
 - **方案**：按 390px 视口最小复现（错误边界截图 + trace 已有），定位传入 Animated 组件的空 unistyles 样式（遍历 compact 分支的 `Animated.View`/`AnimatedPressable` style 数组），修复后跑 `sidebar-workspace.spec.ts` 的 mobile panelState 测试与真实 Android 验证
-- **状态**：已登记（有复现证据：e2e trace `test-results/sidebar-workspace-Mobile-*`、错误边界截图）。**2026-08-11 追加同类触发**：`left-sidebar.tsx` 的 项目/状态 切换器曾用 `Animated.View` + `useAnimatedStyle` 承载 unistyles 动态样式 `styles.viewTabThumb`（打包 Electron 全窗口即崩，非仅 390px）——修复：thumb 改为普通 `View`（unistyles 安全）+ web 用 RNW `transition*` CSS 属性做滑片过渡、native 静态切换 transform；内容区淡入动画同样用注入 keyframes 的 CSS 动画而非 Reanimated。经验：**任何 Animated 节点的 style 数组都不得含 unistyles 注册样式或空 unistyles 规则**
+- **状态**：已登记（有复现证据：e2e trace `test-results/sidebar-workspace-Mobile-*`、错误边界截图）。**2026-08-11 追加同类触发**：`left-sidebar.tsx` 的 项目/状态 切换器曾用 `Animated.View` + `useAnimatedStyle` 承载 unistyles 动态样式 `styles.viewTabThumb`（打包 Electron 全窗口即崩，非仅 390px）——修复：thumb 改为普通 `View`（unistyles 安全）+ web 用 RNW `transition*` CSS 属性做滑片过渡、native 静态切换 transform；内容区淡入动画同样用注入 keyframes 的 CSS 动画而非 Reanimated。经验：**任何 Animated 节点的 style 数组都不得含 unistyles 注册样式或空 unistyles 规则**。**2026-08-25 修复**：定位到 compact-only 的 `MobileSidebar`（`left-sidebar.tsx`）把 unistyles 注册样式 `styles.mobileSidebarSurface` 放进 `Animated.View` 的 style 数组——该组件仅在 390px 等 compact 视口挂载，与错误边界签名吻合；修复为 explorer-sidebar 同款模式（普通 absolute-fill 子 `View` 承载主题背景），并把 left-sidebar/explorer-sidebar 两个文件的 backdrop/mobile/desktop style 变量全部纳入 `reanimated-unistyles-boundary.test.ts` 源码级回归（25 断言全绿）。**未验证项**：真实 390px 浏览器视口 smoke 与真实 Android 验证未在本轮执行（cloud 环境），明确标注为未验证；若真实表面仍崩说明 compact 路径存在第二个触发点，按同法（遍历 compact 分支 Animated style 数组）继续排查
 
 ### 侧栏 项目/状态 视图字体校准 + 切换丝滑化（2026-08-11 启动）
 
@@ -358,7 +375,7 @@
 - **后续**：当前基线仍包含 moduleMock 303、conditionalSkip 105、weakAssertion 349、processEnvMutation 151 等历史债；后续改动不得增加，并应按包拆成独立减债批次逐步下调基线。
 - **远端复核**：首次实际触发 `cn-main` CI 后发现 npm 11 生成的 lockfile 删除了 desktop 精确依赖 `@types/node@24.6.0` / `undici-types@7.13.0`，导致 Node 22/npm 10 的所有 `npm ci` job 在测试前失败；同时 TruffleHog 重复传入 `--no-update`，Nix hash workflow 在 GitHub App secret 缺失时直接失败。
 - **解决补充**：使用 CI 同代 npm 10 重新生成完整跨平台 lockfile；移除重复 TruffleHog 参数；Nix workflow 在 App secret 未配置时回退到具备最小 `contents: write` 权限的 `GITHUB_TOKEN`。
-- **状态**：修复中；本地 npm 10 `ci --dry-run`、test-audit、lockfile-lint 和 workflow YAML 解析均退出 0，等待远端 CI 复验后关闭。
+- **状态**：修复中；本地 npm 10 `ci --dry-run`、test-audit、lockfile-lint 和 workflow YAML 解析均退出 0，等待远端 CI 复验后关闭。**2026-08-25 核对**：远端 `cn-main` CI 至今未出现绿色 run（近 10 次 push run 全部 failure/cancelled，含 2026-08-13 的 `chore(release): cut 1.0.3`），标题里的"完成"仅指本地门禁校准，远端复验事实上从未通过——该条不能视为 done，需要专门一轮把 cn-main CI 修绿后再关闭。
 
 ### 全项目代码审查修复批次（2026-07-05 起执行）
 
