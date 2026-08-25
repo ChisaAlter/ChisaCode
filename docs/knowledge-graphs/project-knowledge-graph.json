@@ -218,9 +218,8 @@
         "client",
         "server"
       ],
-      "fileCount": 57,
+      "fileCount": 18,
       "categories": {
-        "support": 39,
         "config": 3,
         "docs": 1,
         "source": 7,

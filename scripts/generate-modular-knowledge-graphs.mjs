@@ -28,6 +28,11 @@ const IGNORE_DIRS = new Set([
   ".expo",
   ".next",
   ".turbo",
+  // Wrangler writes throwaway bundles under packages/relay/.wrangler/tmp when
+  // the relay dev server runs. They are gitignored, so graphs generated on a
+  // machine that has them diverge from CI's clean-checkout regeneration and
+  // trip the knowledge-graph-drift gate.
+  ".wrangler",
   "android",
   "build",
   "coverage",
