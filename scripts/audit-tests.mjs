@@ -35,6 +35,9 @@ const checks = [
     id: "fixedWait",
     description: "fixed sleeps and waitForTimeout",
     pattern: /(?<!\.)\bsetTimeout\s*\(|\b(?:waitForTimeout|sleep)\s*\(/g,
+    // setTimeout(fn) / setTimeout(fn, 0) is a tick deferral (event-ordering in
+    // fakes), not a fixed sleep — only non-zero delays are debt.
+    accept: (text, match) => !isZeroDelaySetTimeout(text, match),
   },
   {
     id: "weakAssertion",
@@ -50,6 +53,78 @@ const checks = [
 
 function findingKey(checkId, filePath, line) {
   return `${checkId}::${filePath.replaceAll("\\", "/")}:${line}`;
+}
+
+/**
+ * Returns true when a matched `setTimeout(` call passes no delay or a literal
+ * `0` delay, i.e. a next-tick deferral rather than a fixed sleep. Scans from
+ * the opening paren with a small tokenizer that balances parens and skips
+ * string/template literals and comments so nested callbacks parse correctly.
+ * Unparseable calls (unterminated, dynamic) conservatively count as debt.
+ */
+function isZeroDelaySetTimeout(text, match) {
+  if (!match[0].includes("setTimeout")) return false;
+  const openParen = text.indexOf("(", match.index);
+  if (openParen === -1) return false;
+  let depth = 0;
+  let lastTopLevelComma = -1;
+  let i = openParen;
+  while (i < text.length) {
+    const ch = text[i];
+    const skipTo = skipNonCode(text, i);
+    if (skipTo !== -1) {
+      i = skipTo;
+      continue;
+    }
+    if (ch === "(" || ch === "[" || ch === "{") depth += 1;
+    if (ch === ")" || ch === "]" || ch === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        const lastArgStart = lastTopLevelComma === -1 ? openParen + 1 : lastTopLevelComma + 1;
+        const lastArg = text.slice(lastArgStart, i).trim();
+        // No comma at depth 1 means a single callback argument (no delay).
+        return lastTopLevelComma === -1 || lastArg === "0";
+      }
+    }
+    if (ch === "," && depth === 1) lastTopLevelComma = i;
+    i += 1;
+  }
+  return false;
+}
+
+/**
+ * If `start` sits on a string/template literal or a comment, returns the index
+ * just past it; otherwise returns -1.
+ */
+function skipNonCode(text, start) {
+  const ch = text[start];
+  if (ch === '"' || ch === "'" || ch === "`") {
+    return skipStringLiteral(text, start);
+  }
+  if (ch === "/" && text[start + 1] === "/") {
+    const eol = text.indexOf("\n", start);
+    return eol === -1 ? text.length : eol + 1;
+  }
+  if (ch === "/" && text[start + 1] === "*") {
+    const end = text.indexOf("*/", start + 2);
+    return end === -1 ? text.length : end + 2;
+  }
+  return -1;
+}
+
+function skipStringLiteral(text, start) {
+  const quote = text[start];
+  let i = start + 1;
+  while (i < text.length) {
+    if (text[i] === "\\") {
+      i += 2;
+      continue;
+    }
+    if (text[i] === quote) return i + 1;
+    if (quote !== "`" && text[i] === "\n") return i + 1;
+    i += 1;
+  }
+  return text.length;
 }
 
 const ignoredDirs = new Set([
@@ -98,6 +173,7 @@ function scanFile(file) {
     for (;;) {
       const match = check.pattern.exec(text);
       if (!match) break;
+      if (check.accept && !check.accept(text, match)) continue;
       const line = upperBound(lineStarts, match.index);
       findings.push({
         check: check.id,
