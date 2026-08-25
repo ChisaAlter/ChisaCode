@@ -28,10 +28,10 @@
         "protocol"
       ],
       "dependedOnBy": [],
-      "fileCount": 1326,
+      "fileCount": 1327,
       "categories": {
         "config": 41,
-        "test": 410,
+        "test": 411,
         "support": 76,
         "docs": 2,
         "source": 797
@@ -56,12 +56,12 @@
         "server"
       ],
       "dependedOnBy": [],
-      "fileCount": 179,
+      "fileCount": 181,
       "categories": {
         "config": 2,
         "docs": 1,
-        "test": 60,
-        "source": 108,
+        "test": 61,
+        "source": 109,
         "support": 8
       }
     },
@@ -218,8 +218,9 @@
         "client",
         "server"
       ],
-      "fileCount": 18,
+      "fileCount": 57,
       "categories": {
+        "support": 39,
         "config": 3,
         "docs": 1,
         "source": 7,

@@ -7,7 +7,7 @@ import type { ConnectionOffer } from "@chisacode/protocol/connection-offer";
 import {
   FileRelayDeviceCredentialStore,
   resolveRelayOfferDeviceAuth,
-} from "../src/utils/relay-device-store.ts";
+} from "./relay-device-store.ts";
 
 function buildOffer(overrides: Partial<ConnectionOffer> = {}): ConnectionOffer {
   return {

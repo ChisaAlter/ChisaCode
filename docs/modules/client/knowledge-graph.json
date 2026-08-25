@@ -294,7 +294,7 @@
       "id": "file:packages/client/src/daemon-client-connection-controller.test.ts",
       "type": "test",
       "path": "packages/client/src/daemon-client-connection-controller.test.ts",
-      "lines": 139,
+      "lines": 218,
       "imports": [
         "./daemon-client-connection-controller.js",
         "./daemon-client-transport.js",
@@ -328,7 +328,7 @@
       "id": "file:packages/client/src/daemon-client-inbound-controller.test.ts",
       "type": "test",
       "path": "packages/client/src/daemon-client-inbound-controller.test.ts",
-      "lines": 95,
+      "lines": 218,
       "imports": [
         "./daemon-client-inbound-controller.js",
         "@chisacode/protocol/binary-frames/index",
@@ -407,7 +407,7 @@
       "id": "file:packages/client/src/daemon-client-reconnect.test.ts",
       "type": "test",
       "path": "packages/client/src/daemon-client-reconnect.test.ts",
-      "lines": 677,
+      "lines": 915,
       "imports": [
         "./daemon-client-connection-controller.js",
         "./daemon-client-transport-types.js",

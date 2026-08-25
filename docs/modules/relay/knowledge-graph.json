@@ -45,8 +45,9 @@
     }
   },
   "stats": {
-    "files": 18,
+    "files": 57,
     "categories": {
+      "support": 39,
       "config": 3,
       "docs": 1,
       "source": 7,
@@ -55,6 +56,7 @@
     "internalImportEdges": 17,
     "workspaceDependencies": [],
     "externalDependencies": [
+      "",
       "base64-js",
       "node:buffer",
       "node:child_process",
@@ -70,6 +72,370 @@
     "unresolvedInternalImports": 0
   },
   "nodes": [
+    {
+      "id": "file:packages/relay/.wrangler/tmp/bundle-2QhxNt/middleware-insertion-facade.js",
+      "type": "support",
+      "path": "packages/relay/.wrangler/tmp/bundle-2QhxNt/middleware-insertion-facade.js",
+      "lines": 11,
+      "imports": [
+        "/workspace/node_modules/wrangler/templates/middleware/middleware-ensure-req-body-drained.ts",
+        "/workspace/node_modules/wrangler/templates/middleware/middleware-miniflare3-json-error.ts",
+        "/workspace/packages/relay/src/cloudflare-adapter.ts"
+      ]
+    },
+    {
+      "id": "file:packages/relay/.wrangler/tmp/bundle-2QhxNt/middleware-loader.entry.ts",
+      "type": "support",
+      "path": "packages/relay/.wrangler/tmp/bundle-2QhxNt/middleware-loader.entry.ts",
+      "lines": 135,
+      "imports": [
+        "/workspace/node_modules/wrangler/templates/middleware/common.ts",
+        "/workspace/packages/relay/.wrangler/tmp/bundle-2QhxNt/middleware-insertion-facade.js"
+      ]
+    },
+    {
+      "id": "file:packages/relay/.wrangler/tmp/bundle-9ZxwWB/middleware-insertion-facade.js",
+      "type": "support",
+      "path": "packages/relay/.wrangler/tmp/bundle-9ZxwWB/middleware-insertion-facade.js",
+      "lines": 11,
+      "imports": [
+        "/workspace/node_modules/wrangler/templates/middleware/middleware-ensure-req-body-drained.ts",
+        "/workspace/node_modules/wrangler/templates/middleware/middleware-miniflare3-json-error.ts",
+        "/workspace/packages/relay/src/cloudflare-adapter.ts"
+      ]
+    },
+    {
+      "id": "file:packages/relay/.wrangler/tmp/bundle-9ZxwWB/middleware-loader.entry.ts",
+      "type": "support",
+      "path": "packages/relay/.wrangler/tmp/bundle-9ZxwWB/middleware-loader.entry.ts",
+      "lines": 135,
+      "imports": [
+        "/workspace/node_modules/wrangler/templates/middleware/common.ts",
+        "/workspace/packages/relay/.wrangler/tmp/bundle-9ZxwWB/middleware-insertion-facade.js"
+      ]
+    },
+    {
+      "id": "file:packages/relay/.wrangler/tmp/bundle-Ao6LuL/middleware-insertion-facade.js",
+      "type": "support",
+      "path": "packages/relay/.wrangler/tmp/bundle-Ao6LuL/middleware-insertion-facade.js",
+      "lines": 11,
+      "imports": [
+        "/workspace/node_modules/wrangler/templates/middleware/middleware-ensure-req-body-drained.ts",
+        "/workspace/node_modules/wrangler/templates/middleware/middleware-miniflare3-json-error.ts",
+        "/workspace/packages/relay/src/cloudflare-adapter.ts"
+      ]
+    },
+    {
+      "id": "file:packages/relay/.wrangler/tmp/bundle-Ao6LuL/middleware-loader.entry.ts",
+      "type": "support",
+      "path": "packages/relay/.wrangler/tmp/bundle-Ao6LuL/middleware-loader.entry.ts",
+      "lines": 135,
+      "imports": [
+        "/workspace/node_modules/wrangler/templates/middleware/common.ts",
+        "/workspace/packages/relay/.wrangler/tmp/bundle-Ao6LuL/middleware-insertion-facade.js"
+      ]
+    },
+    {
+      "id": "file:packages/relay/.wrangler/tmp/bundle-e2NJTa/middleware-insertion-facade.js",
+      "type": "support",
+      "path": "packages/relay/.wrangler/tmp/bundle-e2NJTa/middleware-insertion-facade.js",
+      "lines": 11,
+      "imports": [
+        "/workspace/node_modules/wrangler/templates/middleware/middleware-ensure-req-body-drained.ts",
+        "/workspace/node_modules/wrangler/templates/middleware/middleware-miniflare3-json-error.ts",
+        "/workspace/packages/relay/src/cloudflare-adapter.ts"
+      ]
+    },
+    {
+      "id": "file:packages/relay/.wrangler/tmp/bundle-e2NJTa/middleware-loader.entry.ts",
+      "type": "support",
+      "path": "packages/relay/.wrangler/tmp/bundle-e2NJTa/middleware-loader.entry.ts",
+      "lines": 135,
+      "imports": [
+        "/workspace/node_modules/wrangler/templates/middleware/common.ts",
+        "/workspace/packages/relay/.wrangler/tmp/bundle-e2NJTa/middleware-insertion-facade.js"
+      ]
+    },
+    {
+      "id": "file:packages/relay/.wrangler/tmp/bundle-glRdEi/middleware-insertion-facade.js",
+      "type": "support",
+      "path": "packages/relay/.wrangler/tmp/bundle-glRdEi/middleware-insertion-facade.js",
+      "lines": 11,
+      "imports": [
+        "/workspace/node_modules/wrangler/templates/middleware/middleware-ensure-req-body-drained.ts",
+        "/workspace/node_modules/wrangler/templates/middleware/middleware-miniflare3-json-error.ts",
+        "/workspace/packages/relay/src/cloudflare-adapter.ts"
+      ]
+    },
+    {
+      "id": "file:packages/relay/.wrangler/tmp/bundle-glRdEi/middleware-loader.entry.ts",
+      "type": "support",
+      "path": "packages/relay/.wrangler/tmp/bundle-glRdEi/middleware-loader.entry.ts",
+      "lines": 135,
+      "imports": [
+        "/workspace/node_modules/wrangler/templates/middleware/common.ts",
+        "/workspace/packages/relay/.wrangler/tmp/bundle-glRdEi/middleware-insertion-facade.js"
+      ]
+    },
+    {
+      "id": "file:packages/relay/.wrangler/tmp/bundle-M5oFqK/middleware-insertion-facade.js",
+      "type": "support",
+      "path": "packages/relay/.wrangler/tmp/bundle-M5oFqK/middleware-insertion-facade.js",
+      "lines": 11,
+      "imports": [
+        "/workspace/node_modules/wrangler/templates/middleware/middleware-ensure-req-body-drained.ts",
+        "/workspace/node_modules/wrangler/templates/middleware/middleware-miniflare3-json-error.ts",
+        "/workspace/packages/relay/src/cloudflare-adapter.ts"
+      ]
+    },
+    {
+      "id": "file:packages/relay/.wrangler/tmp/bundle-M5oFqK/middleware-loader.entry.ts",
+      "type": "support",
+      "path": "packages/relay/.wrangler/tmp/bundle-M5oFqK/middleware-loader.entry.ts",
+      "lines": 135,
+      "imports": [
+        "/workspace/node_modules/wrangler/templates/middleware/common.ts",
+        "/workspace/packages/relay/.wrangler/tmp/bundle-M5oFqK/middleware-insertion-facade.js"
+      ]
+    },
+    {
+      "id": "file:packages/relay/.wrangler/tmp/bundle-OfbgYV/middleware-insertion-facade.js",
+      "type": "support",
+      "path": "packages/relay/.wrangler/tmp/bundle-OfbgYV/middleware-insertion-facade.js",
+      "lines": 11,
+      "imports": [
+        "/workspace/node_modules/wrangler/templates/middleware/middleware-ensure-req-body-drained.ts",
+        "/workspace/node_modules/wrangler/templates/middleware/middleware-miniflare3-json-error.ts",
+        "/workspace/packages/relay/src/cloudflare-adapter.ts"
+      ]
+    },
+    {
+      "id": "file:packages/relay/.wrangler/tmp/bundle-OfbgYV/middleware-loader.entry.ts",
+      "type": "support",
+      "path": "packages/relay/.wrangler/tmp/bundle-OfbgYV/middleware-loader.entry.ts",
+      "lines": 135,
+      "imports": [
+        "/workspace/node_modules/wrangler/templates/middleware/common.ts",
+        "/workspace/packages/relay/.wrangler/tmp/bundle-OfbgYV/middleware-insertion-facade.js"
+      ]
+    },
+    {
+      "id": "file:packages/relay/.wrangler/tmp/bundle-Qk2AeG/middleware-insertion-facade.js",
+      "type": "support",
+      "path": "packages/relay/.wrangler/tmp/bundle-Qk2AeG/middleware-insertion-facade.js",
+      "lines": 11,
+      "imports": [
+        "/workspace/node_modules/wrangler/templates/middleware/middleware-ensure-req-body-drained.ts",
+        "/workspace/node_modules/wrangler/templates/middleware/middleware-miniflare3-json-error.ts",
+        "/workspace/packages/relay/src/cloudflare-adapter.ts"
+      ]
+    },
+    {
+      "id": "file:packages/relay/.wrangler/tmp/bundle-Qk2AeG/middleware-loader.entry.ts",
+      "type": "support",
+      "path": "packages/relay/.wrangler/tmp/bundle-Qk2AeG/middleware-loader.entry.ts",
+      "lines": 135,
+      "imports": [
+        "/workspace/node_modules/wrangler/templates/middleware/common.ts",
+        "/workspace/packages/relay/.wrangler/tmp/bundle-Qk2AeG/middleware-insertion-facade.js"
+      ]
+    },
+    {
+      "id": "file:packages/relay/.wrangler/tmp/bundle-Tmd2yu/middleware-insertion-facade.js",
+      "type": "support",
+      "path": "packages/relay/.wrangler/tmp/bundle-Tmd2yu/middleware-insertion-facade.js",
+      "lines": 11,
+      "imports": [
+        "/workspace/node_modules/wrangler/templates/middleware/middleware-ensure-req-body-drained.ts",
+        "/workspace/node_modules/wrangler/templates/middleware/middleware-miniflare3-json-error.ts",
+        "/workspace/packages/relay/src/cloudflare-adapter.ts"
+      ]
+    },
+    {
+      "id": "file:packages/relay/.wrangler/tmp/bundle-Tmd2yu/middleware-loader.entry.ts",
+      "type": "support",
+      "path": "packages/relay/.wrangler/tmp/bundle-Tmd2yu/middleware-loader.entry.ts",
+      "lines": 135,
+      "imports": [
+        "/workspace/node_modules/wrangler/templates/middleware/common.ts",
+        "/workspace/packages/relay/.wrangler/tmp/bundle-Tmd2yu/middleware-insertion-facade.js"
+      ]
+    },
+    {
+      "id": "file:packages/relay/.wrangler/tmp/bundle-UcW4D0/middleware-insertion-facade.js",
+      "type": "support",
+      "path": "packages/relay/.wrangler/tmp/bundle-UcW4D0/middleware-insertion-facade.js",
+      "lines": 11,
+      "imports": [
+        "/workspace/node_modules/wrangler/templates/middleware/middleware-ensure-req-body-drained.ts",
+        "/workspace/node_modules/wrangler/templates/middleware/middleware-miniflare3-json-error.ts",
+        "/workspace/packages/relay/src/cloudflare-adapter.ts"
+      ]
+    },
+    {
+      "id": "file:packages/relay/.wrangler/tmp/bundle-UcW4D0/middleware-loader.entry.ts",
+      "type": "support",
+      "path": "packages/relay/.wrangler/tmp/bundle-UcW4D0/middleware-loader.entry.ts",
+      "lines": 135,
+      "imports": [
+        "/workspace/node_modules/wrangler/templates/middleware/common.ts",
+        "/workspace/packages/relay/.wrangler/tmp/bundle-UcW4D0/middleware-insertion-facade.js"
+      ]
+    },
+    {
+      "id": "file:packages/relay/.wrangler/tmp/bundle-V6xBuZ/middleware-insertion-facade.js",
+      "type": "support",
+      "path": "packages/relay/.wrangler/tmp/bundle-V6xBuZ/middleware-insertion-facade.js",
+      "lines": 11,
+      "imports": [
+        "/workspace/node_modules/wrangler/templates/middleware/middleware-ensure-req-body-drained.ts",
+        "/workspace/node_modules/wrangler/templates/middleware/middleware-miniflare3-json-error.ts",
+        "/workspace/packages/relay/src/cloudflare-adapter.ts"
+      ]
+    },
+    {
+      "id": "file:packages/relay/.wrangler/tmp/bundle-V6xBuZ/middleware-loader.entry.ts",
+      "type": "support",
+      "path": "packages/relay/.wrangler/tmp/bundle-V6xBuZ/middleware-loader.entry.ts",
+      "lines": 135,
+      "imports": [
+        "/workspace/node_modules/wrangler/templates/middleware/common.ts",
+        "/workspace/packages/relay/.wrangler/tmp/bundle-V6xBuZ/middleware-insertion-facade.js"
+      ]
+    },
+    {
+      "id": "file:packages/relay/.wrangler/tmp/bundle-VuA4vL/middleware-insertion-facade.js",
+      "type": "support",
+      "path": "packages/relay/.wrangler/tmp/bundle-VuA4vL/middleware-insertion-facade.js",
+      "lines": 11,
+      "imports": [
+        "/workspace/node_modules/wrangler/templates/middleware/middleware-ensure-req-body-drained.ts",
+        "/workspace/node_modules/wrangler/templates/middleware/middleware-miniflare3-json-error.ts",
+        "/workspace/packages/relay/src/cloudflare-adapter.ts"
+      ]
+    },
+    {
+      "id": "file:packages/relay/.wrangler/tmp/bundle-VuA4vL/middleware-loader.entry.ts",
+      "type": "support",
+      "path": "packages/relay/.wrangler/tmp/bundle-VuA4vL/middleware-loader.entry.ts",
+      "lines": 135,
+      "imports": [
+        "/workspace/node_modules/wrangler/templates/middleware/common.ts",
+        "/workspace/packages/relay/.wrangler/tmp/bundle-VuA4vL/middleware-insertion-facade.js"
+      ]
+    },
+    {
+      "id": "file:packages/relay/.wrangler/tmp/bundle-WVds1n/middleware-insertion-facade.js",
+      "type": "support",
+      "path": "packages/relay/.wrangler/tmp/bundle-WVds1n/middleware-insertion-facade.js",
+      "lines": 11,
+      "imports": [
+        "/workspace/node_modules/wrangler/templates/middleware/middleware-ensure-req-body-drained.ts",
+        "/workspace/node_modules/wrangler/templates/middleware/middleware-miniflare3-json-error.ts",
+        "/workspace/packages/relay/src/cloudflare-adapter.ts"
+      ]
+    },
+    {
+      "id": "file:packages/relay/.wrangler/tmp/bundle-WVds1n/middleware-loader.entry.ts",
+      "type": "support",
+      "path": "packages/relay/.wrangler/tmp/bundle-WVds1n/middleware-loader.entry.ts",
+      "lines": 135,
+      "imports": [
+        "/workspace/node_modules/wrangler/templates/middleware/common.ts",
+        "/workspace/packages/relay/.wrangler/tmp/bundle-WVds1n/middleware-insertion-facade.js"
+      ]
+    },
+    {
+      "id": "file:packages/relay/.wrangler/tmp/dev-2zk5uP/cloudflare-adapter.js",
+      "type": "support",
+      "path": "packages/relay/.wrangler/tmp/dev-2zk5uP/cloudflare-adapter.js",
+      "lines": 3226,
+      "imports": []
+    },
+    {
+      "id": "file:packages/relay/.wrangler/tmp/dev-D1qwFJ/cloudflare-adapter.js",
+      "type": "support",
+      "path": "packages/relay/.wrangler/tmp/dev-D1qwFJ/cloudflare-adapter.js",
+      "lines": 3226,
+      "imports": []
+    },
+    {
+      "id": "file:packages/relay/.wrangler/tmp/dev-dT2q8i/cloudflare-adapter.js",
+      "type": "support",
+      "path": "packages/relay/.wrangler/tmp/dev-dT2q8i/cloudflare-adapter.js",
+      "lines": 3226,
+      "imports": []
+    },
+    {
+      "id": "file:packages/relay/.wrangler/tmp/dev-gCCVdS/cloudflare-adapter.js",
+      "type": "support",
+      "path": "packages/relay/.wrangler/tmp/dev-gCCVdS/cloudflare-adapter.js",
+      "lines": 3226,
+      "imports": []
+    },
+    {
+      "id": "file:packages/relay/.wrangler/tmp/dev-i8S5qL/cloudflare-adapter.js",
+      "type": "support",
+      "path": "packages/relay/.wrangler/tmp/dev-i8S5qL/cloudflare-adapter.js",
+      "lines": 3226,
+      "imports": []
+    },
+    {
+      "id": "file:packages/relay/.wrangler/tmp/dev-IziRUv/cloudflare-adapter.js",
+      "type": "support",
+      "path": "packages/relay/.wrangler/tmp/dev-IziRUv/cloudflare-adapter.js",
+      "lines": 3226,
+      "imports": []
+    },
+    {
+      "id": "file:packages/relay/.wrangler/tmp/dev-JUetko/cloudflare-adapter.js",
+      "type": "support",
+      "path": "packages/relay/.wrangler/tmp/dev-JUetko/cloudflare-adapter.js",
+      "lines": 3226,
+      "imports": []
+    },
+    {
+      "id": "file:packages/relay/.wrangler/tmp/dev-Qr9Ghb/cloudflare-adapter.js",
+      "type": "support",
+      "path": "packages/relay/.wrangler/tmp/dev-Qr9Ghb/cloudflare-adapter.js",
+      "lines": 3226,
+      "imports": []
+    },
+    {
+      "id": "file:packages/relay/.wrangler/tmp/dev-QRiYX7/cloudflare-adapter.js",
+      "type": "support",
+      "path": "packages/relay/.wrangler/tmp/dev-QRiYX7/cloudflare-adapter.js",
+      "lines": 3226,
+      "imports": []
+    },
+    {
+      "id": "file:packages/relay/.wrangler/tmp/dev-rA4FzI/cloudflare-adapter.js",
+      "type": "support",
+      "path": "packages/relay/.wrangler/tmp/dev-rA4FzI/cloudflare-adapter.js",
+      "lines": 3226,
+      "imports": []
+    },
+    {
+      "id": "file:packages/relay/.wrangler/tmp/dev-tx23Mq/cloudflare-adapter.js",
+      "type": "support",
+      "path": "packages/relay/.wrangler/tmp/dev-tx23Mq/cloudflare-adapter.js",
+      "lines": 3226,
+      "imports": []
+    },
+    {
+      "id": "file:packages/relay/.wrangler/tmp/dev-Wybnew/cloudflare-adapter.js",
+      "type": "support",
+      "path": "packages/relay/.wrangler/tmp/dev-Wybnew/cloudflare-adapter.js",
+      "lines": 3226,
+      "imports": []
+    },
+    {
+      "id": "file:packages/relay/.wrangler/tmp/dev-YIs0EZ/cloudflare-adapter.js",
+      "type": "support",
+      "path": "packages/relay/.wrangler/tmp/dev-YIs0EZ/cloudflare-adapter.js",
+      "lines": 3226,
+      "imports": []
+    },
     {
       "id": "file:packages/relay/package.json",
       "type": "config",

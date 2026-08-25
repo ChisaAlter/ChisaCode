@@ -29,15 +29,15 @@
     }
   },
   "stats": {
-    "files": 179,
+    "files": 181,
     "categories": {
       "config": 2,
       "docs": 1,
-      "test": 60,
-      "source": 108,
+      "test": 61,
+      "source": 109,
       "support": 8
     },
-    "internalImportEdges": 460,
+    "internalImportEdges": 462,
     "workspaceDependencies": [
       "client",
       "protocol",
@@ -1606,10 +1606,11 @@
       "id": "file:packages/cli/src/utils/client.ts",
       "type": "source",
       "path": "packages/cli/src/utils/client.ts",
-      "lines": 440,
+      "lines": 507,
       "imports": [
         "../version.js",
         "./client-id.js",
+        "./relay-device-store.js",
         "@chisacode/client/internal/daemon-client",
         "@chisacode/protocol/connection-offer",
         "@chisacode/protocol/daemon-endpoints",
@@ -1678,6 +1679,34 @@
       "imports": [
         "../i18n.js",
         "../output/index.js"
+      ]
+    },
+    {
+      "id": "file:packages/cli/src/utils/relay-device-store.test.ts",
+      "type": "test",
+      "path": "packages/cli/src/utils/relay-device-store.test.ts",
+      "lines": 141,
+      "imports": [
+        "./relay-device-store.ts",
+        "@chisacode/client/relay-device-credentials",
+        "@chisacode/protocol/connection-offer",
+        "node:fs/promises",
+        "node:os",
+        "node:path",
+        "vitest"
+      ]
+    },
+    {
+      "id": "file:packages/cli/src/utils/relay-device-store.ts",
+      "type": "source",
+      "path": "packages/cli/src/utils/relay-device-store.ts",
+      "lines": 114,
+      "imports": [
+        "@chisacode/client/relay-device-credentials",
+        "@chisacode/protocol/connection-offer",
+        "@chisacode/server",
+        "node:fs/promises",
+        "node:path"
       ]
     },
     {
@@ -2220,7 +2249,7 @@
       "id": "file:packages/cli/tests/e2e/relay-host.test.ts",
       "type": "test",
       "path": "packages/cli/tests/e2e/relay-host.test.ts",
-      "lines": 237,
+      "lines": 263,
       "imports": [
         "../helpers/network.ts",
         "../helpers/test-daemon.ts",
@@ -4991,6 +5020,12 @@
       "specifier": "./client-id.js"
     },
     {
+      "source": "file:packages/cli/src/utils/client.ts",
+      "target": "file:packages/cli/src/utils/relay-device-store.ts",
+      "type": "imports",
+      "specifier": "./relay-device-store.js"
+    },
+    {
       "source": "module:cli",
       "target": "module:client",
       "type": "depends_on",
@@ -5043,6 +5078,42 @@
       "target": "file:packages/cli/src/output/index.ts",
       "type": "imports",
       "specifier": "../output/index.js"
+    },
+    {
+      "source": "file:packages/cli/src/utils/relay-device-store.test.ts",
+      "target": "file:packages/cli/src/utils/relay-device-store.ts",
+      "type": "imports",
+      "specifier": "./relay-device-store.ts"
+    },
+    {
+      "source": "module:cli",
+      "target": "module:client",
+      "type": "depends_on",
+      "specifier": "@chisacode/client/relay-device-credentials"
+    },
+    {
+      "source": "module:cli",
+      "target": "module:protocol",
+      "type": "depends_on",
+      "specifier": "@chisacode/protocol/connection-offer"
+    },
+    {
+      "source": "module:cli",
+      "target": "module:client",
+      "type": "depends_on",
+      "specifier": "@chisacode/client/relay-device-credentials"
+    },
+    {
+      "source": "module:cli",
+      "target": "module:protocol",
+      "type": "depends_on",
+      "specifier": "@chisacode/protocol/connection-offer"
+    },
+    {
+      "source": "module:cli",
+      "target": "module:server",
+      "type": "depends_on",
+      "specifier": "@chisacode/server"
     },
     {
       "source": "module:cli",

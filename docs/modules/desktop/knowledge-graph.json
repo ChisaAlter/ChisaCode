@@ -271,11 +271,12 @@
       "id": "file:packages/desktop/src/daemon/daemon-manager.test.ts",
       "type": "test",
       "path": "packages/desktop/src/daemon/daemon-manager.test.ts",
-      "lines": 560,
+      "lines": 574,
       "imports": [
         "../settings/desktop-settings",
         "./daemon-manager",
         "node:events",
+        "node:fs",
         "node:path",
         "vitest"
       ]
@@ -530,7 +531,7 @@
       "id": "file:packages/desktop/src/features/opener.test.ts",
       "type": "test",
       "path": "packages/desktop/src/features/opener.test.ts",
-      "lines": 108,
+      "lines": 109,
       "imports": [
         "./opener",
         "electron",
@@ -541,7 +542,7 @@
       "id": "file:packages/desktop/src/features/opener.ts",
       "type": "source",
       "path": "packages/desktop/src/features/opener.ts",
-      "lines": 63,
+      "lines": 70,
       "imports": [
         "../daemon/daemon-manager.js",
         "../i18n.js",

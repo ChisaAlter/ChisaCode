@@ -65,7 +65,7 @@
       "test": 363,
       "source": 448
     },
-    "internalImportEdges": 2741,
+    "internalImportEdges": 2742,
     "workspaceDependencies": [
       "client",
       "highlight",
@@ -691,7 +691,7 @@
       "id": "file:packages/server/src/server/agent/agent-launch-config-controller.ts",
       "type": "config",
       "path": "packages/server/src/server/agent/agent-launch-config-controller.ts",
-      "lines": 306,
+      "lines": 316,
       "imports": [
         "../project-context.js",
         "./agent-provider-controller.js",
@@ -808,7 +808,7 @@
       "id": "file:packages/server/src/server/agent/agent-manager.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/agent-manager.ts",
-      "lines": 1552,
+      "lines": 1567,
       "imports": [
         "../../terminal/terminal-manager.js",
         "../git-snapshot.js",
@@ -855,7 +855,7 @@
       "id": "file:packages/server/src/server/agent/agent-mcp.e2e.test.ts",
       "type": "test",
       "path": "packages/server/src/server/agent/agent-mcp.e2e.test.ts",
-      "lines": 712,
+      "lines": 739,
       "imports": [
         "../../utils/promise-timeout.js",
         "../bootstrap.js",
@@ -2029,7 +2029,7 @@
       "id": "file:packages/server/src/server/agent/provider-snapshot-manager.test.ts",
       "type": "test",
       "path": "packages/server/src/server/agent/provider-snapshot-manager.test.ts",
-      "lines": 839,
+      "lines": 842,
       "imports": [
         "../../test-utils/test-logger.js",
         "./agent-sdk-types.js",
@@ -2042,7 +2042,7 @@
       "id": "file:packages/server/src/server/agent/provider-snapshot-manager.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/provider-snapshot-manager.ts",
-      "lines": 1265,
+      "lines": 1276,
       "imports": [
         "../../utils/path.js",
         "../../utils/promise-timeout.js",
@@ -5456,7 +5456,7 @@
       "id": "file:packages/server/src/server/bootstrap.ts",
       "type": "source",
       "path": "packages/server/src/server/bootstrap.ts",
-      "lines": 1669,
+      "lines": 1673,
       "imports": [
         "../services/github-service.js",
         "../terminal/terminal-manager-factory.js",
@@ -5860,7 +5860,7 @@
       "id": "file:packages/server/src/server/daemon-client.e2e.test.ts",
       "type": "test",
       "path": "packages/server/src/server/daemon-client.e2e.test.ts",
-      "lines": 1761,
+      "lines": 1798,
       "imports": [
         "../utils/promise-timeout.js",
         "./agent/agent-sdk-types.js",
@@ -5869,6 +5869,7 @@
         "./test-utils/chisacode-daemon.js",
         "./test-utils/dictation-e2e.js",
         "./test-utils/index.js",
+        "./test-utils/message-collector.js",
         "node:child_process",
         "node:crypto",
         "node:fs",
@@ -6617,7 +6618,7 @@
       "id": "file:packages/server/src/server/daemon-e2e/relay-transport.e2e.test.ts",
       "type": "test",
       "path": "packages/server/src/server/daemon-e2e/relay-transport.e2e.test.ts",
-      "lines": 660,
+      "lines": 719,
       "imports": [
         "../pairing-offer.js",
         "../test-utils/chisacode-daemon.js",
@@ -6900,7 +6901,7 @@
       "id": "file:packages/server/src/server/daemon-e2e/wait-for-idle.e2e.test.ts",
       "type": "test",
       "path": "packages/server/src/server/daemon-e2e/wait-for-idle.e2e.test.ts",
-      "lines": 228,
+      "lines": 238,
       "imports": [
         "../test-utils/index.js",
         "../test-utils/message-collector.js",
@@ -20896,6 +20897,12 @@
       "target": "file:packages/server/src/server/test-utils/index.ts",
       "type": "imports",
       "specifier": "./test-utils/index.js"
+    },
+    {
+      "source": "file:packages/server/src/server/daemon-client.e2e.test.ts",
+      "target": "file:packages/server/src/server/test-utils/message-collector.ts",
+      "type": "imports",
+      "specifier": "./test-utils/message-collector.js"
     },
     {
       "source": "file:packages/server/src/server/daemon-config-store.test.ts",

@@ -47,15 +47,15 @@
     }
   },
   "stats": {
-    "files": 1326,
+    "files": 1327,
     "categories": {
       "config": 41,
-      "test": 410,
+      "test": 411,
       "support": 76,
       "docs": 2,
       "source": 797
     },
-    "internalImportEdges": 3612,
+    "internalImportEdges": 3611,
     "workspaceDependencies": [
       "client",
       "expo-two-way-audio",
@@ -209,20 +209,21 @@
       "id": "file:packages/app/e2e/agent-stream-ui.spec.ts",
       "type": "test",
       "path": "packages/app/e2e/agent-stream-ui.spec.ts",
-      "lines": 67,
+      "lines": 75,
       "imports": [
         "./fixtures",
         "./helpers/agent-stream",
         "./helpers/app",
         "./helpers/composer",
-        "./helpers/launcher"
+        "./helpers/launcher",
+        "@playwright/test"
       ]
     },
     {
       "id": "file:packages/app/e2e/archive-tab.spec.ts",
       "type": "test",
       "path": "packages/app/e2e/archive-tab.spec.ts",
-      "lines": 130,
+      "lines": 132,
       "imports": [
         "./fixtures",
         "./helpers/archive-tab",
@@ -592,7 +593,7 @@
       "id": "file:packages/app/e2e/desktop-user-facing-error-text.script.ts",
       "type": "support",
       "path": "packages/app/e2e/desktop-user-facing-error-text.script.ts",
-      "lines": 323,
+      "lines": 322,
       "imports": [
         "../src/utils/host-routes",
         "./helpers/node-ws-factory",
@@ -672,7 +673,7 @@
       "id": "file:packages/app/e2e/helpers/agent-bottom-anchor.ts",
       "type": "support",
       "path": "packages/app/e2e/helpers/agent-bottom-anchor.ts",
-      "lines": 69,
+      "lines": 74,
       "imports": [
         "@playwright/test"
       ]
@@ -691,9 +692,8 @@
       "id": "file:packages/app/e2e/helpers/app.ts",
       "type": "support",
       "path": "packages/app/e2e/helpers/app.ts",
-      "lines": 441,
+      "lines": 53,
       "imports": [
-        "./regex",
         "@playwright/test"
       ]
     },
@@ -701,7 +701,7 @@
       "id": "file:packages/app/e2e/helpers/archive-tab.ts",
       "type": "support",
       "path": "packages/app/e2e/helpers/archive-tab.ts",
-      "lines": 295,
+      "lines": 283,
       "imports": [
         "./daemon-port",
         "./daemon-registry",
@@ -937,7 +937,7 @@
       "id": "file:packages/app/e2e/helpers/settings.ts",
       "type": "support",
       "path": "packages/app/e2e/helpers/settings.ts",
-      "lines": 274,
+      "lines": 310,
       "imports": [
         "./regex",
         "./server-id",
@@ -1185,7 +1185,7 @@
       "id": "file:packages/app/e2e/settings-host-page.spec.ts",
       "type": "test",
       "path": "packages/app/e2e/settings-host-page.spec.ts",
-      "lines": 143,
+      "lines": 146,
       "imports": [
         "./fixtures",
         "./helpers/app",
@@ -6566,7 +6566,7 @@
       "id": "file:packages/app/src/composer/draft/create-flow.test.ts",
       "type": "test",
       "path": "packages/app/src/composer/draft/create-flow.test.ts",
-      "lines": 503,
+      "lines": 510,
       "imports": [
         "./create-flow",
         "@/i18n",
@@ -12660,7 +12660,7 @@
       "id": "file:packages/app/src/screens/workspace/workspace-screen.tsx",
       "type": "source",
       "path": "packages/app/src/screens/workspace/workspace-screen.tsx",
-      "lines": 1316,
+      "lines": 1329,
       "imports": [
         "@/components/error-boundary",
         "@/components/explorer-sidebar",
@@ -14172,6 +14172,17 @@
       "path": "packages/app/src/test/window-local-storage.ts",
       "lines": 39,
       "imports": []
+    },
+    {
+      "id": "file:packages/app/src/testing/e2e-testid-integrity.test.ts",
+      "type": "test",
+      "path": "packages/app/src/testing/e2e-testid-integrity.test.ts",
+      "lines": 170,
+      "imports": [
+        "node:fs",
+        "node:path",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/app/src/timeline/agent-stream-tail-cache.test.ts",
@@ -17319,12 +17330,6 @@
       "target": "file:packages/app/e2e/helpers/agent-bottom-anchor.ts",
       "type": "imports",
       "specifier": "./agent-bottom-anchor"
-    },
-    {
-      "source": "file:packages/app/e2e/helpers/app.ts",
-      "target": "file:packages/app/e2e/helpers/regex.ts",
-      "type": "imports",
-      "specifier": "./regex"
     },
     {
       "source": "file:packages/app/e2e/helpers/archive-tab.ts",
