@@ -847,10 +847,21 @@ export class ProviderSnapshotManager {
       }
 
       try {
+        // Injected clients (ChisaCodeDaemonConfig.agentClients) own the whole
+        // provider surface. The registry's fetchModels/fetchModes close over the
+        // real provider runtime (e.g. codex spawns a throwaway app-server), so
+        // routing discovery through them would bypass the injection seam and
+        // fail on hosts without the real binary even though the injected client
+        // is fully functional.
+        const injectedClient = this.extraClients[provider];
         const [models, modes] = await withTimeout(
           Promise.all([
-            definition.fetchModels({ cwd, force }),
-            definition.fetchModes({ cwd, force }),
+            injectedClient
+              ? injectedClient.listModels({ cwd, force })
+              : definition.fetchModels({ cwd, force }),
+            injectedClient
+              ? (injectedClient.listModes?.({ cwd, force }) ?? Promise.resolve(definition.modes))
+              : definition.fetchModes({ cwd, force }),
           ]),
           this.refreshTimeoutMs,
           `Timed out refreshing ${definition.label} after ${this.refreshTimeoutMs}ms`,
