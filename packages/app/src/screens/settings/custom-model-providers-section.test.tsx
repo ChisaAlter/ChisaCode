@@ -350,6 +350,7 @@ vi.mock("@/hooks/use-user-visible-error", () => ({
     }),
 }));
 
+import { buildModelGatewayProviderIdList } from "@/screens/settings/custom-model-providers";
 import { CustomModelProvidersSection } from "@/screens/settings/custom-model-providers-section";
 
 function makeConfig(): MutableDaemonConfig {
@@ -598,8 +599,11 @@ describe("CustomModelProvidersSection", () => {
     expect(gateway?.attachToAllAgents).toBeUndefined();
     expect(refreshMock).toHaveBeenCalledTimes(1);
     const refreshProviderIds = refreshMock.mock.calls[0]?.[0] as string[] | undefined;
-    expect(Array.isArray(refreshProviderIds)).toBe(true);
-    expect(refreshProviderIds?.length).toBe(6);
+    // Derive from the same source of truth the section uses so adding a new
+    // built-in gateway face does not silently break this expectation.
+    expect(refreshProviderIds).toEqual(
+      buildModelGatewayProviderIdList("glm-air", { protocolPreset: "openai", supplyScope: "all" }),
+    );
   });
 
   it("saves an edited model and closes without waiting for provider refresh", async () => {
