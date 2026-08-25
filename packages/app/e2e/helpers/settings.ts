@@ -1,6 +1,7 @@
 import { expect, type Page } from "@playwright/test";
 import { escapeRegex } from "./regex";
 import { getServerId } from "./server-id";
+import { localizedAlternatives, localizedRegex } from "./localized-text";
 
 const SECTION_LABELS = {
   general: "General",
@@ -10,32 +11,6 @@ const SECTION_LABELS = {
   permissions: "Permissions",
   diagnostics: "Diagnostics",
   about: "About",
-} as const;
-
-// The app renders zh-CN by default (createAppI18n("zh-CN") in
-// packages/app/src/i18n/index.ts), so every copy assertion must accept both
-// the English and the Chinese variant of the string it targets.
-const LOCALIZED_TEXT = {
-  General: ["General", "通用"],
-  // The detail header reuses the sidebar section label ("用量"), while the
-  // usage page body title is "用量统计" — accept both.
-  Usage: ["Usage", "用量统计", "用量"],
-  Diagnostics: ["Diagnostics", "诊断"],
-  About: ["About", "关于"],
-  Theme: ["Theme", "主题"],
-  "Play test": ["Play test", "播放测试"],
-  "GitHub releases": ["GitHub releases", "GitHub 版本"],
-  Connections: ["Connections", "连接"],
-  "Add connection": ["Add connection", "添加连接"],
-  "Direct connection": ["Direct connection", "直接连接"],
-  "Paste pairing link": ["Paste pairing link", "粘贴配对链接"],
-  "Inject ChisaCode tools": ["Inject ChisaCode tools", "注入ChisaCode工具"],
-  Back: ["Back", "返回"],
-  "Open menu": ["Open menu", "打开菜单"],
-  Hosts: ["Hosts", "主机"],
-  Providers: ["Providers", "提供商"],
-  "Pair device": ["Pair device", "配对设备"],
-  Daemon: ["Daemon", "守护进程"],
 } as const;
 
 export type SettingsSection = keyof typeof SECTION_LABELS | "projects";
@@ -298,12 +273,4 @@ export async function expectLocalHostEntryFirst(page: Page, serverId: string): P
   // The July sidebar redesign replaced the "Local" text badge with an
   // unlabeled dot; the dot carries the semantic marker testID.
   await expect(localHostEntry.getByTestId("settings-host-local-marker")).toBeVisible();
-}
-
-function localizedAlternatives(text: string): string[] {
-  return [...(LOCALIZED_TEXT[text as keyof typeof LOCALIZED_TEXT] ?? [text])];
-}
-
-function localizedRegex(text: string): RegExp {
-  return new RegExp(`^(${localizedAlternatives(text).map(escapeRegex).join("|")})$`);
 }
