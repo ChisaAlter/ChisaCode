@@ -120,6 +120,85 @@ describe("DaemonConnectionController", () => {
     await harness.controller.close();
   });
 
+  it("reconnects only after two consecutive liveness timeouts; inbound activity resets the counter", async () => {
+    vi.useFakeTimers();
+    const harness = createController();
+    await connectController(harness);
+
+    const failOnce = async () => {
+      const probe = harness.controller.checkLiveness({ timeoutMs: 10 });
+      const rejection = expect(probe).rejects.toThrow("Liveness check timed out");
+      await vi.advanceTimersByTimeAsync(10);
+      await rejection;
+    };
+
+    // One timeout is tolerated — the connection must stay up.
+    await failOnce();
+    expect(harness.controller.getState().status).toBe("connected");
+    expect(harness.transport.close).not.toHaveBeenCalled();
+
+    // Inbound activity clears the failure streak, so the next single timeout
+    // is again tolerated.
+    harness.controller.recordInboundActivity();
+    await failOnce();
+    expect(harness.controller.getState().status).toBe("connected");
+
+    // A second consecutive timeout crosses the threshold and tears down the
+    // transport with the liveness reason.
+    await failOnce();
+    expect(harness.controller.getState()).toMatchObject({
+      status: "disconnected",
+      reason: expect.stringContaining("Liveness check timed out"),
+    });
+    expect(harness.transport.close).toHaveBeenCalledWith(1_001, "Liveness check timed out");
+    await harness.controller.close();
+  });
+
+  it("debounces a bare transport error and emits a single reset when close follows within the window", async () => {
+    vi.useFakeTimers();
+    const harness = createController();
+    await connectController(harness);
+    const transitions: string[] = [];
+    const unsubscribe = harness.controller.subscribe((state) => transitions.push(state.status));
+    transitions.length = 0;
+
+    // A generic error carries no diagnostic value; the controller must hold it
+    // for 250ms in case a descriptive close event follows.
+    harness.transport.error({});
+    expect(harness.controller.getState().status).toBe("connected");
+    expect(harness.callbacks.onReset).not.toHaveBeenCalled();
+
+    // The close arrives inside the debounce window: exactly one reset and one
+    // disconnected transition, not two.
+    harness.transport.closeEvent({ code: 1006, reason: "descriptive close" });
+    expect(harness.callbacks.onReset).toHaveBeenCalledTimes(1);
+    expect(transitions).toEqual(["disconnected"]);
+
+    // The pending generic-error timer was cancelled — advancing past the
+    // window produces no second reset.
+    await vi.advanceTimersByTimeAsync(300);
+    expect(harness.callbacks.onReset).toHaveBeenCalledTimes(1);
+    expect(transitions).toEqual(["disconnected"]);
+    unsubscribe();
+    await harness.controller.close();
+  });
+
+  it("escalates a bare transport error to a reset when no close follows within the window", async () => {
+    vi.useFakeTimers();
+    const harness = createController();
+    await connectController(harness);
+
+    harness.transport.error({});
+    expect(harness.controller.getState().status).toBe("connected");
+    await vi.advanceTimersByTimeAsync(250);
+    expect(harness.controller.getState()).toMatchObject({
+      status: "disconnected",
+      reason: "Transport error",
+    });
+    expect(harness.callbacks.onReset).toHaveBeenCalledTimes(1);
+    await harness.controller.close();
+  });
+
   it("coalesces liveness probes and resolves them from one pong", async () => {
     const harness = createController();
     await connectController(harness);
