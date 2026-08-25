@@ -10,6 +10,7 @@ import {
   buildManagedDshCordisYml,
   DSH_DEFAULT_MODELS,
   DshAgentClient,
+  resetDshNpmGlobalRootCacheForTests,
   resolveDshVendorDir,
   withDefaultDshModels,
 } from "./dsh-agent.js";
@@ -311,10 +312,19 @@ describe("resolveDshVendorDir", () => {
 
   afterEach(() => {
     process.env = { ...envBackup };
+    resetDshNpmGlobalRootCacheForTests();
     for (const root of tempRoots.splice(0)) {
       rmSync(root, { recursive: true, force: true });
     }
   });
+
+  function makeNpmGlobalVendorDir(npmRoot: string): string {
+    const vendorDir = join(npmRoot, "@deepseek-ai", "dsh", "node_modules", "@deepseek-ai");
+    for (const pkg of VENDOR_PACKAGES) {
+      mkdirSync(join(vendorDir, pkg, "lib"), { recursive: true });
+    }
+    return vendorDir;
+  }
 
   test("honors the override only when the tree is complete", () => {
     const root = mkdtempSync(join(tmpdir(), "chisacode-dsh-vendor-"));
@@ -326,6 +336,53 @@ describe("resolveDshVendorDir", () => {
     tempRoots.push(incomplete);
     process.env.CHISACODE_DSH_VENDOR_DIR = incomplete;
     expect(resolveDshVendorDir()).toBeNull();
+  });
+
+  test("resolves the global npm root at most once per process", () => {
+    delete process.env.CHISACODE_DSH_VENDOR_DIR;
+    const npmRoot = mkdtempSync(join(tmpdir(), "chisacode-dsh-npm-root-"));
+    tempRoots.push(npmRoot);
+    const vendorDir = makeNpmGlobalVendorDir(npmRoot);
+
+    let calls = 0;
+    const resolveNpmRoot = () => {
+      calls += 1;
+      return npmRoot;
+    };
+
+    expect(resolveDshVendorDir(resolveNpmRoot)).toBe(vendorDir);
+    expect(resolveDshVendorDir(resolveNpmRoot)).toBe(vendorDir);
+    expect(calls).toBe(1);
+  });
+
+  test("caches npm root resolution failures instead of re-blocking", () => {
+    delete process.env.CHISACODE_DSH_VENDOR_DIR;
+    let calls = 0;
+    const failingResolver = () => {
+      calls += 1;
+      throw new Error("npm not on PATH");
+    };
+
+    expect(resolveDshVendorDir(failingResolver)).toBeNull();
+    expect(resolveDshVendorDir(failingResolver)).toBeNull();
+    expect(calls).toBe(1);
+  });
+
+  test("re-checks vendor completeness per call so late installs are picked up", () => {
+    delete process.env.CHISACODE_DSH_VENDOR_DIR;
+    const npmRoot = mkdtempSync(join(tmpdir(), "chisacode-dsh-npm-root-"));
+    tempRoots.push(npmRoot);
+
+    let calls = 0;
+    const resolveNpmRoot = () => {
+      calls += 1;
+      return npmRoot;
+    };
+
+    expect(resolveDshVendorDir(resolveNpmRoot)).toBeNull();
+    const vendorDir = makeNpmGlobalVendorDir(npmRoot);
+    expect(resolveDshVendorDir(resolveNpmRoot)).toBe(vendorDir);
+    expect(calls).toBe(1);
   });
 });
 

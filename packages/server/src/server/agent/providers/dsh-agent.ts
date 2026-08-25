@@ -233,6 +233,21 @@ function resolveInitialDshPin(models: ProviderProfileModel[]): {
   };
 }
 
+/**
+ * Missing-credential preflight failure. Carries a stable `name` and `code`
+ * so logs and tooling can match on them; the user-facing message stays the
+ * localized string clients already display (do not change it — the message
+ * travels over the wire to old clients as plain text).
+ */
+export class DshCredentialsError extends Error {
+  readonly code = "DSH_MISSING_API_KEY";
+
+  constructor(message: string) {
+    super(message);
+    this.name = "DshCredentialsError";
+  }
+}
+
 /** Fail-fast unless a DeepSeek credential will actually be visible to the spawn. */
 function assertDshCredentials(env: Record<string, string> | undefined): void {
   // Process env is the only channel that reliably feeds the spawn; the
@@ -241,7 +256,7 @@ function assertDshCredentials(env: Record<string, string> | undefined): void {
   if (env?.DEEPSEEK_API_KEY?.trim() || process.env.DEEPSEEK_API_KEY?.trim()) {
     return;
   }
-  throw new Error(
+  throw new DshCredentialsError(
     "DeepSeek Harness 尚未配置 API 密钥:请设置环境变量 DEEPSEEK_API_KEY 后重试(本次请求未发出)。",
   );
 }
@@ -297,27 +312,63 @@ function resolveManagedDshHome(providerId: string, baseUrl: string): string {
 }
 
 /**
+ * Process-level cache for the global npm root. `npm root -g` spawns a full npm
+ * process (with a 5s timeout) and blocks the event loop; the path it prints is
+ * stable for the lifetime of the daemon, so resolve it at most once per
+ * process. Failures are cached too — retrying a missing npm binary on every
+ * provider construction would re-block the loop for nothing.
+ * `undefined` = not resolved yet, `null` = resolution failed.
+ */
+let cachedNpmGlobalRoot: string | null | undefined;
+
+function execNpmRootGlobal(): string {
+  return execSync("npm root -g", {
+    encoding: "utf8",
+    timeout: 5_000,
+    windowsHide: true,
+  }).trim();
+}
+
+/** Test-only: clears the cached global npm root. */
+export function resetDshNpmGlobalRootCacheForTests(): void {
+  cachedNpmGlobalRoot = undefined;
+}
+
+/**
  * Locates the directory holding dsh's vendored `@deepseek-ai/*` plugin packages
  * (`<npm-global-root>/@deepseek-ai/dsh/node_modules/@deepseek-ai`). Returns null
  * when the harness is not installed, so construction never throws before a
  * clearer boot-time diagnostic can surface.
+ *
+ * The npm-root lookup is cached per process; the vendor-dir completeness check
+ * still runs per call so a harness installed after daemon boot is picked up.
+ * @param resolveNpmRoot Test seam for the `npm root -g` invocation
+ * @returns The vendor directory, or null when the harness is not installed
  */
-export function resolveDshVendorDir(): string | null {
+export function resolveDshVendorDir(
+  resolveNpmRoot: () => string = execNpmRootGlobal,
+): string | null {
   const override = process.env.CHISACODE_DSH_VENDOR_DIR?.trim();
   if (override) {
     return isCompleteVendorDir(override) ? override : null;
   }
-  let npmRoot: string;
-  try {
-    npmRoot = execSync("npm root -g", {
-      encoding: "utf8",
-      timeout: 5_000,
-      windowsHide: true,
-    }).trim();
-  } catch {
+  if (cachedNpmGlobalRoot === undefined) {
+    try {
+      cachedNpmGlobalRoot = resolveNpmRoot();
+    } catch {
+      cachedNpmGlobalRoot = null;
+    }
+  }
+  if (cachedNpmGlobalRoot === null) {
     return null;
   }
-  const candidate = join(npmRoot, "@deepseek-ai", "dsh", "node_modules", "@deepseek-ai");
+  const candidate = join(
+    cachedNpmGlobalRoot,
+    "@deepseek-ai",
+    "dsh",
+    "node_modules",
+    "@deepseek-ai",
+  );
   return isCompleteVendorDir(candidate) ? candidate : null;
 }
 
