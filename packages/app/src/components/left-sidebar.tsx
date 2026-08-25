@@ -105,6 +105,7 @@ import { buildSidebarLiveAgents, mergeSidebarSessionSources } from "@/utils/side
 import { useSidebarOrderStore, type SidebarViewMode } from "@/stores/sidebar-order-store";
 import { useSidebarV2Store } from "@/sidebar-v2/store";
 import { SidebarAgentListSkeleton } from "./sidebar-agent-list-skeleton";
+import { SidebarCalloutSlot } from "./sidebar-callout-slot";
 import { SidebarSessionList } from "./sidebar-session-list";
 
 const DESKTOP_SIDEBAR_ANIMATION_CONFIG = {
@@ -1447,6 +1448,11 @@ function MobileSidebar({
               />
             )}
 
+            {/* Callout viewport (app updates, worktree setup, Rosetta). Removed by
+                accident in the June 2026 desktop layout rework; the callout sources
+                keep publishing into the context, so without this slot nothing renders. */}
+            <SidebarCalloutSlot />
+
             <SidebarFooter
               activeServerId={activeServerId}
               activeHostLabel={activeHostLabel}
@@ -1618,6 +1624,10 @@ function DesktopSidebar({
             searchQuery={searchQuery}
           />
         )}
+
+        {/* Callout viewport (app updates, worktree setup, Rosetta) — same
+            restoration as the mobile sidebar above. */}
+        <SidebarCalloutSlot />
 
         <SidebarFooter
           activeServerId={activeServerId}
