@@ -687,9 +687,10 @@ export class ProviderSnapshotManager {
     await Promise.allSettled(
       options.providers.map((provider) => {
         const existingLoad = this.getProviderLoad(options.cwd, provider);
-        if (existingLoad) {
+        if (existingLoad && !options.force) {
           // Already probing in this scope — join it instead of consuming a
-          // probe slot for a duplicate.
+          // probe slot for a duplicate. Forced refreshes must supersede the
+          // in-flight load so its (possibly stale) result cannot win.
           return existingLoad.promise;
         }
         return this.withProbeSlot(() => this.loadProvider({ ...options, provider }));
@@ -731,12 +732,13 @@ export class ProviderSnapshotManager {
     }
 
     const existingLoad = this.getProviderLoad(options.cwd, options.provider);
-    if (existingLoad) {
+    if (existingLoad && !options.force) {
       // A probe is already in flight for this provider in this scope. Reuse it
       // instead of running a parallel availability check and model fetch — the
       // in-flight load emits its result through the same snapshot entry.
-      // refreshSettingsSnapshot clears cached loads before forcing, so explicit
-      // settings refreshes still start a fresh probe.
+      // Forced loads fall through: setProviderLoad replaces the current load
+      // pointer, so the superseded probe's writes fail the
+      // isCurrentProviderLoad guard and the latest refresh wins.
       return existingLoad.promise;
     }
 
