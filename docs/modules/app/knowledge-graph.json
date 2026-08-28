@@ -47,15 +47,15 @@
     }
   },
   "stats": {
-    "files": 1327,
+    "files": 1328,
     "categories": {
       "config": 41,
       "test": 411,
-      "support": 76,
+      "support": 77,
       "docs": 2,
       "source": 797
     },
-    "internalImportEdges": 3611,
+    "internalImportEdges": 3615,
     "workspaceDependencies": [
       "client",
       "expo-two-way-audio",
@@ -397,7 +397,7 @@
       "id": "file:packages/app/e2e/desktop-packaged-slices.script.ts",
       "type": "support",
       "path": "packages/app/e2e/desktop-packaged-slices.script.ts",
-      "lines": 446,
+      "lines": 475,
       "imports": [
         "./helpers/agent-bottom-anchor",
         "./helpers/composer",
@@ -773,10 +773,11 @@
       "id": "file:packages/app/e2e/helpers/desktop-updates.ts",
       "type": "support",
       "path": "packages/app/e2e/helpers/desktop-updates.ts",
-      "lines": 295,
+      "lines": 303,
       "imports": [
         "./app",
         "./daemon-port",
+        "./localized-text",
         "./settings",
         "@playwright/test",
         "node:fs"
@@ -812,6 +813,15 @@
         "./server-id",
         "./workspace",
         "@playwright/test"
+      ]
+    },
+    {
+      "id": "file:packages/app/e2e/helpers/localized-text.ts",
+      "type": "support",
+      "path": "packages/app/e2e/helpers/localized-text.ts",
+      "lines": 48,
+      "imports": [
+        "./regex"
       ]
     },
     {
@@ -937,8 +947,9 @@
       "id": "file:packages/app/e2e/helpers/settings.ts",
       "type": "support",
       "path": "packages/app/e2e/helpers/settings.ts",
-      "lines": 310,
+      "lines": 277,
       "imports": [
+        "./localized-text",
         "./regex",
         "./server-id",
         "@playwright/test"
@@ -4253,9 +4264,10 @@
       "id": "file:packages/app/src/components/left-sidebar.tsx",
       "type": "source",
       "path": "packages/app/src/components/left-sidebar.tsx",
-      "lines": 2161,
+      "lines": 2171,
       "imports": [
         "./sidebar-agent-list-skeleton",
+        "./sidebar-callout-slot",
         "./sidebar-session-list",
         "@/components/desktop/titlebar-drag-region",
         "@/components/themed-icon-host",
@@ -17435,6 +17447,12 @@
     },
     {
       "source": "file:packages/app/e2e/helpers/desktop-updates.ts",
+      "target": "file:packages/app/e2e/helpers/localized-text.ts",
+      "type": "imports",
+      "specifier": "./localized-text"
+    },
+    {
+      "source": "file:packages/app/e2e/helpers/desktop-updates.ts",
       "target": "file:packages/app/e2e/helpers/settings.ts",
       "type": "imports",
       "specifier": "./settings"
@@ -17456,6 +17474,12 @@
       "target": "file:packages/app/e2e/helpers/workspace.ts",
       "type": "imports",
       "specifier": "./workspace"
+    },
+    {
+      "source": "file:packages/app/e2e/helpers/localized-text.ts",
+      "target": "file:packages/app/e2e/helpers/regex.ts",
+      "type": "imports",
+      "specifier": "./regex"
     },
     {
       "source": "file:packages/app/e2e/helpers/mock-agent.ts",
@@ -17564,6 +17588,12 @@
       "target": "file:packages/app/e2e/helpers/workspace.ts",
       "type": "imports",
       "specifier": "./workspace"
+    },
+    {
+      "source": "file:packages/app/e2e/helpers/settings.ts",
+      "target": "file:packages/app/e2e/helpers/localized-text.ts",
+      "type": "imports",
+      "specifier": "./localized-text"
     },
     {
       "source": "file:packages/app/e2e/helpers/settings.ts",
@@ -22340,6 +22370,12 @@
       "target": "file:packages/app/src/components/sidebar-agent-list-skeleton.tsx",
       "type": "imports",
       "specifier": "./sidebar-agent-list-skeleton"
+    },
+    {
+      "source": "file:packages/app/src/components/left-sidebar.tsx",
+      "target": "file:packages/app/src/components/sidebar-callout-slot.web.tsx",
+      "type": "imports",
+      "specifier": "./sidebar-callout-slot"
     },
     {
       "source": "file:packages/app/src/components/left-sidebar.tsx",

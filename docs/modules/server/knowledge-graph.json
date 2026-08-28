@@ -1809,7 +1809,7 @@
       "id": "file:packages/server/src/server/agent/model-catalog.e2e.test.ts",
       "type": "test",
       "path": "packages/server/src/server/agent/model-catalog.e2e.test.ts",
-      "lines": 88,
+      "lines": 105,
       "imports": [
         "../test-utils/index.js",
         "./agent-sdk-types.js",
@@ -6241,7 +6241,7 @@
       "id": "file:packages/server/src/server/daemon-e2e/git-operations.e2e.test.ts",
       "type": "test",
       "path": "packages/server/src/server/daemon-e2e/git-operations.e2e.test.ts",
-      "lines": 920,
+      "lines": 931,
       "imports": [
         "../../test-utils/platform.js",
         "../../utils/promise-timeout.js",
@@ -9395,7 +9395,7 @@
       "id": "file:packages/server/src/server/test-utils/fake-agent-client.ts",
       "type": "source",
       "path": "packages/server/src/server/test-utils/fake-agent-client.ts",
-      "lines": 1251,
+      "lines": 1286,
       "imports": [
         "../agent/agent-sdk-types.js",
         "@chisacode/protocol/tool-name-normalization",
