@@ -2173,6 +2173,9 @@ export class HostRuntimeStore {
 
     const refresh = (async () => {
       controller.markAgentDirectorySyncLoading();
+      // Captured before the first request so the replace step can tell which
+      // local rows this fetch snapshot could not possibly know about yet.
+      const fetchStartedAt = new Date();
       const pageLimit = input.page?.limit ?? DEFAULT_AGENT_DIRECTORY_PAGE_LIMIT;
       let cursor = input.page?.cursor ?? null;
       let includeSubscribe = true;
@@ -2207,6 +2210,7 @@ export class HostRuntimeStore {
       const { agents } = replaceFetchedAgentDirectory({
         serverId: input.serverId,
         entries: allEntries,
+        fetchStartedAt,
       });
 
       controller.markAgentDirectorySyncReady();

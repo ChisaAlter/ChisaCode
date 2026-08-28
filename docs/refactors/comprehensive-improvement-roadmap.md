@@ -9,6 +9,68 @@
 
 ## 进行中
 
+### 全量审查修复批次 2026-08-25（S1/S2/M1/M3/M4/M7/L3/L4）
+
+- **来源**：2026-08 全量代码审查结论（严重 S1/S2，中等 M1-M7，低 L1-L4），本批在 `cursor/audit-fixes-2026-08-25-7503` 落地。
+- **已完成**：
+  - **S1 Mobile web 390px 崩溃**：`left-sidebar.tsx` MobileSidebar 的 Animated×unistyles 违例修复 + 边界回归（见上方 2026-08-04 条目的 2026-08-25 修复记录；真实表面验证仍未做）。
+  - **S2 COMPAT 占位符**：protocol/server/app 共 8 处 `v0.1.X` 回填真实版本与移除日期；`scripts/guard.test.ts` 新增门禁禁止 `packages/*/src` 出现占位符（CI lint job 已跑 `test:guard`）。
+  - **M1 dsh execSync**：`npm root -g` 结果进程级缓存（含失败缓存），vendor 完整性仍按次检查以捕捉后装；注入式 resolver + 3 个单测。
+  - **M3/L4 文档矛盾**：根 CLAUDE.md hover 条款改为与 docs/hover.md 一致；server CLAUDE.md 去 Biome/全量测试残留、修 providers 路径；CLAUDE.md/architecture.md/product.md/glossary.md provider 列表补 dsh；本文件 "CI 门禁收尾" 条目状态漂移已修正（远端 CI 实际未绿）。
+  - **M7 relay string/binary 隐式契约**：decrypt UTF-8 启发式 ↔ 双端 opcode 嗅探链条补交叉引用注释（relay crypto/channel、server relay-transport、client inbound controller、protocol demux）；新增 `packages/relay/src/e2ee-frame-type.test.ts`（4 用例：valid-UTF-8 binary 字节级往返、invalid-UTF-8 ArrayBuffer 往返、JSON 直通、opcode 与 0x7b 不相交）与 `packages/client/src/daemon-client-inbound-controller.test.ts`（string 投递的 terminal frame 正确路由）。线格式未动。
+  - **M4 静默 catch（选择性）**：agent-storage 项目目录 readdir 失败（会静默丢整目录 agents）补 warn；acp-agent `isAvailable` 吞错补 debug。全仓 280 处不做机械改动。
+  - **L3 dsh 中文硬编码错误**：改为 `DshCredentialsError`（stable name + `DSH_MISSING_API_KEY` code），用户可见消息保持不变以兼容旧客户端。
+- **第二批（2026-08-25，同分支追加，dsh 收尾）**：
+  - **凭证文档矛盾**：`docs/custom-providers.md` 与 `docs/dsh-upstream-contract.md` §4 改为与代码一致的 env-only `DEEPSEEK_API_KEY` 预检口径（`.credentials.yaml` 不作为 ChisaCode 凭证源；如未来支持须先实机验证 adapter 读取）。完成。
+  - **错误 code 端到端 i18n**：server `toAgentCreateWireError` 把典型化 provider code（`DSH_MISSING_API_KEY`）送上 `agent_create_failed.errorCode`；client 抛 `AgentCreateError`（带 `code`）；app `resolveAgentCreateErrorMessage` 按 code 映射 zh/en i18n（`panels.agent.createErrorDshMissingApiKey`），未知 code 回退 daemon 消息。server 硬编码中文消息保留以兼容旧客户端。三层各有单测。完成（真机 UI 展示未验证）。
+  - **dsh 版本探测**：`GenericACPAgentClient.buildVersionProbe` 可覆写；`DshAgentClient` 受管 launch 用 `dsh --version`（`dsh-acp-demo --version` 上游不存在，契约 §10），replace 覆写保持通用探测。含 2 单测。完成（真机诊断面板未验证）。
+  - **DSH_SNAPSHOT 剥离**：`createProviderEnvSpec` 的 PARENT_SESSION_ENV_VARS 增加 `DSH_SNAPSHOT`（契约 §2「不得透传」），provider env/overlay/进程 env 三来源统一剥离；单测覆盖。完成。
+  - **acp-provider-catalog dsh command 雷区**：dsh 条目移除 `command` 字段（受管 `--config` launch 不可被 replace 覆写），`AcpProviderCatalogEntry.command` 转 optional，`buildAcpProviderConfigPatch` 无 command 不写 command；测试补 dsh patch 形状断言。完成。
+  - **上游复验机制**：`docs/dsh-upstream-contract.md` 新增 §9 复验节奏（检测/复验/写回/联动四步）；`docs/release.md` Stable 检查单挂"dsh 上游契约复验"项（release skills 走该检查单自动生效）。刻意不做自动联网探测。完成。
+  - **文档收尾**：`docs/architecture.md` ASCII 架构图补 DeepSeek Harness 列（provider 列表/表格第一批已补）。完成。
+- **第三批（2026-08-25，同分支追加，性能与体验热点）**：
+  - **Server：workspace 描述符汇总按 cwd 限定**：`WorkspaceDirectory.buildDescriptorMap` 传入 `workspaceIds` 时原本仍调无参 `listAgentPayloads()` 为**全部** live+persisted agent 构建 payload（含 provider 投影/权限归并），而每个 `agent_state` 事件都会经 `publishAgentUpdate → emitWorkspaceUpdateForCwd` 走到这条路——重度用户存量数百 agent 时属流式期间的每事件全量重建。改动：`WorkspaceDirectoryDeps.listAgentPayloads` 增加可选 `scope.cwds`，`Session.listAgentPayloads` 按归一化 cwd 预过滤 live 快照与 persisted 记录（liveIds 去重仍以全量 live 计算避免复活已升级记录）；`buildDescriptorMap` 先取 workspace/project 记录算出目标 cwd 集合再取 agent。协议线格式未动。新增 `workspace-directory.test.ts` 3 用例（scoped 只构建目标 cwd、unscoped 全量、状态 rollup 正确）。完成。
+  - **Server：无订阅时跳过 workspace/agent 广播工作**：`WorkspaceUpdateController.emitUpdateForCwd` 在无 `subscription` 时（CLI/MCP 客户端常态）原本仍列 registry 并解析 workspace；现顶部早退。`publishAgentUpdate` 原本无条件构建 `AgentSnapshotPayload`；现仅 agent 订阅存在才构建，workspace 更新直接用 `agent.cwd`（`toAgentPayload` 为 passthrough，语义一致）。controller 测试补"无订阅零工作"用例。完成。
+  - **App：聚合 agent 包装身份缓存**：`useAggregatedAgents` 每次任一 store 变化都为全部 agent 新建 `AggregatedAgent` 包装对象，击穿下游全部 memo。新增 `createAggregatedAgentCache`（WeakMap keyed by 底层 Agent + serverId/serverLabel 校验），hook 内 ref 持有；单测覆盖复用/重建。完成。
+  - **App：SidebarV2 行渲染最小化**：`SidebarV2Row` 未 memo 且 `rowHandlers`/thread 对象每渲染重建，任一 agent 事件重渲染所有行。改动：`SidebarV2Row` 包 `React.memo`；`agent-adapter.ts` 新增 `createSidebarThreadCache`（agent+workspace hint 双身份校验）；`SidebarV2.tsx` 行回调改 ref-backed 每 id 稳定工厂；`useSidebarV2BulkActions` 回调与 capabilities 身份稳定化。纯 memo 化，无布局改动（不触发 HTML 原型门）。单测覆盖 thread 缓存复用/失效。完成（真机滚动帧率未实测，标注未验证）。
+  - **Client：重连退避加性抖动**：多客户端（app/CLI/MCP/relay）被同一次 daemon 重启断开后按相同指数表同步重试。新增纯函数 `computeReconnectDelayMs`（确定性 `min(base·2^n, max)` + 0–25% 加性抖动，超 cap 后仍保留抖动防止顶格同步）与 `reconnect.jitterRandom` 可注入随机源（0 时严格还原旧行为）；既有精确计时测试注入零随机，新增 3 用例（确定性表、抖动上界/cap、注入随机源计时）。完成。
+- **第四批（2026-08-25，同分支追加，cn-main CI 修绿专项）**：
+  - **诊断口径**：`gh run view --log` 逐 job 复现近 10 次 cn-main 全红 run 的每个失败 job，本地重跑定位根因后修复；覆盖 lint（lockfile-lint + kg drift + format）、server-tests、app-tests、cli-tests shard3、desktop-tests、playwright 六类。
+  - **lockfile-lint**：`expo-secure-store@57.0.1` 的 `resolved` 指向 npmmirror（本地代理写入），改回 registry.npmjs.org（integrity 不变）。
+  - **knowledge-graph drift 门禁**：`generate-modular-knowledge-graphs.mjs` 输出含 `generatedAt` 时间戳导致每次重生成必 drift；移除时间戳使生成确定化，并把生成 JSON 从 oxfmt/lefthook 排除。
+  - **server-tests 全部本地复现修复**：wire-compat fake 补 `getHydrationState/getHydrationPromise`；session 测试对齐 checkout-status 缓存后的 `getSnapshot(includeGitHub:false)` 语义；relay-transport metadata 扩展字段；agent-metadata-generator 补 providerSnapshotManager stub + `setGeneratedTitle({force})`；lifecycle-command 错误文案；codex resume 延迟 connect 契约；tree-kill signalCode 断言；worktree posix 路径改为从 `getChisaCodeWorktreesRoot` 推导。**产品修复 ×2**：`provider-snapshot-manager` force 刷新不再 join 过期 in-flight load；`workspace-mutation-coordinator.canonicalize` 对 Windows 风格路径在 POSIX 上用 `win32.resolve` 确定化。
+  - **app-tests**：settings 两个 gateway 测试改为从 `buildModelGatewayProviderIdList` 派生期望；`agent-directory-sync` 重写合并语义——fetch 全量替换目录、按 `fetchStartedAt` + create-flow 乐观保护集保留本地新 agent（**产品修复**：daemon 已删 agent 不再本地复活）。
+  - **cli-tests shard3（relay-host）**：**产品修复**——daemon 默认要求 relay device auth 后 CLI `--host <offer-url>` 全断（4401）。新增 `FileRelayDeviceCredentialStore`（0600 JSON 凭证store）+ `resolveRelayOfferDeviceAuth`；`connectViaRelayOffer` 先用存储凭证、失败回退 offer pairing token 重试一次、成功后持久化新凭证；e2e probe 用 token 认证且为 CLI 生成独立 offer（token 一次性）。新增 `34-relay-device-store.test.ts`。
+  - **desktop-tests**：daemon-manager 版本测试从 package.json 动态读版本；**产品修复**——`opener.isAllowedLocalPath` 用 `win32.isAbsolute || posix.isAbsolute` 支持跨平台绝对路径；opener 测试 mock 补 `resolveMainAppSenderValidationOptions`。
+  - **playwright**：`openSessions` 改直接路由导航（sidebar testID 已非导航控件、点击静默无效）；`createIdleAgent` 改用 mock provider（CI 无 opencode）；archive-tab 用例适配单 slot workspace（多 tab UI 已移除）；**产品修复**——workspace slot 存在性检查补 pinned 判定，从 Sessions 重开归档会话不再被清回新会话页；agent-stream-ui 发送重试的成功判据改为 `user-message` testid（裸文本会匹配未发送的草稿导致误判成功）——trace 证实 composer 在新 workspace 快照就绪前 1-2 秒窗口内拒发是设计行为；`waitForContentGrowth` poll 放宽到 30s。本地定向 Playwright 3+4 用例全绿。
+  - **M2 减债（fixedWait）**：`scripts/audit-tests.mjs` fixedWait 检测排除 `setTimeout(...,0)` 零延迟 defer（33 处假阳性），基线 229→196；`create-flow.test.ts` 固定 20ms sleep 改确定性 promise 释放。
+- **第五批（2026-08-25，同分支追加，M6 client 补课第一批 + e2e helper 完整性）**：
+  - **设计文档**：[docs/testing/client-e2e-test-hardening-plan-2026-08-25.md](../testing/client-e2e-test-hardening-plan-2026-08-25.md)——M6 用例矩阵（reconnect R1-R7 / demux B1-B6）、E2E Helper Integrity 根因与修复模式、S1/M5/merge 验证门禁 runbook、四阶段执行计划、对抗性审查记录。
+  - **M6 reconnect 边缘矩阵**（`daemon-client-reconnect.test.ts` +5、`daemon-client-connection-controller.test.ts` +3）：hello-ack 丢失→connect 超时重试后原 promise 仍 resolve；in-flight RPC 掉线即时拒绝（不悬挂到 10s 请求超时）；error/close 风暴只武装一个重连 timer 且僵尸事件被忽略；退避 `min(base·2^n,max)` 封顶 + 成功后 attempt 归零；运行时 `setReconnectEnabled` 开关往返；liveness 单次超时容忍/连续两次重连/入站活动清零计数；裸 Transport error 250ms 去抖单次 reset。36/36 绿。
+  - **M6 demux/binary 边界**（`daemon-client-inbound-controller.test.ts` +7）：file-transfer 帧走 relay UTF-8 string 路径；file opcode 先于 terminal 解码；JSON bytes（0x7b）不分岔进 binary；非法帧静默丢弃后流继续；malformed/schema-invalid JSON 丢弃并告警；pong 双路径解析 liveness。
+  - **E2E helper 完整性扫描（186 个 testID 全量交叉校验）**：修复 `settings-host-local-marker`（7 月侧栏改版丢失 testID，恢复到 local dot 上，对应真实 CI 红点 settings-host-page:85）；`expectHostNoLocalOnlyRows` 语义修正——loopback 直连主机现按产品定义视为本机（`resolveLocalDaemonServerId`），pair-device 行合法出现，spec 改为 `expectLoopbackHostLocalRows`；删除 `helpers/app.ts` 中引用已删 UI 的死 helper（setWorkingDirectory/selectModel/selectMode/selectProvider/createAgent\* 等，无 spec 引用）；`helpers/settings.ts` 全部英文断言改 `localizedRegex`（应用默认 zh-CN，`createAppI18n("zh-CN")`，是 playwright ~30 个红点的主根因）。
+  - **假绿防护**：新增 `packages/app/src/testing/e2e-testid-integrity.test.ts`——静态扫描 e2e 引用的 testID（exact/prefix）与 src/desktop 源码（字面量/模板前缀/后缀组合）交叉校验，带 justification 白名单（rename-modal 后缀组合、settle/snooze 缺席断言）；UI 改名/删 testID 时秒级失败而非烧 90 分钟 playwright。
+  - **未完成登记**：其余 spec 的 zh-CN 文案漂移（desktop-updates/composer-attachments/bottom-sheet-reopen/new-workspace/projects-settings 等 ~13 文件）为 Phase 3；client-slash-commands 的 /quit 导航期望依赖 172cb6ad 产品修复在新 CI run 的裁决，未重复改。
+- **第六批（2026-08-25，同分支追加，server e2e 15 红点全数归因）**：设计文档 §6 执行日志见 [docs/testing/client-e2e-test-hardening-plan-2026-08-25.md](../testing/client-e2e-test-hardening-plan-2026-08-25.md)。
+  - **产品修复 1（缓存污染用户 repo）**：project-context TOC 缓存从 `<cwd>/.chisacode-context/` 迁至 `$CHISACODE_HOME/context/`（`AgentLaunchConfigController` 新增 `projectContextCacheDir`，`bootstrap.ts` 注入；未注入则构建不落盘）。此前每个跑过 agent 的仓库 `git status` 都被弄脏、worktree 无法 remove。`git-operations.e2e.test.ts` 捕获。
+  - **产品修复 2（注入客户端被绕过）**：`ProviderSnapshotManager.refreshProvider` 发现流程改走 `extraClients` 的 `listModels`/`listModes`（modes 缺省回落静态 `definition.modes`）；此前注入 fake/嵌入式 client 的 daemon 仍会拉起真实 provider 二进制做模型发现并失败。`agent-mcp.e2e.test.ts` 捕获。
+  - **产品修复 3（live 时间线丢 epoch）**：`emitLiveTimelineItem` 派发 `agent_stream` 附带 `timeline.getEpoch(agentId)`，修复 worktree-setup 进度等 provisional 条目在重连后无法归属当前 epoch。`timeline-reconnect-contract.e2e.test.ts` 捕获。
+  - **spec 债重对齐**：create 类 4 个用例改 fire-and-forget 契约（create 即返、初轮失败→error 态 agent）；wait-for-idle rapid-fire 按事务替换契约断言时序无关不变量（1-3 个终态、末个必 completed）；relay 三用例适配 device-auth 强制（happy path 携带 channel-bound 凭据、readiness 认 401、pipelined-hello 断言拒绝契约 `relay_device_auth_required`）。
+  - **验证**：6 个受影响 e2e 文件 + provider-snapshot/launch-config/project-context 单测逐文件本地绿；全仓 typecheck、改动文件 lint/format 绿。
+  - **CI 卫生红点**（同批修复）：cli-tests shard 2——`34-relay-device-store.test.ts` 是 Vitest 文件但数字前缀命名使 harness 按 tsx 脚本直跑（`runner.config` undefined 崩溃），移至 `packages/cli/src/utils/relay-device-store.test.ts`（约定：数字前缀=脚本、src 单测=Vitest）；test-audit——9 个"新"指纹全部为本分支编辑导致的行号漂移（与 cn-main 逐一比对确认零新增债务），按脚本既定流程刷新基线且 weakAssertion 净 -1（本轮新写断言用精确断言不用 toBeTruthy）；knowledge-graph-drift——重新生成 9 个模块图。**登记系统性问题**：audit 指纹按 `类别::文件:行号` 键控，无关编辑的行号漂移会误报"新增债务"，后续批次可改为内容哈希或行无关指纹。
+  - **残余红点（非本环境可修）**：desktop-packaged-electron / android-maestro-tests 需打包/模拟器 runner；desktop-chain-tests 的 desktop-updates 集群失败模式为 `update-callout` 永不出现（auto-updater 日志 "release feed not found"，chain harness 的 feed mock 问题，属 Phase 3 desktop-updates 清单）。
+- **第七批（2026-08-25，同分支追加，run 32861110015 五红 job 归因 + Phase 3 两项落地）**：设计文档 §7 执行日志见 [docs/testing/client-e2e-test-hardening-plan-2026-08-25.md](../testing/client-e2e-test-hardening-plan-2026-08-25.md)。
+  - **产品修复（sidebar callout 从不渲染）**：`SidebarCalloutSlot`（应用更新横幅/worktree setup 进度/Rosetta 警告的挂载点）在 2026-06 桌面布局改版中被误删出 `left-sidebar.tsx`；callout 源仍向 context 发布但无处渲染。已在 mobile/desktop 两个 sidebar 变体的 `SidebarFooter` 上方重新挂载。desktop-chain-tests 的 `update-callout` 永不出现即此因——第六批"feed mock 问题"假设证伪，mock 正常、UI 槽位丢了。
+  - **server-tests（ubuntu）3 红全修**：model-catalog 真实目录断言改 `agentClients: {}` 真实发现 + 按二进制在装门控（第六批产品修复 2 使注入 fake 成为模型来源后该测试断言对象错位）；live-preferences 走内部管线，`FakeAgentClient` 模型补 `thinkingOptions`/`defaultThinkingOptionId`；git-operations teardown 终端 marker 移出 worktree（`git worktree remove` 无 `--force` 为产品契约，未跟踪文件会阻塞）且 bootstrap 谓词等 marker 落盘。
+  - **knowledge-graph-drift**：提交图谱混入 `packages/relay/.wrangler/tmp` 临时 bundle（本地跑过 relay dev server 即有、CI 干净重生成没有）；生成器 `IGNORE_DIRS` 加 `.wrangler` 并重生成。
+  - **desktop-packaged-electron（harness bug）**：`desktop-packaged-slices.script.ts` 硬编码 `ChisaCode-Setup-1.0.2-x64.zip`，1.0.3 版本 bump 后打包门禁必抛 "no packaged build zip"；改为 glob `ChisaCode-Setup-*.zip`（-x64 优先、最新优先）。端到端仍需 Windows runner 实证，**未验证**。
+  - **Phase 3 落地 ×2**：test-audit 指纹改行无关键控（`check::file::行内容#序数`，基线 v3；已双向验证：上方插行不误报、真新增 `vi.mock` 仍拦截）；zh-CN 清扫覆盖 desktop-updates spec/helper（本地化 helper 抽到共享 `e2e/helpers/localized-text.ts`，`settings.ts` 复用）。
+  - **server-tests（windows）分类为存量平台债**：cn-main 基线 run 32816581763 同 job 亦红，非本 PR 回归。跨平台根因（上述 3 项）修复后预期两 OS 同绿；剩余为 Windows 专属两类——**EBUSY 临时目录清理**（14 处，daemon 子进程句柄未释放即 rmdir，需重试退避或先显式关停子进程）与 **8.3 短路径断言错配**（`RUNNER~1` vs `runneradmin`，路径包含断言需 realpath 归一化 helper）。本环境无 Windows 表面，留待专项批次。
+  - **M2 测试反模式止增**：`scripts/test-audit-baseline.json` 的 moduleMock 303 / conditionalSkip 105 / weakAssertion 349 等历史债按包拆减债批次，第四批仅修 fixedWait 假阳性与 1 个最痛文件。
+  - **M5 Electron Provider Settings smoke**：需要真实打包 Electron 表面，cloud 环境无法执行；待有打包环境时按 `test:desktop-packaged` 门禁补一条 Provider Settings 冒烟用例。**未验证**。
+  - **M6 client 测试补课**：第五批已落地 reconnect R1-R7 + demux B1-B6 系统性矩阵（见上），设计与剩余项见 [docs/testing/client-e2e-test-hardening-plan-2026-08-25.md](../testing/client-e2e-test-hardening-plan-2026-08-25.md)；binary 编码字节级边界此前已由 `daemon-client-binary-frames.test.ts` 覆盖。
+  - **L1 god-file 拆分**：不在本批范围（仅在小步安全时进行），维持既有 Provider God-File 拆分计划。
+
 ### Soft Home 发送对齐 T3：待在所选目录 + 顶栏先显示分支（2026-08-13）
 
 - **问题**：首页发送先问 GitHub、再默默建隐藏工作区；顶栏「正在检查仓库」等远程；干净同步时露出 `git.actionUpToDate`。T3 / 上游 Paseo 默认都在所选目录开聊。
@@ -75,7 +137,7 @@
 - **问题**：桌面 Chrome 以 390x844 视口打开 app 即触发错误边界——`[Reanimated] Invalid value for "unistyles_*": an empty object is not a valid style value.`，`AnimatedComponent.componentDidMount` → `CSSManager.update` 抛错，整屏替换为错误边界（"出错了"）。桌面 1280x720 视口正常。已确认与 e2e 迁移无关（stash 全部迁移改动后仍复现，hash 随 bundle 变化）
 - **影响范围**：`packages/app` 移动/紧凑路径下的 Animated 组件 + unistyles 空样式规则；疑似 compact 分支某个 `Animated.*` 的 style 数组含空 unistyles 规则（`unistyles_*` className 值为 `{}`）
 - **方案**：按 390px 视口最小复现（错误边界截图 + trace 已有），定位传入 Animated 组件的空 unistyles 样式（遍历 compact 分支的 `Animated.View`/`AnimatedPressable` style 数组），修复后跑 `sidebar-workspace.spec.ts` 的 mobile panelState 测试与真实 Android 验证
-- **状态**：已登记（有复现证据：e2e trace `test-results/sidebar-workspace-Mobile-*`、错误边界截图）。**2026-08-11 追加同类触发**：`left-sidebar.tsx` 的 项目/状态 切换器曾用 `Animated.View` + `useAnimatedStyle` 承载 unistyles 动态样式 `styles.viewTabThumb`（打包 Electron 全窗口即崩，非仅 390px）——修复：thumb 改为普通 `View`（unistyles 安全）+ web 用 RNW `transition*` CSS 属性做滑片过渡、native 静态切换 transform；内容区淡入动画同样用注入 keyframes 的 CSS 动画而非 Reanimated。经验：**任何 Animated 节点的 style 数组都不得含 unistyles 注册样式或空 unistyles 规则**
+- **状态**：已登记（有复现证据：e2e trace `test-results/sidebar-workspace-Mobile-*`、错误边界截图）。**2026-08-11 追加同类触发**：`left-sidebar.tsx` 的 项目/状态 切换器曾用 `Animated.View` + `useAnimatedStyle` 承载 unistyles 动态样式 `styles.viewTabThumb`（打包 Electron 全窗口即崩，非仅 390px）——修复：thumb 改为普通 `View`（unistyles 安全）+ web 用 RNW `transition*` CSS 属性做滑片过渡、native 静态切换 transform；内容区淡入动画同样用注入 keyframes 的 CSS 动画而非 Reanimated。经验：**任何 Animated 节点的 style 数组都不得含 unistyles 注册样式或空 unistyles 规则**。**2026-08-25 修复**：定位到 compact-only 的 `MobileSidebar`（`left-sidebar.tsx`）把 unistyles 注册样式 `styles.mobileSidebarSurface` 放进 `Animated.View` 的 style 数组——该组件仅在 390px 等 compact 视口挂载，与错误边界签名吻合；修复为 explorer-sidebar 同款模式（普通 absolute-fill 子 `View` 承载主题背景），并把 left-sidebar/explorer-sidebar 两个文件的 backdrop/mobile/desktop style 变量全部纳入 `reanimated-unistyles-boundary.test.ts` 源码级回归（25 断言全绿）。**未验证项**：真实 390px 浏览器视口 smoke 与真实 Android 验证未在本轮执行（cloud 环境），明确标注为未验证；若真实表面仍崩说明 compact 路径存在第二个触发点，按同法（遍历 compact 分支 Animated style 数组）继续排查
 
 ### 侧栏 项目/状态 视图字体校准 + 切换丝滑化（2026-08-11 启动）
 
@@ -358,7 +420,7 @@
 - **后续**：当前基线仍包含 moduleMock 303、conditionalSkip 105、weakAssertion 349、processEnvMutation 151 等历史债；后续改动不得增加，并应按包拆成独立减债批次逐步下调基线。
 - **远端复核**：首次实际触发 `cn-main` CI 后发现 npm 11 生成的 lockfile 删除了 desktop 精确依赖 `@types/node@24.6.0` / `undici-types@7.13.0`，导致 Node 22/npm 10 的所有 `npm ci` job 在测试前失败；同时 TruffleHog 重复传入 `--no-update`，Nix hash workflow 在 GitHub App secret 缺失时直接失败。
 - **解决补充**：使用 CI 同代 npm 10 重新生成完整跨平台 lockfile；移除重复 TruffleHog 参数；Nix workflow 在 App secret 未配置时回退到具备最小 `contents: write` 权限的 `GITHUB_TOKEN`。
-- **状态**：修复中；本地 npm 10 `ci --dry-run`、test-audit、lockfile-lint 和 workflow YAML 解析均退出 0，等待远端 CI 复验后关闭。
+- **状态**：修复中；本地 npm 10 `ci --dry-run`、test-audit、lockfile-lint 和 workflow YAML 解析均退出 0，等待远端 CI 复验后关闭。**2026-08-25 核对**：远端 `cn-main` CI 至今未出现绿色 run（近 10 次 push run 全部 failure/cancelled，含 2026-08-13 的 `chore(release): cut 1.0.3`），标题里的"完成"仅指本地门禁校准，远端复验事实上从未通过——该条不能视为 done，需要专门一轮把 cn-main CI 修绿后再关闭。**2026-08-25 第四批（`cursor/audit-fixes-2026-08-25-7503`）已系统性逐 job 修复**：lint（lockfile/kg drift）、server-tests、app-tests、cli shard3（relay device auth 产品修复）、desktop-tests、playwright 六类失败全部本地复现修复（详见上方"全量审查修复批次 2026-08-25 第四批"），待 PR CI 复验后关闭本条。
 
 ### 全项目代码审查修复批次（2026-07-05 起执行）
 

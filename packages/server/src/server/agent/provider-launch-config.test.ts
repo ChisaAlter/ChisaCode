@@ -265,6 +265,23 @@ describe("createProviderEnv", () => {
     expect(env.CLAUDE_AGENT_SDK_VERSION).toBeUndefined();
     expect(env.CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING).toBe("true");
   });
+
+  test("strips DSH_SNAPSHOT even when configured in provider env or overlays", () => {
+    // Upstream contract (docs/dsh-upstream-contract.md §2): DSH_SNAPSHOT has
+    // rewind semantics and must never pass through to spawned agents — not
+    // from the daemon's own env, not from provider settings, not from overlays.
+    const base = { PATH: "/usr/bin", DSH_SNAPSHOT: "leaked-from-parent" };
+    const runtime: ProviderRuntimeSettings = { env: { DSH_SNAPSHOT: "from-settings" } };
+
+    const env = createProviderEnv({
+      baseEnv: base,
+      runtimeSettings: runtime,
+      overlays: [{ DSH_SNAPSHOT: "from-overlay" }],
+    });
+
+    expect(env.PATH).toBe("/usr/bin");
+    expect(env.DSH_SNAPSHOT).toBeUndefined();
+  });
 });
 
 describe("ProviderOverrideSchema", () => {

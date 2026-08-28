@@ -103,7 +103,7 @@ export class GenericACPAgentClient extends ACPAgentClient {
       const launch = await this.resolveConfiguredLaunch();
       const availability = await checkProviderLaunchAvailable(launch);
       const available = availability.available;
-      const versionProbe = buildVersionProbeCommand(this.command);
+      const versionProbe = this.buildVersionProbe();
       const probeResult = available
         ? await this.runDiagnosticACPProbe()
         : {
@@ -142,6 +142,16 @@ export class GenericACPAgentClient extends ACPAgentClient {
         diagnostic: formatProviderDiagnosticError(providerName, error),
       };
     }
+  }
+
+  /**
+   * Version probe invocation used by the diagnostic. Providers whose ACP
+   * launcher binary has no `--version` flag (e.g. dsh's `dsh-acp-demo`)
+   * override this to probe a sibling binary instead.
+   * @returns Command and args for the version probe
+   */
+  protected buildVersionProbe(): CommandInvocation {
+    return buildVersionProbeCommand(this.command);
   }
 
   private async resolveConfiguredLaunch() {

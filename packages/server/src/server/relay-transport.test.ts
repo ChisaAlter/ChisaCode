@@ -267,6 +267,11 @@ describe("relay-transport control lifecycle", () => {
       {
         transport: "relay",
         externalSessionKey: "session:clt_test",
+        // Device-auth is on by default for relay-attached external sockets.
+        requireDeviceAuth: true,
+        chisacodeHome: undefined,
+        daemonPublicKeyB64: undefined,
+        serverId: "srv_test",
       },
     ]);
   });

@@ -718,7 +718,10 @@ describe("execCommand", () => {
         },
         { timeout: 5_000 },
       );
-      expect(isProcessRunning(grandchildPid)).toBe(true);
+      // Poll: coverage/CI load can briefly delay pid-table visibility after the tree exits.
+      await vi.waitFor(() => expect(isProcessRunning(grandchildPid)).toBe(true), {
+        timeout: 2_000,
+      });
 
       await triggerExitedFixtureOutput(fixture.outputTriggerPath, commandPromise);
 
@@ -858,7 +861,10 @@ describe("execCommand", () => {
         },
         { timeout: 5_000 },
       );
-      expect(isProcessRunning(grandchildPid)).toBe(true);
+      // Poll: coverage/CI load can briefly delay pid-table visibility after the tree exits.
+      await vi.waitFor(() => expect(isProcessRunning(grandchildPid)).toBe(true), {
+        timeout: 2_000,
+      });
 
       controller.abort(new Error("stop requested"));
 
@@ -1486,7 +1492,10 @@ function createExitedShellTreeFixture(
     [
       'const fs = require("node:fs");',
       'const net = require("node:net");',
+      // Survive session teardown (SIGHUP) and soft stops while the parent tree exits.
       'process.on("SIGTERM", () => {});',
+      'process.on("SIGHUP", () => {});',
+      'process.on("SIGINT", () => {});',
       ...(options.outputBytes
         ? [
             `const outputTriggerPath = ${JSON.stringify(outputTriggerPath)};`,

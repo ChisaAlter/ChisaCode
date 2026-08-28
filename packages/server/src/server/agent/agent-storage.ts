@@ -408,7 +408,16 @@ export class AgentStorage {
           return files
             .filter((file) => file.isFile() && file.name.endsWith(".json"))
             .map((file) => path.join(projectDir, file.name));
-        } catch {
+        } catch (error) {
+          // An unreadable project directory silently drops every agent stored
+          // in it, so the failure must be visible in the daemon log. ENOENT is
+          // still normal (directory removed between readdir calls).
+          if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+            this.logger.warn(
+              { err: error, projectDir },
+              "Skipping unreadable agent project directory",
+            );
+          }
           return [];
         }
       }),

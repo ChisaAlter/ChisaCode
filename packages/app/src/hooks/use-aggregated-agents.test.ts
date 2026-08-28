@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ProjectPlacementPayload } from "@chisacode/protocol/messages";
 import type { Agent } from "@/stores/session-store";
-import { __private__ } from "./use-aggregated-agents";
+import { __private__, createAggregatedAgentCache } from "./use-aggregated-agents";
 
 vi.mock("@/runtime/host-runtime", () => ({
   getHostRuntimeStore: () => ({
@@ -189,5 +189,66 @@ describe("buildAggregatedAgentsResult", () => {
       isInitialLoad: false,
       isRevalidating: false,
     });
+  });
+});
+
+describe("createAggregatedAgentCache", () => {
+  it("reuses the wrapper for an unchanged agent object across rebuilds", () => {
+    const aggregate = createAggregatedAgentCache();
+    const agent = makeAgent({ id: "stable" });
+
+    const first = aggregate({ agent, serverId: "server-1", serverLabel: "Local" });
+    const second = aggregate({ agent, serverId: "server-1", serverLabel: "Local" });
+
+    expect(second).toBe(first);
+    expect(first).toMatchObject({ id: "stable", serverId: "server-1", serverLabel: "Local" });
+  });
+
+  it("rebuilds the wrapper when the agent object identity changes", () => {
+    const aggregate = createAggregatedAgentCache();
+    const agent = makeAgent({ id: "changing" });
+    const first = aggregate({ agent, serverId: "server-1", serverLabel: "Local" });
+
+    const updated = { ...agent, status: "running" as const };
+    const second = aggregate({ agent: updated, serverId: "server-1", serverLabel: "Local" });
+
+    expect(second).not.toBe(first);
+    expect(second.status).toBe("running");
+  });
+
+  it("rebuilds the wrapper when the server label changes", () => {
+    const aggregate = createAggregatedAgentCache();
+    const agent = makeAgent({ id: "relabeled" });
+    const first = aggregate({ agent, serverId: "server-1", serverLabel: "Local" });
+    const second = aggregate({ agent, serverId: "server-1", serverLabel: "Renamed" });
+
+    expect(second).not.toBe(first);
+    expect(second.serverLabel).toBe("Renamed");
+  });
+
+  it("keeps identical results in the full aggregation for unchanged agents", () => {
+    const aggregate = createAggregatedAgentCache();
+    const stable = makeAgent({ id: "stable" });
+    const before = __private__.buildAggregatedAgentsResult({
+      hosts: [{ serverId: "server-1", label: "Local", agentDirectoryStatus: "ready" }],
+      sessionAgents: { "server-1": new Map([["stable", stable]]) },
+      includeArchived: false,
+      aggregate,
+    });
+    const after = __private__.buildAggregatedAgentsResult({
+      hosts: [{ serverId: "server-1", label: "Local", agentDirectoryStatus: "ready" }],
+      sessionAgents: {
+        "server-1": new Map([
+          ["stable", stable],
+          ["fresh", makeAgent({ id: "fresh" })],
+        ]),
+      },
+      includeArchived: false,
+      aggregate,
+    });
+
+    const stableBefore = before.agents.find((agent) => agent.id === "stable");
+    const stableAfter = after.agents.find((agent) => agent.id === "stable");
+    expect(stableAfter).toBe(stableBefore);
   });
 });

@@ -11,6 +11,7 @@ vi.mock("electron", () => ({
 
 vi.mock("../daemon/daemon-manager.js", () => ({
   isMainAppSenderUrl: (url: string) => url.startsWith("chisacode://app"),
+  resolveMainAppSenderValidationOptions: () => ({ packaged: true }),
 }));
 
 // opener.ts reads the configured language via getDesktopSettingsStore() to

@@ -1203,10 +1203,32 @@ class FakeAgentClient implements AgentClient {
   }
 
   async listModels(_options: ListModelsOptions): Promise<AgentModelDefinition[]> {
+    // Every model carries thinkingOptions so live-preference tests can switch
+    // thinking levels through the daemon without depending on a real provider
+    // catalog. Provider discovery routes through injected clients, so these
+    // fakes are the only model source in a fake-client daemon.
+    const thinkingOptions = [
+      { id: "default", label: "Default", isDefault: true },
+      { id: "high", label: "High" },
+    ];
     if (this.provider === "claude") {
       return [
-        { provider: this.provider, id: "haiku", label: "Haiku", isDefault: true },
-        { provider: this.provider, id: "sonnet", label: "Sonnet", isDefault: false },
+        {
+          provider: this.provider,
+          id: "haiku",
+          label: "Haiku",
+          isDefault: true,
+          thinkingOptions,
+          defaultThinkingOptionId: "default",
+        },
+        {
+          provider: this.provider,
+          id: "sonnet",
+          label: "Sonnet",
+          isDefault: false,
+          thinkingOptions,
+          defaultThinkingOptionId: "default",
+        },
       ];
     }
     if (this.provider === "codex") {
@@ -1216,22 +1238,35 @@ class FakeAgentClient implements AgentClient {
           id: "gpt-5.4-mini",
           label: "gpt-5.4-mini",
           isDefault: true,
+          thinkingOptions,
+          defaultThinkingOptionId: "default",
         },
         {
           provider: this.provider,
           id: "gpt-5.4",
           label: "gpt-5.4",
           isDefault: false,
+          thinkingOptions,
+          defaultThinkingOptionId: "default",
         },
       ];
     }
     return [
-      { provider: this.provider, id: "test-model", label: "Test Model", isDefault: true },
+      {
+        provider: this.provider,
+        id: "test-model",
+        label: "Test Model",
+        isDefault: true,
+        thinkingOptions,
+        defaultThinkingOptionId: "default",
+      },
       {
         provider: this.provider,
         id: "test-model-2",
         label: "Test Model 2",
         isDefault: false,
+        thinkingOptions,
+        defaultThinkingOptionId: "default",
       },
     ];
   }

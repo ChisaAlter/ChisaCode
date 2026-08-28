@@ -78,7 +78,7 @@ ChisaCode ACP SDK 0.17.1(protocolVersion 1)与上游 SDK 0.25.1 **互通正常**
 
 ## 4. 鉴权与上游端点
 
-- **DeepSeek 官方路由 = API key only**:`DEEPSEEK_API_KEY`(env 或 `$DSH_HOME/.credentials.yaml`,后者由 `dsh web` 的 Models 页写入);可选 `DEEPSEEK_BASE_URL` 覆盖(默认 `https://api.deepseek.com`,走 chat completions)。AC`authenticate` 是空 no-op,无账号 OAuth(上游另有 pi-ai 系 OAuth 适配,但与 deepseek-official 路由无关)。
+- **DeepSeek 官方路由 = API key only**:上游宣称两个来源——env `DEEPSEEK_API_KEY`,或 `$DSH_HOME/.credentials.yaml`(由 `dsh web` 的 Models 页写入)。**ChisaCode 集成只认 env**:受管 composition 的生产链路未实机验证过 `.credentials.yaml` 读取(§6 亦明确"上游 `.credentials.yaml` 不读写"),daemon 的 createSession 预检因此只检查 spawn 可见的 `DEEPSEEK_API_KEY`(provider env 或进程 env),不把 yaml 当凭证源。若未来要支持 yaml,须先实机验证 adapter 在受管 cordis.yml 下确实读它,再改预检。可选 `DEEPSEEK_BASE_URL` 覆盖(默认 `https://api.deepseek.com`,走 chat completions)。ACP `authenticate` 是空 no-op,无账号 OAuth(上游另有 pi-ai 系 OAuth 适配,但与 deepseek-official 路由无关)。
 - 缺 key 实测(verbatim):`session/prompt` 返回 JSON-RPC `{"code":-32603,"message":"Internal error: turn failed: llm-deepseek: no API key for provider route \"deepseek-official\"; store DEEPSEEK_API_KEY through the credentials service (the web Models page writes it), or export DEEPSEEK_API_KEY in the launching environment"}` → **daemon 探测应前置检查 `DEEPSEEK_API_KEY` 存在性,按仓库惯例给中文可操作文案**,不依赖跑挂后的英文报错。
 - 请求头部还带 `x-deepseek-harness-user-id` / `x-deepseek-harness-session-id` 与 harness UA(网关分析者须知)。
 
@@ -169,7 +169,18 @@ ChisaCode ACP SDK 0.17.1(protocolVersion 1)与上游 SDK 0.25.1 **互通正常**
 | manifest modes                                | `defaultModeId: null`(automation-only 无模式概念先行;若 UI 必需再打最小模式桩)              | 模块 1 定稿                                                                                                |
 | 思考档                                        | `off/low/high/max`,默认 `high`                                                              | ProviderProfileModel thinkingOptions 在网关面与 manifest 模型目录共用                                      |
 
-## 9. 模块 5 实机踩坑实录(2026-08-22)
+## 9. 上游复验机制(rc 期强制)
+
+`dsh-acp-demo` 是 examples 级包,上游全域处于 rc 期且 README 明示会发生 breaking changes(§1/§7-4)。契约有效性以本文档头部版本横幅为准,**上游发布新 rc / 正式版时必须复验**:
+
+1. **检测**:`npm view @deepseek-ai/dsh dist-tags --json` 与 `npm view @deepseek-ai/dsh-acp-demo dist-tags --json`,对照头部横幅版本;有新版即触发复验。
+2. **复验**:全局安装钉住的新版本(`@next` 或精确版本,注意 §1 的 dist-tag 陷阱),重跑 §3 的 ACP 字节级探针(initialize / session/new / 缺 key 报错样例)与 §10 的踩坑回归(persistenceRoot 并发锁、`dsh --version` 而非 `dsh-acp-demo --version`)。
+3. **写回**:差异更新到本文档对应章节,并更新头部版本横幅(验证日期 + 版本)。
+4. **联动**:若 provider 代码需随之改动(vendored 插件清单、cordis 字段、模型目录、思考档),同批落地并跑 `packages/server/src/server/agent/providers/dsh-agent.test.ts`。
+
+挂载点:`docs/release.md` 的 Stable release 完成检查单含"dsh 上游契约复验"项(release skills 走该检查单)。刻意**不做**自动联网探测——复验是发版检查单驱动的人工步骤,仓库无同类自动化先例,脆弱探测只会制造噪音。
+
+## 10. 模块 5 实机踩坑实录(2026-08-22)
 
 - **persistence 单写者锁(已修)**:ChisaCode 会并发拉起多个 `dsh-acp-demo` 进程(home scope 探测 + per-cwd 探测 + 会话)。上游 `dsh-acp-demo` 组合在 `persistenceRoot` 下写 SQLite 查询索引(`session-query.db`、JSONL 包),`same-path` 并发 boot 直接 `ERR_SQLITE_ERROR code=5 database is locked`,child exit(1),ACP initialize 收不到响应 → 超时。受管 cordis.yml 因此把 `persistenceRoot` 写成 `!!js String.raw`<home>/sessions\p${process.pid}``(pid 隔离;YAML 约束:!!js 值不允许"引号标量 + 尾部操作数"的混形,须以标识符起头)。
 - **静默超时无证据(已修)**:原 `process-runtime.ts` 的 initialize 超时不带子进程 stderr 与存活态,排错全靠猜。现错误消息带 `(child exited(1)) | child stderr: …` 尾部证据,诊断价值大(此修复随后进入主分支)。

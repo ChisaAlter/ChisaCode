@@ -195,7 +195,7 @@ DeepSeek ships an official coding-agent harness — [DeepSeek Harness](https://g
 npm i -g @deepseek-ai/dsh@next @deepseek-ai/dsh-acp-demo@next
 ```
 
-2. Export `DEEPSEEK_API_KEY` (or store it once via `dsh web` → Models, which writes `$DSH_HOME/.credentials.yaml`), then start a chat with **DeepSeek Harness** in the provider picker.
+2. Export `DEEPSEEK_API_KEY` in the environment the ChisaCode daemon runs in (or set it in the provider's `env`), then start a chat with **DeepSeek Harness** in the provider picker. The environment variable is the only credential source ChisaCode supports for `dsh`: the managed composition does not read `$DSH_HOME/.credentials.yaml` (the file `dsh web` → Models writes), so a key stored there alone will not pass ChisaCode's preflight.
 
 Behavior notes:
 

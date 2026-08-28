@@ -3,6 +3,7 @@ import type { AggregatedAgent } from "@/hooks/use-aggregated-agents";
 import {
   agentToSidebarThread,
   buildWorkspaceDirectoryIndex,
+  createSidebarThreadCache,
   findWorkspaceForAgent,
   isAgentInMotion,
   type SidebarV2WorkspaceHint,
@@ -117,6 +118,42 @@ describe("isAgentInMotion", () => {
     expect(isAgentInMotion("initializing")).toBe(true);
     expect(isAgentInMotion("idle")).toBe(false);
     expect(isAgentInMotion("closed")).toBe(false);
+  });
+});
+
+describe("createSidebarThreadCache", () => {
+  it("reuses the thread object while agent and workspace identities are unchanged", () => {
+    const toThread = createSidebarThreadCache();
+    const stable = agent({ id: "a1", title: "Stable" });
+    const workspace: SidebarV2WorkspaceHint = { workspaceDirectory: "C:\\repo", projectId: "p1" };
+
+    const first = toThread(stable, workspace);
+    const second = toThread(stable, workspace);
+
+    expect(second).toBe(first);
+    expect(first).toEqual(agentToSidebarThread(stable, workspace));
+  });
+
+  it("rebuilds the thread when the agent wrapper identity changes", () => {
+    const toThread = createSidebarThreadCache();
+    const original = agent({ id: "a1", status: "idle" });
+    const first = toThread(original, null);
+
+    const updated = agent({ id: "a1", status: "running" });
+    const second = toThread(updated, null);
+
+    expect(second).not.toBe(first);
+    expect(second.status).toBe("running");
+  });
+
+  it("rebuilds the thread when the workspace hint identity changes", () => {
+    const toThread = createSidebarThreadCache();
+    const stable = agent({ id: "a1" });
+    const first = toThread(stable, { gitRuntime: { currentBranch: "main" } });
+    const second = toThread(stable, { gitRuntime: { currentBranch: "feature/x" } });
+
+    expect(second).not.toBe(first);
+    expect(second.branch).toBe("feature/x");
   });
 });
 

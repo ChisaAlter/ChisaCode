@@ -4,7 +4,7 @@ For AI coding agents working in `packages/server`. Supplements [CLAUDE.md](../..
 
 ## Project Overview
 
-ChisaCode is a local-first app for monitoring and controlling local AI coding agents. The built-in providers are Claude, Codex, OpenCode, Pi, Kimi Code, and Grok Build. The daemon runs on your machine, manages agent processes, and streams their output over WebSocket to clients.
+ChisaCode is a local-first app for monitoring and controlling local AI coding agents. The built-in providers are Claude, Codex, OpenCode, Pi, Kimi Code, Grok Build, and DeepSeek Harness (`dsh`). The daemon runs on your machine, manages agent processes, and streams their output over WebSocket to clients.
 
 ---
 
@@ -16,9 +16,11 @@ ChisaCode is a local-first app for monitoring and controlling local AI coding ag
 npm run dev                          # Start daemon + Expo in Tmux
 npm run build:server                 # Build: highlight + relay + protocol + client + server + cli
 npm run typecheck                    # Typecheck all packages
-npm run test                         # Test all packages
-npm run format                       # Format with Biome (in-place)
+npm run lint                         # Lint with oxlint
+npm run format                       # Format with oxfmt (in-place)
 ```
+
+Never run the full workspace test suite locally (`npm run test` at the root) — it is heavy enough to freeze the machine. Run only the specific test file you changed (`npx vitest run <file> --bail=1`) and use CI for full-suite confidence.
 
 ### Server package (`packages/server`)
 
@@ -59,18 +61,9 @@ npm run cli -- daemon status                 # Check daemon status
 
 ## Code Style
 
-### Biome (formatting only, no linting)
+### Formatting and linting (oxfmt + oxlint)
 
-```json
-{
-  "indentStyle": "space",
-  "indentWidth": 2,
-  "lineWidth": 100,
-  "quoteStyle": "double",
-  "trailingCommas": "all",
-  "semicolons": "always"
-}
-```
+Formatting is oxfmt: 2-space indent, 100-column width, double quotes, trailing commas, semicolons. Linting is oxlint. Always go through the npm scripts (`npm run format`, `npm run format:files -- <paths>`, `npm run lint -- <paths>`) — never invoke `npx oxfmt`/`npx oxlint` directly.
 
 ### TypeScript
 
@@ -162,11 +155,11 @@ packages/server/src/
 │   ├── bootstrap.ts           # Daemon initialization
 │   ├── websocket-server.ts   # WS connection management
 │   ├── session.ts             # Per-client session state
+│   ├── relay-transport.ts    # Outbound relay connection
 │   └── agent/
 │       ├── agent-manager.ts  # Agent lifecycle state machine
-│       └── agent-storage.ts  # File-backed JSON persistence
-├── providers/                 # Claude, Codex, OpenCode, Pi, Kimi Code, Grok Build, generic ACP, and test adapters
-├── relay-transport.ts        # Outbound relay connection
+│       ├── agent-storage.ts  # File-backed JSON persistence
+│       └── providers/        # Claude, Codex, OpenCode, Pi, Kimi Code, Grok Build, DeepSeek Harness (dsh), generic ACP, and test adapters
 ```
 
 Agent state persists to `$CHISACODE_HOME/agents/{cwd-with-dashes}/{agent-id}.json`  
