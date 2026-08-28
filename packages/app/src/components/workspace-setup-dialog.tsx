@@ -14,7 +14,7 @@ import { normalizeWorkspaceDescriptor, useSessionStore } from "@/stores/session-
 import { useWorkspaceSetupStore } from "@/stores/workspace-setup-store";
 import { normalizeAgentSnapshot } from "@/utils/agent-snapshots";
 import { encodeImages } from "@/utils/encode-images";
-import { toErrorMessage } from "@/utils/error-messages";
+import { resolveAgentCreateErrorMessage } from "@/utils/agent-create-errors";
 import { splitComposerAttachmentsForSubmit } from "@/composer/attachments/submit";
 import type {
   CreateAgentRequestOptions,
@@ -324,7 +324,9 @@ export function WorkspaceSetupDialog() {
         });
         navigateAfterCreation(ensuredWorkspace.id, { kind: "agent", agentId: agent.id });
       } catch (error) {
-        const message = toErrorMessage(error);
+        // Known daemon create-failure codes (e.g. DSH_MISSING_API_KEY) render
+        // localized copy; anything else keeps the raw message.
+        const message = resolveAgentCreateErrorMessage(error);
         setErrorMessage(message);
         toast.error(message);
       } finally {

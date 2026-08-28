@@ -14,8 +14,21 @@ function isBinaryInstalled(binary: string): boolean {
   }
 }
 
+const hasClaude = isBinaryInstalled("claude");
 const hasCodex = isBinaryInstalled("codex");
 const hasOpenCode = isBinaryInstalled("opencode");
+
+/**
+ * These are real-catalog tests: they assert the shape of models discovered
+ * from the actual provider CLIs. The default daemon test context injects fake
+ * agent clients, and provider discovery now routes through injected clients
+ * (see ProviderSnapshotManager.refreshProvider), so a context with fakes would
+ * return fake models here. Pass an empty agentClients map so discovery hits
+ * the real runtimes, and gate each test on the binary being installed.
+ */
+function createRealDiscoveryContext() {
+  return createDaemonTestContext({ agentClients: {} });
+}
 
 function modelMatchesFamily(model: AgentModelDefinition, family: "sonnet" | "haiku"): boolean {
   const haystacks = [model.id, model.label, model.description ?? ""].map((value) =>
@@ -25,25 +38,29 @@ function modelMatchesFamily(model: AgentModelDefinition, family: "sonnet" | "hai
 }
 
 describe("provider model catalogs (e2e)", () => {
-  test("Claude catalog exposes Sonnet and Haiku variants", async () => {
-    const ctx = await createDaemonTestContext();
-    try {
-      const result = await ctx.client.listProviderModels("claude");
+  test.runIf(hasClaude)(
+    "Claude catalog exposes Sonnet and Haiku variants",
+    async () => {
+      const ctx = await createRealDiscoveryContext();
+      try {
+        const result = await ctx.client.listProviderModels("claude");
 
-      expect(result.error).toBeNull();
-      expect(result.models.length).toBeGreaterThan(0);
+        expect(result.error).toBeNull();
+        expect(result.models.length).toBeGreaterThan(0);
 
-      expect(result.models.some((model) => modelMatchesFamily(model, "sonnet"))).toBe(true);
-      expect(result.models.some((model) => modelMatchesFamily(model, "haiku"))).toBe(true);
-    } finally {
-      await ctx.cleanup();
-    }
-  }, 180_000);
+        expect(result.models.some((model) => modelMatchesFamily(model, "sonnet"))).toBe(true);
+        expect(result.models.some((model) => modelMatchesFamily(model, "haiku"))).toBe(true);
+      } finally {
+        await ctx.cleanup();
+      }
+    },
+    180_000,
+  );
 
   test.runIf(hasCodex)(
     "Codex catalog exposes gpt-5.1-codex",
     async () => {
-      const ctx = await createDaemonTestContext();
+      const ctx = await createRealDiscoveryContext();
       try {
         const result = await ctx.client.listProviderModels("codex");
 
@@ -60,7 +77,7 @@ describe("provider model catalogs (e2e)", () => {
   test.runIf(hasOpenCode)(
     "OpenCode catalog returns models from multiple providers",
     async () => {
-      const ctx = await createDaemonTestContext();
+      const ctx = await createRealDiscoveryContext();
       try {
         const result = await ctx.client.listProviderModels("opencode");
 

@@ -1,6 +1,5 @@
 {
   "version": "1.0.0",
-  "generatedAt": "2026-08-22T09:09:46.405Z",
   "generator": "scripts/generate-modular-knowledge-graphs.mjs",
   "module": {
     "id": "server",
@@ -58,16 +57,21 @@
     }
   },
   "stats": {
-    "files": 856,
+    "files": 857,
     "categories": {
-      "config": 28,
       "docs": 4,
+      "config": 27,
       "support": 15,
-      "test": 361,
+      "test": 363,
       "source": 448
     },
-    "internalImportEdges": 2733,
-    "workspaceDependencies": ["client", "highlight", "protocol", "relay"],
+    "internalImportEdges": 2742,
+    "workspaceDependencies": [
+      "client",
+      "highlight",
+      "protocol",
+      "relay"
+    ],
     "externalDependencies": [
       "@agentclientprotocol/sdk",
       "@ai-sdk/mcp",
@@ -130,13 +134,6 @@
   },
   "nodes": [
     {
-      "id": "file:packages/server/.chisacode-context/725466058f949b06.json",
-      "type": "config",
-      "path": "packages/server/.chisacode-context/725466058f949b06.json",
-      "lines": 8,
-      "imports": []
-    },
-    {
       "id": "file:packages/server/AGENTS.md",
       "type": "docs",
       "path": "packages/server/AGENTS.md",
@@ -147,7 +144,7 @@
       "id": "file:packages/server/CLAUDE.md",
       "type": "docs",
       "path": "packages/server/CLAUDE.md",
-      "lines": 197,
+      "lines": 190,
       "imports": []
     },
     {
@@ -185,14 +182,25 @@
       "type": "support",
       "path": "packages/server/scripts/dev-runner.ts",
       "lines": 46,
-      "imports": ["dotenv", "node:child_process", "url"]
+      "imports": [
+        "dotenv",
+        "node:child_process",
+        "url"
+      ]
     },
     {
       "id": "file:packages/server/scripts/dictation-generate-baseline.ts",
       "type": "support",
       "path": "packages/server/scripts/dictation-generate-baseline.ts",
       "lines": 60,
-      "imports": ["dotenv/config", "node:fs", "node:fs/promises", "node:path", "node:url", "openai"]
+      "imports": [
+        "dotenv/config",
+        "node:fs",
+        "node:fs/promises",
+        "node:path",
+        "node:url",
+        "openai"
+      ]
     },
     {
       "id": "file:packages/server/scripts/download-speech-models.ts",
@@ -223,7 +231,9 @@
       "type": "support",
       "path": "packages/server/scripts/list-speech-models.ts",
       "lines": 11,
-      "imports": ["../src/server/speech/providers/local/models.js"]
+      "imports": [
+        "../src/server/speech/providers/local/models.js"
+      ]
     },
     {
       "id": "file:packages/server/scripts/mcp-echo-test-server.mjs",
@@ -241,14 +251,20 @@
       "type": "support",
       "path": "packages/server/scripts/mcp-stdio-socket-bridge-cli.mjs",
       "lines": 63,
-      "imports": ["node:net"]
+      "imports": [
+        "node:net"
+      ]
     },
     {
       "id": "file:packages/server/scripts/supervision-parity.test.ts",
       "type": "test",
       "path": "packages/server/scripts/supervision-parity.test.ts",
       "lines": 48,
-      "imports": ["node:child_process", "node:fs", "vitest"]
+      "imports": [
+        "node:child_process",
+        "node:fs",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/scripts/supervisor-entrypoint.ts",
@@ -272,14 +288,20 @@
       "type": "config",
       "path": "packages/server/scripts/supervisor-log-config.ts",
       "lines": 43,
-      "imports": ["../src/server/persisted-config.js", "node:path"]
+      "imports": [
+        "../src/server/persisted-config.js",
+        "node:path"
+      ]
     },
     {
       "id": "file:packages/server/scripts/supervisor.lifecycle-intents.test.ts",
       "type": "test",
       "path": "packages/server/scripts/supervisor.lifecycle-intents.test.ts",
       "lines": 20,
-      "imports": ["node:fs", "vitest"]
+      "imports": [
+        "node:fs",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/scripts/supervisor.logging.test.ts",
@@ -302,7 +324,12 @@
       "type": "support",
       "path": "packages/server/scripts/supervisor.ts",
       "lines": 293,
-      "imports": ["child_process", "node:fs", "node:path", "rotating-file-stream"]
+      "imports": [
+        "child_process",
+        "node:fs",
+        "node:path",
+        "rotating-file-stream"
+      ]
     },
     {
       "id": "file:packages/server/scripts/test-codex-mcp-servers.ts",
@@ -397,14 +424,19 @@
       "type": "test",
       "path": "packages/server/src/server/agent-attention-policy.test.ts",
       "lines": 192,
-      "imports": ["./agent-attention-policy.js", "vitest"]
+      "imports": [
+        "./agent-attention-policy.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent-attention-policy.ts",
       "type": "source",
       "path": "packages/server/src/server/agent-attention-policy.ts",
       "lines": 58,
-      "imports": ["@chisacode/protocol/agent-attention-notification"]
+      "imports": [
+        "@chisacode/protocol/agent-attention-notification"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent-event-forwarder.test.ts",
@@ -438,7 +470,10 @@
       "type": "source",
       "path": "packages/server/src/server/agent-index/agent-index-rebuilder.ts",
       "lines": 16,
-      "imports": ["../agent/agent-storage.js", "./sqlite-agent-index.js"]
+      "imports": [
+        "../agent/agent-storage.js",
+        "./sqlite-agent-index.js"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent-index/schema.ts",
@@ -503,7 +538,11 @@
       "type": "test",
       "path": "packages/server/src/server/agent/activity-curator.test.ts",
       "lines": 223,
-      "imports": ["./activity-curator.js", "./agent-sdk-types.js", "vitest"]
+      "imports": [
+        "./activity-curator.js",
+        "./agent-sdk-types.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/activity-curator.ts",
@@ -536,14 +575,20 @@
       "type": "test",
       "path": "packages/server/src/server/agent/agent-archive.test.ts",
       "lines": 71,
-      "imports": ["./agent-archive.js", "./agent-storage.js", "vitest"]
+      "imports": [
+        "./agent-archive.js",
+        "./agent-storage.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/agent-archive.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/agent-archive.ts",
       "lines": 31,
-      "imports": ["./agent-storage.js"]
+      "imports": [
+        "./agent-storage.js"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/agent-control-mcp-tools.ts",
@@ -591,7 +636,12 @@
       "type": "source",
       "path": "packages/server/src/server/agent/agent-foreground-execution-controller.ts",
       "lines": 346,
-      "imports": ["./agent-manager.js", "./agent-sdk-types.js", "./foreground-run-state.js", "pino"]
+      "imports": [
+        "./agent-manager.js",
+        "./agent-sdk-types.js",
+        "./foreground-run-state.js",
+        "pino"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/agent-history-controller.test.ts",
@@ -641,7 +691,7 @@
       "id": "file:packages/server/src/server/agent/agent-launch-config-controller.ts",
       "type": "config",
       "path": "packages/server/src/server/agent/agent-launch-config-controller.ts",
-      "lines": 306,
+      "lines": 316,
       "imports": [
         "../project-context.js",
         "./agent-provider-controller.js",
@@ -686,7 +736,10 @@
       "type": "source",
       "path": "packages/server/src/server/agent/agent-manager-event-bus.ts",
       "lines": 116,
-      "imports": ["./agent-manager.js", "pino"]
+      "imports": [
+        "./agent-manager.js",
+        "pino"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/agent-manager-gen-ui-integration.test.ts",
@@ -755,7 +808,7 @@
       "id": "file:packages/server/src/server/agent/agent-manager.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/agent-manager.ts",
-      "lines": 1552,
+      "lines": 1567,
       "imports": [
         "../../terminal/terminal-manager.js",
         "../git-snapshot.js",
@@ -802,7 +855,7 @@
       "id": "file:packages/server/src/server/agent/agent-mcp.e2e.test.ts",
       "type": "test",
       "path": "packages/server/src/server/agent/agent-mcp.e2e.test.ts",
-      "lines": 712,
+      "lines": 739,
       "imports": [
         "../../utils/promise-timeout.js",
         "../bootstrap.js",
@@ -826,7 +879,10 @@
       "type": "source",
       "path": "packages/server/src/server/agent/agent-metadata-controller.ts",
       "lines": 148,
-      "imports": ["./agent-manager.js", "./agent-storage.js"]
+      "imports": [
+        "./agent-manager.js",
+        "./agent-storage.js"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/agent-metadata-generator.real.e2e.test.ts",
@@ -869,12 +925,13 @@
       "id": "file:packages/server/src/server/agent/agent-metadata-generator.unit.test.ts",
       "type": "test",
       "path": "packages/server/src/server/agent/agent-metadata-generator.unit.test.ts",
-      "lines": 221,
+      "lines": 242,
       "imports": [
         "../../test-utils/test-logger.js",
         "../test-utils/workspace-git-service-stub.js",
         "./agent-manager.js",
         "./agent-metadata-generator.js",
+        "./provider-snapshot-manager.js",
         "@chisacode/protocol/agent-title-limits",
         "node:fs",
         "node:os",
@@ -887,7 +944,11 @@
       "type": "source",
       "path": "packages/server/src/server/agent/agent-permission-controller.ts",
       "lines": 157,
-      "imports": ["./agent-manager.js", "./agent-sdk-types.js", "pino"]
+      "imports": [
+        "./agent-manager.js",
+        "./agent-sdk-types.js",
+        "pino"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/agent-preset-mcp-tools.test.ts",
@@ -931,14 +992,24 @@
       "type": "source",
       "path": "packages/server/src/server/agent/agent-preset-store.ts",
       "lines": 56,
-      "imports": ["@chisacode/protocol/agent-presets", "node:fs", "node:path", "pino"]
+      "imports": [
+        "@chisacode/protocol/agent-presets",
+        "node:fs",
+        "node:path",
+        "pino"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/agent-projections.test.ts",
       "type": "test",
       "path": "packages/server/src/server/agent/agent-projections.test.ts",
       "lines": 468,
-      "imports": ["./agent-manager.js", "./agent-projections.js", "./agent-sdk-types.js", "vitest"]
+      "imports": [
+        "./agent-manager.js",
+        "./agent-projections.js",
+        "./agent-sdk-types.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/agent-projections.ts",
@@ -987,7 +1058,11 @@
       "type": "source",
       "path": "packages/server/src/server/agent/agent-provider-controller.ts",
       "lines": 309,
-      "imports": ["./agent-sdk-types.js", "./provider-registry.js", "pino"]
+      "imports": [
+        "./agent-sdk-types.js",
+        "./provider-registry.js",
+        "pino"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/agent-response-loop.e2e.test.ts",
@@ -1019,7 +1094,12 @@
       "type": "test",
       "path": "packages/server/src/server/agent/agent-response-loop.test.ts",
       "lines": 267,
-      "imports": ["./agent-manager.js", "./agent-response-loop.js", "vitest", "zod/v3"]
+      "imports": [
+        "./agent-manager.js",
+        "./agent-response-loop.js",
+        "vitest",
+        "zod/v3"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/agent-response-loop.ts",
@@ -1040,14 +1120,23 @@
       "type": "source",
       "path": "packages/server/src/server/agent/agent-run-control-controller.ts",
       "lines": 190,
-      "imports": ["./agent-manager.js", "./agent-sdk-types.js", "./foreground-run-state.js", "pino"]
+      "imports": [
+        "./agent-manager.js",
+        "./agent-sdk-types.js",
+        "./foreground-run-state.js",
+        "pino"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/agent-runtime-configuration-controller.ts",
       "type": "config",
       "path": "packages/server/src/server/agent/agent-runtime-configuration-controller.ts",
       "lines": 128,
-      "imports": ["./agent-manager.js", "./agent-provider-controller.js", "./agent-sdk-types.js"]
+      "imports": [
+        "./agent-manager.js",
+        "./agent-provider-controller.js",
+        "./agent-sdk-types.js"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/agent-sdk-capabilities.md",
@@ -1061,7 +1150,10 @@
       "type": "source",
       "path": "packages/server/src/server/agent/agent-sdk-types.ts",
       "lines": 747,
-      "imports": ["@anthropic-ai/claude-agent-sdk", "@chisacode/protocol/messages"]
+      "imports": [
+        "@anthropic-ai/claude-agent-sdk",
+        "@chisacode/protocol/messages"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/agent-session-event-pipeline-controller.ts",
@@ -1113,7 +1205,10 @@
       "type": "source",
       "path": "packages/server/src/server/agent/agent-session-reaper.ts",
       "lines": 118,
-      "imports": ["./agent-manager.js", "pino"]
+      "imports": [
+        "./agent-manager.js",
+        "pino"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/agent-session-registration-controller.ts",
@@ -1135,7 +1230,10 @@
       "type": "source",
       "path": "packages/server/src/server/agent/agent-session-rescue-controller.ts",
       "lines": 112,
-      "imports": ["./agent-sdk-types.js", "pino"]
+      "imports": [
+        "./agent-sdk-types.js",
+        "pino"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/agent-session-state-controller.ts",
@@ -1184,7 +1282,7 @@
       "id": "file:packages/server/src/server/agent/agent-storage.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/agent-storage.ts",
-      "lines": 503,
+      "lines": 512,
       "imports": [
         "../../utils/atomic-write.js",
         "../messages.js",
@@ -1203,14 +1301,20 @@
       "type": "test",
       "path": "packages/server/src/server/agent/agent-stream-coalescer.test.ts",
       "lines": 674,
-      "imports": ["./agent-sdk-types.js", "./agent-stream-coalescer.js", "vitest"]
+      "imports": [
+        "./agent-sdk-types.js",
+        "./agent-stream-coalescer.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/agent-stream-coalescer.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/agent-stream-coalescer.ts",
       "lines": 258,
-      "imports": ["./agent-sdk-types.js"]
+      "imports": [
+        "./agent-sdk-types.js"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/agent-timeline-controller.ts",
@@ -1243,21 +1347,30 @@
       "type": "source",
       "path": "packages/server/src/server/agent/agent-timeline-store-types.ts",
       "lines": 62,
-      "imports": ["./agent-sdk-types.js"]
+      "imports": [
+        "./agent-sdk-types.js"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/agent-timeline-store.test.ts",
       "type": "test",
       "path": "packages/server/src/server/agent/agent-timeline-store.test.ts",
       "lines": 54,
-      "imports": ["./agent-timeline-store.js", "vitest"]
+      "imports": [
+        "./agent-timeline-store.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/agent-timeline-store.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/agent-timeline-store.ts",
       "lines": 302,
-      "imports": ["./agent-sdk-types.js", "./agent-timeline-store-types.js", "node:crypto"]
+      "imports": [
+        "./agent-sdk-types.js",
+        "./agent-timeline-store-types.js",
+        "node:crypto"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/agent-turn-event-controller.ts",
@@ -1315,7 +1428,9 @@
       "type": "source",
       "path": "packages/server/src/server/agent/companion-mcp-injection.ts",
       "lines": 35,
-      "imports": ["node:crypto"]
+      "imports": [
+        "node:crypto"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/companion-mcp-tools.ts",
@@ -1381,21 +1496,28 @@
       "type": "test",
       "path": "packages/server/src/server/agent/create-agent-mode.test.ts",
       "lines": 159,
-      "imports": ["./create-agent-mode.js", "vitest"]
+      "imports": [
+        "./create-agent-mode.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/create-agent-mode.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/create-agent-mode.ts",
       "lines": 93,
-      "imports": ["./agent-sdk-types.js"]
+      "imports": [
+        "./agent-sdk-types.js"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/create-agent-title.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/create-agent-title.ts",
       "lines": 38,
-      "imports": ["@chisacode/protocol/agent-title-limits"]
+      "imports": [
+        "@chisacode/protocol/agent-title-limits"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/create-agent/create.ts",
@@ -1429,28 +1551,44 @@
       "type": "source",
       "path": "packages/server/src/server/agent/delegation-task-status.ts",
       "lines": 46,
-      "imports": ["./agent-manager.js", "./agent-sdk-types.js", "./agent-storage.js"]
+      "imports": [
+        "./agent-manager.js",
+        "./agent-sdk-types.js",
+        "./agent-storage.js"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/dictation-debug.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/dictation-debug.ts",
       "lines": 85,
-      "imports": ["./audio-utils.js", "./recordings-debug.js", "fs/promises", "path", "pino"]
+      "imports": [
+        "./audio-utils.js",
+        "./recordings-debug.js",
+        "fs/promises",
+        "path",
+        "pino"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/foreground-run-state.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/foreground-run-state.ts",
       "lines": 229,
-      "imports": ["./agent-sdk-types.js", "node:crypto"]
+      "imports": [
+        "./agent-sdk-types.js",
+        "node:crypto"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/generative-ui-action-queue.test.ts",
       "type": "test",
       "path": "packages/server/src/server/agent/generative-ui-action-queue.test.ts",
       "lines": 317,
-      "imports": ["./generative-ui-action-queue.js", "vitest"]
+      "imports": [
+        "./generative-ui-action-queue.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/generative-ui-action-queue.ts",
@@ -1515,7 +1653,11 @@
       "type": "source",
       "path": "packages/server/src/server/agent/lifecycle-command.ts",
       "lines": 203,
-      "imports": ["./agent-manager.js", "./agent-storage.js", "pino"]
+      "imports": [
+        "./agent-manager.js",
+        "./agent-storage.js",
+        "pino"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/loop-mcp-tools.ts",
@@ -1554,7 +1696,11 @@
       "type": "test",
       "path": "packages/server/src/server/agent/mcp-server-management.test.ts",
       "lines": 192,
-      "imports": ["./mcp-server-management.js", "@chisacode/protocol/messages", "vitest"]
+      "imports": [
+        "./mcp-server-management.js",
+        "@chisacode/protocol/messages",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/mcp-server-management.ts",
@@ -1664,21 +1810,32 @@
       "type": "test",
       "path": "packages/server/src/server/agent/model-catalog.e2e.test.ts",
       "lines": 88,
-      "imports": ["../test-utils/index.js", "./agent-sdk-types.js", "node:child_process", "vitest"]
+      "imports": [
+        "../test-utils/index.js",
+        "./agent-sdk-types.js",
+        "node:child_process",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/model-catalog.test.ts",
       "type": "test",
       "path": "packages/server/src/server/agent/model-catalog.test.ts",
       "lines": 173,
-      "imports": ["./agent-sdk-types.js", "./model-catalog.js", "vitest"]
+      "imports": [
+        "./agent-sdk-types.js",
+        "./model-catalog.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/model-catalog.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/model-catalog.ts",
       "lines": 127,
-      "imports": ["./agent-sdk-types.js"]
+      "imports": [
+        "./agent-sdk-types.js"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/opencode-reasoning.e2e.test.ts",
@@ -1719,28 +1876,40 @@
       "type": "source",
       "path": "packages/server/src/server/agent/permission-response.ts",
       "lines": 41,
-      "imports": ["./agent-prompt.js", "./agent-sdk-types.js", "pino"]
+      "imports": [
+        "./agent-prompt.js",
+        "./agent-sdk-types.js",
+        "pino"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/prompt-attachments.test.ts",
       "type": "test",
       "path": "packages/server/src/server/agent/prompt-attachments.test.ts",
       "lines": 127,
-      "imports": ["./prompt-attachments.js", "vitest"]
+      "imports": [
+        "./prompt-attachments.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/prompt-attachments.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/prompt-attachments.ts",
       "lines": 85,
-      "imports": ["@chisacode/protocol/messages"]
+      "imports": [
+        "@chisacode/protocol/messages"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/provider-history-timestamps.test.ts",
       "type": "test",
       "path": "packages/server/src/server/agent/provider-history-timestamps.test.ts",
       "lines": 24,
-      "imports": ["./provider-history-timestamps.js", "vitest"]
+      "imports": [
+        "./provider-history-timestamps.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/provider-history-timestamps.ts",
@@ -1753,14 +1922,20 @@
       "id": "file:packages/server/src/server/agent/provider-launch-config.test.ts",
       "type": "test",
       "path": "packages/server/src/server/agent/provider-launch-config.test.ts",
-      "lines": 441,
-      "imports": ["./provider-launch-config.js", "node:fs", "node:os", "node:path", "vitest"]
+      "lines": 458,
+      "imports": [
+        "./provider-launch-config.js",
+        "node:fs",
+        "node:os",
+        "node:path",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/provider-launch-config.ts",
       "type": "config",
       "path": "packages/server/src/server/agent/provider-launch-config.ts",
-      "lines": 278,
+      "lines": 282,
       "imports": [
         "../../utils/executable.js",
         "../chisacode-env.js",
@@ -1790,13 +1965,17 @@
       "type": "test",
       "path": "packages/server/src/server/agent/provider-registry-wrap.test.ts",
       "lines": 198,
-      "imports": ["./agent-sdk-types.js", "./provider-registry.js", "vitest"]
+      "imports": [
+        "./agent-sdk-types.js",
+        "./provider-registry.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/provider-registry.test.ts",
       "type": "test",
       "path": "packages/server/src/server/agent/provider-registry.test.ts",
-      "lines": 1937,
+      "lines": 1940,
       "imports": [
         "../../test-utils/test-logger.js",
         "../../utils/executable.js",
@@ -1809,7 +1988,7 @@
       "id": "file:packages/server/src/server/agent/provider-registry.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/provider-registry.ts",
-      "lines": 1305,
+      "lines": 1307,
       "imports": [
         "../ssh-transport.js",
         "../workspace-git-service.js",
@@ -1850,7 +2029,7 @@
       "id": "file:packages/server/src/server/agent/provider-snapshot-manager.test.ts",
       "type": "test",
       "path": "packages/server/src/server/agent/provider-snapshot-manager.test.ts",
-      "lines": 839,
+      "lines": 842,
       "imports": [
         "../../test-utils/test-logger.js",
         "./agent-sdk-types.js",
@@ -1863,7 +2042,7 @@
       "id": "file:packages/server/src/server/agent/provider-snapshot-manager.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/provider-snapshot-manager.ts",
-      "lines": 1263,
+      "lines": 1276,
       "imports": [
         "../../utils/path.js",
         "../../utils/promise-timeout.js",
@@ -1886,7 +2065,11 @@
       "type": "source",
       "path": "packages/server/src/server/agent/provider-tooling.ts",
       "lines": 202,
-      "imports": ["../../utils/spawn.js", "./agent-sdk-types.js", "./provider-launch-config.js"]
+      "imports": [
+        "../../utils/spawn.js",
+        "./agent-sdk-types.js",
+        "./provider-launch-config.js"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/acp-agent.test.ts",
@@ -1912,7 +2095,7 @@
       "id": "file:packages/server/src/server/agent/providers/acp-agent.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/providers/acp-agent.ts",
-      "lines": 979,
+      "lines": 983,
       "imports": [
         "../agent-sdk-types.js",
         "../provider-launch-config.js",
@@ -1954,7 +2137,9 @@
       "type": "source",
       "path": "packages/server/src/server/agent/providers/acp/command-catalog.ts",
       "lines": 94,
-      "imports": ["../../agent-sdk-types.js"]
+      "imports": [
+        "../../agent-sdk-types.js"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/acp/foreground-turn-controller.ts",
@@ -1973,7 +2158,11 @@
       "type": "source",
       "path": "packages/server/src/server/agent/providers/acp/ndjson-stream.ts",
       "lines": 108,
-      "imports": ["@agentclientprotocol/sdk", "node:stream/web", "pino"]
+      "imports": [
+        "@agentclientprotocol/sdk",
+        "node:stream/web",
+        "pino"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/acp/process-runtime.test.ts",
@@ -2022,7 +2211,11 @@
       "type": "config",
       "path": "packages/server/src/server/agent/providers/acp/session-config.ts",
       "lines": 284,
-      "imports": ["../../agent-sdk-types.js", "@agentclientprotocol/sdk", "pino"]
+      "imports": [
+        "../../agent-sdk-types.js",
+        "@agentclientprotocol/sdk",
+        "pino"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/acp/session-lifecycle-controller.test.ts",
@@ -2059,7 +2252,11 @@
       "type": "source",
       "path": "packages/server/src/server/agent/providers/acp/session-update-controller.ts",
       "lines": 191,
-      "imports": ["../../agent-sdk-types.js", "./tool-call-mapper.js", "@agentclientprotocol/sdk"]
+      "imports": [
+        "../../agent-sdk-types.js",
+        "./tool-call-mapper.js",
+        "@agentclientprotocol/sdk"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/acp/terminal-controller.ts",
@@ -2081,42 +2278,63 @@
       "type": "test",
       "path": "packages/server/src/server/agent/providers/acp/tool-call-mapper.test.ts",
       "lines": 155,
-      "imports": ["./tool-call-mapper.js", "@agentclientprotocol/sdk", "vitest"]
+      "imports": [
+        "./tool-call-mapper.js",
+        "@agentclientprotocol/sdk",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/acp/tool-call-mapper.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/providers/acp/tool-call-mapper.ts",
       "lines": 432,
-      "imports": ["../../agent-sdk-types.js", "@agentclientprotocol/sdk"]
+      "imports": [
+        "../../agent-sdk-types.js",
+        "@agentclientprotocol/sdk"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/acp/workspace-path.test.ts",
       "type": "test",
       "path": "packages/server/src/server/agent/providers/acp/workspace-path.test.ts",
       "lines": 23,
-      "imports": ["./workspace-path.js", "node:path", "vitest"]
+      "imports": [
+        "./workspace-path.js",
+        "node:path",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/acp/workspace-path.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/providers/acp/workspace-path.ts",
       "lines": 21,
-      "imports": ["node:path"]
+      "imports": [
+        "node:path"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/claude/agent-commands.e2e.test.ts",
       "type": "test",
       "path": "packages/server/src/server/agent/providers/claude/agent-commands.e2e.test.ts",
       "lines": 62,
-      "imports": ["../../../test-utils/index.js", "vitest"]
+      "imports": [
+        "../../../test-utils/index.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/claude/agent-commands.real.e2e.test.ts",
       "type": "test",
       "path": "packages/server/src/server/agent/providers/claude/agent-commands.real.e2e.test.ts",
       "lines": 52,
-      "imports": ["../../../daemon-e2e/agent-configs.js", "./agent.js", "pino", "vitest"]
+      "imports": [
+        "../../../daemon-e2e/agent-configs.js",
+        "./agent.js",
+        "pino",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/claude/agent.env.test.ts",
@@ -2153,7 +2371,10 @@
       "type": "test",
       "path": "packages/server/src/server/agent/providers/claude/agent.history.test.ts",
       "lines": 28,
-      "imports": ["./agent.js", "vitest"]
+      "imports": [
+        "./agent.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/claude/agent.integration.real.e2e.test.ts",
@@ -2323,7 +2544,9 @@
       "type": "source",
       "path": "packages/server/src/server/agent/providers/claude/feature-definitions.ts",
       "lines": 49,
-      "imports": ["../../agent-sdk-types.js"]
+      "imports": [
+        "../../agent-sdk-types.js"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/claude/foreground-turn-controller.ts",
@@ -2347,14 +2570,21 @@
       "type": "source",
       "path": "packages/server/src/server/agent/providers/claude/history-converter.ts",
       "lines": 328,
-      "imports": ["../../agent-sdk-types.js", "./task-notification-tool-call.js"]
+      "imports": [
+        "../../agent-sdk-types.js",
+        "./task-notification-tool-call.js"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/claude/message-router.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/providers/claude/message-router.ts",
       "lines": 398,
-      "imports": ["../../agent-sdk-types.js", "@anthropic-ai/claude-agent-sdk", "pino"]
+      "imports": [
+        "../../agent-sdk-types.js",
+        "@anthropic-ai/claude-agent-sdk",
+        "pino"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/claude/message-translator.ts",
@@ -2389,7 +2619,13 @@
       "type": "source",
       "path": "packages/server/src/server/agent/providers/claude/models.ts",
       "lines": 258,
-      "imports": ["../../agent-sdk-types.js", "node:fs/promises", "node:os", "node:path", "pino"]
+      "imports": [
+        "../../agent-sdk-types.js",
+        "node:fs/promises",
+        "node:os",
+        "node:path",
+        "pino"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/claude/options-builder.ts",
@@ -2413,7 +2649,10 @@
       "type": "test",
       "path": "packages/server/src/server/agent/providers/claude/partial-json.test.ts",
       "lines": 43,
-      "imports": ["./partial-json.js", "vitest"]
+      "imports": [
+        "./partial-json.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/claude/partial-json.ts",
@@ -2456,7 +2695,11 @@
       "type": "source",
       "path": "packages/server/src/server/agent/providers/claude/project-dir.ts",
       "lines": 53,
-      "imports": ["node:fs/promises", "node:os", "node:path"]
+      "imports": [
+        "node:fs/promises",
+        "node:os",
+        "node:path"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/claude/query-lifecycle.ts",
@@ -2514,7 +2757,9 @@
       "type": "source",
       "path": "packages/server/src/server/agent/providers/claude/rewind.ts",
       "lines": 58,
-      "imports": ["@anthropic-ai/claude-agent-sdk"]
+      "imports": [
+        "@anthropic-ai/claude-agent-sdk"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/claude/sdk-behavior.real.e2e.test.ts",
@@ -2537,14 +2782,20 @@
       "type": "source",
       "path": "packages/server/src/server/agent/providers/claude/sdk-pump.ts",
       "lines": 125,
-      "imports": ["@anthropic-ai/claude-agent-sdk", "pino"]
+      "imports": [
+        "@anthropic-ai/claude-agent-sdk",
+        "pino"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/claude/sdk-types-mapping.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/providers/claude/sdk-types-mapping.ts",
       "lines": 234,
-      "imports": ["../../agent-sdk-types.js", "@anthropic-ai/claude-agent-sdk"]
+      "imports": [
+        "../../agent-sdk-types.js",
+        "@anthropic-ai/claude-agent-sdk"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/claude/session-history.ts",
@@ -2625,28 +2876,41 @@
       "type": "test",
       "path": "packages/server/src/server/agent/providers/claude/task-notification-tool-call.test.ts",
       "lines": 140,
-      "imports": ["./task-notification-tool-call.js", "vitest"]
+      "imports": [
+        "./task-notification-tool-call.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/claude/task-notification-tool-call.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/providers/claude/task-notification-tool-call.ts",
       "lines": 390,
-      "imports": ["../../agent-sdk-types.js", "node:crypto", "zod/v3"]
+      "imports": [
+        "../../agent-sdk-types.js",
+        "node:crypto",
+        "zod/v3"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/claude/test-rewind-claude-sdk.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/providers/claude/test-rewind-claude-sdk.ts",
       "lines": 37,
-      "imports": ["./rewind.js"]
+      "imports": [
+        "./rewind.js"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/claude/timeline-assembler.test.ts",
       "type": "test",
       "path": "packages/server/src/server/agent/providers/claude/timeline-assembler.test.ts",
       "lines": 81,
-      "imports": ["./timeline-assembler.js", "@anthropic-ai/claude-agent-sdk", "vitest"]
+      "imports": [
+        "./timeline-assembler.js",
+        "@anthropic-ai/claude-agent-sdk",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/claude/timeline-assembler.ts",
@@ -2664,7 +2928,11 @@
       "type": "source",
       "path": "packages/server/src/server/agent/providers/claude/tool-call-detail-parser.ts",
       "lines": 246,
-      "imports": ["../../agent-sdk-types.js", "../tool-call-detail-primitives.js", "zod/v3"]
+      "imports": [
+        "../../agent-sdk-types.js",
+        "../tool-call-detail-primitives.js",
+        "zod/v3"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/claude/tool-call-handlers.ts",
@@ -2685,7 +2953,10 @@
       "type": "test",
       "path": "packages/server/src/server/agent/providers/claude/tool-call-mapper.test.ts",
       "lines": 446,
-      "imports": ["./tool-call-mapper.js", "vitest"]
+      "imports": [
+        "./tool-call-mapper.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/claude/tool-call-mapper.ts",
@@ -2704,7 +2975,10 @@
       "type": "test",
       "path": "packages/server/src/server/agent/providers/claude/user-facing-error-text.test.ts",
       "lines": 43,
-      "imports": ["./user-facing-error-text.js", "vitest"]
+      "imports": [
+        "./user-facing-error-text.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/claude/user-facing-error-text.ts",
@@ -2751,13 +3025,17 @@
       "type": "test",
       "path": "packages/server/src/server/agent/providers/codex-app-server-agent.spawn-error.test.ts",
       "lines": 56,
-      "imports": ["../../../test-utils/test-logger.js", "./codex-app-server-agent.js", "vitest"]
+      "imports": [
+        "../../../test-utils/test-logger.js",
+        "./codex-app-server-agent.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/codex-app-server-agent.test.ts",
       "type": "test",
       "path": "packages/server/src/server/agent/providers/codex-app-server-agent.test.ts",
-      "lines": 3014,
+      "lines": 2999,
       "imports": [
         "../../../test-utils/test-logger.js",
         "../../test-utils/class-mocks.js",
@@ -2781,14 +3059,21 @@
       "type": "source",
       "path": "packages/server/src/server/agent/providers/codex-app-server-agent.ts",
       "lines": 56,
-      "imports": ["../provider-launch-config.js", "./codex/client.js", "./codex/session.js", "pino"]
+      "imports": [
+        "../provider-launch-config.js",
+        "./codex/client.js",
+        "./codex/session.js",
+        "pino"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/codex-feature-definitions.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/providers/codex-feature-definitions.ts",
       "lines": 62,
-      "imports": ["../agent-sdk-types.js"]
+      "imports": [
+        "../agent-sdk-types.js"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/codex-mcp-agent-commands.e2e.test.ts",
@@ -2885,7 +3170,10 @@
       "type": "source",
       "path": "packages/server/src/server/agent/providers/codex/context-compaction-state.ts",
       "lines": 81,
-      "imports": ["../../agent-sdk-types.js", "./history.js"]
+      "imports": [
+        "../../agent-sdk-types.js",
+        "./history.js"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/codex/delta-notification-handler.test.ts",
@@ -2993,28 +3281,41 @@
       "type": "test",
       "path": "packages/server/src/server/agent/providers/codex/models.test.ts",
       "lines": 49,
-      "imports": ["./models.js", "vitest"]
+      "imports": [
+        "./models.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/codex/models.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/providers/codex/models.ts",
       "lines": 231,
-      "imports": ["../../agent-sdk-types.js", "./turn-config.js", "pino", "zod/v3"]
+      "imports": [
+        "../../agent-sdk-types.js",
+        "./turn-config.js",
+        "pino",
+        "zod/v3"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/codex/notification-router.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/providers/codex/notification-router.ts",
       "lines": 100,
-      "imports": ["./notifications.js"]
+      "imports": [
+        "./notifications.js"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/codex/notification-stream-state.test.ts",
       "type": "test",
       "path": "packages/server/src/server/agent/providers/codex/notification-stream-state.test.ts",
       "lines": 58,
-      "imports": ["./notification-stream-state.js", "vitest"]
+      "imports": [
+        "./notification-stream-state.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/codex/notification-stream-state.ts",
@@ -3028,7 +3329,11 @@
       "type": "test",
       "path": "packages/server/src/server/agent/providers/codex/notification-timeline.test.ts",
       "lines": 77,
-      "imports": ["../../agent-sdk-types.js", "./notification-timeline.js", "vitest"]
+      "imports": [
+        "../../agent-sdk-types.js",
+        "./notification-timeline.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/codex/notification-timeline.ts",
@@ -3046,7 +3351,9 @@
       "type": "source",
       "path": "packages/server/src/server/agent/providers/codex/notifications.ts",
       "lines": 865,
-      "imports": ["zod/v3"]
+      "imports": [
+        "zod/v3"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/codex/permission-controller.ts",
@@ -3067,35 +3374,49 @@
       "type": "source",
       "path": "packages/server/src/server/agent/providers/codex/permission-state.ts",
       "lines": 51,
-      "imports": ["../../agent-sdk-types.js"]
+      "imports": [
+        "../../agent-sdk-types.js"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/codex/permissions.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/providers/codex/permissions.ts",
       "lines": 291,
-      "imports": ["../../agent-sdk-types.js", "../tool-call-mapper-utils.js"]
+      "imports": [
+        "../../agent-sdk-types.js",
+        "../tool-call-mapper-utils.js"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/codex/rewind.test.ts",
       "type": "test",
       "path": "packages/server/src/server/agent/providers/codex/rewind.test.ts",
       "lines": 151,
-      "imports": ["./app-server-transport.js", "./rewind.js", "vitest"]
+      "imports": [
+        "./app-server-transport.js",
+        "./rewind.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/codex/rewind.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/providers/codex/rewind.ts",
       "lines": 88,
-      "imports": ["./app-server-transport.js"]
+      "imports": [
+        "./app-server-transport.js"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/codex/runtime-config.ts",
       "type": "config",
       "path": "packages/server/src/server/agent/providers/codex/runtime-config.ts",
       "lines": 128,
-      "imports": ["../../agent-sdk-types.js", "../../provider-launch-config.js"]
+      "imports": [
+        "../../agent-sdk-types.js",
+        "../../provider-launch-config.js"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/codex/session-commands.ts",
@@ -3130,7 +3451,12 @@
       "type": "source",
       "path": "packages/server/src/server/agent/providers/codex/session-connection.ts",
       "lines": 121,
-      "imports": ["./app-server-transport.js", "./runtime-config.js", "node:child_process", "pino"]
+      "imports": [
+        "./app-server-transport.js",
+        "./runtime-config.js",
+        "node:child_process",
+        "pino"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/codex/session-event-bus.test.ts",
@@ -3149,21 +3475,31 @@
       "type": "source",
       "path": "packages/server/src/server/agent/providers/codex/session-event-bus.ts",
       "lines": 53,
-      "imports": ["../../agent-sdk-types.js", "pino"]
+      "imports": [
+        "../../agent-sdk-types.js",
+        "pino"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/codex/session-history.test.ts",
       "type": "test",
       "path": "packages/server/src/server/agent/providers/codex/session-history.test.ts",
       "lines": 74,
-      "imports": ["./session-history.js", "./user-message-turn-state.js", "vitest"]
+      "imports": [
+        "./session-history.js",
+        "./user-message-turn-state.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/codex/session-history.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/providers/codex/session-history.ts",
       "lines": 66,
-      "imports": ["./history.js", "./user-message-turn-state.js"]
+      "imports": [
+        "./history.js",
+        "./user-message-turn-state.js"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/codex/session-metadata.test.ts",
@@ -3196,7 +3532,11 @@
       "type": "test",
       "path": "packages/server/src/server/agent/providers/codex/session-runtime.test.ts",
       "lines": 113,
-      "imports": ["../../agent-sdk-types.js", "./session-runtime.js", "vitest"]
+      "imports": [
+        "../../agent-sdk-types.js",
+        "./session-runtime.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/codex/session-runtime.ts",
@@ -3216,7 +3556,11 @@
       "type": "test",
       "path": "packages/server/src/server/agent/providers/codex/session-turn-execution.test.ts",
       "lines": 84,
-      "imports": ["../../../../test-utils/test-logger.js", "./session-turn-execution.js", "vitest"]
+      "imports": [
+        "../../../../test-utils/test-logger.js",
+        "./session-turn-execution.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/codex/session-turn-execution.ts",
@@ -3281,7 +3625,10 @@
       "type": "test",
       "path": "packages/server/src/server/agent/providers/codex/skills.test.ts",
       "lines": 31,
-      "imports": ["./skills.js", "vitest"]
+      "imports": [
+        "./skills.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/codex/skills.ts",
@@ -3302,14 +3649,22 @@
       "type": "source",
       "path": "packages/server/src/server/agent/providers/codex/sub-agent-tracker.ts",
       "lines": 102,
-      "imports": ["../../activity-curator.js", "../../agent-sdk-types.js"]
+      "imports": [
+        "../../activity-curator.js",
+        "../../agent-sdk-types.js"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/codex/test-utils/fake-app-server.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/providers/codex/test-utils/fake-app-server.ts",
       "lines": 285,
-      "imports": ["../../../agent-sdk-types.js", "node:child_process", "node:events", "node:stream"]
+      "imports": [
+        "../../../agent-sdk-types.js",
+        "node:child_process",
+        "node:events",
+        "node:stream"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/codex/thread-bootstrap.test.ts",
@@ -3354,7 +3709,12 @@
       "type": "test",
       "path": "packages/server/src/server/agent/providers/codex/tool-call-mapper.test.ts",
       "lines": 904,
-      "imports": ["./tool-call-mapper.js", "@/app-support/index-startup", "react", "vitest"]
+      "imports": [
+        "./tool-call-mapper.js",
+        "@/app-support/index-startup",
+        "react",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/codex/tool-call-mapper.ts",
@@ -3401,7 +3761,9 @@
       "type": "config",
       "path": "packages/server/src/server/agent/providers/codex/turn-config.ts",
       "lines": 255,
-      "imports": ["../../agent-sdk-types.js"]
+      "imports": [
+        "../../agent-sdk-types.js"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/codex/turn-notification-handler.test.ts",
@@ -3437,27 +3799,35 @@
       "type": "source",
       "path": "packages/server/src/server/agent/providers/codex/user-message-turn-state.ts",
       "lines": 44,
-      "imports": ["./rewind.js"]
+      "imports": [
+        "./rewind.js"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/diagnostic-utils.test.ts",
       "type": "test",
       "path": "packages/server/src/server/agent/providers/diagnostic-utils.test.ts",
       "lines": 79,
-      "imports": ["./diagnostic-utils.js", "vitest"]
+      "imports": [
+        "./diagnostic-utils.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/diagnostic-utils.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/providers/diagnostic-utils.ts",
       "lines": 216,
-      "imports": ["../../../utils/spawn.js", "../provider-launch-config.js"]
+      "imports": [
+        "../../../utils/spawn.js",
+        "../provider-launch-config.js"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/dsh-agent.test.ts",
       "type": "test",
       "path": "packages/server/src/server/agent/providers/dsh-agent.test.ts",
-      "lines": 275,
+      "lines": 434,
       "imports": [
         "../../../test-utils/test-logger.js",
         "./dsh-agent.js",
@@ -3472,7 +3842,7 @@
       "id": "file:packages/server/src/server/agent/providers/dsh-agent.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/providers/dsh-agent.ts",
-      "lines": 410,
+      "lines": 577,
       "imports": [
         "../agent-sdk-types.js",
         "../provider-launch-config.js",
@@ -3503,13 +3873,17 @@
       "type": "test",
       "path": "packages/server/src/server/agent/providers/generic-acp-agent.test.ts",
       "lines": 47,
-      "imports": ["../../../test-utils/test-logger.js", "./generic-acp-agent.js", "vitest"]
+      "imports": [
+        "../../../test-utils/test-logger.js",
+        "./generic-acp-agent.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/generic-acp-agent.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/providers/generic-acp-agent.ts",
-      "lines": 338,
+      "lines": 348,
       "imports": [
         "../agent-sdk-types.js",
         "../provider-launch-config.js",
@@ -3611,14 +3985,20 @@
       "type": "source",
       "path": "packages/server/src/server/agent/providers/mock-slow-provider.ts",
       "lines": 79,
-      "imports": ["../agent-sdk-types.js"]
+      "imports": [
+        "../agent-sdk-types.js"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/opencode-agent-commands.e2e.test.ts",
       "type": "test",
       "path": "packages/server/src/server/agent/providers/opencode-agent-commands.e2e.test.ts",
       "lines": 97,
-      "imports": ["../../daemon-e2e/agent-configs.js", "../../test-utils/index.js", "vitest"]
+      "imports": [
+        "../../daemon-e2e/agent-configs.js",
+        "../../test-utils/index.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/opencode-agent-commands.real.e2e.test.ts",
@@ -3878,7 +4258,10 @@
       "type": "test",
       "path": "packages/server/src/server/agent/providers/opencode/event-translator.test.ts",
       "lines": 1228,
-      "imports": ["../opencode-agent.js", "vitest"]
+      "imports": [
+        "../opencode-agent.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/opencode/event-translator.ts",
@@ -4003,14 +4386,19 @@
       "type": "source",
       "path": "packages/server/src/server/agent/providers/opencode/rewind.ts",
       "lines": 30,
-      "imports": ["../diagnostic-utils.js"]
+      "imports": [
+        "../diagnostic-utils.js"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/opencode/runtime.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/providers/opencode/runtime.ts",
       "lines": 52,
-      "imports": ["./server-manager.js", "@opencode-ai/sdk/v2/client"]
+      "imports": [
+        "./server-manager.js",
+        "@opencode-ai/sdk/v2/client"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/opencode/server-manager.ts",
@@ -4034,14 +4422,21 @@
       "type": "source",
       "path": "packages/server/src/server/agent/providers/opencode/session-event-bus.ts",
       "lines": 135,
-      "imports": ["../../agent-sdk-types.js"]
+      "imports": [
+        "../../agent-sdk-types.js"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/opencode/session-lifecycle.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/providers/opencode/session-lifecycle.ts",
       "lines": 109,
-      "imports": ["../diagnostic-utils.js", "./helpers.js", "@opencode-ai/sdk/v2/client", "pino"]
+      "imports": [
+        "../diagnostic-utils.js",
+        "./helpers.js",
+        "@opencode-ai/sdk/v2/client",
+        "pino"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/opencode/session-runtime.ts",
@@ -4098,14 +4493,19 @@
       "type": "source",
       "path": "packages/server/src/server/agent/providers/opencode/test-server-manager.ts",
       "lines": 41,
-      "imports": ["./server-manager.js"]
+      "imports": [
+        "./server-manager.js"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/opencode/test-utils/test-opencode-runtime.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/providers/opencode/test-utils/test-opencode-runtime.ts",
       "lines": 268,
-      "imports": ["../runtime.js", "@opencode-ai/sdk/v2/client"]
+      "imports": [
+        "../runtime.js",
+        "@opencode-ai/sdk/v2/client"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/opencode/tool-call-detail-parser.ts",
@@ -4124,7 +4524,10 @@
       "type": "test",
       "path": "packages/server/src/server/agent/providers/opencode/tool-call-mapper.test.ts",
       "lines": 540,
-      "imports": ["./tool-call-mapper.js", "vitest"]
+      "imports": [
+        "./tool-call-mapper.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/opencode/tool-call-mapper.ts",
@@ -4264,35 +4667,59 @@
       "type": "test",
       "path": "packages/server/src/server/agent/providers/pi/gateway-env.test.ts",
       "lines": 90,
-      "imports": ["./gateway-env.js", "node:fs", "node:os", "node:path", "vitest"]
+      "imports": [
+        "./gateway-env.js",
+        "node:fs",
+        "node:os",
+        "node:path",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/pi/gateway-env.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/providers/pi/gateway-env.ts",
       "lines": 105,
-      "imports": ["node:crypto", "node:fs", "node:os", "node:path"]
+      "imports": [
+        "node:crypto",
+        "node:fs",
+        "node:os",
+        "node:path"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/pi/history-mapper.test.ts",
       "type": "test",
       "path": "packages/server/src/server/agent/providers/pi/history-mapper.test.ts",
       "lines": 207,
-      "imports": ["../../agent-sdk-types.js", "./history-mapper.js", "./rpc-types.js", "vitest"]
+      "imports": [
+        "../../agent-sdk-types.js",
+        "./history-mapper.js",
+        "./rpc-types.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/pi/history-mapper.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/providers/pi/history-mapper.ts",
       "lines": 211,
-      "imports": ["../../agent-sdk-types.js", "./rpc-types.js", "./tool-call-mapper.js"]
+      "imports": [
+        "../../agent-sdk-types.js",
+        "./rpc-types.js",
+        "./tool-call-mapper.js"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/pi/permission-mapper.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/providers/pi/permission-mapper.ts",
       "lines": 296,
-      "imports": ["../../agent-sdk-types.js", "./event-values.js", "./rpc-types.js"]
+      "imports": [
+        "../../agent-sdk-types.js",
+        "./event-values.js",
+        "./rpc-types.js"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/pi/rewind.ts",
@@ -4313,7 +4740,11 @@
       "type": "source",
       "path": "packages/server/src/server/agent/providers/pi/runtime.ts",
       "lines": 143,
-      "imports": ["../../provider-launch-config.js", "./gateway-env.js", "./rpc-types.js"]
+      "imports": [
+        "../../provider-launch-config.js",
+        "./gateway-env.js",
+        "./rpc-types.js"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/pi/session-event-controller.test.ts",
@@ -4398,21 +4829,31 @@
       "type": "source",
       "path": "packages/server/src/server/agent/providers/pi/test-utils/fake-pi.ts",
       "lines": 245,
-      "imports": ["../../../provider-launch-config.js", "../rpc-types.js", "../runtime.js"]
+      "imports": [
+        "../../../provider-launch-config.js",
+        "../rpc-types.js",
+        "../runtime.js"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/pi/tool-call-mapper.test.ts",
       "type": "test",
       "path": "packages/server/src/server/agent/providers/pi/tool-call-mapper.test.ts",
       "lines": 77,
-      "imports": ["./tool-call-mapper.js", "vitest"]
+      "imports": [
+        "./tool-call-mapper.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/pi/tool-call-mapper.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/providers/pi/tool-call-mapper.ts",
       "lines": 470,
-      "imports": ["../../agent-sdk-types.js", "zod/v3"]
+      "imports": [
+        "../../agent-sdk-types.js",
+        "zod/v3"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/provider-availability.posix.test.ts",
@@ -4454,21 +4895,29 @@
       "type": "source",
       "path": "packages/server/src/server/agent/providers/provider-image-output.ts",
       "lines": 78,
-      "imports": ["../agent-sdk-types.js"]
+      "imports": [
+        "../agent-sdk-types.js"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/provider-runner.test.ts",
       "type": "test",
       "path": "packages/server/src/server/agent/providers/provider-runner.test.ts",
       "lines": 155,
-      "imports": ["../agent-sdk-types.js", "./provider-runner.js", "vitest"]
+      "imports": [
+        "../agent-sdk-types.js",
+        "./provider-runner.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/provider-runner.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/providers/provider-runner.ts",
       "lines": 130,
-      "imports": ["../agent-sdk-types.js"]
+      "imports": [
+        "../agent-sdk-types.js"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/provider-windows-launch.test.ts",
@@ -4492,14 +4941,20 @@
       "type": "source",
       "path": "packages/server/src/server/agent/providers/test-utils/session-stream-adapter.ts",
       "lines": 79,
-      "imports": ["../../agent-sdk-types.js"]
+      "imports": [
+        "../../agent-sdk-types.js"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/tool-call-detail-primitives.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/providers/tool-call-detail-primitives.ts",
       "lines": 989,
-      "imports": ["../agent-sdk-types.js", "./tool-call-mapper-utils.js", "zod/v3"]
+      "imports": [
+        "../agent-sdk-types.js",
+        "./tool-call-mapper-utils.js",
+        "zod/v3"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/providers/tool-call-mapper-utils.ts",
@@ -4513,14 +4968,21 @@
       "type": "test",
       "path": "packages/server/src/server/agent/providers/tool-call-read-gutter.test.ts",
       "lines": 87,
-      "imports": ["./tool-call-detail-primitives.js", "./tool-call-mapper-utils.js", "a", "vitest"]
+      "imports": [
+        "./tool-call-detail-primitives.js",
+        "./tool-call-mapper-utils.js",
+        "a",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/recordings-debug.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/recordings-debug.ts",
       "lines": 24,
-      "imports": ["path"]
+      "imports": [
+        "path"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/rewind/rewind.test.ts",
@@ -4540,14 +5002,18 @@
       "type": "source",
       "path": "packages/server/src/server/agent/rewind/rewind.ts",
       "lines": 37,
-      "imports": ["../agent-sdk-types.js"]
+      "imports": [
+        "../agent-sdk-types.js"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/rewind/test-rewind-session.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/rewind/test-rewind-session.ts",
       "lines": 126,
-      "imports": ["../agent-sdk-types.js"]
+      "imports": [
+        "../agent-sdk-types.js"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/schedule-mcp-tools.ts",
@@ -4570,7 +5036,10 @@
       "type": "source",
       "path": "packages/server/src/server/agent/skill-policy.ts",
       "lines": 34,
-      "imports": ["./agent-sdk-types.js", "@chisacode/protocol/messages"]
+      "imports": [
+        "./agent-sdk-types.js",
+        "@chisacode/protocol/messages"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/skills-management.test.ts",
@@ -4608,7 +5077,10 @@
       "type": "test",
       "path": "packages/server/src/server/agent/structured-generation-providers.test.ts",
       "lines": 203,
-      "imports": ["./structured-generation-providers.js", "vitest"]
+      "imports": [
+        "./structured-generation-providers.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/structured-generation-providers.ts",
@@ -4626,7 +5098,13 @@
       "type": "source",
       "path": "packages/server/src/server/agent/stt-debug.ts",
       "lines": 52,
-      "imports": ["./audio-utils.js", "./recordings-debug.js", "fs/promises", "path", "pino"]
+      "imports": [
+        "./audio-utils.js",
+        "./recordings-debug.js",
+        "fs/promises",
+        "path",
+        "pino"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/stt-manager.test.ts",
@@ -4683,35 +5161,54 @@
       "type": "source",
       "path": "packages/server/src/server/agent/timeline-append.ts",
       "lines": 39,
-      "imports": ["./agent-manager.js", "./agent-sdk-types.js"]
+      "imports": [
+        "./agent-manager.js",
+        "./agent-sdk-types.js"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/timeline-projection.test.ts",
       "type": "test",
       "path": "packages/server/src/server/agent/timeline-projection.test.ts",
       "lines": 494,
-      "imports": ["./agent-manager.js", "./timeline-projection.js", "vitest"]
+      "imports": [
+        "./agent-manager.js",
+        "./timeline-projection.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/timeline-projection.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/timeline-projection.ts",
       "lines": 389,
-      "imports": ["./agent-manager.js", "./agent-sdk-types.js"]
+      "imports": [
+        "./agent-manager.js",
+        "./agent-sdk-types.js"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/tool-name-normalization.test.ts",
       "type": "test",
       "path": "packages/server/src/server/agent/tool-name-normalization.test.ts",
       "lines": 50,
-      "imports": ["@chisacode/protocol/tool-name-normalization", "vitest"]
+      "imports": [
+        "@chisacode/protocol/tool-name-normalization",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/tts-debug.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/tts-debug.ts",
       "lines": 40,
-      "imports": ["./audio-utils.js", "./recordings-debug.js", "fs/promises", "path", "pino"]
+      "imports": [
+        "./audio-utils.js",
+        "./recordings-debug.js",
+        "fs/promises",
+        "path",
+        "pino"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/tts-manager.test.ts",
@@ -4759,28 +5256,42 @@
       "type": "test",
       "path": "packages/server/src/server/agent/vision-fallback.test.ts",
       "lines": 136,
-      "imports": ["./provider-launch-config.js", "./vision-fallback.js", "vitest"]
+      "imports": [
+        "./provider-launch-config.js",
+        "./vision-fallback.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/vision-fallback.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/vision-fallback.ts",
       "lines": 368,
-      "imports": ["./agent-sdk-types.js", "./provider-launch-config.js", "pino"]
+      "imports": [
+        "./agent-sdk-types.js",
+        "./provider-launch-config.js",
+        "pino"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/wait-for-agent-tracker.test.ts",
       "type": "test",
       "path": "packages/server/src/server/agent/wait-for-agent-tracker.test.ts",
       "lines": 44,
-      "imports": ["../../test-utils/test-logger.js", "./wait-for-agent-tracker.js", "vitest"]
+      "imports": [
+        "../../test-utils/test-logger.js",
+        "./wait-for-agent-tracker.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/wait-for-agent-tracker.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/wait-for-agent-tracker.ts",
       "lines": 63,
-      "imports": ["pino"]
+      "imports": [
+        "pino"
+      ]
     },
     {
       "id": "file:packages/server/src/server/agent/worktree-mcp-tools.ts",
@@ -4809,14 +5320,20 @@
       "type": "test",
       "path": "packages/server/src/server/auth.test.ts",
       "lines": 83,
-      "imports": ["./auth.js", "vitest"]
+      "imports": [
+        "./auth.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/auth.ts",
       "type": "source",
       "path": "packages/server/src/server/auth.ts",
       "lines": 152,
-      "imports": ["bcryptjs", "express"]
+      "imports": [
+        "bcryptjs",
+        "express"
+      ]
     },
     {
       "id": "file:packages/server/src/server/auto-archive-on-merge/archive-if-safe.temp-repo.test.ts",
@@ -4872,21 +5389,34 @@
       "type": "source",
       "path": "packages/server/src/server/auto-archive-on-merge/index.ts",
       "lines": 26,
-      "imports": ["../workspace-git-service.js", "./archive-if-safe.js", "pino"]
+      "imports": [
+        "../workspace-git-service.js",
+        "./archive-if-safe.js",
+        "pino"
+      ]
     },
     {
       "id": "file:packages/server/src/server/bootstrap-auth.test.ts",
       "type": "test",
       "path": "packages/server/src/server/bootstrap-auth.test.ts",
       "lines": 212,
-      "imports": ["./bootstrap.js", "./test-utils/chisacode-daemon.js", "vitest", "ws"]
+      "imports": [
+        "./bootstrap.js",
+        "./test-utils/chisacode-daemon.js",
+        "vitest",
+        "ws"
+      ]
     },
     {
       "id": "file:packages/server/src/server/bootstrap-model-gateway.test.ts",
       "type": "test",
       "path": "packages/server/src/server/bootstrap-model-gateway.test.ts",
       "lines": 578,
-      "imports": ["./test-utils/chisacode-daemon.js", "node:http", "vitest"]
+      "imports": [
+        "./test-utils/chisacode-daemon.js",
+        "node:http",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/bootstrap-provider-availability.test.ts",
@@ -4926,7 +5456,7 @@
       "id": "file:packages/server/src/server/bootstrap.ts",
       "type": "source",
       "path": "packages/server/src/server/bootstrap.ts",
-      "lines": 1669,
+      "lines": 1673,
       "imports": [
         "../services/github-service.js",
         "../terminal/terminal-manager-factory.js",
@@ -5020,14 +5550,25 @@
       "type": "source",
       "path": "packages/server/src/server/chat/chat-mentions.ts",
       "lines": 195,
-      "imports": ["../agent/agent-manager.js", "../agent/agent-storage.js", "pino"]
+      "imports": [
+        "../agent/agent-manager.js",
+        "../agent/agent-storage.js",
+        "pino"
+      ]
     },
     {
       "id": "file:packages/server/src/server/chat/chat-service.test.ts",
       "type": "test",
       "path": "packages/server/src/server/chat/chat-service.test.ts",
       "lines": 227,
-      "imports": ["./chat-service.js", "node:fs/promises", "node:os", "node:path", "pino", "vitest"]
+      "imports": [
+        "./chat-service.js",
+        "node:fs/promises",
+        "node:os",
+        "node:path",
+        "pino",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/chat/chat-service.ts",
@@ -5065,7 +5606,12 @@
       "type": "test",
       "path": "packages/server/src/server/checkout-diff-manager.test.ts",
       "lines": 224,
-      "imports": ["./checkout-diff-manager.js", "./workspace-git-service.js", "pino", "vitest"]
+      "imports": [
+        "./checkout-diff-manager.js",
+        "./workspace-git-service.js",
+        "pino",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/checkout-diff-manager.ts",
@@ -5085,28 +5631,41 @@
       "type": "source",
       "path": "packages/server/src/server/checkout-git-utils.ts",
       "lines": 47,
-      "imports": ["../utils/checkout-git.js", "../utils/run-git-command.js"]
+      "imports": [
+        "../utils/checkout-git.js",
+        "../utils/run-git-command.js"
+      ]
     },
     {
       "id": "file:packages/server/src/server/checkout/status-projection.test.ts",
       "type": "test",
       "path": "packages/server/src/server/checkout/status-projection.test.ts",
       "lines": 98,
-      "imports": ["./status-projection.js", "@chisacode/protocol/messages", "vitest"]
+      "imports": [
+        "./status-projection.js",
+        "@chisacode/protocol/messages",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/checkout/status-projection.ts",
       "type": "source",
       "path": "packages/server/src/server/checkout/status-projection.ts",
       "lines": 139,
-      "imports": ["../workspace-git-service.js", "@chisacode/protocol/messages"]
+      "imports": [
+        "../workspace-git-service.js",
+        "@chisacode/protocol/messages"
+      ]
     },
     {
       "id": "file:packages/server/src/server/chisacode-env.test.ts",
       "type": "test",
       "path": "packages/server/src/server/chisacode-env.test.ts",
       "lines": 122,
-      "imports": ["./chisacode-env.js", "vitest"]
+      "imports": [
+        "./chisacode-env.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/chisacode-env.ts",
@@ -5134,7 +5693,11 @@
       "type": "source",
       "path": "packages/server/src/server/chisacode-home.ts",
       "lines": 32,
-      "imports": ["./private-files.js", "node:os", "node:path"]
+      "imports": [
+        "./private-files.js",
+        "node:os",
+        "node:path"
+      ]
     },
     {
       "id": "file:packages/server/src/server/chisacode-worktree-archive-service.ts",
@@ -5210,35 +5773,59 @@
       "type": "test",
       "path": "packages/server/src/server/client-message-id.test.ts",
       "lines": 29,
-      "imports": ["./client-message-id.js", "vitest"]
+      "imports": [
+        "./client-message-id.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/client-message-id.ts",
       "type": "source",
       "path": "packages/server/src/server/client-message-id.ts",
       "lines": 17,
-      "imports": ["node:crypto"]
+      "imports": [
+        "node:crypto"
+      ]
     },
     {
       "id": "file:packages/server/src/server/config-auth.test.ts",
       "type": "test",
       "path": "packages/server/src/server/config-auth.test.ts",
       "lines": 97,
-      "imports": ["./auth.js", "./config.js", "node:fs/promises", "node:os", "node:path", "vitest"]
+      "imports": [
+        "./auth.js",
+        "./config.js",
+        "node:fs/promises",
+        "node:os",
+        "node:path",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/config-relay.test.ts",
       "type": "test",
       "path": "packages/server/src/server/config-relay.test.ts",
       "lines": 88,
-      "imports": ["./config.js", "node:fs/promises", "node:os", "node:path", "vitest"]
+      "imports": [
+        "./config.js",
+        "node:fs/promises",
+        "node:os",
+        "node:path",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/config-speech.test.ts",
       "type": "test",
       "path": "packages/server/src/server/config-speech.test.ts",
       "lines": 52,
-      "imports": ["./config.js", "node:fs/promises", "node:os", "node:path", "vitest"]
+      "imports": [
+        "./config.js",
+        "node:fs/promises",
+        "node:os",
+        "node:path",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/config.ts",
@@ -5264,13 +5851,16 @@
       "type": "source",
       "path": "packages/server/src/server/connection-offer.ts",
       "lines": 91,
-      "imports": ["@chisacode/protocol/connection-offer", "node:os"]
+      "imports": [
+        "@chisacode/protocol/connection-offer",
+        "node:os"
+      ]
     },
     {
       "id": "file:packages/server/src/server/daemon-client.e2e.test.ts",
       "type": "test",
       "path": "packages/server/src/server/daemon-client.e2e.test.ts",
-      "lines": 1761,
+      "lines": 1798,
       "imports": [
         "../utils/promise-timeout.js",
         "./agent/agent-sdk-types.js",
@@ -5279,6 +5869,7 @@
         "./test-utils/chisacode-daemon.js",
         "./test-utils/dictation-e2e.js",
         "./test-utils/index.js",
+        "./test-utils/message-collector.js",
         "node:child_process",
         "node:crypto",
         "node:fs",
@@ -5335,7 +5926,7 @@
       "id": "file:packages/server/src/server/daemon-e2e/agent-configs.ts",
       "type": "config",
       "path": "packages/server/src/server/daemon-e2e/agent-configs.ts",
-      "lines": 158,
+      "lines": 156,
       "imports": [
         "../../utils/executable.js",
         "dotenv",
@@ -5590,13 +6181,12 @@
       "id": "file:packages/server/src/server/daemon-e2e/dsh-session.real.e2e.test.ts",
       "type": "test",
       "path": "packages/server/src/server/daemon-e2e/dsh-session.real.e2e.test.ts",
-      "lines": 220,
+      "lines": 214,
       "imports": [
         "../agent/agent-sdk-types.js",
         "../agent/provider-registry.js",
         "../test-utils/chisacode-daemon.js",
         "../test-utils/daemon-client.js",
-        "../test-utils/message-collector.js",
         "./agent-configs.js",
         "./test-utils/rewind-helpers.js",
         "node:fs",
@@ -5611,14 +6201,26 @@
       "type": "test",
       "path": "packages/server/src/server/daemon-e2e/file-download.e2e.test.ts",
       "lines": 123,
-      "imports": ["../test-utils/index.js", "fs", "os", "path", "vitest"]
+      "imports": [
+        "../test-utils/index.js",
+        "fs",
+        "os",
+        "path",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/daemon-e2e/filesystem.e2e.test.ts",
       "type": "test",
       "path": "packages/server/src/server/daemon-e2e/filesystem.e2e.test.ts",
       "lines": 128,
-      "imports": ["../test-utils/index.js", "fs", "os", "path", "vitest"]
+      "imports": [
+        "../test-utils/index.js",
+        "fs",
+        "os",
+        "path",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/daemon-e2e/git-diff-bottleneck.local.e2e.test.ts",
@@ -5737,7 +6339,11 @@
       "type": "test",
       "path": "packages/server/src/server/daemon-e2e/models.e2e.test.ts",
       "lines": 100,
-      "imports": ["../test-utils/index.js", "node:child_process", "vitest"]
+      "imports": [
+        "../test-utils/index.js",
+        "node:child_process",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/daemon-e2e/open-project-worktree-reclassification.e2e.test.ts",
@@ -5926,7 +6532,9 @@
       "type": "test",
       "path": "packages/server/src/server/daemon-e2e/orchestration.e2e.test.ts",
       "lines": 12,
-      "imports": ["vitest"]
+      "imports": [
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/daemon-e2e/permissions-claude.e2e.test.ts",
@@ -5948,7 +6556,14 @@
       "type": "test",
       "path": "packages/server/src/server/daemon-e2e/permissions-codex.e2e.test.ts",
       "lines": 398,
-      "imports": ["../messages.js", "../test-utils/index.js", "fs", "os", "path", "vitest"]
+      "imports": [
+        "../messages.js",
+        "../test-utils/index.js",
+        "fs",
+        "os",
+        "path",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/daemon-e2e/persistence.e2e.test.ts",
@@ -6003,7 +6618,7 @@
       "id": "file:packages/server/src/server/daemon-e2e/relay-transport.e2e.test.ts",
       "type": "test",
       "path": "packages/server/src/server/daemon-e2e/relay-transport.e2e.test.ts",
-      "lines": 660,
+      "lines": 719,
       "imports": [
         "../pairing-offer.js",
         "../test-utils/chisacode-daemon.js",
@@ -6103,14 +6718,20 @@
       "type": "test",
       "path": "packages/server/src/server/daemon-e2e/send-while-running-stuck-test-utils.test.ts",
       "lines": 59,
-      "imports": ["../messages.js", "./send-while-running-stuck-test-utils.js", "vitest"]
+      "imports": [
+        "../messages.js",
+        "./send-while-running-stuck-test-utils.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/daemon-e2e/send-while-running-stuck-test-utils.ts",
       "type": "source",
       "path": "packages/server/src/server/daemon-e2e/send-while-running-stuck-test-utils.ts",
       "lines": 49,
-      "imports": ["../messages.js"]
+      "imports": [
+        "../messages.js"
+      ]
     },
     {
       "id": "file:packages/server/src/server/daemon-e2e/send-while-running-stuck.real.e2e.test.ts",
@@ -6195,7 +6816,13 @@
       "type": "test",
       "path": "packages/server/src/server/daemon-e2e/timeline-window.e2e.test.ts",
       "lines": 90,
-      "imports": ["../test-utils/index.js", "node:fs", "node:os", "node:path", "vitest"]
+      "imports": [
+        "../test-utils/index.js",
+        "node:fs",
+        "node:os",
+        "node:path",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/daemon-e2e/tool-calls.e2e.test.ts",
@@ -6274,7 +6901,7 @@
       "id": "file:packages/server/src/server/daemon-e2e/wait-for-idle.e2e.test.ts",
       "type": "test",
       "path": "packages/server/src/server/daemon-e2e/wait-for-idle.e2e.test.ts",
-      "lines": 228,
+      "lines": 238,
       "imports": [
         "../test-utils/index.js",
         "../test-utils/message-collector.js",
@@ -6318,28 +6945,45 @@
       "type": "test",
       "path": "packages/server/src/server/daemon-version.test.ts",
       "lines": 65,
-      "imports": ["./daemon-version.js", "node:fs", "node:os", "node:path", "node:url", "vitest"]
+      "imports": [
+        "./daemon-version.js",
+        "node:fs",
+        "node:os",
+        "node:path",
+        "node:url",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/daemon-version.ts",
       "type": "source",
       "path": "packages/server/src/server/daemon-version.ts",
       "lines": 23,
-      "imports": ["./package-version.js"]
+      "imports": [
+        "./package-version.js"
+      ]
     },
     {
       "id": "file:packages/server/src/server/daemon-worker.ts",
       "type": "source",
       "path": "packages/server/src/server/daemon-worker.ts",
       "lines": 207,
-      "imports": ["./bootstrap.js", "./chisacode-home.js", "./config.js", "./logger.js"]
+      "imports": [
+        "./bootstrap.js",
+        "./chisacode-home.js",
+        "./config.js",
+        "./logger.js"
+      ]
     },
     {
       "id": "file:packages/server/src/server/diagnostic-redaction.test.ts",
       "type": "test",
       "path": "packages/server/src/server/diagnostic-redaction.test.ts",
       "lines": 51,
-      "imports": ["./diagnostic-redaction.js", "vitest"]
+      "imports": [
+        "./diagnostic-redaction.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/diagnostic-redaction.ts",
@@ -6353,7 +6997,11 @@
       "type": "test",
       "path": "packages/server/src/server/diagnostics-report.test.ts",
       "lines": 112,
-      "imports": ["./diagnostics-report.js", "@chisacode/protocol/daemon/messages", "vitest"]
+      "imports": [
+        "./diagnostics-report.js",
+        "@chisacode/protocol/daemon/messages",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/diagnostics-report.ts",
@@ -6410,7 +7058,11 @@
       "type": "test",
       "path": "packages/server/src/server/editor-targets.test.ts",
       "lines": 119,
-      "imports": ["./editor-targets.js", "node:child_process", "vitest"]
+      "imports": [
+        "./editor-targets.js",
+        "node:child_process",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/editor-targets.ts",
@@ -6432,7 +7084,10 @@
       "type": "test",
       "path": "packages/server/src/server/exports.test.ts",
       "lines": 20,
-      "imports": ["./exports.js", "vitest"]
+      "imports": [
+        "./exports.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/exports.ts",
@@ -6470,7 +7125,9 @@
       "type": "source",
       "path": "packages/server/src/server/file-download/token-store.ts",
       "lines": 65,
-      "imports": ["node:crypto"]
+      "imports": [
+        "node:crypto"
+      ]
     },
     {
       "id": "file:packages/server/src/server/file-explorer/service.posix.test.ts",
@@ -6491,7 +7148,13 @@
       "type": "test",
       "path": "packages/server/src/server/file-explorer/service.test.ts",
       "lines": 137,
-      "imports": ["./service.js", "node:fs/promises", "node:os", "node:path", "vitest"]
+      "imports": [
+        "./service.js",
+        "node:fs/promises",
+        "node:os",
+        "node:path",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/file-explorer/service.ts",
@@ -6511,7 +7174,10 @@
       "type": "test",
       "path": "packages/server/src/server/git-metadata-generator.test.ts",
       "lines": 49,
-      "imports": ["./git-metadata-generator.js", "vitest"]
+      "imports": [
+        "./git-metadata-generator.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/git-metadata-generator.ts",
@@ -6563,7 +7229,10 @@
       "type": "test",
       "path": "packages/server/src/server/goal-service.test.ts",
       "lines": 162,
-      "imports": ["./goal-service.js", "vitest"]
+      "imports": [
+        "./goal-service.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/goal-service.ts",
@@ -6577,14 +7246,20 @@
       "type": "test",
       "path": "packages/server/src/server/hostnames.test.ts",
       "lines": 78,
-      "imports": ["./hostnames.js", "./persisted-config.js", "vitest"]
+      "imports": [
+        "./hostnames.js",
+        "./persisted-config.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/hostnames.ts",
       "type": "source",
       "path": "packages/server/src/server/hostnames.ts",
       "lines": 162,
-      "imports": ["node:net"]
+      "imports": [
+        "node:net"
+      ]
     },
     {
       "id": "file:packages/server/src/server/json-utils.ts",
@@ -6598,7 +7273,10 @@
       "type": "test",
       "path": "packages/server/src/server/learn-service.test.ts",
       "lines": 155,
-      "imports": ["./learn-service.js", "vitest"]
+      "imports": [
+        "./learn-service.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/learn-service.ts",
@@ -6619,14 +7297,19 @@
       "type": "test",
       "path": "packages/server/src/server/log-metadata.test.ts",
       "lines": 31,
-      "imports": ["./log-metadata.js", "vitest"]
+      "imports": [
+        "./log-metadata.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/log-metadata.ts",
       "type": "source",
       "path": "packages/server/src/server/log-metadata.ts",
       "lines": 17,
-      "imports": ["node:crypto"]
+      "imports": [
+        "node:crypto"
+      ]
     },
     {
       "id": "file:packages/server/src/server/logger.test.ts",
@@ -6707,7 +7390,11 @@
       "type": "test",
       "path": "packages/server/src/server/messages.test.ts",
       "lines": 166,
-      "imports": ["./agent/agent-sdk-types.js", "./messages.js", "vitest"]
+      "imports": [
+        "./agent/agent-sdk-types.js",
+        "./messages.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/messages.ts",
@@ -6726,28 +7413,43 @@
       "type": "test",
       "path": "packages/server/src/server/model-gateway/model-gateway.test.ts",
       "lines": 1943,
-      "imports": ["./model-gateway.js", "@chisacode/protocol/provider-config", "vitest"]
+      "imports": [
+        "./model-gateway.js",
+        "@chisacode/protocol/provider-config",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/model-gateway/model-gateway.ts",
       "type": "source",
       "path": "packages/server/src/server/model-gateway/model-gateway.ts",
       "lines": 2793,
-      "imports": ["@chisacode/protocol/provider-config", "node:crypto"]
+      "imports": [
+        "@chisacode/protocol/provider-config",
+        "node:crypto"
+      ]
     },
     {
       "id": "file:packages/server/src/server/package-version.ts",
       "type": "source",
       "path": "packages/server/src/server/package-version.ts",
       "lines": 77,
-      "imports": ["node:fs", "node:path", "node:url", "zod/v3"]
+      "imports": [
+        "node:fs",
+        "node:path",
+        "node:url",
+        "zod/v3"
+      ]
     },
     {
       "id": "file:packages/server/src/server/pagination/cursor.test.ts",
       "type": "test",
       "path": "packages/server/src/server/pagination/cursor.test.ts",
       "lines": 160,
-      "imports": ["./cursor.js", "vitest"]
+      "imports": [
+        "./cursor.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/pagination/cursor.ts",
@@ -6761,14 +7463,20 @@
       "type": "test",
       "path": "packages/server/src/server/pagination/sortable-pager.test.ts",
       "lines": 107,
-      "imports": ["./cursor.js", "./sortable-pager.js", "vitest"]
+      "imports": [
+        "./cursor.js",
+        "./sortable-pager.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/pagination/sortable-pager.ts",
       "type": "source",
       "path": "packages/server/src/server/pagination/sortable-pager.ts",
       "lines": 93,
-      "imports": ["./cursor.js"]
+      "imports": [
+        "./cursor.js"
+      ]
     },
     {
       "id": "file:packages/server/src/server/pairing-offer.ts",
@@ -6789,14 +7497,20 @@
       "type": "source",
       "path": "packages/server/src/server/pairing-qr.ts",
       "lines": 45,
-      "imports": ["../share/QRCode.js", "pino"]
+      "imports": [
+        "../share/QRCode.js",
+        "pino"
+      ]
     },
     {
       "id": "file:packages/server/src/server/path-utils.ts",
       "type": "source",
       "path": "packages/server/src/server/path-utils.ts",
       "lines": 37,
-      "imports": ["node:os", "node:path"]
+      "imports": [
+        "node:os",
+        "node:path"
+      ]
     },
     {
       "id": "file:packages/server/src/server/persisted-config.test.ts",
@@ -6832,7 +7546,11 @@
       "type": "test",
       "path": "packages/server/src/server/persistence-hooks.test.ts",
       "lines": 157,
-      "imports": ["./agent/agent-storage.js", "./persistence-hooks.js", "vitest"]
+      "imports": [
+        "./agent/agent-storage.js",
+        "./persistence-hooks.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/persistence-hooks.ts",
@@ -6850,7 +7568,13 @@
       "type": "test",
       "path": "packages/server/src/server/pid-lock.test.ts",
       "lines": 202,
-      "imports": ["./pid-lock.js", "node:fs/promises", "node:os", "node:path", "vitest"]
+      "imports": [
+        "./pid-lock.js",
+        "node:fs/promises",
+        "node:os",
+        "node:path",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/pid-lock.ts",
@@ -6873,42 +7597,69 @@
       "type": "test",
       "path": "packages/server/src/server/private-files.test.ts",
       "lines": 57,
-      "imports": ["./private-files.js", "node:fs", "node:os", "node:path", "vitest"]
+      "imports": [
+        "./private-files.js",
+        "node:fs",
+        "node:os",
+        "node:path",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/private-files.ts",
       "type": "source",
       "path": "packages/server/src/server/private-files.ts",
       "lines": 83,
-      "imports": ["node:crypto", "node:fs", "node:path"]
+      "imports": [
+        "node:crypto",
+        "node:fs",
+        "node:path"
+      ]
     },
     {
       "id": "file:packages/server/src/server/project-context.test.ts",
       "type": "test",
       "path": "packages/server/src/server/project-context.test.ts",
       "lines": 124,
-      "imports": ["./project-context.js", "node:fs", "node:os", "node:path", "vitest"]
+      "imports": [
+        "./project-context.js",
+        "node:fs",
+        "node:os",
+        "node:path",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/project-context.ts",
       "type": "source",
       "path": "packages/server/src/server/project-context.ts",
       "lines": 232,
-      "imports": ["node:crypto", "node:fs", "node:path"]
+      "imports": [
+        "node:crypto",
+        "node:fs",
+        "node:path"
+      ]
     },
     {
       "id": "file:packages/server/src/server/push/notifications.ts",
       "type": "source",
       "path": "packages/server/src/server/push/notifications.ts",
       "lines": 30,
-      "imports": ["./push-service.js", "./token-store.js", "pino"]
+      "imports": [
+        "./push-service.js",
+        "./token-store.js",
+        "pino"
+      ]
     },
     {
       "id": "file:packages/server/src/server/push/push-service.ts",
       "type": "source",
       "path": "packages/server/src/server/push/push-service.ts",
       "lines": 111,
-      "imports": ["./token-store.js", "pino"]
+      "imports": [
+        "./token-store.js",
+        "pino"
+      ]
     },
     {
       "id": "file:packages/server/src/server/push/token-store.test.ts",
@@ -6930,14 +7681,22 @@
       "type": "source",
       "path": "packages/server/src/server/push/token-store.ts",
       "lines": 74,
-      "imports": ["../private-files.js", "node:fs", "pino"]
+      "imports": [
+        "../private-files.js",
+        "node:fs",
+        "pino"
+      ]
     },
     {
       "id": "file:packages/server/src/server/rate-limit-key.test.ts",
       "type": "test",
       "path": "packages/server/src/server/rate-limit-key.test.ts",
       "lines": 47,
-      "imports": ["./bootstrap.js", "express", "vitest"]
+      "imports": [
+        "./bootstrap.js",
+        "express",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/relay-device-auth.test.ts",
@@ -6958,7 +7717,9 @@
       "type": "source",
       "path": "packages/server/src/server/relay-device-auth.ts",
       "lines": 72,
-      "imports": ["node:crypto"]
+      "imports": [
+        "node:crypto"
+      ]
     },
     {
       "id": "file:packages/server/src/server/relay-device-credential-store.ts",
@@ -6978,7 +7739,7 @@
       "id": "file:packages/server/src/server/relay-transport.test.ts",
       "type": "test",
       "path": "packages/server/src/server/relay-transport.test.ts",
-      "lines": 555,
+      "lines": 560,
       "imports": [
         "./relay-transport",
         "./websocket-limits.js",
@@ -6991,7 +7752,7 @@
       "id": "file:packages/server/src/server/relay-transport.ts",
       "type": "source",
       "path": "packages/server/src/server/relay-transport.ts",
-      "lines": 750,
+      "lines": 761,
       "imports": [
         "./websocket-limits.js",
         "./websocket-server.js",
@@ -7019,21 +7780,29 @@
       "type": "source",
       "path": "packages/server/src/server/resolve-worktree-creation-intent.ts",
       "lines": 190,
-      "imports": ["../services/github-service.js", "../utils/worktree.js"]
+      "imports": [
+        "../services/github-service.js",
+        "../utils/worktree.js"
+      ]
     },
     {
       "id": "file:packages/server/src/server/schedule/cron.test.ts",
       "type": "test",
       "path": "packages/server/src/server/schedule/cron.test.ts",
       "lines": 29,
-      "imports": ["./cron.js", "vitest"]
+      "imports": [
+        "./cron.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/schedule/cron.ts",
       "type": "source",
       "path": "packages/server/src/server/schedule/cron.ts",
       "lines": 150,
-      "imports": ["@chisacode/protocol/schedule/types"]
+      "imports": [
+        "@chisacode/protocol/schedule/types"
+      ]
     },
     {
       "id": "file:packages/server/src/server/schedule/service.test.ts",
@@ -7080,7 +7849,13 @@
       "type": "test",
       "path": "packages/server/src/server/schedule/store.test.ts",
       "lines": 128,
-      "imports": ["./store.js", "node:fs/promises", "node:os", "node:path", "vitest"]
+      "imports": [
+        "./store.js",
+        "node:fs/promises",
+        "node:os",
+        "node:path",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/schedule/store.ts",
@@ -7119,21 +7894,39 @@
       "type": "source",
       "path": "packages/server/src/server/script-health-monitor.ts",
       "lines": 230,
-      "imports": ["./script-proxy.js", "node:net"]
+      "imports": [
+        "./script-proxy.js",
+        "node:net"
+      ]
     },
     {
       "id": "file:packages/server/src/server/script-proxy.test.ts",
       "type": "test",
       "path": "packages/server/src/server/script-proxy.test.ts",
       "lines": 689,
-      "imports": ["./script-proxy.js", "express", "node:http", "node:net", "pino", "vitest", "ws"]
+      "imports": [
+        "./script-proxy.js",
+        "express",
+        "node:http",
+        "node:net",
+        "pino",
+        "vitest",
+        "ws"
+      ]
     },
     {
       "id": "file:packages/server/src/server/script-proxy.ts",
       "type": "source",
       "path": "packages/server/src/server/script-proxy.ts",
       "lines": 570,
-      "imports": ["./auth.js", "./hostnames.js", "express", "node:http", "node:net", "pino"]
+      "imports": [
+        "./auth.js",
+        "./hostnames.js",
+        "express",
+        "node:http",
+        "node:net",
+        "pino"
+      ]
     },
     {
       "id": "file:packages/server/src/server/script-route-branch-handler.test.ts",
@@ -7155,7 +7948,11 @@
       "type": "source",
       "path": "packages/server/src/server/script-route-branch-handler.ts",
       "lines": 69,
-      "imports": ["../utils/script-hostname.js", "./script-proxy.js", "pino"]
+      "imports": [
+        "../utils/script-hostname.js",
+        "./script-proxy.js",
+        "pino"
+      ]
     },
     {
       "id": "file:packages/server/src/server/script-status-projection.test.ts",
@@ -7214,20 +8011,30 @@
       "type": "source",
       "path": "packages/server/src/server/server-id.ts",
       "lines": 84,
-      "imports": ["./private-files.js", "node:crypto", "node:fs", "node:path"]
+      "imports": [
+        "./private-files.js",
+        "node:crypto",
+        "node:fs",
+        "node:path"
+      ]
     },
     {
       "id": "file:packages/server/src/server/session-handlers/agent-directory-handler.test.ts",
       "type": "test",
       "path": "packages/server/src/server/session-handlers/agent-directory-handler.test.ts",
       "lines": 51,
-      "imports": ["../messages.js", "./agent-directory-handler.js", "pino", "vitest"]
+      "imports": [
+        "../messages.js",
+        "./agent-directory-handler.js",
+        "pino",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/session-handlers/agent-directory-handler.ts",
       "type": "source",
       "path": "packages/server/src/server/session-handlers/agent-directory-handler.ts",
-      "lines": 987,
+      "lines": 991,
       "imports": [
         "../agent/agent-loading.js",
         "../agent/agent-manager.js",
@@ -7251,7 +8058,10 @@
       "type": "test",
       "path": "packages/server/src/server/session-handlers/agent-lifecycle-handler.test.ts",
       "lines": 86,
-      "imports": ["./agent-lifecycle-handler.js", "vitest"]
+      "imports": [
+        "./agent-lifecycle-handler.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/session-handlers/agent-lifecycle-handler.ts",
@@ -7368,7 +8178,11 @@
       "type": "test",
       "path": "packages/server/src/server/session-handlers/goal-handler.test.ts",
       "lines": 80,
-      "imports": ["../goal-service.js", "./goal-handler.js", "vitest"]
+      "imports": [
+        "../goal-service.js",
+        "./goal-handler.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/session-handlers/goal-handler.ts",
@@ -7413,7 +8227,10 @@
       "type": "test",
       "path": "packages/server/src/server/session-handlers/learn-handler.test.ts",
       "lines": 34,
-      "imports": ["./learn-handler.js", "vitest"]
+      "imports": [
+        "./learn-handler.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/session-handlers/learn-handler.ts",
@@ -7543,7 +8360,10 @@
       "type": "test",
       "path": "packages/server/src/server/session-handlers/team-handler.test.ts",
       "lines": 107,
-      "imports": ["./team-handler.js", "vitest"]
+      "imports": [
+        "./team-handler.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/session-handlers/team-handler.ts",
@@ -7563,7 +8383,11 @@
       "type": "source",
       "path": "packages/server/src/server/session-handlers/terminal-script-handler.ts",
       "lines": 97,
-      "imports": ["../messages.js", "../worktree-bootstrap.js", "./session-context.js"]
+      "imports": [
+        "../messages.js",
+        "../worktree-bootstrap.js",
+        "./session-context.js"
+      ]
     },
     {
       "id": "file:packages/server/src/server/session-handlers/voice-dictation-handler.test.ts",
@@ -7635,7 +8459,11 @@
       "type": "source",
       "path": "packages/server/src/server/session-internal-types.ts",
       "lines": 81,
-      "imports": ["./speech/providers/local/models.js", "./speech/speech-runtime.js", "node:fs"]
+      "imports": [
+        "./speech/providers/local/models.js",
+        "./speech/speech-runtime.js",
+        "node:fs"
+      ]
     },
     {
       "id": "file:packages/server/src/server/session-mcp-client-controller.test.ts",
@@ -7655,14 +8483,20 @@
       "type": "source",
       "path": "packages/server/src/server/session-mcp-client-controller.ts",
       "lines": 87,
-      "imports": ["@ai-sdk/mcp", "pino"]
+      "imports": [
+        "@ai-sdk/mcp",
+        "pino"
+      ]
     },
     {
       "id": "file:packages/server/src/server/session.create-agent-title.test.ts",
       "type": "test",
       "path": "packages/server/src/server/session.create-agent-title.test.ts",
       "lines": 36,
-      "imports": ["./agent/create-agent-title.js", "vitest"]
+      "imports": [
+        "./agent/create-agent-title.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/session.create-agent-worktree-autoarchive.e2e.test.ts",
@@ -7697,13 +8531,16 @@
       "type": "test",
       "path": "packages/server/src/server/session.lifecycle-boundary.test.ts",
       "lines": 10,
-      "imports": ["node:fs", "vitest"]
+      "imports": [
+        "node:fs",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/session.test.ts",
       "type": "test",
       "path": "packages/server/src/server/session.test.ts",
-      "lines": 3615,
+      "lines": 3657,
       "imports": [
         "../services/github-service.js",
         "../test-utils/platform.js",
@@ -7730,7 +8567,7 @@
       "id": "file:packages/server/src/server/session.ts",
       "type": "source",
       "path": "packages/server/src/server/session.ts",
-      "lines": 2175,
+      "lines": 2190,
       "imports": [
         "../services/github-service.js",
         "../terminal/terminal-manager.js",
@@ -7797,14 +8634,21 @@
       "type": "test",
       "path": "packages/server/src/server/session.voice-mcp-config.test.ts",
       "lines": 83,
-      "imports": ["./voice-config.js", "vitest"]
+      "imports": [
+        "./voice-config.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/session.wait-for-finish.test.ts",
       "type": "test",
       "path": "packages/server/src/server/session.wait-for-finish.test.ts",
       "lines": 34,
-      "imports": ["./messages.js", "./session.js", "vitest"]
+      "imports": [
+        "./messages.js",
+        "./session.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/session.workspace-git-watch.test.ts",
@@ -7916,7 +8760,11 @@
       "type": "source",
       "path": "packages/server/src/server/speech/providers/local/models.ts",
       "lines": 44,
-      "imports": ["./sherpa/model-catalog.js", "./sherpa/model-downloader.js", "pino"]
+      "imports": [
+        "./sherpa/model-catalog.js",
+        "./sherpa/model-downloader.js",
+        "pino"
+      ]
     },
     {
       "id": "file:packages/server/src/server/speech/providers/local/runtime.ts",
@@ -7938,14 +8786,23 @@
       "type": "source",
       "path": "packages/server/src/server/speech/providers/local/sherpa/model-catalog.ts",
       "lines": 123,
-      "imports": ["zod/v3"]
+      "imports": [
+        "zod/v3"
+      ]
     },
     {
       "id": "file:packages/server/src/server/speech/providers/local/sherpa/model-downloader.test.ts",
       "type": "test",
       "path": "packages/server/src/server/speech/providers/local/sherpa/model-downloader.test.ts",
       "lines": 42,
-      "imports": ["./model-downloader.js", "node:fs", "node:os", "node:path", "pino", "vitest"]
+      "imports": [
+        "./model-downloader.js",
+        "node:fs",
+        "node:os",
+        "node:path",
+        "pino",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/speech/providers/local/sherpa/model-downloader.ts",
@@ -7968,7 +8825,11 @@
       "type": "source",
       "path": "packages/server/src/server/speech/providers/local/sherpa/sherpa-offline-recognizer.ts",
       "lines": 132,
-      "imports": ["./sherpa-onnx-node-loader.js", "node:fs", "pino"]
+      "imports": [
+        "./sherpa-onnx-node-loader.js",
+        "node:fs",
+        "pino"
+      ]
     },
     {
       "id": "file:packages/server/src/server/speech/providers/local/sherpa/sherpa-onnx-node-loader.ts",
@@ -8002,7 +8863,12 @@
       "type": "test",
       "path": "packages/server/src/server/speech/providers/local/sherpa/sherpa-parakeet-stt.test.ts",
       "lines": 94,
-      "imports": ["../../../speech-provider.js", "./sherpa-parakeet-stt.js", "pino", "vitest"]
+      "imports": [
+        "../../../speech-provider.js",
+        "./sherpa-parakeet-stt.js",
+        "pino",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/speech/providers/local/sherpa/sherpa-parakeet-stt.ts",
@@ -8024,14 +8890,21 @@
       "type": "source",
       "path": "packages/server/src/server/speech/providers/local/sherpa/sherpa-runtime-env.ts",
       "lines": 119,
-      "imports": ["node:module", "node:path"]
+      "imports": [
+        "node:module",
+        "node:path"
+      ]
     },
     {
       "id": "file:packages/server/src/server/speech/providers/local/sherpa/sherpa-tts.test.ts",
       "type": "test",
       "path": "packages/server/src/server/speech/providers/local/sherpa/sherpa-tts.test.ts",
       "lines": 54,
-      "imports": ["./sherpa-tts.js", "pino", "vitest"]
+      "imports": [
+        "./sherpa-tts.js",
+        "pino",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/speech/providers/local/sherpa/sherpa-tts.ts",
@@ -8098,7 +8971,10 @@
       "type": "test",
       "path": "packages/server/src/server/speech/providers/local/worker-bytes.test.ts",
       "lines": 16,
-      "imports": ["./worker-bytes.js", "vitest"]
+      "imports": [
+        "./worker-bytes.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/speech/providers/local/worker-bytes.ts",
@@ -8187,14 +9063,21 @@
       "type": "source",
       "path": "packages/server/src/server/speech/providers/local/worker-protocol.ts",
       "lines": 124,
-      "imports": ["../../speech-provider.js", "./worker-bytes.js"]
+      "imports": [
+        "../../speech-provider.js",
+        "./worker-bytes.js"
+      ]
     },
     {
       "id": "file:packages/server/src/server/speech/providers/mimo/config.ts",
       "type": "config",
       "path": "packages/server/src/server/speech/providers/mimo/config.ts",
       "lines": 94,
-      "imports": ["../../../persisted-config.js", "../../speech-types.js", "zod/v3"]
+      "imports": [
+        "../../../persisted-config.js",
+        "../../speech-types.js",
+        "zod/v3"
+      ]
     },
     {
       "id": "file:packages/server/src/server/speech/providers/mimo/runtime.ts",
@@ -8214,14 +9097,22 @@
       "type": "source",
       "path": "packages/server/src/server/speech/providers/mimo/tts.ts",
       "lines": 140,
-      "imports": ["../../speech-provider.js", "node:stream", "pino"]
+      "imports": [
+        "../../speech-provider.js",
+        "node:stream",
+        "pino"
+      ]
     },
     {
       "id": "file:packages/server/src/server/speech/providers/openai/config.test.ts",
       "type": "test",
       "path": "packages/server/src/server/speech/providers/openai/config.test.ts",
       "lines": 47,
-      "imports": ["../../../persisted-config.js", "./config.js", "vitest"]
+      "imports": [
+        "../../../persisted-config.js",
+        "./config.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/speech/providers/openai/config.ts",
@@ -8241,7 +9132,12 @@
       "type": "source",
       "path": "packages/server/src/server/speech/providers/openai/realtime-transcription-session.ts",
       "lines": 265,
-      "imports": ["../../speech-provider.js", "node:events", "pino", "ws"]
+      "imports": [
+        "../../speech-provider.js",
+        "node:events",
+        "pino",
+        "ws"
+      ]
     },
     {
       "id": "file:packages/server/src/server/speech/providers/openai/runtime.ts",
@@ -8282,14 +9178,24 @@
       "type": "source",
       "path": "packages/server/src/server/speech/providers/openai/tts.ts",
       "lines": 84,
-      "imports": ["../../speech-provider.js", "node:stream", "openai", "pino"]
+      "imports": [
+        "../../speech-provider.js",
+        "node:stream",
+        "openai",
+        "pino"
+      ]
     },
     {
       "id": "file:packages/server/src/server/speech/speech-config-resolver.test.ts",
       "type": "test",
       "path": "packages/server/src/server/speech/speech-config-resolver.test.ts",
       "lines": 263,
-      "imports": ["../persisted-config.js", "./speech-config-resolver.js", "node:path", "vitest"]
+      "imports": [
+        "../persisted-config.js",
+        "./speech-config-resolver.js",
+        "node:path",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/speech/speech-config-resolver.ts",
@@ -8311,7 +9217,10 @@
       "type": "source",
       "path": "packages/server/src/server/speech/speech-provider.ts",
       "lines": 70,
-      "imports": ["node:stream", "pino"]
+      "imports": [
+        "node:stream",
+        "pino"
+      ]
     },
     {
       "id": "file:packages/server/src/server/speech/speech-runtime.test.ts",
@@ -8353,35 +9262,48 @@
       "type": "source",
       "path": "packages/server/src/server/speech/speech-types.ts",
       "lines": 19,
-      "imports": ["zod/v3"]
+      "imports": [
+        "zod/v3"
+      ]
     },
     {
       "id": "file:packages/server/src/server/speech/turn-detection-provider.ts",
       "type": "source",
       "path": "packages/server/src/server/speech/turn-detection-provider.ts",
       "lines": 25,
-      "imports": ["pino"]
+      "imports": [
+        "pino"
+      ]
     },
     {
       "id": "file:packages/server/src/server/ssh-transport.test.ts",
       "type": "test",
       "path": "packages/server/src/server/ssh-transport.test.ts",
       "lines": 153,
-      "imports": ["./ssh-transport.js", "vitest"]
+      "imports": [
+        "./ssh-transport.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/ssh-transport.ts",
       "type": "source",
       "path": "packages/server/src/server/ssh-transport.ts",
       "lines": 283,
-      "imports": ["../utils/spawn.js", "node:child_process"]
+      "imports": [
+        "../utils/spawn.js",
+        "node:child_process"
+      ]
     },
     {
       "id": "file:packages/server/src/server/team-service.test.ts",
       "type": "test",
       "path": "packages/server/src/server/team-service.test.ts",
       "lines": 167,
-      "imports": ["./team-service.js", "vitest"]
+      "imports": [
+        "./team-service.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/team-service.ts",
@@ -8418,35 +9340,56 @@
       "type": "source",
       "path": "packages/server/src/server/test-utils/claude-auth.ts",
       "lines": 41,
-      "imports": ["fs", "path"]
+      "imports": [
+        "fs",
+        "path"
+      ]
     },
     {
       "id": "file:packages/server/src/server/test-utils/claude-config.ts",
       "type": "config",
       "path": "packages/server/src/server/test-utils/claude-config.ts",
       "lines": 87,
-      "imports": ["./claude-auth.js", "fs", "os", "path"]
+      "imports": [
+        "./claude-auth.js",
+        "fs",
+        "os",
+        "path"
+      ]
     },
     {
       "id": "file:packages/server/src/server/test-utils/daemon-client.ts",
       "type": "source",
       "path": "packages/server/src/server/test-utils/daemon-client.ts",
       "lines": 39,
-      "imports": ["@chisacode/client/internal/daemon-client", "ws"]
+      "imports": [
+        "@chisacode/client/internal/daemon-client",
+        "ws"
+      ]
     },
     {
       "id": "file:packages/server/src/server/test-utils/daemon-test-context.ts",
       "type": "source",
       "path": "packages/server/src/server/test-utils/daemon-test-context.ts",
       "lines": 57,
-      "imports": ["./chisacode-daemon.js", "./daemon-client.js", "./fake-agent-client.js"]
+      "imports": [
+        "./chisacode-daemon.js",
+        "./daemon-client.js",
+        "./fake-agent-client.js"
+      ]
     },
     {
       "id": "file:packages/server/src/server/test-utils/dictation-e2e.ts",
       "type": "source",
       "path": "packages/server/src/server/test-utils/dictation-e2e.ts",
       "lines": 177,
-      "imports": ["node:fs", "node:fs/promises", "node:os", "node:path", "openai"]
+      "imports": [
+        "node:fs",
+        "node:fs/promises",
+        "node:os",
+        "node:path",
+        "openai"
+      ]
     },
     {
       "id": "file:packages/server/src/server/test-utils/fake-agent-client.ts",
@@ -8481,7 +9424,10 @@
       "type": "source",
       "path": "packages/server/src/server/test-utils/message-collector.ts",
       "lines": 23,
-      "imports": ["@chisacode/client/internal/daemon-client", "@chisacode/protocol/messages"]
+      "imports": [
+        "@chisacode/client/internal/daemon-client",
+        "@chisacode/protocol/messages"
+      ]
     },
     {
       "id": "file:packages/server/src/server/test-utils/session-stubs.ts",
@@ -8522,28 +9468,50 @@
       "type": "test",
       "path": "packages/server/src/server/usage/usage-store.test.ts",
       "lines": 146,
-      "imports": ["./usage-store.js", "node:fs/promises", "node:os", "node:path", "vitest"]
+      "imports": [
+        "./usage-store.js",
+        "node:fs/promises",
+        "node:os",
+        "node:path",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/usage/usage-store.ts",
       "type": "source",
       "path": "packages/server/src/server/usage/usage-store.ts",
       "lines": 455,
-      "imports": ["../../utils/atomic-write.js", "node:crypto", "node:fs", "node:path"]
+      "imports": [
+        "../../utils/atomic-write.js",
+        "node:crypto",
+        "node:fs",
+        "node:path"
+      ]
     },
     {
       "id": "file:packages/server/src/server/utils/diff-highlighter.test.ts",
       "type": "test",
       "path": "packages/server/src/server/utils/diff-highlighter.test.ts",
       "lines": 569,
-      "imports": ["./diff-highlighter.js", "fmt", "node:fs", "node:os", "node:path", "vitest"]
+      "imports": [
+        "./diff-highlighter.js",
+        "fmt",
+        "node:fs",
+        "node:os",
+        "node:path",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/utils/diff-highlighter.ts",
       "type": "source",
       "path": "packages/server/src/server/utils/diff-highlighter.ts",
       "lines": 400,
-      "imports": ["@chisacode/highlight", "node:fs/promises", "node:path"]
+      "imports": [
+        "@chisacode/highlight",
+        "node:fs/promises",
+        "node:path"
+      ]
     },
     {
       "id": "file:packages/server/src/server/voice-config.ts",
@@ -8574,14 +9542,21 @@
       "type": "test",
       "path": "packages/server/src/server/voice-permission-policy.test.ts",
       "lines": 54,
-      "imports": ["./agent/agent-sdk-types.js", "./voice-permission-policy.js", "vitest"]
+      "imports": [
+        "./agent/agent-sdk-types.js",
+        "./voice-permission-policy.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/voice-permission-policy.ts",
       "type": "source",
       "path": "packages/server/src/server/voice-permission-policy.ts",
       "lines": 17,
-      "imports": ["./agent/agent-sdk-types.js", "@chisacode/protocol/tool-name-normalization"]
+      "imports": [
+        "./agent/agent-sdk-types.js",
+        "@chisacode/protocol/tool-name-normalization"
+      ]
     },
     {
       "id": "file:packages/server/src/server/voice-roundtrip.e2e.test.ts",
@@ -8644,14 +9619,19 @@
       "type": "source",
       "path": "packages/server/src/server/websocket-limits.ts",
       "lines": 18,
-      "imports": ["@chisacode/protocol/binary-frames/file-transfer"]
+      "imports": [
+        "@chisacode/protocol/binary-frames/file-transfer"
+      ]
     },
     {
       "id": "file:packages/server/src/server/websocket-message-lanes.test.ts",
       "type": "test",
       "path": "packages/server/src/server/websocket-message-lanes.test.ts",
       "lines": 124,
-      "imports": ["./websocket-message-lanes.js", "vitest"]
+      "imports": [
+        "./websocket-message-lanes.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/websocket-message-lanes.ts",
@@ -8766,20 +9746,26 @@
       "type": "test",
       "path": "packages/server/src/server/websocket/runtime-metrics.test.ts",
       "lines": 203,
-      "imports": ["../messages.js", "./runtime-metrics.js", "vitest"]
+      "imports": [
+        "../messages.js",
+        "./runtime-metrics.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/websocket/runtime-metrics.ts",
       "type": "source",
       "path": "packages/server/src/server/websocket/runtime-metrics.ts",
       "lines": 216,
-      "imports": ["../messages.js"]
+      "imports": [
+        "../messages.js"
+      ]
     },
     {
       "id": "file:packages/server/src/server/wire-compat.test.ts",
       "type": "test",
       "path": "packages/server/src/server/wire-compat.test.ts",
-      "lines": 914,
+      "lines": 922,
       "imports": [
         "./agent/agent-manager.js",
         "./agent/agent-timeline-store.js",
@@ -8800,7 +9786,9 @@
       "type": "source",
       "path": "packages/server/src/server/workspace-archive-service.ts",
       "lines": 33,
-      "imports": ["./workspace-registry.js"]
+      "imports": [
+        "./workspace-registry.js"
+      ]
     },
     {
       "id": "file:packages/server/src/server/workspace-core.ts",
@@ -8850,10 +9838,24 @@
       ]
     },
     {
+      "id": "file:packages/server/src/server/workspace-directory.test.ts",
+      "type": "test",
+      "path": "packages/server/src/server/workspace-directory.test.ts",
+      "lines": 171,
+      "imports": [
+        "./messages.js",
+        "./test-utils/session-stubs.js",
+        "./workspace-directory.js",
+        "./workspace-registry-model.js",
+        "./workspace-registry.js",
+        "vitest"
+      ]
+    },
+    {
       "id": "file:packages/server/src/server/workspace-directory.ts",
       "type": "source",
       "path": "packages/server/src/server/workspace-directory.ts",
-      "lines": 335,
+      "lines": 353,
       "imports": [
         "./messages.js",
         "./pagination/sortable-pager.js",
@@ -8899,7 +9901,10 @@
       "type": "source",
       "path": "packages/server/src/server/workspace-git-github-poll-binding.ts",
       "lines": 169,
-      "imports": ["../services/github-service.js", "pino"]
+      "imports": [
+        "../services/github-service.js",
+        "pino"
+      ]
     },
     {
       "id": "file:packages/server/src/server/workspace-git-metadata.test.ts",
@@ -8968,7 +9973,9 @@
       "type": "source",
       "path": "packages/server/src/server/workspace-git-repository-fetch-authority.ts",
       "lines": 150,
-      "imports": ["pino"]
+      "imports": [
+        "pino"
+      ]
     },
     {
       "id": "file:packages/server/src/server/workspace-git-service.primitive.test.ts",
@@ -9065,14 +10072,20 @@
       "type": "test",
       "path": "packages/server/src/server/workspace-mutation-coordinator.test.ts",
       "lines": 196,
-      "imports": ["./workspace-mutation-coordinator.js", "vitest"]
+      "imports": [
+        "./workspace-mutation-coordinator.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/workspace-mutation-coordinator.ts",
       "type": "source",
       "path": "packages/server/src/server/workspace-mutation-coordinator.ts",
-      "lines": 385,
-      "imports": ["node:crypto", "node:path"]
+      "lines": 390,
+      "imports": [
+        "node:crypto",
+        "node:path"
+      ]
     },
     {
       "id": "file:packages/server/src/server/workspace-reconciliation-service.test.ts",
@@ -9166,7 +10179,11 @@
       "type": "test",
       "path": "packages/server/src/server/workspace-registry-model.test.ts",
       "lines": 219,
-      "imports": ["./workspace-registry-model.js", "./workspace-registry.js", "vitest"]
+      "imports": [
+        "./workspace-registry-model.js",
+        "./workspace-registry.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/workspace-registry-model.ts",
@@ -9213,7 +10230,10 @@
       "type": "test",
       "path": "packages/server/src/server/workspace-script-runtime-store.test.ts",
       "lines": 100,
-      "imports": ["./workspace-script-runtime-store.js", "vitest"]
+      "imports": [
+        "./workspace-script-runtime-store.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/workspace-script-runtime-store.ts",
@@ -9227,21 +10247,29 @@
       "type": "test",
       "path": "packages/server/src/server/workspace-service-env.test.ts",
       "lines": 164,
-      "imports": ["./workspace-service-env.js", "vitest"]
+      "imports": [
+        "./workspace-service-env.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/workspace-service-env.ts",
       "type": "source",
       "path": "packages/server/src/server/workspace-service-env.ts",
       "lines": 121,
-      "imports": ["../utils/script-hostname.js"]
+      "imports": [
+        "../utils/script-hostname.js"
+      ]
     },
     {
       "id": "file:packages/server/src/server/workspace-service-port-registry.test.ts",
       "type": "test",
       "path": "packages/server/src/server/workspace-service-port-registry.test.ts",
       "lines": 233,
-      "imports": ["./workspace-service-port-registry.js", "vitest"]
+      "imports": [
+        "./workspace-service-port-registry.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/server/workspace-service-port-registry.ts",
@@ -9254,7 +10282,7 @@
       "id": "file:packages/server/src/server/workspace-update-controller.test.ts",
       "type": "test",
       "path": "packages/server/src/server/workspace-update-controller.test.ts",
-      "lines": 107,
+      "lines": 130,
       "imports": [
         "./messages.js",
         "./test-utils/session-stubs.js",
@@ -9266,7 +10294,7 @@
       "id": "file:packages/server/src/server/workspace-update-controller.ts",
       "type": "source",
       "path": "packages/server/src/server/workspace-update-controller.ts",
-      "lines": 245,
+      "lines": 251,
       "imports": [
         "./messages.js",
         "./workspace-directory.js",
@@ -9404,11 +10432,26 @@
       ]
     },
     {
+      "id": "file:packages/server/src/server/worktree-errors.test.ts",
+      "type": "test",
+      "path": "packages/server/src/server/worktree-errors.test.ts",
+      "lines": 45,
+      "imports": [
+        "../utils/worktree.js",
+        "./agent/providers/dsh-agent.js",
+        "./worktree-errors.js",
+        "vitest"
+      ]
+    },
+    {
       "id": "file:packages/server/src/server/worktree-errors.ts",
       "type": "source",
       "path": "packages/server/src/server/worktree-errors.ts",
-      "lines": 44,
-      "imports": ["../utils/worktree.js", "./resolve-worktree-creation-intent.js"]
+      "lines": 71,
+      "imports": [
+        "../utils/worktree.js",
+        "./resolve-worktree-creation-intent.js"
+      ]
     },
     {
       "id": "file:packages/server/src/server/worktree-session.test.ts",
@@ -9486,42 +10529,56 @@
       "type": "source",
       "path": "packages/server/src/services/github-current-pr-poller.ts",
       "lines": 235,
-      "imports": ["./github-current-pr.js"]
+      "imports": [
+        "./github-current-pr.js"
+      ]
     },
     {
       "id": "file:packages/server/src/services/github-current-pr.ts",
       "type": "source",
       "path": "packages/server/src/services/github-current-pr.ts",
       "lines": 626,
-      "imports": ["./github-pr-checks.js", "zod/v3"]
+      "imports": [
+        "./github-pr-checks.js",
+        "zod/v3"
+      ]
     },
     {
       "id": "file:packages/server/src/services/github-pr-checks.ts",
       "type": "source",
       "path": "packages/server/src/services/github-pr-checks.ts",
       "lines": 231,
-      "imports": ["zod/v3"]
+      "imports": [
+        "zod/v3"
+      ]
     },
     {
       "id": "file:packages/server/src/services/github-pr-mutations.ts",
       "type": "source",
       "path": "packages/server/src/services/github-pr-mutations.ts",
       "lines": 254,
-      "imports": ["./github-current-pr.js", "zod/v3"]
+      "imports": [
+        "./github-current-pr.js",
+        "zod/v3"
+      ]
     },
     {
       "id": "file:packages/server/src/services/github-pr-timeline.ts",
       "type": "source",
       "path": "packages/server/src/services/github-pr-timeline.ts",
       "lines": 336,
-      "imports": ["zod/v3"]
+      "imports": [
+        "zod/v3"
+      ]
     },
     {
       "id": "file:packages/server/src/services/github-search.ts",
       "type": "source",
       "path": "packages/server/src/services/github-search.ts",
       "lines": 175,
-      "imports": ["@chisacode/protocol/messages"]
+      "imports": [
+        "@chisacode/protocol/messages"
+      ]
     },
     {
       "id": "file:packages/server/src/services/github-service.test.ts",
@@ -9563,49 +10620,72 @@
       "type": "test",
       "path": "packages/server/src/share/QRCode.test.ts",
       "lines": 231,
-      "imports": ["./QRCode.js", "vitest"]
+      "imports": [
+        "./QRCode.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/share/QRCode.ts",
       "type": "source",
       "path": "packages/server/src/share/QRCode.ts",
       "lines": 208,
-      "imports": ["qrcode"]
+      "imports": [
+        "qrcode"
+      ]
     },
     {
       "id": "file:packages/server/src/tasks/execution-order.test.ts",
       "type": "test",
       "path": "packages/server/src/tasks/execution-order.test.ts",
       "lines": 380,
-      "imports": ["./execution-order.js", "./types.js", "vitest"]
+      "imports": [
+        "./execution-order.js",
+        "./types.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/tasks/execution-order.ts",
       "type": "source",
       "path": "packages/server/src/tasks/execution-order.ts",
       "lines": 93,
-      "imports": ["./task-graph.js", "./types.js"]
+      "imports": [
+        "./task-graph.js",
+        "./types.js"
+      ]
     },
     {
       "id": "file:packages/server/src/tasks/task-document.ts",
       "type": "source",
       "path": "packages/server/src/tasks/task-document.ts",
       "lines": 135,
-      "imports": ["./types.js", "node:fs/promises"]
+      "imports": [
+        "./types.js",
+        "node:fs/promises"
+      ]
     },
     {
       "id": "file:packages/server/src/tasks/task-graph.ts",
       "type": "source",
       "path": "packages/server/src/tasks/task-graph.ts",
       "lines": 132,
-      "imports": ["./types.js"]
+      "imports": [
+        "./types.js"
+      ]
     },
     {
       "id": "file:packages/server/src/tasks/task-store.test.ts",
       "type": "test",
       "path": "packages/server/src/tasks/task-store.test.ts",
       "lines": 1126,
-      "imports": ["./task-store.js", "node:fs/promises", "node:os", "node:path", "vitest"]
+      "imports": [
+        "./task-store.js",
+        "node:fs/promises",
+        "node:os",
+        "node:path",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/tasks/task-store.ts",
@@ -9633,14 +10713,21 @@
       "type": "source",
       "path": "packages/server/src/terminal/terminal-capture.ts",
       "lines": 72,
-      "imports": ["./terminal.js", "@chisacode/protocol/messages", "strip-ansi"]
+      "imports": [
+        "./terminal.js",
+        "@chisacode/protocol/messages",
+        "strip-ansi"
+      ]
     },
     {
       "id": "file:packages/server/src/terminal/terminal-manager-factory.ts",
       "type": "source",
       "path": "packages/server/src/terminal/terminal-manager-factory.ts",
       "lines": 10,
-      "imports": ["./terminal-manager.js", "./worker-terminal-manager.js"]
+      "imports": [
+        "./terminal-manager.js",
+        "./worker-terminal-manager.js"
+      ]
     },
     {
       "id": "file:packages/server/src/terminal/terminal-manager.test.ts",
@@ -9662,14 +10749,21 @@
       "type": "source",
       "path": "packages/server/src/terminal/terminal-manager.ts",
       "lines": 288,
-      "imports": ["./terminal-capture.js", "./terminal.js", "node:path"]
+      "imports": [
+        "./terminal-capture.js",
+        "./terminal.js",
+        "node:path"
+      ]
     },
     {
       "id": "file:packages/server/src/terminal/terminal-output-coalescer.test.ts",
       "type": "test",
       "path": "packages/server/src/terminal/terminal-output-coalescer.test.ts",
       "lines": 80,
-      "imports": ["./terminal-output-coalescer.js", "vitest"]
+      "imports": [
+        "./terminal-output-coalescer.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/terminal/terminal-output-coalescer.ts",
@@ -9739,7 +10833,10 @@
       "type": "source",
       "path": "packages/server/src/terminal/terminal-ts-loader.mjs",
       "lines": 21,
-      "imports": ["node:fs", "node:url"]
+      "imports": [
+        "node:fs",
+        "node:url"
+      ]
     },
     {
       "id": "file:packages/server/src/terminal/terminal-worker-process.ts",
@@ -9758,7 +10855,11 @@
       "type": "source",
       "path": "packages/server/src/terminal/terminal-worker-protocol.ts",
       "lines": 147,
-      "imports": ["./terminal-capture.js", "./terminal.js", "@chisacode/protocol/messages"]
+      "imports": [
+        "./terminal-capture.js",
+        "./terminal.js",
+        "@chisacode/protocol/messages"
+      ]
     },
     {
       "id": "file:packages/server/src/terminal/terminal.posix.test.ts",
@@ -9859,28 +10960,44 @@
       "type": "source",
       "path": "packages/server/src/test-utils/test-logger.ts",
       "lines": 6,
-      "imports": ["pino"]
+      "imports": [
+        "pino"
+      ]
     },
     {
       "id": "file:packages/server/src/test-utils/vitest-setup.ts",
       "type": "source",
       "path": "packages/server/src/test-utils/vitest-setup.ts",
       "lines": 16,
-      "imports": ["dotenv", "node:path", "node:url"]
+      "imports": [
+        "dotenv",
+        "node:path",
+        "node:url"
+      ]
     },
     {
       "id": "file:packages/server/src/utils/atomic-write.test.ts",
       "type": "test",
       "path": "packages/server/src/utils/atomic-write.test.ts",
       "lines": 116,
-      "imports": ["./atomic-write.js", "node:fs", "node:os", "node:path", "vitest"]
+      "imports": [
+        "./atomic-write.js",
+        "node:fs",
+        "node:os",
+        "node:path",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/utils/atomic-write.ts",
       "type": "source",
       "path": "packages/server/src/utils/atomic-write.ts",
       "lines": 96,
-      "imports": ["node:crypto", "node:fs", "node:path"]
+      "imports": [
+        "node:crypto",
+        "node:fs",
+        "node:path"
+      ]
     },
     {
       "id": "file:packages/server/src/utils/build-metadata-prompt.ts",
@@ -9924,7 +11041,10 @@
       "type": "source",
       "path": "packages/server/src/utils/checkout-git-branches.ts",
       "lines": 267,
-      "imports": ["./checkout-git-repository.js", "./run-git-command.js"]
+      "imports": [
+        "./checkout-git-repository.js",
+        "./run-git-command.js"
+      ]
     },
     {
       "id": "file:packages/server/src/utils/checkout-git-diff.ts",
@@ -9945,14 +11065,20 @@
       "type": "source",
       "path": "packages/server/src/utils/checkout-git-file-inspection.ts",
       "lines": 37,
-      "imports": ["node:fs/promises"]
+      "imports": [
+        "node:fs/promises"
+      ]
     },
     {
       "id": "file:packages/server/src/utils/checkout-git-merge.ts",
       "type": "source",
       "path": "packages/server/src/utils/checkout-git-merge.ts",
       "lines": 288,
-      "imports": ["./checkout-git-repository.js", "./run-git-command.js", "node:path"]
+      "imports": [
+        "./checkout-git-repository.js",
+        "./run-git-command.js",
+        "node:path"
+      ]
     },
     {
       "id": "file:packages/server/src/utils/checkout-git-pull-request-status.ts",
@@ -9971,7 +11097,9 @@
       "type": "source",
       "path": "packages/server/src/utils/checkout-git-repository.ts",
       "lines": 32,
-      "imports": ["./run-git-command.js"]
+      "imports": [
+        "./run-git-command.js"
+      ]
     },
     {
       "id": "file:packages/server/src/utils/checkout-git-rev-parse.test.ts",
@@ -10106,14 +11234,25 @@
       "type": "test",
       "path": "packages/server/src/utils/config-migration.test.ts",
       "lines": 120,
-      "imports": ["./config-migration.js", "node:fs", "node:os", "node:path", "pino", "vitest"]
+      "imports": [
+        "./config-migration.js",
+        "node:fs",
+        "node:os",
+        "node:path",
+        "pino",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/utils/config-migration.ts",
       "type": "config",
       "path": "packages/server/src/utils/config-migration.ts",
       "lines": 226,
-      "imports": ["node:fs", "node:path", "pino"]
+      "imports": [
+        "node:fs",
+        "node:path",
+        "pino"
+      ]
     },
     {
       "id": "file:packages/server/src/utils/directory-suggestions.test.ts",
@@ -10134,7 +11273,11 @@
       "type": "source",
       "path": "packages/server/src/utils/directory-suggestions.ts",
       "lines": 1013,
-      "imports": ["node:fs", "node:fs/promises", "node:path"]
+      "imports": [
+        "node:fs",
+        "node:fs/promises",
+        "node:path"
+      ]
     },
     {
       "id": "file:packages/server/src/utils/executable.probe.test.ts",
@@ -10185,28 +11328,40 @@
       "type": "source",
       "path": "packages/server/src/utils/git-rev-parse-path.ts",
       "lines": 26,
-      "imports": ["node:path"]
+      "imports": [
+        "node:path"
+      ]
     },
     {
       "id": "file:packages/server/src/utils/github-remote.test.ts",
       "type": "test",
       "path": "packages/server/src/utils/github-remote.test.ts",
       "lines": 110,
-      "imports": ["./github-remote.js", "vitest"]
+      "imports": [
+        "./github-remote.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/utils/github-remote.ts",
       "type": "source",
       "path": "packages/server/src/utils/github-remote.ts",
       "lines": 72,
-      "imports": ["./executable.js", "./spawn.js", "@chisacode/protocol/git-remote"]
+      "imports": [
+        "./executable.js",
+        "./spawn.js",
+        "@chisacode/protocol/git-remote"
+      ]
     },
     {
       "id": "file:packages/server/src/utils/markdown-utils.test.ts",
       "type": "test",
       "path": "packages/server/src/utils/markdown-utils.test.ts",
       "lines": 108,
-      "imports": ["./markdown-utils.js", "vitest"]
+      "imports": [
+        "./markdown-utils.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/utils/markdown-utils.ts",
@@ -10220,28 +11375,44 @@
       "type": "test",
       "path": "packages/server/src/utils/path.test.ts",
       "lines": 23,
-      "imports": ["./path.js", "vitest"]
+      "imports": [
+        "./path.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/utils/path.ts",
       "type": "source",
       "path": "packages/server/src/utils/path.ts",
       "lines": 134,
-      "imports": ["node:fs", "node:os", "node:path"]
+      "imports": [
+        "node:fs",
+        "node:os",
+        "node:path"
+      ]
     },
     {
       "id": "file:packages/server/src/utils/project-icon.test.ts",
       "type": "test",
       "path": "packages/server/src/utils/project-icon.test.ts",
       "lines": 425,
-      "imports": ["./project-icon.js", "fs", "os", "path", "vitest"]
+      "imports": [
+        "./project-icon.js",
+        "fs",
+        "os",
+        "path",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/utils/project-icon.ts",
       "type": "source",
       "path": "packages/server/src/utils/project-icon.ts",
       "lines": 444,
-      "imports": ["fs/promises", "path"]
+      "imports": [
+        "fs/promises",
+        "path"
+      ]
     },
     {
       "id": "file:packages/server/src/utils/promise-timeout.ts",
@@ -10255,42 +11426,67 @@
       "type": "test",
       "path": "packages/server/src/utils/run-git-command.test.ts",
       "lines": 452,
-      "imports": ["./run-git-command.js", "node:child_process", "node:events", "vitest"]
+      "imports": [
+        "./run-git-command.js",
+        "node:child_process",
+        "node:events",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/utils/run-git-command.ts",
       "type": "source",
       "path": "packages/server/src/utils/run-git-command.ts",
       "lines": 326,
-      "imports": ["../server/chisacode-env.js", "./spawn.js", "node:fs", "p-limit", "pino"]
+      "imports": [
+        "../server/chisacode-env.js",
+        "./spawn.js",
+        "node:fs",
+        "p-limit",
+        "pino"
+      ]
     },
     {
       "id": "file:packages/server/src/utils/run-git-command.windows-shell.test.ts",
       "type": "test",
       "path": "packages/server/src/utils/run-git-command.windows-shell.test.ts",
       "lines": 43,
-      "imports": ["./run-git-command.js", "node:fs", "node:os", "node:path", "vitest"]
+      "imports": [
+        "./run-git-command.js",
+        "node:fs",
+        "node:os",
+        "node:path",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/utils/script-hostname.test.ts",
       "type": "test",
       "path": "packages/server/src/utils/script-hostname.test.ts",
       "lines": 72,
-      "imports": ["./script-hostname.js", "vitest"]
+      "imports": [
+        "./script-hostname.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/utils/script-hostname.ts",
       "type": "source",
       "path": "packages/server/src/utils/script-hostname.ts",
       "lines": 28,
-      "imports": ["./worktree.js"]
+      "imports": [
+        "./worktree.js"
+      ]
     },
     {
       "id": "file:packages/server/src/utils/sensitive-path.test.ts",
       "type": "test",
       "path": "packages/server/src/utils/sensitive-path.test.ts",
       "lines": 173,
-      "imports": ["./sensitive-path.js", "vitest"]
+      "imports": [
+        "./sensitive-path.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/utils/sensitive-path.ts",
@@ -10320,7 +11516,13 @@
       "type": "test",
       "path": "packages/server/src/utils/spawn.percent-escape.test.ts",
       "lines": 50,
-      "imports": ["./spawn.js", "node:fs", "node:os", "node:path", "vitest"]
+      "imports": [
+        "./spawn.js",
+        "node:fs",
+        "node:os",
+        "node:path",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/utils/spawn.test.ts",
@@ -10360,7 +11562,12 @@
       "type": "test",
       "path": "packages/server/src/utils/string-command-shell.test.ts",
       "lines": 59,
-      "imports": ["./string-command-shell.js", "node:child_process", "node:util", "vitest"]
+      "imports": [
+        "./string-command-shell.js",
+        "node:child_process",
+        "node:util",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/utils/string-command-shell.ts",
@@ -10374,21 +11581,29 @@
       "type": "test",
       "path": "packages/server/src/utils/tool-call-parsers.test.ts",
       "lines": 29,
-      "imports": ["./tool-call-parsers.js", "vitest"]
+      "imports": [
+        "./tool-call-parsers.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/utils/tool-call-parsers.ts",
       "type": "source",
       "path": "packages/server/src/utils/tool-call-parsers.ts",
       "lines": 49,
-      "imports": ["@chisacode/protocol/path-utils", "zod/v3"]
+      "imports": [
+        "@chisacode/protocol/path-utils",
+        "zod/v3"
+      ]
     },
     {
       "id": "file:packages/server/src/utils/tree-kill-command.ts",
       "type": "source",
       "path": "packages/server/src/utils/tree-kill-command.ts",
       "lines": 31,
-      "imports": ["node:child_process"]
+      "imports": [
+        "node:child_process"
+      ]
     },
     {
       "id": "file:packages/server/src/utils/tree-kill-deadline.ts",
@@ -10402,20 +11617,25 @@
       "type": "source",
       "path": "packages/server/src/utils/tree-kill-posix.ts",
       "lines": 528,
-      "imports": ["./tree-kill-command.js", "node:fs/promises"]
+      "imports": [
+        "./tree-kill-command.js",
+        "node:fs/promises"
+      ]
     },
     {
       "id": "file:packages/server/src/utils/tree-kill-windows.ts",
       "type": "source",
       "path": "packages/server/src/utils/tree-kill-windows.ts",
       "lines": 315,
-      "imports": ["./tree-kill-command.js"]
+      "imports": [
+        "./tree-kill-command.js"
+      ]
     },
     {
       "id": "file:packages/server/src/utils/tree-kill.test.ts",
       "type": "test",
       "path": "packages/server/src/utils/tree-kill.test.ts",
-      "lines": 2111,
+      "lines": 2118,
       "imports": [
         "./tree-kill.js",
         "node:child_process",
@@ -10443,27 +11663,40 @@
       "type": "source",
       "path": "packages/server/src/utils/windows-command.ts",
       "lines": 47,
-      "imports": ["node:path"]
+      "imports": [
+        "node:path"
+      ]
     },
     {
       "id": "file:packages/server/src/utils/worktree-metadata.ts",
       "type": "source",
       "path": "packages/server/src/utils/worktree-metadata.ts",
       "lines": 214,
-      "imports": ["fs", "path", "zod/v3"]
+      "imports": [
+        "fs",
+        "path",
+        "zod/v3"
+      ]
     },
     {
       "id": "file:packages/server/src/utils/worktree-shell-selection.test.ts",
       "type": "test",
       "path": "packages/server/src/utils/worktree-shell-selection.test.ts",
       "lines": 95,
-      "imports": ["./worktree.js", "child_process", "node:fs", "node:os", "node:path", "vitest"]
+      "imports": [
+        "./worktree.js",
+        "child_process",
+        "node:fs",
+        "node:os",
+        "node:path",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/utils/worktree.posix.test.ts",
       "type": "test",
       "path": "packages/server/src/utils/worktree.posix.test.ts",
-      "lines": 1178,
+      "lines": 1185,
       "imports": [
         "../test-utils/platform.js",
         "./worktree",
@@ -10482,7 +11715,15 @@
       "type": "test",
       "path": "packages/server/src/utils/worktree.test.ts",
       "lines": 339,
-      "imports": ["./worktree", "child_process", "fs", "node:fs", "os", "path", "vitest"]
+      "imports": [
+        "./worktree",
+        "child_process",
+        "fs",
+        "node:fs",
+        "os",
+        "path",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/utils/worktree.ts",
@@ -10516,7 +11757,10 @@
       "type": "test",
       "path": "packages/server/src/utils/wrap-user-instructions.test.ts",
       "lines": 30,
-      "imports": ["./wrap-user-instructions.js", "vitest"]
+      "imports": [
+        "./wrap-user-instructions.js",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/server/src/utils/wrap-user-instructions.ts",
@@ -10551,7 +11795,10 @@
       "type": "config",
       "path": "packages/server/vitest.config.ts",
       "lines": 41,
-      "imports": ["node:path", "vitest/config"]
+      "imports": [
+        "node:path",
+        "vitest/config"
+      ]
     }
   ],
   "edges": [
@@ -11832,6 +13079,12 @@
       "target": "file:packages/server/src/server/agent/agent-metadata-generator.ts",
       "type": "imports",
       "specifier": "./agent-metadata-generator.js"
+    },
+    {
+      "source": "file:packages/server/src/server/agent/agent-metadata-generator.unit.test.ts",
+      "target": "file:packages/server/src/server/agent/provider-snapshot-manager.ts",
+      "type": "imports",
+      "specifier": "./provider-snapshot-manager.js"
     },
     {
       "source": "module:server",
@@ -19646,6 +20899,12 @@
       "specifier": "./test-utils/index.js"
     },
     {
+      "source": "file:packages/server/src/server/daemon-client.e2e.test.ts",
+      "target": "file:packages/server/src/server/test-utils/message-collector.ts",
+      "type": "imports",
+      "specifier": "./test-utils/message-collector.js"
+    },
+    {
       "source": "file:packages/server/src/server/daemon-config-store.test.ts",
       "target": "file:packages/server/src/server/daemon-config-store.ts",
       "type": "imports",
@@ -20022,12 +21281,6 @@
       "target": "file:packages/server/src/server/test-utils/daemon-client.ts",
       "type": "imports",
       "specifier": "../test-utils/daemon-client.js"
-    },
-    {
-      "source": "file:packages/server/src/server/daemon-e2e/dsh-session.real.e2e.test.ts",
-      "target": "file:packages/server/src/server/test-utils/message-collector.ts",
-      "type": "imports",
-      "specifier": "../test-utils/message-collector.js"
     },
     {
       "source": "file:packages/server/src/server/daemon-e2e/dsh-session.real.e2e.test.ts",
@@ -25700,6 +26953,36 @@
       "specifier": "./workspace-registry.js"
     },
     {
+      "source": "file:packages/server/src/server/workspace-directory.test.ts",
+      "target": "file:packages/server/src/server/messages.ts",
+      "type": "imports",
+      "specifier": "./messages.js"
+    },
+    {
+      "source": "file:packages/server/src/server/workspace-directory.test.ts",
+      "target": "file:packages/server/src/server/test-utils/session-stubs.ts",
+      "type": "imports",
+      "specifier": "./test-utils/session-stubs.js"
+    },
+    {
+      "source": "file:packages/server/src/server/workspace-directory.test.ts",
+      "target": "file:packages/server/src/server/workspace-directory.ts",
+      "type": "imports",
+      "specifier": "./workspace-directory.js"
+    },
+    {
+      "source": "file:packages/server/src/server/workspace-directory.test.ts",
+      "target": "file:packages/server/src/server/workspace-registry-model.ts",
+      "type": "imports",
+      "specifier": "./workspace-registry-model.js"
+    },
+    {
+      "source": "file:packages/server/src/server/workspace-directory.test.ts",
+      "target": "file:packages/server/src/server/workspace-registry.ts",
+      "type": "imports",
+      "specifier": "./workspace-registry.js"
+    },
+    {
       "source": "file:packages/server/src/server/workspace-directory.ts",
       "target": "file:packages/server/src/server/messages.ts",
       "type": "imports",
@@ -26586,6 +27869,24 @@
       "target": "module:protocol",
       "type": "depends_on",
       "specifier": "@chisacode/protocol/messages"
+    },
+    {
+      "source": "file:packages/server/src/server/worktree-errors.test.ts",
+      "target": "file:packages/server/src/utils/worktree.ts",
+      "type": "imports",
+      "specifier": "../utils/worktree.js"
+    },
+    {
+      "source": "file:packages/server/src/server/worktree-errors.test.ts",
+      "target": "file:packages/server/src/server/agent/providers/dsh-agent.ts",
+      "type": "imports",
+      "specifier": "./agent/providers/dsh-agent.js"
+    },
+    {
+      "source": "file:packages/server/src/server/worktree-errors.test.ts",
+      "target": "file:packages/server/src/server/worktree-errors.ts",
+      "type": "imports",
+      "specifier": "./worktree-errors.js"
     },
     {
       "source": "file:packages/server/src/server/worktree-errors.ts",

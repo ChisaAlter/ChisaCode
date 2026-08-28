@@ -12,7 +12,7 @@ import {
   expectHostConnectionsCard,
   expectHostInjectMcpCard,
   expectHostActionCards,
-  expectHostNoLocalOnlyRows,
+  expectLoopbackHostLocalRows,
   expectRetiredSidebarSectionsAbsent,
   expectHostPageVisible,
   expectLocalHostEntryFirst,
@@ -48,7 +48,7 @@ test.describe("Settings host page", () => {
     await expectHostLabelEditMode(page, TEST_HOST_LABEL);
   });
 
-  test("host page does not render pair-device or daemon-lifecycle rows for a remote daemon", async ({
+  test("loopback host renders the pair-device row but not the desktop-only daemon lifecycle card", async ({
     page,
   }) => {
     const serverId = getServerId();
@@ -57,8 +57,11 @@ test.describe("Settings host page", () => {
     await openSettings(page);
     await openSettingsHost(page, serverId);
 
-    // TODO: add local-daemon fixture for positive Pair/Daemon coverage.
-    await expectHostNoLocalOnlyRows(page);
+    // The seeded e2e host is a 127.0.0.1 direct-TCP endpoint, and
+    // resolveLocalDaemonServerId treats loopback hosts as the local daemon,
+    // so the pair-device section legitimately renders here. The daemon
+    // lifecycle card stays Electron-only (shouldUseDesktopDaemon gate).
+    await expectLoopbackHostLocalRows(page);
   });
 
   test("settings sidebar does not expose retired top-level sections", async ({ page }) => {

@@ -15,6 +15,11 @@ import { DaemonClient, type WebSocketLike } from "@chisacode/client/internal/dae
 import path from "node:path";
 import { WebSocket } from "ws";
 import { getOrCreateCliClientId } from "./client-id.js";
+import {
+  createCliRelayDeviceCredentialClient,
+  resolveRelayOfferDeviceAuth,
+  type RelayOfferDeviceAuth,
+} from "./relay-device-store.js";
 import { resolveCliVersion } from "../version.js";
 
 export interface ConnectOptions {
@@ -294,12 +299,15 @@ async function tryConnectHost(
   }
 }
 
-async function connectViaRelayOffer(
-  offer: ConnectionOffer,
-  clientId: string,
-  timeout: number,
-  nodeWebSocketFactory: ReturnType<typeof createNodeWebSocketFactory>,
-): Promise<DaemonClient> {
+async function connectRelayOfferAttempt(args: {
+  offer: ConnectionOffer;
+  clientId: string;
+  timeout: number;
+  nodeWebSocketFactory: ReturnType<typeof createNodeWebSocketFactory>;
+  relayDeviceAuth: RelayOfferDeviceAuth | null;
+  credentialClient: ReturnType<typeof createCliRelayDeviceCredentialClient>;
+}): Promise<DaemonClient> {
+  const { offer, relayDeviceAuth } = args;
   const url = buildRelayWebSocketUrl({
     endpoint: offer.relay.endpoint,
     serverId: offer.serverId,
@@ -309,15 +317,35 @@ async function connectViaRelayOffer(
 
   const client = new DaemonClient({
     url,
-    clientId,
+    clientId: args.clientId,
     clientType: "cli",
     appVersion: resolveCliVersion(),
-    connectTimeoutMs: timeout,
+    connectTimeoutMs: args.timeout,
     webSocketFactory: (
       target: string,
       config?: { headers?: Record<string, string>; protocols?: string[] },
-    ) => nodeWebSocketFactory(target, { headers: config?.headers, protocols: config?.protocols }),
+    ) =>
+      args.nodeWebSocketFactory(target, { headers: config?.headers, protocols: config?.protocols }),
     e2ee: { enabled: true, daemonPublicKeyB64: offer.daemonPublicKeyB64 },
+    ...(relayDeviceAuth ? { relayDeviceAuth } : {}),
+    onRelayDeviceAuthResult: (result) => {
+      if (!result.ok || !result.deviceId || !result.deviceSecret) {
+        return;
+      }
+      void args.credentialClient
+        .upsert({
+          serverId: offer.serverId,
+          deviceId: result.deviceId,
+          deviceSecret: result.deviceSecret,
+          daemonPublicKeyB64: offer.daemonPublicKeyB64,
+        })
+        .catch((error: unknown) => {
+          // Persist failures are non-fatal: the session works, but the next
+          // connect needs a fresh offer. Surface it so users understand why.
+          const message = error instanceof Error ? error.message : String(error);
+          console.error(`Warning: failed to persist relay device credential: ${message}`);
+        });
+    },
     reconnect: { enabled: false },
   });
 
@@ -329,6 +357,45 @@ async function connectViaRelayOffer(
     const message = error instanceof Error ? error.message : String(error);
     const lastError = client.lastError ? ` (${client.lastError})` : "";
     throw new Error(`Failed to connect via relay offer: ${message}${lastError}`, { cause: error });
+  }
+}
+
+async function connectViaRelayOffer(
+  offer: ConnectionOffer,
+  clientId: string,
+  timeout: number,
+  nodeWebSocketFactory: ReturnType<typeof createNodeWebSocketFactory>,
+): Promise<DaemonClient> {
+  const credentialClient = createCliRelayDeviceCredentialClient();
+  const storedCredential = await credentialClient.get(offer.serverId).catch(() => null);
+  const primaryAuth = resolveRelayOfferDeviceAuth(offer, storedCredential);
+
+  try {
+    return await connectRelayOfferAttempt({
+      offer,
+      clientId,
+      timeout,
+      nodeWebSocketFactory,
+      relayDeviceAuth: primaryAuth,
+      credentialClient,
+    });
+  } catch (error) {
+    // A stored device secret can go stale when the daemon re-paired or its
+    // home was reset. If the offer carries a fresh one-time bootstrap token,
+    // retry once as a first-time pairing before giving up.
+    const canRetryWithPairing =
+      primaryAuth?.deviceSecret !== undefined && offer.authBootstrap?.pairingToken !== undefined;
+    if (!canRetryWithPairing) {
+      throw error;
+    }
+    return await connectRelayOfferAttempt({
+      offer,
+      clientId,
+      timeout,
+      nodeWebSocketFactory,
+      relayDeviceAuth: resolveRelayOfferDeviceAuth(offer, null),
+      credentialClient,
+    });
   }
 }
 

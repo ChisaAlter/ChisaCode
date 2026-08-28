@@ -91,8 +91,14 @@ describe("useDraftAgentCreateFlow", () => {
 
   it("projects an optimistic sidebar agent immediately on submit", async () => {
     const { useSessionStore } = await import("@/stores/session-store");
+    // Deferred (not a timed sleep) keeps the create in flight until the test
+    // has asserted the optimistic projection, then resolves deterministically.
+    let releaseCreate: (() => void) | undefined;
+    const createGate = new Promise<void>((resolve) => {
+      releaseCreate = resolve;
+    });
     const createRequest = vi.fn(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 20));
+      await createGate;
       return {
         agentId: "agent-optimistic",
         result: { id: "agent-optimistic" },
@@ -177,6 +183,7 @@ describe("useDraftAgentCreateFlow", () => {
       useSessionStore.getState().sessions["server-1"]?.agents.get("draft-optimistic")?.title,
     ).toBe("你怎么看这个项目");
 
+    releaseCreate?.();
     await act(async () => {
       await createPromise;
     });

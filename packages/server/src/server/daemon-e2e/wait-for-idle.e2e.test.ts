@@ -1,4 +1,4 @@
-import { test, expect, beforeEach, afterEach } from "vitest";
+import { test, expect, beforeEach, afterEach, vi } from "vitest";
 import { mkdtempSync, rmSync } from "fs";
 import { tmpdir } from "os";
 import path from "path";
@@ -71,15 +71,25 @@ test("rapid fire messages then single wait", async () => {
   const state = await ctx.client.waitForFinish(agent.id, 30000);
   expect(state.status).toBe("idle");
 
-  // Verify all 3 rapid-fire turns completed. The fake Claude provider used in
-  // this E2E emits assistant output, not user-message echo events.
-  const completedTurns = collector.messages.filter(
-    (m) =>
-      m.type === "agent_stream" &&
-      m.payload.agentId === agent.id &&
-      m.payload.event.type === "turn_completed",
-  );
-  expect(completedTurns.length).toBe(3);
+  // sendMessage transactionally replaces a running turn: a send that arrives
+  // mid-turn cancels the running turn, and a send that arrives while a
+  // replacement is still pending supersedes that pending run before it ever
+  // becomes a turn. The observable turn count is therefore timing-dependent
+  // (1 to 3 terminal events), but the invariant is fixed: at least one turn
+  // reaches a terminal state and the final terminal event is a completion.
+  await vi.waitFor(() => {
+    const terminalTurns = collector.messages.filter(
+      (m) =>
+        m.type === "agent_stream" &&
+        m.payload.agentId === agent.id &&
+        (m.payload.event.type === "turn_completed" || m.payload.event.type === "turn_canceled"),
+    );
+    expect(terminalTurns.length).toBeGreaterThanOrEqual(1);
+    expect(terminalTurns.length).toBeLessThanOrEqual(3);
+    const lastTerminal = terminalTurns[terminalTurns.length - 1];
+    if (lastTerminal?.type !== "agent_stream") throw new Error("unreachable: filtered above");
+    expect(lastTerminal.payload.event.type).toBe("turn_completed");
+  });
 
   await ctx.client.deleteAgent(agent.id);
   rmSync(cwd, { recursive: true, force: true });

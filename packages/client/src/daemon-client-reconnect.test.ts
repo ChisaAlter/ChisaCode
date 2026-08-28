@@ -9,6 +9,7 @@
  */
 import { afterEach, expect, test, vi } from "vitest";
 import { DaemonClient } from "./daemon-client.js";
+import { computeReconnectDelayMs } from "./daemon-client-connection-controller.js";
 import type { DaemonTransport } from "./daemon-client-transport-types.js";
 
 // ---------------------------------------------------------------------------
@@ -114,7 +115,7 @@ test("retries after initial connect failure and succeeds on second attempt", asy
       url: "ws://test",
       clientId: "clsk_reconnect_1",
       logger,
-      reconnect: { enabled: true, baseDelayMs: 5, maxDelayMs: 100 },
+      reconnect: { enabled: true, baseDelayMs: 5, maxDelayMs: 100, jitterRandom: () => 0 },
       transportFactory: () => {
         callCount += 1;
         return callCount === 1 ? first.transport : second.transport;
@@ -287,7 +288,7 @@ test("ignores a deferred Blob message from a stale reconnect transport", async (
       url: "ws://test",
       clientId: "clsk_reconnect_deferred_blob",
       logger,
-      reconnect: { enabled: true, baseDelayMs: 5, maxDelayMs: 5 },
+      reconnect: { enabled: true, baseDelayMs: 5, maxDelayMs: 5, jitterRandom: () => 0 },
       transportFactory: () => {
         callCount += 1;
         return callCount === 1 ? first.transport : second.transport;
@@ -410,7 +411,8 @@ test("uses exponential backoff between reconnect attempts", async () => {
       url: "ws://test",
       clientId: "clsk_reconnect_6",
       logger,
-      reconnect: { enabled: true, baseDelayMs: 100, maxDelayMs: 5000 },
+      // jitterRandom fixed at 0 keeps the deterministic exponential schedule.
+      reconnect: { enabled: true, baseDelayMs: 100, maxDelayMs: 5000, jitterRandom: () => 0 },
       transportFactory: () => mock.transport,
     });
     clients.push(client);
@@ -464,7 +466,7 @@ test("reconnect does not resolve original connect promise until hello completes"
       url: "ws://test",
       clientId: "clsk_reconnect_7",
       logger,
-      reconnect: { enabled: true, baseDelayMs: 5, maxDelayMs: 5 },
+      reconnect: { enabled: true, baseDelayMs: 5, maxDelayMs: 5, jitterRandom: () => 0 },
       transportFactory: () => {
         callCount += 1;
         return callCount === 1 ? first.transport : second.transport;
@@ -505,7 +507,7 @@ test("lastError is cleared after successful reconnect", async () => {
       url: "ws://test",
       clientId: "clsk_reconnect_8",
       logger,
-      reconnect: { enabled: true, baseDelayMs: 5, maxDelayMs: 100 },
+      reconnect: { enabled: true, baseDelayMs: 5, maxDelayMs: 100, jitterRandom: () => 0 },
       transportFactory: () => {
         callCount += 1;
         return callCount <= 1 ? first.transport : second.transport;
@@ -606,4 +608,307 @@ test("getConnectionState reflects correct state through reconnect lifecycle", as
   // Explicit close.
   await client.close();
   expect(client.getConnectionState().status).toBe("disposed");
+});
+
+// ---------------------------------------------------------------------------
+// Backoff jitter
+// ---------------------------------------------------------------------------
+
+test("hello-ack loss: connect timeout mid-handshake retries and resolves the original connect", async () => {
+  vi.useFakeTimers();
+  try {
+    const logger = createMockLogger();
+    const first = createMockTransport();
+    const second = createMockTransport();
+    let callCount = 0;
+
+    const client = new DaemonClient({
+      url: "ws://test",
+      clientId: "clsk_hello_ack_loss",
+      logger,
+      connectTimeoutMs: 50,
+      reconnect: { enabled: true, baseDelayMs: 5, maxDelayMs: 5, jitterRandom: () => 0 },
+      transportFactory: () => {
+        callCount += 1;
+        return callCount === 1 ? first.transport : second.transport;
+      },
+    });
+    clients.push(client);
+
+    const connectPromise = client.connect().then(
+      () => ({ ok: true as const }),
+      (e: Error) => ({ ok: false as const, error: e }),
+    );
+
+    // Socket opens and hello goes out, but the daemon never answers with
+    // server_info (the handshake ack is lost).
+    first.triggerSocketOpen();
+    expect(first.sent.length).toBeGreaterThan(0);
+    expect(String(first.sent[0])).toContain('"type":"hello"');
+    expect(client.getConnectionState().status).toBe("connecting");
+
+    // Connect timeout fires, the client backs off and retries.
+    await vi.advanceTimersByTimeAsync(50);
+    expect(client.getConnectionState().status).toBe("disconnected");
+    await vi.advanceTimersByTimeAsync(5);
+    expect(client.getConnectionState().status).toBe("connecting");
+
+    // The retry handshake completes and the ORIGINAL connect() resolves.
+    second.triggerOpen();
+    const result = await connectPromise;
+    expect(result.ok).toBe(true);
+    expect(client.getConnectionState().status).toBe("connected");
+    expect(callCount).toBe(2);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test("in-flight RPC rejects promptly when the transport drops before the response", async () => {
+  vi.useFakeTimers();
+  try {
+    const logger = createMockLogger();
+    const first = createMockTransport();
+
+    const client = new DaemonClient({
+      url: "ws://test",
+      clientId: "clsk_inflight_drop",
+      logger,
+      reconnect: { enabled: true, baseDelayMs: 60_000, maxDelayMs: 60_000 },
+      transportFactory: () => first.transport,
+    });
+    clients.push(client);
+
+    const connectPromise = client.connect();
+    first.triggerOpen();
+    await connectPromise;
+
+    const pending = client.fetchAgent("agent-inflight").then(
+      () => ({ ok: true as const }),
+      (e: Error) => ({ ok: false as const, error: e }),
+    );
+    // The request went out over the wire.
+    expect(first.sent.some((frame) => String(frame).includes("fetch_agent_request"))).toBe(true);
+
+    // Drop the connection before any response arrives. The waiter must reject
+    // through the reset boundary immediately — not dangle until its own 10s
+    // request timeout.
+    first.triggerClose({ code: 1006, reason: "connection reset" });
+    await vi.advanceTimersByTimeAsync(0);
+
+    const result = await pending;
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.message).toContain("connection reset");
+    }
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test("an error/close burst from one transport arms a single reconnect, and stale events are ignored", async () => {
+  vi.useFakeTimers();
+  try {
+    const logger = createMockLogger();
+    const first = createMockTransport();
+    const second = createMockTransport();
+    let callCount = 0;
+
+    const client = new DaemonClient({
+      url: "ws://test",
+      clientId: "clsk_reconnect_storm",
+      logger,
+      reconnect: { enabled: true, baseDelayMs: 5, maxDelayMs: 200, jitterRandom: () => 0 },
+      transportFactory: () => {
+        callCount += 1;
+        return callCount === 1 ? first.transport : second.transport;
+      },
+    });
+    clients.push(client);
+
+    const connectPromise = client.connect();
+    first.triggerOpen();
+    await connectPromise;
+    expect(callCount).toBe(1);
+
+    // Storm: the same dying transport emits error + close + error in a burst.
+    first.triggerError(new Error("socket hangup"));
+    first.triggerClose({ code: 1006, reason: "socket hangup" });
+    first.triggerError(new Error("late error"));
+    expect(client.getConnectionState().status).toBe("disconnected");
+
+    // Only one reconnect attempt fires after the (rescheduled) backoff window.
+    await vi.advanceTimersByTimeAsync(200);
+    expect(callCount).toBe(2);
+    second.triggerOpen();
+    expect(client.getConnectionState().status).toBe("connected");
+
+    // Late events from the replaced transport must not disturb the new one.
+    first.triggerClose({ code: 1006, reason: "zombie close" });
+    first.triggerError(new Error("zombie error"));
+    await vi.advanceTimersByTimeAsync(400);
+    expect(client.getConnectionState().status).toBe("connected");
+    expect(callCount).toBe(2);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test("backoff delays cap at maxDelayMs and the attempt counter resets after a successful connect", async () => {
+  vi.useFakeTimers();
+  try {
+    const logger = createMockLogger();
+    const transports: ReturnType<typeof createMockTransport>[] = [];
+    const client = new DaemonClient({
+      url: "ws://test",
+      clientId: "clsk_backoff_cap",
+      logger,
+      reconnect: { enabled: true, baseDelayMs: 10, maxDelayMs: 40, jitterRandom: () => 0 },
+      transportFactory: () => {
+        const mock = createMockTransport();
+        transports.push(mock);
+        return mock.transport;
+      },
+    });
+    clients.push(client);
+
+    void client.connect().catch(() => undefined);
+    expect(transports).toHaveLength(1);
+
+    const failCurrent = () => {
+      const current = transports[transports.length - 1];
+      current.triggerClose({ code: 1006, reason: "refused" });
+    };
+
+    // Deterministic schedule with jitter 0: 10, 20, 40, then capped at 40.
+    const expectedDelays = [10, 20, 40, 40];
+    for (const delay of expectedDelays) {
+      failCurrent();
+      const countBefore = transports.length;
+      await vi.advanceTimersByTimeAsync(delay - 1);
+      expect(transports).toHaveLength(countBefore);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(transports).toHaveLength(countBefore + 1);
+    }
+
+    // Successful handshake resets the attempt counter…
+    transports[transports.length - 1].triggerOpen();
+    expect(client.getConnectionState().status).toBe("connected");
+
+    // …so the next drop retries after the base delay again, not the cap.
+    failCurrent();
+    const countBefore = transports.length;
+    await vi.advanceTimersByTimeAsync(9);
+    expect(transports).toHaveLength(countBefore);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(transports).toHaveLength(countBefore + 1);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test("setReconnectEnabled(false) stops retries on the next drop; re-enable + ensureConnected recovers", async () => {
+  vi.useFakeTimers();
+  try {
+    const logger = createMockLogger();
+    const first = createMockTransport();
+    const second = createMockTransport();
+    let callCount = 0;
+
+    const client = new DaemonClient({
+      url: "ws://test",
+      clientId: "clsk_runtime_toggle",
+      logger,
+      reconnect: { enabled: true, baseDelayMs: 5, maxDelayMs: 5, jitterRandom: () => 0 },
+      transportFactory: () => {
+        callCount += 1;
+        return callCount === 1 ? first.transport : second.transport;
+      },
+    });
+    clients.push(client);
+
+    const connectPromise = client.connect();
+    first.triggerOpen();
+    await connectPromise;
+
+    client.setReconnectEnabled(false);
+    first.triggerClose({ code: 1001, reason: "going away" });
+    expect(client.getConnectionState().status).toBe("disconnected");
+
+    // No retry while reconnect is disabled, no matter how long we wait.
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(callCount).toBe(1);
+    expect(client.getConnectionState().status).toBe("disconnected");
+
+    // Re-enabling and nudging the client brings the connection back.
+    client.setReconnectEnabled(true);
+    client.ensureConnected();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(callCount).toBe(2);
+    second.triggerOpen();
+    expect(client.getConnectionState().status).toBe("connected");
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test("computeReconnectDelayMs matches the deterministic schedule when random is 0", () => {
+  const base = { baseDelayMs: 100, maxDelayMs: 5000, random: () => 0 };
+  expect(computeReconnectDelayMs({ attempt: 0, ...base })).toBe(100);
+  expect(computeReconnectDelayMs({ attempt: 1, ...base })).toBe(200);
+  expect(computeReconnectDelayMs({ attempt: 2, ...base })).toBe(400);
+  // Cap: 100 * 2^7 = 12800 > 5000.
+  expect(computeReconnectDelayMs({ attempt: 7, ...base })).toBe(5000);
+});
+
+test("computeReconnectDelayMs adds up to 25% additive jitter", () => {
+  const nearOne = () => 0.999999;
+  // attempt 0: 100 + floor(100 * 0.25 * ~1) = 124
+  expect(
+    computeReconnectDelayMs({ attempt: 0, baseDelayMs: 100, maxDelayMs: 5000, random: nearOne }),
+  ).toBe(124);
+  // Midpoint random: 100 + floor(100 * 0.25 * 0.5) = 112
+  expect(
+    computeReconnectDelayMs({ attempt: 0, baseDelayMs: 100, maxDelayMs: 5000, random: () => 0.5 }),
+  ).toBe(112);
+  // Jitter still applies above the cap so clients at max backoff stay decorrelated:
+  // min(12800, 5000) = 5000, + floor(5000 * 0.25 * ~1) = 6249.
+  expect(
+    computeReconnectDelayMs({ attempt: 7, baseDelayMs: 100, maxDelayMs: 5000, random: nearOne }),
+  ).toBe(6249);
+});
+
+test("reconnect timer honors injected jitter random source", async () => {
+  vi.useFakeTimers();
+  try {
+    const logger = createMockLogger();
+    const mock = createMockTransport();
+
+    const client = new DaemonClient({
+      url: "ws://test",
+      clientId: "clsk_reconnect_jitter",
+      logger,
+      // random ~1 → delay = 100 + floor(100 * 0.25 * 0.999999) = 124ms.
+      reconnect: {
+        enabled: true,
+        baseDelayMs: 100,
+        maxDelayMs: 5000,
+        jitterRandom: () => 0.999999,
+      },
+      transportFactory: () => mock.transport,
+    });
+    clients.push(client);
+
+    const _connectPromise = client.connect().catch(() => {});
+    mock.triggerClose({ code: 1006, reason: "refused" });
+
+    // Deterministic component alone (100ms) must not fire the retry yet.
+    await vi.advanceTimersByTimeAsync(123);
+    expect(client.getConnectionState().status).toBe("disconnected");
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(client.getConnectionState().status).toBe("connecting");
+  } finally {
+    vi.useRealTimers();
+  }
 });

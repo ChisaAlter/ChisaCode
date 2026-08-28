@@ -1,6 +1,5 @@
 {
   "version": "1.0.0",
-  "generatedAt": "2026-08-22T09:09:46.415Z",
   "generator": "scripts/generate-modular-knowledge-graphs.mjs",
   "project": {
     "name": "chisacode",
@@ -22,15 +21,20 @@
       ],
       "graphPath": "docs/modules/app/knowledge-graph.json",
       "handoffPath": "docs/modules/app/README.md",
-      "dependsOn": ["client", "expo-two-way-audio", "highlight", "protocol"],
+      "dependsOn": [
+        "client",
+        "expo-two-way-audio",
+        "highlight",
+        "protocol"
+      ],
       "dependedOnBy": [],
-      "fileCount": 1326,
+      "fileCount": 1327,
       "categories": {
-        "config": 42,
-        "test": 409,
-        "support": 77,
+        "config": 41,
+        "test": 411,
+        "support": 76,
         "docs": 2,
-        "source": 796
+        "source": 797
       }
     },
     {
@@ -46,14 +50,18 @@
       ],
       "graphPath": "docs/modules/cli/knowledge-graph.json",
       "handoffPath": "docs/modules/cli/README.md",
-      "dependsOn": ["client", "protocol", "server"],
+      "dependsOn": [
+        "client",
+        "protocol",
+        "server"
+      ],
       "dependedOnBy": [],
-      "fileCount": 179,
+      "fileCount": 181,
       "categories": {
         "config": 2,
         "docs": 1,
-        "test": 60,
-        "source": 108,
+        "test": 61,
+        "source": 109,
         "support": 8
       }
     },
@@ -70,15 +78,22 @@
       ],
       "graphPath": "docs/modules/client/knowledge-graph.json",
       "handoffPath": "docs/modules/client/README.md",
-      "dependsOn": ["protocol", "relay"],
-      "dependedOnBy": ["app", "cli", "server"],
-      "fileCount": 58,
+      "dependsOn": [
+        "protocol",
+        "relay"
+      ],
+      "dependedOnBy": [
+        "app",
+        "cli",
+        "server"
+      ],
+      "fileCount": 59,
       "categories": {
         "support": 4,
         "docs": 2,
         "config": 4,
         "source": 30,
-        "test": 18
+        "test": 19
       }
     },
     {
@@ -94,7 +109,9 @@
       ],
       "graphPath": "docs/modules/desktop/knowledge-graph.json",
       "handoffPath": "docs/modules/desktop/README.md",
-      "dependsOn": ["server"],
+      "dependsOn": [
+        "server"
+      ],
       "dependedOnBy": [],
       "fileCount": 75,
       "categories": {
@@ -118,7 +135,9 @@
       "graphPath": "docs/modules/expo-two-way-audio/knowledge-graph.json",
       "handoffPath": "docs/modules/expo-two-way-audio/README.md",
       "dependsOn": [],
-      "dependedOnBy": ["app"],
+      "dependedOnBy": [
+        "app"
+      ],
       "fileCount": 35,
       "categories": {
         "support": 5,
@@ -141,7 +160,10 @@
       "graphPath": "docs/modules/highlight/knowledge-graph.json",
       "handoffPath": "docs/modules/highlight/README.md",
       "dependsOn": [],
-      "dependedOnBy": ["app", "server"],
+      "dependedOnBy": [
+        "app",
+        "server"
+      ],
       "fileCount": 13,
       "categories": {
         "config": 2,
@@ -164,7 +186,12 @@
       "graphPath": "docs/modules/protocol/knowledge-graph.json",
       "handoffPath": "docs/modules/protocol/README.md",
       "dependsOn": [],
-      "dependedOnBy": ["app", "cli", "client", "server"],
+      "dependedOnBy": [
+        "app",
+        "cli",
+        "client",
+        "server"
+      ],
       "fileCount": 109,
       "categories": {
         "config": 4,
@@ -187,14 +214,16 @@
       "graphPath": "docs/modules/relay/knowledge-graph.json",
       "handoffPath": "docs/modules/relay/README.md",
       "dependsOn": [],
-      "dependedOnBy": ["client", "server"],
-      "fileCount": 44,
+      "dependedOnBy": [
+        "client",
+        "server"
+      ],
+      "fileCount": 18,
       "categories": {
-        "support": 27,
         "config": 3,
         "docs": 1,
         "source": 7,
-        "test": 6
+        "test": 7
       }
     },
     {
@@ -210,14 +239,22 @@
       ],
       "graphPath": "docs/modules/server/knowledge-graph.json",
       "handoffPath": "docs/modules/server/README.md",
-      "dependsOn": ["client", "highlight", "protocol", "relay"],
-      "dependedOnBy": ["cli", "desktop"],
-      "fileCount": 856,
+      "dependsOn": [
+        "client",
+        "highlight",
+        "protocol",
+        "relay"
+      ],
+      "dependedOnBy": [
+        "cli",
+        "desktop"
+      ],
+      "fileCount": 857,
       "categories": {
-        "config": 28,
         "docs": 4,
+        "config": 27,
         "support": 15,
-        "test": 361,
+        "test": 363,
         "source": 448
       }
     }
@@ -298,35 +335,80 @@
     {
       "id": "provider-plumbing",
       "title": "Provider Plumbing",
-      "modules": ["protocol", "server", "client", "app", "cli"],
-      "docs": ["docs/providers.md", "docs/custom-providers.md"],
+      "modules": [
+        "protocol",
+        "server",
+        "client",
+        "app",
+        "cli"
+      ],
+      "docs": [
+        "docs/providers.md",
+        "docs/custom-providers.md"
+      ],
       "reason": "Provider changes usually cross manifest/config schemas, daemon runtime adapters, app settings, client requests, and verification paths."
     },
     {
       "id": "daemon-agent-lifecycle",
       "title": "Daemon And Agent Lifecycle",
-      "modules": ["server", "protocol", "client", "app", "cli", "desktop"],
-      "docs": ["docs/architecture.md", "docs/agent-lifecycle.md", "docs/data-model.md"],
+      "modules": [
+        "server",
+        "protocol",
+        "client",
+        "app",
+        "cli",
+        "desktop"
+      ],
+      "docs": [
+        "docs/architecture.md",
+        "docs/agent-lifecycle.md",
+        "docs/data-model.md"
+      ],
       "reason": "Agent state is daemon-owned, protocol-visible, client-consumed, and surfaced through app/CLI/desktop workflows."
     },
     {
       "id": "websocket-rpc-protocol",
       "title": "WebSocket RPC Protocol",
-      "modules": ["protocol", "server", "client", "app", "cli", "desktop"],
-      "docs": ["docs/rpc-namespacing.md", "docs/architecture.md"],
+      "modules": [
+        "protocol",
+        "server",
+        "client",
+        "app",
+        "cli",
+        "desktop"
+      ],
+      "docs": [
+        "docs/rpc-namespacing.md",
+        "docs/architecture.md"
+      ],
       "reason": "New RPCs must be schema-compatible, server-routed, client-correlated, and UI/CLI-consumed through one wire contract."
     },
     {
       "id": "desktop-daemon-spawn",
       "title": "Desktop Daemon Spawn",
-      "modules": ["desktop", "server", "app", "client", "protocol"],
-      "docs": ["docs/development.md", "docs/architecture.md"],
+      "modules": [
+        "desktop",
+        "server",
+        "app",
+        "client",
+        "protocol"
+      ],
+      "docs": [
+        "docs/development.md",
+        "docs/architecture.md"
+      ],
       "reason": "Desktop behavior crosses Electron main/preload code, exported web app, daemon process management, and local WebSocket transport."
     },
     {
       "id": "app-platform-boundaries",
       "title": "App Platform Boundaries",
-      "modules": ["app", "desktop", "expo-two-way-audio", "client", "protocol"],
+      "modules": [
+        "app",
+        "desktop",
+        "expo-two-way-audio",
+        "client",
+        "protocol"
+      ],
       "docs": [
         "docs/coding-standards.md",
         "docs/hover.md",
@@ -338,8 +420,17 @@
     {
       "id": "relay-security-boundaries",
       "title": "Relay Security Boundaries",
-      "modules": ["relay", "server", "client", "app", "desktop"],
-      "docs": ["SECURITY.md", "docs/architecture.md"],
+      "modules": [
+        "relay",
+        "server",
+        "client",
+        "app",
+        "desktop"
+      ],
+      "docs": [
+        "SECURITY.md",
+        "docs/architecture.md"
+      ],
       "reason": "Relay work changes E2EE transport assumptions across daemon, client transport, pairing, and remote access UX."
     }
   ]

@@ -489,7 +489,8 @@ export class Session {
       logger: this.sessionLogger,
       projectRegistry: this.projectRegistry,
       workspaceRegistry: this.workspaceRegistry,
-      listAgentPayloads: () => this.listAgentPayloads(),
+      listAgentPayloads: (scope) =>
+        this.listAgentPayloads(scope ? { cwds: scope.cwds } : undefined),
       isProviderVisibleToClient: (provider) => this.isProviderVisibleToClient(provider),
       buildWorkspaceDescriptor: (input) => this.buildWorkspaceDescriptor(input),
     });
@@ -1780,20 +1781,34 @@ export class Session {
   private async listAgentPayloads(filter?: {
     labels?: Record<string, string>;
     includeUnavailablePersisted?: boolean;
+    /**
+     * When set, only agents whose normalized cwd is in the set get a payload.
+     * This is the per-workspace-update hot path: building snapshot payloads
+     * for every agent on every agent_state event is O(all agents) churn.
+     */
+    cwds?: ReadonlySet<string>;
   }): Promise<AgentSnapshotPayload[]> {
+    const matchesCwdScope = (cwd: string): boolean =>
+      !filter?.cwds || filter.cwds.has(normalizePersistedWorkspaceId(cwd));
+
     // Get live agents with session modes
-    const agentSnapshots = this.agentManager.listAgents();
+    const allAgentSnapshots = this.agentManager.listAgents();
+    const agentSnapshots = allAgentSnapshots.filter((agent) => matchesCwdScope(agent.cwd));
     const liveAgents = await Promise.all(
       agentSnapshots.map((agent) => this.buildAgentPayload(agent)),
     );
 
     // Add persisted agents that have not been lazily initialized yet
-    // (excluding internal agents which are for ephemeral system tasks)
+    // (excluding internal agents which are for ephemeral system tasks).
+    // liveIds covers ALL live agents (not just scoped ones) so a stored
+    // record never doubles as a payload for an agent that is already live.
     const registryRecords = await this.agentStorage.list();
-    const liveIds = new Set(agentSnapshots.map((a) => a.id));
+    const liveIds = new Set(allAgentSnapshots.map((a) => a.id));
     const registeredProviderIds = this.providerSnapshotManager.listRegisteredProviderIds();
     const persistedAgents = registryRecords
-      .filter((record) => !liveIds.has(record.id) && !record.internal)
+      .filter(
+        (record) => !liveIds.has(record.id) && !record.internal && matchesCwdScope(record.cwd),
+      )
       .filter(
         (record) =>
           filter?.includeUnavailablePersisted === true ||

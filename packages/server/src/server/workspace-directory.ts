@@ -45,7 +45,14 @@ export interface WorkspaceDirectoryDeps {
   workspaceRegistry: {
     list(): Promise<PersistedWorkspaceRecord[]>;
   };
-  listAgentPayloads(): Promise<AgentSnapshotPayload[]>;
+  /**
+   * Lists agent snapshot payloads. When `scope.cwds` is provided the
+   * implementation may skip building payloads for agents whose normalized cwd
+   * is outside the set — the caller only needs those agents for the workspace
+   * status rollup. Returning extra agents is allowed (they are ignored), but
+   * agents inside the scope must not be omitted.
+   */
+  listAgentPayloads(scope?: { cwds?: ReadonlySet<string> }): Promise<AgentSnapshotPayload[]>;
   isProviderVisibleToClient(provider: string): boolean;
   buildWorkspaceDescriptor(input: {
     workspace: PersistedWorkspaceRecord;
@@ -135,8 +142,7 @@ export class WorkspaceDirectory {
     includeGitData: boolean;
     workspaceIds?: Iterable<string>;
   }): Promise<Map<string, WorkspaceDescriptorPayload>> {
-    const [agents, persistedWorkspaces, persistedProjects] = await Promise.all([
-      this.deps.listAgentPayloads(),
+    const [persistedWorkspaces, persistedProjects] = await Promise.all([
       this.deps.workspaceRegistry.list(),
       this.deps.projectRegistry.list(),
     ]);
@@ -163,6 +169,17 @@ export class WorkspaceDirectory {
     const includedWorkspaces = activeRecords.filter(
       (workspace) => !workspaceIds || workspaceIds.has(workspace.workspaceId),
     );
+    // The agent list is only used for the per-workspace status rollup below,
+    // which matches agents by exact normalized cwd. When the caller scoped
+    // the rebuild to specific workspaces (the per-agent-update hot path),
+    // pass those directories along so the daemon does not build snapshot
+    // payloads for every agent on every state event.
+    const agentScope = workspaceIds
+      ? {
+          cwds: new Set(includedWorkspaces.map((workspace) => normalizeWorkspaceId(workspace.cwd))),
+        }
+      : undefined;
+    const agentsPromise = this.deps.listAgentPayloads(agentScope);
     const workspaceDescriptors = await Promise.all(
       includedWorkspaces.map((workspace) =>
         this.deps.buildWorkspaceDescriptor({
@@ -180,6 +197,7 @@ export class WorkspaceDirectory {
       });
     }
 
+    const agents = await agentsPromise;
     for (const agent of agents) {
       if (agent.archivedAt) {
         continue;

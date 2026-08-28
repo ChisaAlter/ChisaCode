@@ -11,6 +11,7 @@ import {
   type AgentMetadataGeneratorDeps,
 } from "./agent-metadata-generator.js";
 import type { AgentManager } from "./agent-manager.js";
+import type { ProviderSnapshotManager } from "./provider-snapshot-manager.js";
 
 const logger = createTestLogger();
 const cleanupPaths: string[] = [];
@@ -37,6 +38,20 @@ function createDeps(
   };
 }
 
+// Metadata generation resolves candidate providers from the snapshot manager;
+// "haiku" matches the built-in structured-generation default list.
+function createProviderSnapshotManagerStub(): Pick<ProviderSnapshotManager, "listProviders"> {
+  return {
+    listProviders: vi.fn().mockResolvedValue([
+      {
+        provider: "claude",
+        enabled: true,
+        models: [{ id: "claude-haiku-4", label: "Claude Haiku 4" }],
+      },
+    ]),
+  } as unknown as Pick<ProviderSnapshotManager, "listProviders">;
+}
+
 describe("agent metadata generator auto-title", () => {
   it("caps generated auto titles at 40 characters before persisting", async () => {
     const setGeneratedTitle = vi.fn().mockResolvedValue(undefined);
@@ -50,6 +65,7 @@ describe("agent metadata generator auto-title", () => {
       agentManager: manager,
       agentId: "agent-1",
       cwd: "/tmp/repo",
+      providerSnapshotManager: createProviderSnapshotManagerStub(),
       initialPrompt: "Implement this feature",
       explicitTitle: null,
       logger,
@@ -60,6 +76,7 @@ describe("agent metadata generator auto-title", () => {
     expect(setGeneratedTitle).toHaveBeenCalledWith(
       "agent-1",
       "x".repeat(MAX_AUTO_AGENT_TITLE_CHARS),
+      { force: false },
     );
   });
 
@@ -119,6 +136,7 @@ describe("agent metadata generator auto-title", () => {
       agentManager: manager,
       agentId: "agent-suppressed-branch",
       cwd: "/tmp/repo/metadata-worktree",
+      providerSnapshotManager: createProviderSnapshotManagerStub(),
       initialPrompt: "Implement this feature",
       explicitTitle: null,
       logger,
@@ -133,7 +151,9 @@ describe("agent metadata generator auto-title", () => {
         persistSession: false,
       }),
     );
-    expect(setGeneratedTitle).toHaveBeenCalledWith("agent-suppressed-branch", "Generated title");
+    expect(setGeneratedTitle).toHaveBeenCalledWith("agent-suppressed-branch", "Generated title", {
+      force: false,
+    });
   });
 
   it.each([
@@ -208,6 +228,7 @@ async function generateTitlePromptWithConfig(config: unknown): Promise<{ prompt:
     workspaceGitService: createNoopWorkspaceGitService({
       resolveRepoRoot: async () => repoRoot,
     }),
+    providerSnapshotManager: createProviderSnapshotManagerStub(),
     initialPrompt: "Implement this feature",
     explicitTitle: null,
     logger,

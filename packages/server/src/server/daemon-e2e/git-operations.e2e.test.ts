@@ -837,6 +837,12 @@ test("archives worktree by running teardown commands and shutting down worktree 
   execSync("git branch -M main", { cwd: repoRoot, stdio: "pipe" });
 
   const teardownMarkerPath = path.join(repoRoot, "teardown-marker.txt");
+  // The terminal marker must land OUTSIDE the worktree: archive removes the
+  // worktree with plain `git worktree remove` (no --force, by product
+  // contract — see utils/worktree.ts), and git refuses when untracked files
+  // are present. Terminal-created artifacts inside the worktree are the
+  // user's teardown responsibility, not something archive force-deletes.
+  const terminalMarkerPath = path.join(repoRoot, "dev-terminal.txt");
   writeFileSync(
     path.join(repoRoot, "chisacode.json"),
     JSON.stringify({
@@ -846,7 +852,7 @@ test("archives worktree by running teardown commands and shutting down worktree 
             name: "Dev Server",
             command: nodeEvalCommand(`
 const fs = require("node:fs");
-fs.writeFileSync("dev-terminal.txt", "dev-server\\n");
+fs.writeFileSync(${JSON.stringify(terminalMarkerPath)}, "dev-server\\n");
 setInterval(() => {}, 1000);
 `),
           },
@@ -894,7 +900,12 @@ fs.writeFileSync(${JSON.stringify(teardownMarkerPath)}, process.env.CHISACODE_WO
         return false;
       }
       const terminals = await ctx.client.listTerminals(agent.cwd);
-      return terminals.terminals.some((terminal) => terminal.name === "Dev Server");
+      if (!terminals.terminals.some((terminal) => terminal.name === "Dev Server")) {
+        return false;
+      }
+      // The marker write is the terminal process's first statement; waiting for
+      // it proves the terminal actually ran (not just registered) before archive.
+      return existsSync(terminalMarkerPath);
     },
   });
 

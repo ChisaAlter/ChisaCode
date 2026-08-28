@@ -11,5 +11,13 @@
   "arrowParens": "always",
   "bracketSameLine": false,
   "bracketSpacing": true,
-  "ignorePatterns": ["*.lock", "**/*.gen.ts", "**/*.gen.tsx", ".omo/**", ".omc/**"]
+  "ignorePatterns": [
+    "*.lock",
+    "**/*.gen.ts",
+    "**/*.gen.tsx",
+    ".omo/**",
+    ".omc/**",
+    "docs/knowledge-graphs/**",
+    "docs/modules/**/knowledge-graph.json"
+  ]
 }

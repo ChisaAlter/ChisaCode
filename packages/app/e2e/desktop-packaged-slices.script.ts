@@ -10,7 +10,15 @@
  * packaged desktop surface. Run with `tsx` from packages/app.
  */
 import { spawnSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, statSync } from "node:fs";
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  rmSync,
+  statSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import net from "node:net";
@@ -86,19 +94,40 @@ async function ensurePortFree(port: number): Promise<void> {
   }
 }
 
+/**
+ * Finds the packaged build zip regardless of the current app version. The old
+ * implementation hard-coded `ChisaCode-Setup-1.0.2-x64.zip`, so every version
+ * bump silently broke the packaged gate ("no packaged build zip") even though
+ * the workflow had just produced a fresh artifact. Prefer -x64 over the
+ * generic name, and the newest zip when several versions are present.
+ */
+function findPackagedZip(): string | null {
+  const entries = existsSync(releaseDir) ? readdirSync(releaseDir) : [];
+  const zipNames = entries.filter((name) => /^ChisaCode-Setup-.*\.zip$/.test(name));
+  if (zipNames.length === 0) {
+    return null;
+  }
+  const ranked = zipNames
+    .map((name) => path.join(releaseDir, name))
+    .sort((a, b) => {
+      const archDelta = Number(b.includes("-x64")) - Number(a.includes("-x64"));
+      if (archDelta !== 0) {
+        return archDelta;
+      }
+      return statSync(b).mtimeMs - statSync(a).mtimeMs;
+    });
+  return ranked[0] ?? null;
+}
+
 /** Extracts the packaged win build once and returns the ChisaCode.exe path. */
 async function ensurePackagedBuild(): Promise<string> {
-  const zips = ["ChisaCode-Setup-1.0.2-x64.zip", "ChisaCode-Setup-1.0.2.zip"]
-    .map((name) => path.join(releaseDir, name))
-    .filter((p) => existsSync(p));
-  if (zips.length === 0) {
+  const zip = findPackagedZip();
+  if (zip === null) {
     if (existsSync(packagedExe)) {
       return packagedExe;
     }
     throw new Error("no packaged build zip in packages/desktop/release");
   }
-
-  const zip = zips[0];
   const extractedBuildIsCurrent = (() => {
     try {
       return existsSync(packagedExe) && statSync(packagedExe).mtimeMs >= statSync(zip).mtimeMs;

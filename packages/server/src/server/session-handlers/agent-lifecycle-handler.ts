@@ -52,7 +52,7 @@ import type {
   CreateAgentSessionWorktreeResult,
 } from "../agent/create-agent/create.js";
 import { resolveCreateAgentTitles } from "../agent/create-agent-title.js";
-import { toWorktreeWireError } from "../worktree-errors.js";
+import { toAgentCreateWireError } from "../worktree-errors.js";
 import type { CreateChisaCodeWorktreeWorkflowResult } from "../worktree-session.js";
 import { handleModelGatewayRequest } from "../model-gateway/model-gateway.js";
 import type { ApplyVisionFallbackParams } from "../agent/vision-fallback.js";
@@ -651,7 +651,7 @@ export class AgentLifecycleHandler implements DisposableHandler {
     } catch (error) {
       // Only reachable when an awaited in-flight create failed; the attempt
       // itself already emitted its own failure status.
-      const wireError = toWorktreeWireError(error);
+      const wireError = toAgentCreateWireError(error);
       this.context.sessionLogger.error(
         { err: error },
         "Failed to await in-flight agent create for retry",
@@ -839,7 +839,7 @@ export class AgentLifecycleHandler implements DisposableHandler {
         createdWorktree: createdWorktreeForCleanup,
         createdAgentId,
       });
-      const wireError = toWorktreeWireError(error);
+      const wireError = toAgentCreateWireError(error);
       this.context.sessionLogger.error({ err: error }, "Failed to create agent");
       if (requestId) {
         this.context.emit({
