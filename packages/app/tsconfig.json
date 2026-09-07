@@ -3,7 +3,13 @@
   "compilerOptions": {
     "strict": true,
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@chisacode/protocol": ["../protocol/src/index.ts"],
+      "@chisacode/protocol/*": ["../protocol/src/*"],
+      "@chisacode/client": ["../client/src/index.ts"],
+      "@chisacode/client/*": ["../client/src/*"],
+      "@chisacode/highlight": ["../highlight/src/index.ts"],
+      "@chisacode/highlight/*": ["../highlight/src/*"]
     }
   },
   "include": [

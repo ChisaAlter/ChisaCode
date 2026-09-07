@@ -41,13 +41,13 @@
   "dependencies": {
     "base64-js": "^1.5.1",
     "tweetnacl": "^1.0.3",
-    "ws": "8.21.0"
+    "ws": "catalog:"
   },
   "devDependencies": {
-    "@types/node": "^20.9.0",
+    "@types/node": "catalog:",
     "@types/ws": "^8.5.8",
-    "typescript": "^5.2.2",
-    "vitest": "^4.1.6",
+    "typescript": "catalog:",
+    "vitest": "catalog:",
     "wrangler": "4.110.0"
   }
 }

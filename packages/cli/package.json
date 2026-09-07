@@ -25,23 +25,23 @@
     "test:e2e:lifecycle": "npx tsx tests/e2e/agent-lifecycle.test.ts"
   },
   "dependencies": {
-    "@chisacode/client": "1.0.3",
-    "@chisacode/protocol": "1.0.3",
-    "@chisacode/server": "1.0.3",
+    "@chisacode/client": "workspace:*",
+    "@chisacode/protocol": "workspace:*",
+    "@chisacode/server": "workspace:*",
     "@clack/prompts": "^1.0.0",
     "chalk": "^5.3.0",
     "commander": "^12.0.0",
     "mime-types": "^2.1.35",
     "tree-kill": "^1.2.2",
-    "ws": "8.21.0",
+    "ws": "catalog:",
     "yaml": "^2.8.4"
   },
   "devDependencies": {
     "@types/mime-types": "^3.0.1",
     "@types/ws": "^8.5.8",
     "tsx": "^4.6.0",
-    "typescript": "^5.2.2",
-    "vitest": "^4.1.6",
+    "typescript": "catalog:",
+    "vitest": "catalog:",
     "zx": "^8.8.5"
   },
   "engines": {

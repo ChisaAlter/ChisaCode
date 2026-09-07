@@ -1,0 +1,58 @@
+packages:
+  - "packages/*"
+
+allowBuilds:
+  better-sqlite3: true
+  electron: true
+  electron-winstaller: true
+  esbuild: true
+  lefthook: true
+  node-pty: true
+  sharp: true
+  workerd: true
+
+# allowBuilds:
+#   better-sqlite3: true
+#   electron: true
+#   electron-winstaller: true
+#   esbuild: true
+#   lefthook: true
+#   node-pty: true
+#   sharp: true
+#   workerd: true
+
+catalogs:
+  default:
+    # React ecosystem
+    react: 19.2.3
+    react-dom: 19.2.3
+    react-native: 0.86.0
+
+    # TypeScript
+    typescript: ^5.9.3
+    "@types/node": ^22.10.0
+
+    # Build tools
+    vite: ^6.0.0
+    vitest: ^4.1.10
+    "@vitest/coverage-v8": ^4.1.10
+
+    # Effect (if adopting)
+    effect: ^4.0.0-beta.103
+    "@effect/schema": ^0.85.0
+
+    # Testing
+    playwright: ^1.56.1
+
+    # Linting & Formatting
+    oxfmt: 0.46.0
+    oxlint: 1.61.0
+
+    # Expo ecosystem
+    expo: ~57.0.0
+    expo-router: ~57.0.0
+
+    # Common dependencies
+    zod: ^4.3.6
+    ws: 8.21.0
+    pino: ^10.0.0

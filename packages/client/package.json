@@ -37,13 +37,13 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@chisacode/protocol": "1.0.3",
-    "@chisacode/relay": "1.0.3",
-    "zod": "^4.3.6"
+    "@chisacode/protocol": "workspace:*",
+    "@chisacode/relay": "workspace:*",
+    "zod": "catalog:"
   },
   "devDependencies": {
-    "@types/node": "^20.9.0",
-    "typescript": "^5.2.2",
-    "vitest": "4.1.10"
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   }
 }

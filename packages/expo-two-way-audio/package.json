@@ -40,7 +40,7 @@
     "@types/react": "^19.2.2",
     "expo-module-scripts": "^56.0.3",
     "expo-modules-core": "^57.0.3",
-    "vitest": "4.1.10"
+    "vitest": "catalog:"
   },
   "peerDependencies": {
     "expo": "^57.0.0",
