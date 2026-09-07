@@ -66,6 +66,11 @@ import { resolveSoftComposerCardElevation } from "@/composer/draft/soft-home-lay
 import { COMPOSER_VOICE_UI_VISIBLE } from "@/composer/voice-visibility";
 import { useComposerHeightMirror } from "./height-mirror";
 import { computeCanStartDictation } from "./state";
+import {
+  type PromptHistoryDirection,
+  isCursorOnFirstLine,
+  isCursorOnLastLine,
+} from "./composer-prompt-history";
 import { useTranslation } from "react-i18next";
 
 export interface AttachmentMenuItem {
@@ -124,6 +129,11 @@ export interface MessageInputProps {
   onSubmitLoadingPress?: () => void;
   /** Intercept key press events before default handling. Return true to prevent default. */
   onKeyPress?: (event: { key: string; preventDefault: () => void }) => boolean;
+  /**
+   * Steps through prompt history (ArrowUp/ArrowDown, web only). Returns true
+   * when a history entry was recalled so the key press can be prevented.
+   */
+  onPromptHistoryStep?: (direction: PromptHistoryDirection) => boolean;
   /** Reports cursor selection updates from the underlying input. */
   onSelectionChange?: (selection: { start: number; end: number }) => void;
   onFocusChange?: (focused: boolean) => void;
@@ -406,6 +416,31 @@ interface DesktopKeyPressContext {
   disabled: boolean;
   handleAlternateSendAction: () => void;
   handleDefaultSendAction: () => void;
+  onPromptHistoryStep: ((direction: PromptHistoryDirection) => boolean) | undefined;
+  getValue: () => string;
+  getSelection: () => { start: number; end: number };
+}
+
+/**
+ * Recalls prompt history when ArrowUp/ArrowDown sit on the first/last line.
+ * The autocomplete popover's onKeyPressCallback runs first in
+ * handleDesktopKeyPressImpl, so an open popover always wins over history.
+ */
+function handlePromptHistoryArrowKey(
+  event: WebTextInputKeyPressEvent,
+  ctx: DesktopKeyPressContext,
+): void {
+  const step = ctx.onPromptHistoryStep;
+  if (!step) return;
+  const direction: PromptHistoryDirection =
+    event.nativeEvent.key === "ArrowUp" ? "back" : "forward";
+  const value = ctx.getValue();
+  const selection = ctx.getSelection();
+  if (direction === "back" && !isCursorOnFirstLine(value, selection.start)) return;
+  if (direction === "forward" && !isCursorOnLastLine(value, selection.end)) return;
+  if (step(direction)) {
+    event.preventDefault();
+  }
 }
 
 function handleDesktopKeyPressImpl(
@@ -423,8 +458,14 @@ function handleDesktopKeyPressImpl(
   }
 
   const { shiftKey, metaKey, ctrlKey } = event.nativeEvent;
+  const key = event.nativeEvent.key;
 
-  if (event.nativeEvent.key !== "Enter") return;
+  if (key === "ArrowUp" || key === "ArrowDown") {
+    handlePromptHistoryArrowKey(event, ctx);
+    return;
+  }
+
+  if (key !== "Enter") return;
   if (!ctx.submitOnEnter) return;
   if (shiftKey) return;
 
@@ -1184,6 +1225,7 @@ interface ResolvedMessageInputProps {
   onQueue: ((payload: MessagePayload) => void) | undefined;
   onSubmitLoadingPress: (() => void) | undefined;
   onKeyPressCallback: ((event: { key: string; preventDefault: () => void }) => boolean) | undefined;
+  onPromptHistoryStep: ((direction: PromptHistoryDirection) => boolean) | undefined;
   onSelectionChangeCallback: ((selection: { start: number; end: number }) => void) | undefined;
   onFocusChange: ((focused: boolean) => void) | undefined;
   onHeightChange: ((height: number) => void) | undefined;
@@ -1224,6 +1266,7 @@ function resolveMessageInputProps(props: MessageInputProps): ResolvedMessageInpu
     onQueue: props.onQueue,
     onSubmitLoadingPress: props.onSubmitLoadingPress,
     onKeyPressCallback: props.onKeyPress,
+    onPromptHistoryStep: props.onPromptHistoryStep,
     onSelectionChangeCallback: props.onSelectionChange,
     onFocusChange: props.onFocusChange,
     onHeightChange: props.onHeightChange,
@@ -1272,6 +1315,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       onQueue,
       onSubmitLoadingPress,
       onKeyPressCallback,
+      onPromptHistoryStep,
       onSelectionChangeCallback,
       onFocusChange,
       onHeightChange,
@@ -1325,6 +1369,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
     const overlayTransition = useSharedValue(0);
     const sendAfterTranscriptRef = useRef(false);
     const valueRef = useRef(value);
+    const selectionRef = useRef({ start: 0, end: 0 });
     const serverInfo = useSessionStore(
       useCallback(
         (state) => {
@@ -1692,6 +1737,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       (event: NativeSyntheticEvent<TextInputSelectionChangeEventData>) => {
         const start = event.nativeEvent.selection?.start ?? 0;
         const end = event.nativeEvent.selection?.end ?? start;
+        selectionRef.current = { start, end };
         onSelectionChangeCallback?.({ start, end });
       },
       [onSelectionChangeCallback],
@@ -1713,6 +1759,9 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
           disabled,
           handleAlternateSendAction,
           handleDefaultSendAction,
+          onPromptHistoryStep,
+          getValue: () => valueRef.current,
+          getSelection: () => selectionRef.current,
         });
       },
       [
@@ -1726,6 +1775,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
         disabled,
         handleAlternateSendAction,
         handleDefaultSendAction,
+        onPromptHistoryStep,
       ],
     );
 
@@ -1741,6 +1791,9 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
           disabled,
           handleAlternateSendAction,
           handleDefaultSendAction,
+          onPromptHistoryStep,
+          getValue: () => valueRef.current,
+          getSelection: () => selectionRef.current,
         };
         handleNativeKeyPress(event, ctx);
       },
@@ -1754,6 +1807,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
         disabled,
         handleAlternateSendAction,
         handleDefaultSendAction,
+        onPromptHistoryStep,
       ],
     );
 

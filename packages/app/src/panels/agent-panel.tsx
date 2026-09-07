@@ -28,6 +28,7 @@ import { isNative, isWeb } from "@/constants/platform";
 import { useAgentAttentionClear } from "@/hooks/use-agent-attention-clear";
 import { useAgentInitialization } from "@/hooks/use-agent-initialization";
 import { useAgentInputDraft, type AgentInputDraft } from "@/composer/draft/input-draft";
+import { useComposerPromptHistory } from "@/composer/use-composer-prompt-history";
 import {
   type AgentScreenAgent,
   type AgentScreenContinuity,
@@ -1485,6 +1486,12 @@ function ActiveAgentComposer({
   const isCompact = useIsCompactFormFactor();
   const paneContext = usePaneContext();
   const { workspaceId } = paneContext;
+  const { onPromptHistoryStep } = useComposerPromptHistory({
+    serverId,
+    agentId,
+    currentText: agentInputDraft.text,
+    setText: agentInputDraft.setText,
+  });
   const { archiveAgent } = useArchiveAgent();
   const unpinWorkspaceAgent = useWorkspaceLayoutStore((state) => state.unpinAgent);
   const subagentRows = useSubagentsForParent({
@@ -1600,6 +1607,7 @@ function ActiveAgentComposer({
           onMessageSent={onMessageSent}
           onOptimisticMessageDispatched={onOptimisticMessageDispatched}
           onClientSlashCommand={handleClientSlashCommand}
+          onPromptHistoryStep={onPromptHistoryStep}
           footer={composerFooter}
           inputWrapperStyle={styles.composerInputWrapper}
         />

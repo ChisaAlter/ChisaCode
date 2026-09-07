@@ -23,6 +23,7 @@ import {
 import { useImageAttachmentPicker } from "@/hooks/use-image-attachment-picker";
 import { useSessionStore } from "@/stores/session-store";
 import { MessageInput, type MessageInputRef } from "./input/input";
+import type { PromptHistoryDirection } from "./input/composer-prompt-history";
 import type { ImageAttachment, MessagePayload } from "./types";
 import type { Theme } from "@/styles/theme";
 import type { DraftCommandConfig } from "@/hooks/use-agent-commands-query";
@@ -172,6 +173,11 @@ interface ComposerProps {
   onComposerHeightChange?: (height: number) => void;
   onAttentionInputFocus?: () => void;
   onAttentionPromptSend?: () => void;
+  /**
+   * Steps through prompt history (ArrowUp/ArrowDown, web only). Returns true
+   * when a history entry was recalled so the key press can be prevented.
+   */
+  onPromptHistoryStep?: (direction: PromptHistoryDirection) => boolean;
   /** Controlled agent controls rendered in input area (draft flows). */
   agentControls?: DraftAgentControlsProps;
   /** Extra styles merged onto the message input wrapper (e.g. elevated background). */
@@ -221,6 +227,8 @@ export function Composer({
   onComposerHeightChange,
   onAttentionInputFocus,
   onAttentionPromptSend,
+  /** Steps through prompt history (ArrowUp/ArrowDown, web only). */
+  onPromptHistoryStep,
   agentControls,
   inputWrapperStyle,
   inputAreaStyle,
@@ -734,6 +742,7 @@ export function Composer({
                 onQueue={handleQueue}
                 onSubmitLoadingPress={submitLoadingPressHandler}
                 onKeyPress={handleCommandKeyPress}
+                onPromptHistoryStep={onPromptHistoryStep}
                 onSelectionChange={handleSelectionChange}
                 onFocusChange={handleFocusChange}
                 onHeightChange={onComposerHeightChange}

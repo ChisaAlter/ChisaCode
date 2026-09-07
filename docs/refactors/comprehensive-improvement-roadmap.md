@@ -9,6 +9,16 @@
 
 ## 进行中
 
+### T3 移植 M1：提示历史（↑↓ 键回想）（2026-09-07 启动）
+
+- **问题**：ChisaCode 输入框无提示历史——发送失败后无法快速恢复已输入文本，也无 ↑↓ 键浏览既往提示。T3 有完整 shell 风格历史召回（`composerPromptHistory.ts`，第二轮审计 Top10）。完全计划见 `docs/refactors/t3code-complete-port-plan.md` 模块 1
+- **影响范围**：新 `packages/app/src/composer/input/composer-prompt-history.ts`（纯函数）+ 新 `packages/app/src/composer/use-composer-prompt-history.ts`（hook）+ `composer/input/input.tsx`（ArrowUp/ArrowDown 接线）+ `composer/index.tsx`（props 透传）+ `panels/agent-panel.tsx`（ActiveAgentComposer 接线）
+- **方案**：纯函数（构建：trim+连续去重+新→旧 / 导航：back 起点 0、forward 超出最新清空、最旧停驻 / 首末行谓词：光标前后无换行）+ hook 订阅 session store `agentStreamTail`+`agentStreamHead` 派生用户消息历史 + `handleDesktopKeyPressImpl` 新增 Arrow case（autocomplete 的 onKeyPressCallback 先行，弹层打开时天然归补全）
+- **强制门禁**：聚焦 vitest（`composer-prompt-history.test.ts` ≥14）；改动文件 typecheck + lint；web Playwright 定向 spec（发送→↑恢复→编辑退出→↓清空）；打包 Electron 实机
+- **残余边界（开工即声明）**：native 键盘无 ↑↓（RN 限制），仅 web/Electron；draft composer（Soft Home /new）无历史不接线；T3 语义不保留浏览前草稿（forward 超最新即清空，T3-faithful）
+- **状态**：实现完成 + web 实机验证通过（2026-09-07）。17/17 单测；typecheck（app 内 M1 文件 0 错误；预存 e2e/global-setup + cli 的 `once` 类型错误经 stash 验证与本次无关）；lint 0/0；web Playwright `prompt-history.spec.ts` 1/1 PASS（one-minute-stream mock：↑ 恢复原文→编辑退出→↑ 从最新重来→↓ 清空→多行 ↑ 不触发）。**附带交付：pnpm 迁移遗留的 dev/e2e 断链修复**（metro.config.js sourceExts 合并保留 css、.js→.ts NodeNext retry、@xterm/headless 坏 `module` 字段回退 `main`、Expo Router require.context 路由发现把 \*.test.ts 吸入图→context 来源测试文件解析为 empty、`node:diagnostics_channel` 浏览 shim（lru-cache v11 模块作用域调用致崩）、global-setup spawnNpx→pnpm exec（npx 在 catalog 协议下 EOVERRIDE）、tsx 按包内 .bin 解析、CLI 配对经 tsx bin + cwd、metro spawn stdin 改 pipe+CI=1 防静默退出）。**待办：打包 Electron 实机验证**（expo export → desktop tsc → electron-builder → win-unpacked ↑↓ 实测）——未跑，不得宣称 M1 全门禁完成
+- **关联预存问题（迁移提交 d6aac94a2 自述）**：CI 仍用 `npm ci` 未更新——pnpm 迁移未完成项，独立登记
+
 ### Soft Home 发送对齐 T3：待在所选目录 + 顶栏先显示分支（2026-08-13）
 
 - **问题**：首页发送先问 GitHub、再默默建隐藏工作区；顶栏「正在检查仓库」等远程；干净同步时露出 `git.actionUpToDate`。T3 / 上游 Paseo 默认都在所选目录开聊。
