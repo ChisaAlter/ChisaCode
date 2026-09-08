@@ -55,10 +55,10 @@ Write-Host ""
 Write-Host "[3/5] 配置 Git hooks ..." -ForegroundColor Yellow
 Push-Location $ProjectRoot
 try {
-    npx lefthook install 2>&1 | Out-Null
+    pnpm exec lefthook install 2>&1 | Out-Null
     Write-Host "  Git hooks 配置完成" -ForegroundColor Green
 } catch {
-    Write-Host "  警告: Git hooks 配置失败（$($_.Exception.Message)），可手动运行: npx lefthook install" -ForegroundColor DarkYellow
+    Write-Host "  警告: Git hooks 配置失败（$($_.Exception.Message)），可手动运行: pnpm exec lefthook install" -ForegroundColor DarkYellow
 } finally {
     Pop-Location
 }

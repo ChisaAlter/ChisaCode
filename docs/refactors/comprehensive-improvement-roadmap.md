@@ -9,15 +9,23 @@
 
 ## 进行中
 
-### T3 移植 M1：提示历史（↑↓ 键回想）（2026-09-07 启动）
+### pnpm 迁移收尾：dev / e2e / 桌面打包管线修复（2026-09-08 完成）
+
+- **问题**：迁移提交 d6aac94a2 只换了 lockfile，未改任何调用方——web dev、e2e 全栈、桌面打包链全部断裂：① `npx` 在 pnpm catalog 协议下 EOVERRIDE（`build:x64` 的 `npx expo export`、root/desktop dev 脚本 8 处、e2e global-setup 的 relay/metro spawn）；② pnpm 不再提升 bin（`tsx`、`wait-on`、`concurrently` 等按包内 `.bin` 解析，`where.exe`/PATH 找不到）；③ 三个包缺类型依赖声明（cli/app 缺 `@types/node`→@types/node@26 泄漏进编译致 `Pick<ChildProcess,"once">` 报错、expo-two-way-audio 缺 `@types/jest`）→ 全仓 typecheck 红；④ electron-builder 的 `@electron/rebuild`/`node-abi` 隐形依赖未声明；⑤ **eb 的 pnpm 收集器在 monorepo 下打包出零 node_modules**（`pnpm list --prod --json` 在 workspace 子包返回根包树，收集器拿到"非空但错"结果提前退出，asar 无任何运行时依赖→打包 app 主进程启动即 `Cannot find module 'electron-log/main'` 隐形错误对话框挂死）；⑥ metro web 打包四处断（sourceExts 覆写砍掉 css、NodeNext `.js` 导入、@xterm/headless 坏 `module` 字段、Expo Router require.context 把全 src 含 \*.test.ts 吸入 bundle、lru-cache v11 的 `node:diagnostics_channel` 调用）；⑦ e2e global-setup 的 metro spawn `stdio:ignore` 致 expo stdin EOF 静默退出；⑧ **pnpm 11 坑**：`pnpm patch-commit` 后 install 被 `node_modules/.pnpm-workspace-state-v1.json` 状态缓存短路，补丁静默不生效，须删该文件强制重链
+- **影响范围**：`packages/desktop/scripts/build-x64.js`（重写为 pnpm deploy 暂存 + yml 路径重写 + eb 从暂存目录打包）、`packages/desktop/scripts/after-pack.js`（新增 copyStagedProductionNodeModules 把 deploy 闭包拷入 app.asar.unpacked/node_modules——Electron 标准解析路径；ensureNativeBuildInputs 支持 resolvePaths）、`packages/desktop/electron-builder.yml`（不改，路径重写在暂存副本上进行）、`packages/desktop/package.json` + `packages/cli/package.json` + `packages/app/package.json` + `packages/expo-two-way-audio/package.json`（补声明）、`pnpm-workspace.yaml`+`patches/app-builder-lib@26.8.1.patch`（收集顺序 traversal 优先补丁）、dev 脚本 5 个、`packages/app/e2e/global-setup.ts`、metro.config.js+metro-shims（M1 提交已含）
+- **方案**：桌面打包走 **pnpm deploy 暂存**——`pnpm --filter=@chisacode/desktop deploy --prod --legacy release/.deploy` 产出自包含闭包，重写暂存 yml 三条相对路径（app dist/skills/output）为绝对路径，eb projectDir 指向暂存目录；after-pack 把闭包经 realpath 递归解引用拷入 app.asar.unpacked（better-sqlite3 由 @electron/rebuild 现场重编 + .forge-meta ABI 校验不变）；app-builder-lib 打 patch 让收集顺序 traversal 优先（pnp­m list 收集器在 monorepo 子包必错）
+- **验证**：`npm run typecheck` 全仓 **0 错误**（迁移后首次）；`build:x64` 全链绿（server build → main tsc → expo export → deploy → eb pack → better-sqlite3 重编 → asar 完整性 → nsis+zip）；新 win-unpacked 内 electron-log/ws/@chisacode/server/better-sqlite3（重编 .node）全部就位；`desktop-prompt-history.script.ts` 打包实机 4/4 断言 PASS
+- **残余**：CI 仍用 `npm ci`（迁移提交自述未完成项，需改 pnpm/frozen-lockfile，独立任务）；metro web 打包里 eb 根闭包 junk（@babel/markdown-it 约 20 包）会进 asar——无害冗余，待收集器上游修复后自然消失
+- **状态**：完成（2026-09-08）
+
+### T3 移植 M1：提示历史（↑↓ 键回想）（2026-09-07 启动，2026-09-08 完成）
 
 - **问题**：ChisaCode 输入框无提示历史——发送失败后无法快速恢复已输入文本，也无 ↑↓ 键浏览既往提示。T3 有完整 shell 风格历史召回（`composerPromptHistory.ts`，第二轮审计 Top10）。完全计划见 `docs/refactors/t3code-complete-port-plan.md` 模块 1
 - **影响范围**：新 `packages/app/src/composer/input/composer-prompt-history.ts`（纯函数）+ 新 `packages/app/src/composer/use-composer-prompt-history.ts`（hook）+ `composer/input/input.tsx`（ArrowUp/ArrowDown 接线）+ `composer/index.tsx`（props 透传）+ `panels/agent-panel.tsx`（ActiveAgentComposer 接线）
 - **方案**：纯函数（构建：trim+连续去重+新→旧 / 导航：back 起点 0、forward 超出最新清空、最旧停驻 / 首末行谓词：光标前后无换行）+ hook 订阅 session store `agentStreamTail`+`agentStreamHead` 派生用户消息历史 + `handleDesktopKeyPressImpl` 新增 Arrow case（autocomplete 的 onKeyPressCallback 先行，弹层打开时天然归补全）
 - **强制门禁**：聚焦 vitest（`composer-prompt-history.test.ts` ≥14）；改动文件 typecheck + lint；web Playwright 定向 spec（发送→↑恢复→编辑退出→↓清空）；打包 Electron 实机
 - **残余边界（开工即声明）**：native 键盘无 ↑↓（RN 限制），仅 web/Electron；draft composer（Soft Home /new）无历史不接线；T3 语义不保留浏览前草稿（forward 超最新即清空，T3-faithful）
-- **状态**：实现完成 + web 实机验证通过（2026-09-07）。17/17 单测；typecheck（app 内 M1 文件 0 错误；预存 e2e/global-setup + cli 的 `once` 类型错误经 stash 验证与本次无关）；lint 0/0；web Playwright `prompt-history.spec.ts` 1/1 PASS（one-minute-stream mock：↑ 恢复原文→编辑退出→↑ 从最新重来→↓ 清空→多行 ↑ 不触发）。**附带交付：pnpm 迁移遗留的 dev/e2e 断链修复**（metro.config.js sourceExts 合并保留 css、.js→.ts NodeNext retry、@xterm/headless 坏 `module` 字段回退 `main`、Expo Router require.context 路由发现把 \*.test.ts 吸入图→context 来源测试文件解析为 empty、`node:diagnostics_channel` 浏览 shim（lru-cache v11 模块作用域调用致崩）、global-setup spawnNpx→pnpm exec（npx 在 catalog 协议下 EOVERRIDE）、tsx 按包内 .bin 解析、CLI 配对经 tsx bin + cwd、metro spawn stdin 改 pipe+CI=1 防静默退出）。**待办：打包 Electron 实机验证**（expo export → desktop tsc → electron-builder → win-unpacked ↑↓ 实测）——未跑，不得宣称 M1 全门禁完成
-- **关联预存问题（迁移提交 d6aac94a2 自述）**：CI 仍用 `npm ci` 未更新——pnpm 迁移未完成项，独立登记
+- **状态**：**完成（2026-09-08，全门禁闭合）**。17/17 单测；typecheck 全仓 0 错误；lint 0/0；web Playwright `prompt-history.spec.ts` 1/1 PASS；**打包 Electron 实机 `desktop-prompt-history.script.ts` 4/4 断言 PASS**（真实 ChisaCode.exe + 隔离 home + desktop-managed daemon + mock provider：↑ 恢复原文→编辑退出→↑ 从最新重来→↓ 清空→多行 ↑ 不触发）。实现细节与 dev/e2e 断链修复见上一条目与提交历史
 
 ### Soft Home 发送对齐 T3：待在所选目录 + 顶栏先显示分支（2026-08-13）
 
