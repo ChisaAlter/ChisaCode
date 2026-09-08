@@ -195,7 +195,33 @@ function getSegmentNeighbor(input: {
   return null;
 }
 
+// Tool-sequence group arrays are rebuilt on every layoutStream call; keeping
+// them identity-stable while their member rows are unchanged lets the stable
+// layout derivation (stable-layout.ts) reuse row references across streaming
+// frames. Keyed by the segment's StreamItem array reference, which is itself
+// identity-stable while the segment contents are only appended.
+const toolSequenceGroupCache = new WeakMap<StreamItem[], Map<string, StreamLayoutItem[]>>();
+
+function isSameToolSequenceGroupMembers(
+  cached: StreamLayoutItem[],
+  group: StreamLayoutItem[],
+): boolean {
+  if (cached.length !== group.length) return false;
+  for (let index = 0; index < cached.length; index += 1) {
+    if (cached[index]?.item !== group[index]?.item) {
+      return false;
+    }
+  }
+  return true;
+}
+
 function assignToolSequenceGroups(items: StreamLayoutItem[]): StreamLayoutItem[] {
+  const segmentItems = items[0]?.items ?? null;
+  let segmentCache = segmentItems ? toolSequenceGroupCache.get(segmentItems) : undefined;
+  if (segmentItems && !segmentCache) {
+    segmentCache = new Map();
+    toolSequenceGroupCache.set(segmentItems, segmentCache);
+  }
   for (let index = 0; index < items.length; index += 1) {
     const layoutItem = items[index];
     if (
@@ -204,26 +230,37 @@ function assignToolSequenceGroups(items: StreamLayoutItem[]): StreamLayoutItem[]
     ) {
       continue;
     }
-
-    const group = [layoutItem];
-    let cursor = index + 1;
-    while (cursor < items.length) {
-      const candidate = items[cursor];
-      if (!candidate || !isToolSequenceItem(candidate.item)) {
-        break;
-      }
-      group.push(candidate);
-      candidate.isToolSequenceGroupContinuation = true;
-      cursor += 1;
-      if (candidate.toolSequence === "last" || candidate.toolSequence === "single") {
-        break;
-      }
-    }
-
-    layoutItem.toolSequenceGroup = group;
-    layoutItem.toolSequenceGroupGapBelow = group.at(-1)?.gapBelow ?? layoutItem.gapBelow;
+    assignStableToolSequenceGroup(items, index, layoutItem, segmentCache);
   }
   return items;
+}
+
+function assignStableToolSequenceGroup(
+  items: StreamLayoutItem[],
+  index: number,
+  layoutItem: StreamLayoutItem,
+  segmentCache: Map<string, StreamLayoutItem[]> | undefined,
+): void {
+  const group = [layoutItem];
+  let cursor = index + 1;
+  while (cursor < items.length) {
+    const candidate = items[cursor];
+    if (!candidate || !isToolSequenceItem(candidate.item)) {
+      break;
+    }
+    group.push(candidate);
+    candidate.isToolSequenceGroupContinuation = true;
+    cursor += 1;
+    if (candidate.toolSequence === "last" || candidate.toolSequence === "single") {
+      break;
+    }
+  }
+
+  const cached = segmentCache?.get(layoutItem.item.id);
+  const stableGroup = cached && isSameToolSequenceGroupMembers(cached, group) ? cached : group;
+  segmentCache?.set(layoutItem.item.id, stableGroup);
+  layoutItem.toolSequenceGroup = stableGroup;
+  layoutItem.toolSequenceGroupGapBelow = stableGroup.at(-1)?.gapBelow ?? layoutItem.gapBelow;
 }
 
 function layoutSegment(input: LayoutSegmentInput): StreamLayoutItem[] {

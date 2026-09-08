@@ -71,6 +71,7 @@ import {
 } from "./strategy";
 import { CompletedTurnFooterRow, TurnFooter, type TurnContentStrategy } from "./turn-footer";
 import { layoutStream, type StreamLayoutItem } from "./layout";
+import { useStableStreamLayout } from "./stable-layout";
 import {
   type BottomAnchorLocalRequest,
   type BottomAnchorRouteRequest,
@@ -406,6 +407,9 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
         streamRenderStrategy,
       ],
     );
+    // Restores row-reference identity across streaming frames so memoized
+    // rows and the derived maps below skip re-render when content is unchanged.
+    const stableStreamLayout = useStableStreamLayout(streamLayout);
     useImperativeHandle(
       ref,
       () => ({
@@ -718,7 +722,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       ],
     );
 
-    const bottomTurnFooterHost = streamLayout.auxiliaryTurnFooter;
+    const bottomTurnFooterHost = stableStreamLayout.auxiliaryTurnFooter;
 
     const renderStreamItem = useCallback(
       (layoutItem: StreamLayoutItem) => {
@@ -801,19 +805,19 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
 
     const layoutHistoryItemById = useMemo(() => {
       const itemById = new Map<string, StreamLayoutItem>();
-      for (const item of streamLayout.history) {
+      for (const item of stableStreamLayout.history) {
         itemById.set(item.item.id, item);
       }
       return itemById;
-    }, [streamLayout.history]);
+    }, [stableStreamLayout.history]);
 
     const layoutLiveHeadItemById = useMemo(() => {
       const itemById = new Map<string, StreamLayoutItem>();
-      for (const item of streamLayout.liveHead) {
+      for (const item of stableStreamLayout.liveHead) {
         itemById.set(item.item.id, item);
       }
       return itemById;
-    }, [streamLayout.liveHead]);
+    }, [stableStreamLayout.liveHead]);
 
     const renderHistoryRow = useCallback(
       (item: StreamItem) =>

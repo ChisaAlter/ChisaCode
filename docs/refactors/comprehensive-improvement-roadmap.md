@@ -9,6 +9,15 @@
 
 ## 进行中
 
+### T3 移植 M2：稳定行派生（流式期间行引用复用）（2026-09-08 启动）
+
+- **问题**：`layoutStream` 每帧重建全部 `StreamLayoutItem` 对象，流式期间整表行引用全变→React memo/tanstack 全量重渲；T3 用 `computeStableMessagesTimelineRows` 按行复用引用让 memo 真正生效（审计性能 Tier-1）。完全计划见 `docs/refactors/t3code-complete-port-plan.md` 模块 2
+- **影响范围**：新 `packages/app/src/agent-stream/stable-layout.ts`（纯函数 + hook）+ `agent-stream/layout.ts`（assignToolSequenceGroups 组数组按 segment 引用缓存——不缓存则优化退化为 no-op）+ `agent-stream/view.tsx`（streamLayout 后包一层 stable）
+- **方案**：`computeStableStreamLayoutItems` 两档复用（内容未变且 index/frameOrder/items 引用未变→复用上一帧对象；仅内容未变但位置变→新对象防携带过期 index；全未变→返回上一帧状态对象本身）+ `computeStableStreamLayout` 层级（history/liveHead/aux footer 全未变→同一 layout 对象）+ `useStableStreamLayout` hook 接入 view.tsx（native 共享自动受益）
+- **强制门禁**：`stable-layout.test.ts` ≥18；既有 web-virtualization/bottom-anchor-controller/turn-anchor-controller/session-stream-reducers 测试回归；改动文件 typecheck+lint；Playwright 既有流式 spec 不回归；打包 Electron 实机
+- **残余边界（开工即声明）**：liveHead 段 `items` 引用每 delta 变化→头部少数行仍每帧重渲（流式行本需重渲，历史段数百行稳定是主要收益）；DevTools 提交计数为补充证据非硬门禁
+- **状态**：**完成（2026-09-08）**。stable-layout.test.ts 23/23（全字段矩阵/流式变化/index 不携带/组缓存）；回归 web-virtualization+bottom-anchor+turn-anchor+reducers 156/156；typecheck 0 错误、lint 0/0；Playwright `agent-stream-ui.spec.ts` auto-scroll 1/1（真实流式滚动跟随无回归）；打包 Electron 门禁经 M1 的 `desktop-prompt-history.script.ts` 同链路验证管线可用（stable-layout 无独立实机断言——行为是无 API 变化的纯优化，声明以单测+web e2e 为准）。**附带修复**：vitest.config 的 react-native alias 指向根 node_modules（pnpm 迁移后不存在）→ `resolvePackageEntry` 解析，agent-stream 系列单测恢复可跑
+
 ### pnpm 迁移收尾：dev / e2e / 桌面打包管线修复（2026-09-08 完成）
 
 - **问题**：迁移提交 d6aac94a2 只换了 lockfile，未改任何调用方——web dev、e2e 全栈、桌面打包链全部断裂：① `npx` 在 pnpm catalog 协议下 EOVERRIDE（`build:x64` 的 `npx expo export`、root/desktop dev 脚本 8 处、e2e global-setup 的 relay/metro spawn）；② pnpm 不再提升 bin（`tsx`、`wait-on`、`concurrently` 等按包内 `.bin` 解析，`where.exe`/PATH 找不到）；③ 三个包缺类型依赖声明（cli/app 缺 `@types/node`→@types/node@26 泄漏进编译致 `Pick<ChildProcess,"once">` 报错、expo-two-way-audio 缺 `@types/jest`）→ 全仓 typecheck 红；④ electron-builder 的 `@electron/rebuild`/`node-abi` 隐形依赖未声明；⑤ **eb 的 pnpm 收集器在 monorepo 下打包出零 node_modules**（`pnpm list --prod --json` 在 workspace 子包返回根包树，收集器拿到"非空但错"结果提前退出，asar 无任何运行时依赖→打包 app 主进程启动即 `Cannot find module 'electron-log/main'` 隐形错误对话框挂死）；⑥ metro web 打包四处断（sourceExts 覆写砍掉 css、NodeNext `.js` 导入、@xterm/headless 坏 `module` 字段、Expo Router require.context 把全 src 含 \*.test.ts 吸入 bundle、lru-cache v11 的 `node:diagnostics_channel` 调用）；⑦ e2e global-setup 的 metro spawn `stdio:ignore` 致 expo stdin EOF 静默退出；⑧ **pnpm 11 坑**：`pnpm patch-commit` 后 install 被 `node_modules/.pnpm-workspace-state-v1.json` 状态缓存短路，补丁静默不生效，须删该文件强制重链
