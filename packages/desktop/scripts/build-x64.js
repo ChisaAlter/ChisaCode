@@ -120,6 +120,26 @@ function flattenDeployedNodeModules() {
 }
 
 function main() {
+  // Export the renderer here (Node-level env, no cmd/cross-env chain): the
+  // desktop renderer must carry the `.electron.ts(x)` variants, which the
+  // metro resolver only picks up when CHISACODE_WEB_PLATFORM=electron.
+  const appDir = path.join(repoRoot, "packages", "app");
+  console.log("[build-x64] exporting renderer web bundle");
+  const expoBin = path.join(
+    appDir,
+    "node_modules",
+    ".bin",
+    process.platform === "win32" ? "expo.CMD" : "expo",
+  );
+  const exportResult = spawnSync(expoBin, ["export", "--platform", "web"], {
+    cwd: appDir,
+    env: { ...process.env, CHISACODE_WEB_PLATFORM: "electron" },
+    stdio: "inherit",
+    shell: process.platform === "win32",
+  });
+  if (exportResult.status !== 0 || !fs.existsSync(path.join(appDir, "dist", "index.html"))) {
+    throw new Error(`expo export failed (status ${exportResult.status})`);
+  }
   stageDeployDir();
   console.log("[build-x64] building electron targets from staged deploy dir");
   return build({

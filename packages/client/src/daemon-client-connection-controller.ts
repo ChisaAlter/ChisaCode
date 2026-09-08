@@ -542,6 +542,9 @@ export class DaemonConnectionController {
             [CLIENT_CAPS.generativeUi]: true,
             // COMPAT(cindyModules): added in v0.1.102; advertise so goal/team/learn RPCs are accepted.
             [CLIENT_CAPS.cindyModules]: true,
+            // COMPAT(discoveredPorts): added in v1.0.4; the session subscribes
+            // to daemon-side local dev-server discovery.
+            [CLIENT_CAPS.discoveredPorts]: true,
           },
           ...(this.config.appVersion ? { appVersion: this.config.appVersion } : {}),
           ...(relayDeviceAuth ? { relayDeviceAuth } : {}),

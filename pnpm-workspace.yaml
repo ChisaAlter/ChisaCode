@@ -59,3 +59,9 @@ catalogs:
 
 patchedDependencies:
   app-builder-lib@26.8.1: patches/app-builder-lib@26.8.1.patch
+
+# pnpm 11 auto-verifies node_modules before every `pnpm exec`/run and will
+# purge the workspace install to a production graph mid-build (it truncated
+# the root install during `expo export`). Installs here are always explicit.
+verifyDepsBeforeRun: never
+confirmModulesPurge: false

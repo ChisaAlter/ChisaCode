@@ -17,6 +17,7 @@ import {
 } from "react-native-unistyles";
 import { type Theme } from "@/styles/theme";
 import { useTranslation } from "react-i18next";
+import { useDiscoveredServers } from "@/hooks/use-discovered-servers";
 import {
   buildWorkspaceAttachmentScopeKey,
   useWorkspaceAttachments,
@@ -288,6 +289,39 @@ function startSelectorResultPolling(input: {
   return poll;
 }
 
+function DiscoveredServerCard({
+  host,
+  port,
+  processName,
+  onOpen,
+}: {
+  host: string;
+  port: number;
+  processName: string | null;
+  onOpen: (url: string) => void;
+}) {
+  const { t } = useTranslation();
+  const url = `http://${host}:${port}`;
+  const handleOpen = useCallback(() => {
+    onOpen(url);
+  }, [onOpen, url]);
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${t("browser.discoveredServersOpen")} ${url}`}
+      onPress={handleOpen}
+      style={styles.discoveredServerCard}
+    >
+      <Text numberOfLines={1} style={styles.discoveredServerName}>
+        {processName ?? t("browser.discoveredServersUnknownProcess")}
+      </Text>
+      <Text numberOfLines={1} style={styles.discoveredServerUrl}>
+        {host}:{port}
+      </Text>
+    </Pressable>
+  );
+}
+
 // eslint-disable-next-line complexity
 export function BrowserPane({
   browserId,
@@ -305,12 +339,26 @@ export function BrowserPane({
   onFocusPane?: () => void;
 }) {
   const { t } = useTranslation();
+  const discoveredServers = useDiscoveredServers(serverId);
   const browser = useBrowserStore((state) => state.browsersById[browserId] ?? null);
   const updateBrowser = useBrowserStore((state) => state.updateBrowser);
   const webviewRef = useRef<ElectronWebview | null>(null);
   const webviewHostRef = useRef<HTMLDivElement | null>(null);
   const urlInputRef = useRef<WebTextInput | null>(null);
   const initialUrlRef = useRef(browser?.url ?? "https://example.com");
+  // Empty-state affordance: example.com is the untouched default URL, so the
+  // discovered-servers card list only shows before the first real navigation.
+  // The store URL is normalized (may carry a trailing slash), so compare by
+  // hostname rather than the exact string.
+  const storeUrl = browser?.url ?? initialUrlRef.current;
+  const storeUrlHost = (() => {
+    try {
+      return new URL(storeUrl).hostname;
+    } catch {
+      return storeUrl;
+    }
+  })();
+  const showDiscoveredServers = discoveredServers.length > 0 && storeUrlHost === "example.com";
   const browserIdRef = useRef(browserId);
   browserIdRef.current = browserId;
   const browserRef = useRef(browser);
@@ -331,6 +379,7 @@ export function BrowserPane({
   const subtitleStyle = styles.unavailableSubtitle;
   const urlInputStyle = styles.urlInput;
   const errorTextStyle = styles.metaError;
+  const discoveredServersTitleStyle = styles.discoveredServersTitle;
 
   useEffect(() => {
     const nextUrl = browser?.url ?? "https://example.com";
@@ -1047,6 +1096,22 @@ export function BrowserPane({
           </Text>
         </View>
       ) : null}
+      {showDiscoveredServers ? (
+        <View style={styles.discoveredServersRow} testID="discovered-servers-section">
+          <Text style={discoveredServersTitleStyle}>{t("browser.discoveredServersTitle")}</Text>
+          <View style={styles.discoveredServersList}>
+            {discoveredServers.slice(0, 6).map((server) => (
+              <DiscoveredServerCard
+                key={`${server.host}:${server.port}`}
+                host={server.host}
+                port={server.port}
+                processName={server.processName ?? null}
+                onOpen={navigate}
+              />
+            ))}
+          </View>
+        </View>
+      ) : null}
       <View style={styles.webviewWrap}>
         {createElement("div", {
           ref: (node: HTMLDivElement | null) => {
@@ -1162,6 +1227,44 @@ const styles = StyleSheet.create((theme) => ({
   unavailableSubtitle: {
     fontSize: 12.5,
     lineHeight: 18,
+    color: theme.colors.foregroundMuted,
+  },
+  discoveredServersRow: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
+  },
+  discoveredServersList: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+  discoveredServerCard: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: theme.colors.surfaceWorkspace,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    maxWidth: 220,
+  },
+  discoveredServersTitle: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: "500",
+    color: theme.colors.foregroundMuted,
+  },
+  discoveredServerName: {
+    fontSize: 12.5,
+    lineHeight: 17,
+    fontWeight: "500",
+    color: theme.colors.foreground,
+  },
+  discoveredServerUrl: {
+    fontSize: 11.5,
+    lineHeight: 16,
     color: theme.colors.foregroundMuted,
   },
 }));

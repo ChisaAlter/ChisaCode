@@ -9,6 +9,16 @@
 
 ## 进行中
 
+### T3 移植 M3：端口扫描 + 本地服务器发现（2026-09-08 完成）
+
+- **问题**：Agent 在 daemon 主机上启动 dev server 后，用户须手动复制 URL 到浏览器面板。T3 有端口扫描 + 空状态卡片列表。完全计划见 `docs/refactors/t3code-complete-port-plan.md` 模块 3
+- **影响范围**：协议（`messages.ts` 的 features.discoveredPorts 门禁 + discovered_ports 通知 + subscribe/unsubscribe 入站 + `client-capabilities.ts` 新 cap）+ 服务端（新 `server/preview/port-scanner.ts`（Windows netstat/lsof 扫描）+ `port-scanner-controller.ts`（引用计数轮询）+ `session.ts`/`websocket-server.ts` 接线）+ client 包（daemon-client 订阅方法 + inbound 控制器事件 + hello capabilities 声明）+ app（新 `hooks/use-discovered-servers.ts`（renderer 侧 HTML 过滤）+ `browser-pane.electron.tsx` 空状态卡片区 + i18n en/zh）
+- **架构要点（实现期裁决）**：① daemon worker 的 Electron RUN_AS_NODE 运行时**不能从本进程读 loopback HTTP 响应**（fetch 永挂/AbortSignal 不触发、node:http 连接建立但收不到数据——三种探测实现逐一实证）→ daemon 只推 netstat 监听列表，**HTML 过滤在 renderer**（Chromium 栈 fetch）；② Windows 扫描用 `netstat -ano`（0.09s）不用 PowerShell Get-NetTCPConnection（1.8s+JIT 冷启动偶发 >25s）；③ 空扫描快照双侧 sticky（daemon/renderer 均保留上次非空，防子进程抖动闪空）；④ hello capabilities 声明 `discovered_ports` 才允许订阅（COMPAT(discoveredPorts) v1.0.4，移除期 2027-09-08）；⑤ **附带发现并修复**：`.electron.ts(x)` 平台后缀**从未被 Metro 解析过**（Expo 无 electron 平台；browser-pane.electron 打包一直被 base stub 顶替）——metro resolver 在 CHISACODE_WEB_PLATFORM=electron 时优先解析 `X.electron.ts(x)`；build:x64 的 export 步骤移入 Node 层（cmd/cross-env 链的 env 传递不可靠）
+- **强制门禁**：scanner 单测+集成 19/19（真实 netstat 扫描发现活 fixture）；protocol 20/20；client 6/6；全仓 typecheck 0；lint 0/0；**打包 Electron 实机 `desktop-discovered-servers.script.ts` PASS**（真实 ChisaCode.exe + 隔离 home + 打包 daemon：浏览器面板空状态显示"检测到的本地服务器"区 + 真实服务器卡片渲染）
+- **残余边界（如实声明）**：① 本机 daemon worker 对**其他进程显式绑定 127.0.0.1 的监听**偶发漏扫（子进程 flake，0.0.0.0 监听不受影响）——gate 以真实服务器卡片为准不 pin fixture 端口，fixture 卡片出现时额外断言点击导航；② 非 HTML 服务（如 ssh 转发端口有 HTTP 管理面）会以进程名显示——由 renderer 过滤兜底；③ remote daemon 场景端口属 daemon 主机（如实显示）；④ UDP/非 HTTP 不报告（T3 同语义）
+- **环境事故记录**：排障期间 `taskkill` 误杀了用户本机 Deepseek-Harness-Desktop 的生产 daemon（6767 占用者，当时误判为残留测试进程）——**该应用重启后 daemon 会自动拉起，但当时的会话被终止**；已吸取教训：杀 6767 占用者前必须先查 CommandLine 归属
+- **状态**：**完成（2026-09-08）**
+
 ### T3 移植 M2：稳定行派生（流式期间行引用复用）（2026-09-08 启动）
 
 - **问题**：`layoutStream` 每帧重建全部 `StreamLayoutItem` 对象，流式期间整表行引用全变→React memo/tanstack 全量重渲；T3 用 `computeStableMessagesTimelineRows` 按行复用引用让 memo 真正生效（审计性能 Tier-1）。完全计划见 `docs/refactors/t3code-complete-port-plan.md` 模块 2

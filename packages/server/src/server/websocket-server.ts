@@ -59,6 +59,8 @@ import {
   type WebSocketRuntimeCounters,
 } from "./websocket/runtime-metrics.js";
 import { summarizeUntrustedLogIdentifier } from "./log-metadata.js";
+import { PortScannerController } from "./preview/port-scanner-controller.js";
+import { scanListeningPorts } from "./preview/port-scanner.js";
 import { isWebSocketPayloadWithinLimit, WEBSOCKET_MAX_PAYLOAD_BYTES } from "./websocket-limits.js";
 import { RelayDeviceCredentialStore } from "./relay-device-credential-store.js";
 import { MessageLaneExecutor, classifySessionMessageLane } from "./websocket-message-lanes.js";
@@ -397,6 +399,9 @@ export class VoiceAssistantWebSocketServer {
   private readonly workspaceGitService: WorkspaceGitService;
   private readonly downloadTokenStore: DownloadTokenStore;
   private readonly chisacodeHome: string;
+  // COMPAT(discoveredPorts): created lazily on first subscription; shared by
+  // all sessions so the host scan runs once regardless of client count.
+  private portScannerController: PortScannerController | null = null;
   private readonly daemonConfigStore: DaemonConfigStore;
   private readonly pushTokenStore: PushTokenStore;
   private readonly pushNotificationSender: PushNotificationSender;
@@ -937,6 +942,7 @@ export class VoiceAssistantWebSocketServer {
       clientId,
       appVersion,
       clientCapabilities,
+      portScannerController: this.ensurePortScannerController(),
       onMessage: (msg) => {
         if (!connection) {
           return;
@@ -1339,6 +1345,15 @@ export class VoiceAssistantWebSocketServer {
     );
   }
 
+  private ensurePortScannerController(): PortScannerController {
+    if (!this.portScannerController) {
+      this.portScannerController = new PortScannerController({
+        scanFn: () => scanListeningPorts(),
+      });
+    }
+    return this.portScannerController;
+  }
+
   private buildServerInfoStatusPayload(): ServerInfoStatusPayload {
     return {
       status: "server_info",
@@ -1370,6 +1385,8 @@ export class VoiceAssistantWebSocketServer {
         cindyModules: true,
         // COMPAT(modelGatewaySupplyScope): added in v0.1.103; remove the gate when daemon floor >= the version that persists supplyScope.
         modelGatewaySupplyScope: true,
+        // COMPAT(discoveredPorts): added in v1.0.4; remove gate no earlier than 2027-09-08 when client/daemon floor >= v1.0.4.
+        discoveredPorts: true,
       },
     };
   }

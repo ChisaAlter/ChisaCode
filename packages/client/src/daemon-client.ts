@@ -797,6 +797,22 @@ export class DaemonClient {
     });
   }
 
+  /**
+   * Subscribes this session to daemon-side local dev-server discovery
+   * (discovered_ports events). Requires the daemon's
+   * server_info.features.discoveredPorts gate.
+   */
+  subscribeDiscoveredPorts(): void {
+    this.sendSessionMessage({ type: "discovered_ports.subscribe" });
+  }
+
+  /**
+   * Stops discovered_ports events for this session.
+   */
+  unsubscribeDiscoveredPorts(): void {
+    this.sendSessionMessage({ type: "discovered_ports.unsubscribe" });
+  }
+
   async ping(params?: { requestId?: string; timeoutMs?: number }): Promise<{
     requestId: string;
     clientSentAt: number;

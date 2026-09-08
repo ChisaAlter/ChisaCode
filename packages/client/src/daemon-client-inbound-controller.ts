@@ -64,6 +64,10 @@ export type DaemonEvent =
       type: "providers_snapshot_update";
       payload: Extract<SessionOutboundMessage, { type: "providers_snapshot_update" }>["payload"];
     }
+  | {
+      type: "discovered_ports";
+      ports: Extract<SessionOutboundMessage, { type: "discovered_ports" }>["ports"];
+    }
   | { type: "error"; message: string };
 
 export type DaemonEventHandler = (event: DaemonEvent) => void;
@@ -377,6 +381,8 @@ export class DaemonClientInboundController {
           type: "providers_snapshot_update",
           payload: message.payload,
         };
+      case "discovered_ports":
+        return { type: "discovered_ports", ports: message.ports };
       default:
         return null;
     }

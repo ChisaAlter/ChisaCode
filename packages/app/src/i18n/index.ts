@@ -761,6 +761,9 @@ export const resources = {
         openDevTools: "打开浏览器开发者工具",
         cancelElementSelector: "取消元素选择器",
         selectElement: "选择元素",
+        discoveredServersTitle: "检测到的本地服务器",
+        discoveredServersOpen: "在浏览器中打开",
+        discoveredServersUnknownProcess: "本地服务器",
       },
       terminal: {
         title: "终端",
@@ -2792,6 +2795,9 @@ export const resources = {
         openDevTools: "Open browser developer tools",
         cancelElementSelector: "Cancel element selector",
         selectElement: "Select element",
+        discoveredServersTitle: "Detected local servers",
+        discoveredServersOpen: "Open in browser",
+        discoveredServersUnknownProcess: "Local server",
       },
       message: {
         copyMessage: "Copy message",
