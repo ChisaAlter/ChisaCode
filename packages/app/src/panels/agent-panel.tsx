@@ -29,6 +29,8 @@ import { useAgentAttentionClear } from "@/hooks/use-agent-attention-clear";
 import { useAgentInitialization } from "@/hooks/use-agent-initialization";
 import { useAgentInputDraft, type AgentInputDraft } from "@/composer/draft/input-draft";
 import { useComposerPromptHistory } from "@/composer/use-composer-prompt-history";
+import { deriveComposerTasks } from "@/composer/tasks-badge";
+import { TasksBadge } from "@/composer/tasks-badge-view";
 import {
   type AgentScreenAgent,
   type AgentScreenContinuity,
@@ -1492,6 +1494,13 @@ function ActiveAgentComposer({
     currentText: agentInputDraft.text,
     setText: agentInputDraft.setText,
   });
+  const composerStreamTail = useSessionStore((state) =>
+    agentId ? state.sessions[serverId]?.agentStreamTail?.get(agentId) : undefined,
+  );
+  const tasksBadge = useMemo(
+    () => deriveComposerTasks(composerStreamTail ?? EMPTY_STREAM_ITEMS),
+    [composerStreamTail],
+  );
   const { archiveAgent } = useArchiveAgent();
   const unpinWorkspaceAgent = useWorkspaceLayoutStore((state) => state.unpinAgent);
   const subagentRows = useSubagentsForParent({
@@ -1585,6 +1594,11 @@ function ActiveAgentComposer({
           onOpenSubagent={handleOpenSubagent}
           onArchiveSubagent={handleArchiveSubagent}
         />
+        {tasksBadge ? (
+          <View style={styles.tasksBadgeRow}>
+            <TasksBadge badge={tasksBadge} />
+          </View>
+        ) : null}
         <Composer
           agentId={agentId}
           serverId={serverId}
@@ -1682,6 +1696,10 @@ const foregroundMutedColorMapping = (theme: Theme) => ({
 });
 
 const styles = StyleSheet.create((theme) => ({
+  tasksBadgeRow: {
+    paddingHorizontal: 12,
+    paddingTop: 6,
+  },
   root: {
     flex: 1,
     minWidth: 0,

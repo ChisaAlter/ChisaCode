@@ -688,6 +688,7 @@ export const resources = {
         },
       },
       composer: {
+        tasksToggle: "任务进度",
         placeholder: "输入消息...",
         desktopPlaceholder: "给智能体发消息，可用 @files、/commands 和 /skills",
         mobilePlaceholder: "输入消息，@files，/commands",
@@ -2673,6 +2674,7 @@ export const resources = {
         },
       },
       composer: {
+        tasksToggle: "Task progress",
         placeholder: "Message...",
         desktopPlaceholder: "Message the agent, tag @files, or use /commands and /skills",
         mobilePlaceholder: "Message, @files, /commands",
