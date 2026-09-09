@@ -290,6 +290,35 @@ describe("MockLoadTestAgentClient", () => {
     });
   });
 
+  test("todo-list mode emits a todo timeline item and finishes", async () => {
+    vi.useFakeTimers();
+    const client = new MockLoadTestAgentClient();
+    const session = await client.createSession({
+      provider: "mock",
+      cwd: process.cwd(),
+      model: "ten-second-stream",
+    });
+    const events: AgentStreamEvent[] = [];
+    const unsubscribe = session.subscribe((event) => events.push(event));
+
+    const resultPromise = session.run("Emit a todo list.");
+    await vi.advanceTimersByTimeAsync(1_000);
+    const result = await resultPromise;
+    unsubscribe();
+
+    const todoItems = events.flatMap((event): AgentTimelineItem[] =>
+      event.type === "timeline" && event.item.type === "todo" ? [event.item] : [],
+    );
+    expect(todoItems).toHaveLength(1);
+    expect(todoItems[0]?.items).toEqual([
+      { text: "扫描仓库结构", completed: true },
+      { text: "实现横幅系统", completed: true },
+      { text: "补齐桌面验证", completed: false },
+    ]);
+    expect(events.some((event) => event.type === "turn_completed")).toBe(true);
+    expect(result).toMatchObject({ finalText: "Synthetic todo list complete", canceled: false });
+  });
+
   test("failing-turn mode emits turn_failed with the caller message and never completes", async () => {
     vi.useFakeTimers();
     const client = new MockLoadTestAgentClient();

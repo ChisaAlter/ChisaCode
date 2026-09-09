@@ -528,6 +528,11 @@ function shouldEmitCodeFence(prompt: AgentPromptInput): boolean {
   );
 }
 
+/** Prompt mode for the composer tasks-badge gate: `Emit a todo list.` */
+function shouldEmitTodoList(prompt: AgentPromptInput): boolean {
+  return /emit\s+(?:a\s+)?todo\s+list/i.test(promptToText(prompt));
+}
+
 /**
  * Prompt mode for the composer banner gate: fail the turn with a
  * caller-supplied message so the real daemon error path can be exercised.
@@ -727,6 +732,8 @@ export class MockLoadTestAgentSession implements AgentSession {
       this.scheduleStressTurn(turn, stress);
     } else if (failingMessage) {
       this.scheduleFailingTurn(turn, failingMessage);
+    } else if (shouldEmitTodoList(prompt)) {
+      this.scheduleTodoListTurn(turn);
     } else if (shouldEmitTrailingToolRun(prompt)) {
       this.scheduleTrailingToolRunTurn(turn);
     } else if (shouldEmitCodeFence(prompt)) {
@@ -912,6 +919,32 @@ export class MockLoadTestAgentSession implements AgentSession {
         timeline: [],
         canceled: false,
       });
+    }, 0);
+    turn.timer.unref?.();
+  }
+
+  /**
+   * Single-shot turn that emits a todo list (mixed completion states) then a
+   * closing line, so the composer tasks badge renders on the real surface.
+   */
+  private scheduleTodoListTurn(turn: ActiveTurn): void {
+    turn.timer = setTimeout(() => {
+      if (this.activeTurn?.turnId !== turn.turnId) {
+        return;
+      }
+      this.emitTimeline(turn.turnId, {
+        type: "todo",
+        items: [
+          { text: "扫描仓库结构", completed: true },
+          { text: "实现横幅系统", completed: true },
+          { text: "补齐桌面验证", completed: false },
+        ],
+      });
+      this.emitTimeline(turn.turnId, {
+        type: "assistant_message",
+        text: "任务清单已同步，剩余 1 项待完成。",
+      });
+      this.finishTurnWithText(turn, "Synthetic todo list complete");
     }, 0);
     turn.timer.unref?.();
   }

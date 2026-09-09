@@ -74,7 +74,7 @@ export function TasksBadge({ badge }: TasksBadgeProps) {
       {expanded ? (
         <View style={styles.listContainer}>
           {badge.tasks.map((task) => (
-            <View key={task.id} style={styles.taskRow}>
+            <View key={task.id} style={styles.taskRow} testID="composer-tasks-badge-row">
               <Text style={styles.taskIcon}>{taskIcon(task.status)}</Text>
               <Text
                 numberOfLines={1}
