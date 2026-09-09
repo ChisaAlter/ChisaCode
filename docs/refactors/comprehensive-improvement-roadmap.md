@@ -9,6 +9,16 @@
 
 ## 进行中
 
+### T3 移植 M5：Webview 崩溃恢复（2026-09-08 完成）
+
+- **问题**：browser-pane 的 webview 未监听 `render-process-gone`——render 进程崩溃后面板白屏无提示。T3 有指数退避自动重载 + 上限（审计 M5）
+- **影响范围**：新 `packages/app/src/components/webview-crash-recovery.ts`（纯策略：退避 [250,500,1000]ms、30s 滑动窗口、上限 3 次）+ `browser-pane.electron.tsx` 接线（`render-process-gone` 监听 → 崩溃覆盖层 + 自动重载；`dom-ready` 清除；手动重载按钮重置预算）+ i18n en/zh
+- **强制门禁**：`webview-crash-recovery.test.ts` 7/7（退避序列/上限/窗口过期重置/部分过期/自定义 delay/maxAttempts）；typecheck 0；lint 0/0；打包 Electron 实机——重打包后 `desktop-discovered-servers.script.ts`（面板全链路含新代码）PASS
+- **残余边界（如实声明）**：渲染进程崩溃的注入自动化未做（需 kill renderer 的工具链），覆盖层出现路径以单测+代码审阅+面板全链路 smoke 为准；连续 3 次崩溃后停留覆盖层等手动（T3 同语义）
+- **状态**：**完成（2026-09-08）**
+
+### T3 移植 M3：端口扫描 + 本地服务器发现（2026-09-08 完成）
+
 ### T3 移植 M3：端口扫描 + 本地服务器发现（2026-09-08 完成）
 
 - **问题**：Agent 在 daemon 主机上启动 dev server 后，用户须手动复制 URL 到浏览器面板。T3 有端口扫描 + 空状态卡片列表。完全计划见 `docs/refactors/t3code-complete-port-plan.md` 模块 3

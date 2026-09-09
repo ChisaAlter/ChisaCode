@@ -764,6 +764,9 @@ export const resources = {
         discoveredServersTitle: "检测到的本地服务器",
         discoveredServersOpen: "在浏览器中打开",
         discoveredServersUnknownProcess: "本地服务器",
+        crashedTitle: "页面已崩溃",
+        crashedBody: "浏览器页面的渲染进程意外退出。",
+        crashedReload: "重新加载",
       },
       terminal: {
         title: "终端",
@@ -2798,6 +2801,9 @@ export const resources = {
         discoveredServersTitle: "Detected local servers",
         discoveredServersOpen: "Open in browser",
         discoveredServersUnknownProcess: "Local server",
+        crashedTitle: "Page crashed",
+        crashedBody: "The browser page's renderer process exited unexpectedly.",
+        crashedReload: "Reload",
       },
       message: {
         copyMessage: "Copy message",

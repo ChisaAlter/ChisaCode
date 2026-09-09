@@ -18,6 +18,7 @@ import {
 import { type Theme } from "@/styles/theme";
 import { useTranslation } from "react-i18next";
 import { useDiscoveredServers } from "@/hooks/use-discovered-servers";
+import { createWebviewCrashRecovery } from "@/components/webview-crash-recovery";
 import {
   buildWorkspaceAttachmentScopeKey,
   useWorkspaceAttachments,
@@ -380,6 +381,8 @@ export function BrowserPane({
   const urlInputStyle = styles.urlInput;
   const errorTextStyle = styles.metaError;
   const discoveredServersTitleStyle = styles.discoveredServersTitle;
+  const crashTitleStyle = styles.crashTitle;
+  const crashBodyStyle = styles.crashBody;
 
   useEffect(() => {
     const nextUrl = browser?.url ?? "https://example.com";
@@ -388,6 +391,46 @@ export function BrowserPane({
 
   const updateBrowserRef = useRef(updateBrowser);
   updateBrowserRef.current = updateBrowser;
+  // Renderer-crash recovery: exponential backoff auto-reload, capped per
+  // window; the overlay takes over when the budget is exhausted.
+  const crashRecoveryRef = useRef<{
+    policy: ReturnType<typeof createWebviewCrashRecovery>;
+    setCrashed: (crashed: boolean) => void;
+  } | null>(null);
+  const [isWebviewCrashed, setIsWebviewCrashed] = useState(false);
+  if (!crashRecoveryRef.current) {
+    let notifyCrashed: ((crashed: boolean) => void) | null = null;
+    crashRecoveryRef.current = {
+      policy: createWebviewCrashRecovery(),
+      setCrashed: (crashed) => {
+        notifyCrashed?.(crashed);
+      },
+    };
+    notifyCrashed = setIsWebviewCrashed;
+  }
+
+  useEffect(() => {
+    if (!isWebviewCrashed) {
+      return;
+    }
+    const verdict = crashRecoveryRef.current?.policy.onCrash();
+    if (!verdict) {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      crashRecoveryRef.current?.setCrashed(false);
+      webviewRef.current?.reload?.();
+    }, verdict.reloadAfterMs);
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [isWebviewCrashed]);
+
+  const handleManualCrashReload = useCallback(() => {
+    crashRecoveryRef.current?.policy.reset();
+    crashRecoveryRef.current?.setCrashed(false);
+    webviewRef.current?.reload?.();
+  }, []);
 
   const selectUrlBar = useCallback(() => {
     window.setTimeout(() => {
@@ -521,8 +564,15 @@ export function BrowserPane({
         lastError: message,
       });
     };
+    const handleRenderProcessGone = (event: Event) => {
+      const details = (event as Event & { details?: { reason?: string } }).details;
+      console.warn("[browser-pane] render process gone:", details?.reason ?? "unknown");
+      crashRecoveryRef.current?.setCrashed(true);
+      updateBrowserRef.current(browserIdRef.current, { isLoading: false });
+    };
     const handleDomReady = () => {
       domReadyRef.current = true;
+      crashRecoveryRef.current?.setCrashed(false);
       syncNavigationState();
     };
     const handleWebviewFocus = () => {
@@ -537,6 +587,7 @@ export function BrowserPane({
     webview.addEventListener("page-title-updated", handleTitleUpdated);
     webview.addEventListener("page-favicon-updated", handleFaviconUpdated);
     webview.addEventListener("did-fail-load", handleLoadFailed);
+    webview.addEventListener("render-process-gone", handleRenderProcessGone);
     webview.addEventListener("dom-ready", handleDomReady);
     webview.addEventListener("focus", handleWebviewFocus);
     webview.addEventListener("mousedown", handleWebviewFocus);
@@ -558,6 +609,7 @@ export function BrowserPane({
       webview.removeEventListener("page-title-updated", handleTitleUpdated);
       webview.removeEventListener("page-favicon-updated", handleFaviconUpdated);
       webview.removeEventListener("did-fail-load", handleLoadFailed);
+      webview.removeEventListener("render-process-gone", handleRenderProcessGone);
       webview.removeEventListener("dom-ready", handleDomReady);
       webview.removeEventListener("focus", handleWebviewFocus);
       webview.removeEventListener("mousedown", handleWebviewFocus);
@@ -1119,6 +1171,20 @@ export function BrowserPane({
           },
           style: webviewHostStyle,
         })}
+        {isWebviewCrashed ? (
+          <View style={styles.crashOverlay} testID="browser-crash-overlay">
+            <Text style={crashTitleStyle}>{t("browser.crashedTitle")}</Text>
+            <Text style={crashBodyStyle}>{t("browser.crashedBody")}</Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t("browser.crashedReload")}
+              onPress={handleManualCrashReload}
+              style={styles.crashReloadButton}
+            >
+              <Text style={styles.crashReloadText}>{t("browser.crashedReload")}</Text>
+            </Pressable>
+          </View>
+        ) : null}
       </View>
     </View>
   );
@@ -1266,5 +1332,42 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: 11.5,
     lineHeight: 16,
     color: theme.colors.foregroundMuted,
+  },
+  crashOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    padding: 24,
+    backgroundColor: theme.colors.surface0,
+  },
+  crashTitle: {
+    fontSize: 14.5,
+    lineHeight: 20,
+    fontWeight: "500",
+    color: theme.colors.foreground,
+    textAlign: "center",
+  },
+  crashBody: {
+    fontSize: 12.5,
+    lineHeight: 18,
+    color: theme.colors.foregroundMuted,
+    textAlign: "center",
+  },
+  crashReloadButton: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 8,
+    backgroundColor: theme.colors.primary,
+  },
+  crashReloadText: {
+    fontSize: 12.5,
+    lineHeight: 17,
+    fontWeight: "500",
+    color: "#ffffff",
   },
 }));
