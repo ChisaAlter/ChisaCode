@@ -72,6 +72,7 @@ import {
 import { CompletedTurnFooterRow, TurnFooter, type TurnContentStrategy } from "./turn-footer";
 import { layoutStream, type StreamLayoutItem } from "./layout";
 import { useStableStreamLayout } from "./stable-layout";
+import { TurnChangesTree } from "@/components/turn-changes-tree";
 import {
   type BottomAnchorLocalRequest,
   type BottomAnchorRouteRequest,
@@ -469,8 +470,24 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       [agent.capabilities, agentId, client, resolvedServerId],
     );
 
+    const openTurnChangeFile = useCallback(
+      (path: string) => {
+        if (workspaceId) {
+          navigateToPreparedWorkspaceTab({
+            serverId: resolvedServerId,
+            workspaceId,
+            target: createWorkspaceFileTabTarget({ path }),
+          });
+          return;
+        }
+        handleInlinePathPress({ raw: path, path }, "main");
+      },
+      [handleInlinePathPress, resolvedServerId, workspaceId],
+    );
+
     const renderAssistantMessageItem = useCallback(
       (layoutItem: StreamLayoutItem, item: Extract<StreamItem, { kind: "assistant_message" }>) => {
+        const turnChanges = layoutItem.turnChanges;
         return (
           <View style={stylesheet.workbenchAssistantTurn}>
             {/* No T3-style AI badge + duration turn header above assistant prose.
@@ -492,6 +509,9 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
                 spacing={layoutItem.assistantSpacing}
                 isStreaming={agent.status === "running"}
               />
+              {turnChanges && agent.status !== "running" ? (
+                <TurnChangesTree files={turnChanges.changedFiles} onOpenFile={openTurnChangeFile} />
+              ) : null}
             </AssistantFileLinkResolverProvider>
           </View>
         );
@@ -500,6 +520,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
         agent.status,
         client,
         handleInlinePathPress,
+        openTurnChangeFile,
         resolvedServerId,
         toast,
         workspaceRoot,

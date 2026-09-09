@@ -1391,6 +1391,8 @@ export const resources = {
         scrollToBottom: "滚动到底部",
         thinking: "推理过程",
         thinkingRunning: "正在推理",
+        changedFilesTitle: "变更文件",
+        changedFilesToggle: "展开或收起变更文件列表",
       },
       review: {
         editComment: "编辑评论",
@@ -3413,6 +3415,8 @@ export const resources = {
         scrollToBottom: "Scroll to bottom",
         thinking: "Reasoning",
         thinkingRunning: "Reasoning...",
+        changedFilesTitle: "Changed files",
+        changedFilesToggle: "Expand or collapse changed files",
       },
       review: {
         editComment: "Edit comment",

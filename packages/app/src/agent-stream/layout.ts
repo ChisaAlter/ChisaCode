@@ -22,6 +22,12 @@ export interface StreamLayoutItem {
   assistantSpacing: "default" | "compactTop" | "compactBottom" | "compactBoth";
   completedFooter: TurnFooterHost | null;
   turnTiming?: TurnTiming;
+  /**
+   * A completed turn's TurnChangesItem captured while walking this segment,
+   * attached to the assistant message it follows (T3 port M4). Purely
+   * derived — turn_changes rows themselves stay invisible.
+   */
+  turnChanges: import("@/types/stream").TurnChangesItem | null;
   toolSequence: StreamToolSequence;
   toolSequenceGroup: StreamLayoutItem[] | null;
   toolSequenceGroupGapBelow: number;
@@ -311,6 +317,7 @@ function layoutSegment(input: LayoutSegmentInput): StreamLayoutItem[] {
       completedFooter,
       turnTiming:
         item.kind === "assistant_message" ? input.timingByAssistantId.get(item.id) : undefined,
+      turnChanges: null,
       toolSequence: getToolSequence({ item, aboveItem, belowItem }),
       toolSequenceGroup: null,
       toolSequenceGroupGapBelow: 0,
@@ -321,7 +328,30 @@ function layoutSegment(input: LayoutSegmentInput): StreamLayoutItem[] {
       frameOrder: input.frameOrder,
     };
   });
+  attachTurnChanges(items);
   return assignToolSequenceGroups(items);
+}
+
+/**
+ * Attaches each invisible turn_changes row to the completed turn's last
+ * assistant_message layout item (walking back past the collapsed tool run),
+ * so the changed-files tree renders under that message (T3 port M4).
+ */
+function attachTurnChanges(items: StreamLayoutItem[]): void {
+  let pending: import("@/types/stream").TurnChangesItem | null = null;
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    const layoutItem = items[index];
+    if (!layoutItem) continue;
+    if (layoutItem.item.kind === "turn_changes") {
+      pending = layoutItem.item;
+      continue;
+    }
+    if (pending === null) continue;
+    if (layoutItem.item.kind === "assistant_message") {
+      layoutItem.turnChanges = pending;
+      pending = null;
+    }
+  }
 }
 
 export function layoutStream(input: StreamLayoutInput): StreamLayout {

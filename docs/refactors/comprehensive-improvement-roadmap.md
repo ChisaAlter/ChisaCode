@@ -9,6 +9,16 @@
 
 ## 进行中
 
+### T3 移植 M4：回合变更文件树（TurnChangesItem 渲染）（2026-09-08 完成）
+
+- **问题**：`TurnChangesItem`（回合完成的 changedFiles）在 reducer 已产出但被 `isVisibleLayoutItem` 过滤从不显示。T3 在 assistant 文本下渲染可折叠变更文件树（原型 `prototypes/changed-files-tree.html`，用户"继续"批准）。完全计划见 `docs/refactors/t3code-complete-port-plan.md` 模块 4
+- **影响范围**：新 `components/build-turn-diff-tree.ts`（目录分组树构建纯函数：目录聚合统计/目录先排序/basename 消歧 parentDir/重复路径去重）+ 新 `components/turn-changes-tree.tsx`（折叠树组件，复用 DiffStat 色彩体系 + Fonts.mono）+ `agent-stream/layout.ts`（`StreamLayoutItem.turnChanges` 字段 + `attachTurnChanges` 反向回溯附着到回合最后一条 assistant——初版"附着到前一条可见行"会挂到折叠 tool-run 行，实机验证抓出后重写）+ `stable-layout.ts` 比较器补 turnChanges + `view.tsx`（idle 时 assistant 下方渲染树 + openTurnChangeFile 打开文件预览 tab）+ mock provider（trailing-tool-run 模式追加 turn_changes 尾置项）+ i18n en/zh
+- **强制门禁**：`build-turn-diff-tree.test.ts` 12/12（分组/聚合/排序/消歧/去重/深嵌套/确定性）；回归 stable-layout+layout+web-virtualization+bottom+turn-anchor+reducers 168/168；mock provider 8/8；typecheck 0；lint 0/0；**web Playwright `turn-changes-tree.spec.ts` 1/1 PASS**（mock 两回合 turn_changes → 树折叠态渲染 → 展开出 4 文件行 → 目录分组可见 → 点击文件行打开预览 tab）
+- **残余边界（如实声明）**：① 虚拟化历史段的树行初始高度估计未含树（tanstack measureElement 挂载重测兜底，仅首帧估算偏差）；② "打开 diff" 仍无 diff 内容 RPC（沿用计划裁决：点击开文件预览 tab）；③ `changeSummary` 不显示（树更直观）；④ 崩溃注入自动化未做（与 M5 同款残余）
+- **状态**：**完成（2026-09-08）**
+
+### T3 移植 M5：Webview 崩溃恢复（2026-09-08 完成）
+
 ### T3 移植 M5：Webview 崩溃恢复（2026-09-08 完成）
 
 - **问题**：browser-pane 的 webview 未监听 `render-process-gone`——render 进程崩溃后面板白屏无提示。T3 有指数退避自动重载 + 上限（审计 M5）

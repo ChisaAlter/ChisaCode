@@ -54,6 +54,7 @@ export function isStreamLayoutItemContentUnchanged(
     a.assistantSpacing === b.assistantSpacing &&
     isTurnFooterHostUnchanged(a.completedFooter, b.completedFooter) &&
     a.turnTiming === b.turnTiming &&
+    a.turnChanges === b.turnChanges &&
     a.toolSequence === b.toolSequence &&
     a.toolSequenceGroup === b.toolSequenceGroup &&
     a.toolSequenceGroupGapBelow === b.toolSequenceGroupGapBelow &&

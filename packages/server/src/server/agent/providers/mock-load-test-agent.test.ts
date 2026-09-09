@@ -267,11 +267,22 @@ describe("MockLoadTestAgentClient", () => {
     ]);
 
     // The tool run is the last content: no assistant text after it and no
-    // repeated cycles (the app folds the run as badges once idle).
+    // repeated cycles (the app folds the run as badges once idle). The only
+    // timeline item after the tool run is the trailing turn_changes payload
+    // (T3 port M4) exercising the changed-files tree.
     const lastToolIndex = timelineItems.findLastIndex((item) => item.type === "tool_call");
     const afterToolItems = timelineItems.slice(lastToolIndex + 1);
     expect(afterToolItems.every((item) => item.type !== "assistant_message")).toBe(true);
-    expect(afterToolItems.length).toBe(0);
+    expect(afterToolItems).toHaveLength(1);
+    expect(afterToolItems[0]).toMatchObject({
+      type: "turn_changes",
+      changeSummary: "Synthetic trailing tool run changed files",
+    });
+    expect(
+      afterToolItems[0]?.type === "turn_changes" && afterToolItems[0].changedFiles,
+    ).toContainEqual(
+      expect.objectContaining({ path: "packages/app/src/hooks/use-scroll-anchor.ts" }),
+    );
     expect(events.some((event) => event.type === "turn_completed")).toBe(true);
     expect(result).toMatchObject({
       finalText: "Synthetic trailing tool run complete",

@@ -73,6 +73,7 @@ function makeLayoutItem(
     assistantSpacing: "default",
     completedFooter: null,
     turnTiming: undefined,
+    turnChanges: null,
     toolSequence: "none",
     toolSequenceGroup: null,
     toolSequenceGroupGapBelow: 0,

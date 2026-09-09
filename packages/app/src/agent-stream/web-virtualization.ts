@@ -42,12 +42,19 @@ export interface WebVirtualizedHistoryWindow {
   mountedEntries: IndexedStreamItem[];
 }
 
-export function estimateStreamItemHeight(item: StreamItem): number {
+export function estimateStreamItemHeight(
+  item: StreamItem,
+  options?: { hasTurnChangesTree?: boolean },
+): number {
   switch (item.kind) {
     case "user_message":
       return item.images && item.images.length > 0 ? 220 : 96;
-    case "assistant_message":
-      return estimateAssistantMessageHeightFromCache(item.text) ?? 220;
+    case "assistant_message": {
+      const base = estimateAssistantMessageHeightFromCache(item.text) ?? 220;
+      // Changed-files tree (collapsed header + margin) when the turn carries a
+      // TurnChangesItem; expanded content is remeasured on mount.
+      return options?.hasTurnChangesTree ? base + 56 : base;
+    }
     case "tool_call":
       return COLLAPSED_TOOL_SEQUENCE_ROW_HEIGHT_ESTIMATE;
     case "thought":

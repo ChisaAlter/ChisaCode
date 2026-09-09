@@ -116,6 +116,10 @@ type CycleEvent =
   | { kind: "reasoning_token"; text: string }
   | { kind: "tool_running"; callId: string; name: string; detail: ToolCallDetail }
   | { kind: "tool_completed"; callId: string; name: string; detail: ToolCallDetail }
+  | {
+      kind: "turn_changes";
+      changedFiles: { path: string; additions?: number; deletions?: number }[];
+    }
   | { kind: "usage" };
 
 interface LargeAgentStreamPayloadRequest {
@@ -494,6 +498,21 @@ function buildTrailingToolRunQueue(turnId: string): CycleEvent[] {
   });
 
   queue.push(...buildCycleToolEvents(turnId, 1));
+  // Trailing turn_changes (T3 port M4): the completed turn's changed-files
+  // tree, attached by the app to the last assistant message of the turn.
+  queue.push({
+    kind: "turn_changes",
+    changedFiles: [
+      { path: "packages/app/src/hooks/use-scroll-anchor.ts", additions: 8, deletions: 3 },
+      { path: "packages/app/src/components/conversation-list.tsx", additions: 4, deletions: 1 },
+      {
+        path: "packages/app/src/components/sidebar-status-view.tsx",
+        additions: 12,
+        deletions: 2,
+      },
+      { path: "docs/refactors/roadmap.md", additions: 3 },
+    ],
+  });
   queue.push({ kind: "usage" });
   return queue;
 }
@@ -1149,6 +1168,14 @@ export class MockLoadTestAgentSession implements AgentSession {
             detail: event.detail,
           }),
         );
+        return;
+      }
+      case "turn_changes": {
+        this.emitTimeline(turn.turnId, {
+          type: "turn_changes",
+          changeSummary: "Synthetic trailing tool run changed files",
+          changedFiles: event.changedFiles,
+        });
         return;
       }
       case "usage": {
