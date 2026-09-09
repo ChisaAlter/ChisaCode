@@ -528,6 +528,17 @@ function shouldEmitCodeFence(prompt: AgentPromptInput): boolean {
   );
 }
 
+/**
+ * Prompt mode for the composer banner gate: fail the turn with a
+ * caller-supplied message so the real daemon error path can be exercised.
+ * `Fail the turn: <message>`.
+ */
+function parseFailingTurnPrompt(prompt: AgentPromptInput): string | null {
+  const match = /fail\s+(?:the\s+)?turn:\s*(.+)/i.exec(promptToText(prompt));
+  const message = match?.[1]?.trim();
+  return message ? message : null;
+}
+
 function buildCodeFenceQueue(): CycleEvent[] {
   const queue: CycleEvent[] = [];
   for (const tok of tokenize(
@@ -705,6 +716,7 @@ export class MockLoadTestAgentSession implements AgentSession {
 
     const largePayload = parseLargeAgentStreamPayloadPrompt(prompt);
     const stress = parseAgentStreamStressPrompt(prompt);
+    const failingMessage = parseFailingTurnPrompt(prompt);
     if (options?.outputSchema) {
       this.scheduleStructuredOutputTurn(turn, options.outputSchema);
     } else if (shouldEmitPlanApprovalPrompt(prompt)) {
@@ -713,6 +725,8 @@ export class MockLoadTestAgentSession implements AgentSession {
       this.scheduleLargePayloadTurn(turn, largePayload);
     } else if (stress) {
       this.scheduleStressTurn(turn, stress);
+    } else if (failingMessage) {
+      this.scheduleFailingTurn(turn, failingMessage);
     } else if (shouldEmitTrailingToolRun(prompt)) {
       this.scheduleTrailingToolRunTurn(turn);
     } else if (shouldEmitCodeFence(prompt)) {
@@ -869,6 +883,37 @@ export class MockLoadTestAgentSession implements AgentSession {
     turn.finishTextWhenQueueDrained = "Synthetic code fence stream complete";
     turn.queue = buildCodeFenceQueue();
     this.schedule(turn, 0);
+  }
+
+  /**
+   * Single-shot turn that ends in a `turn_failed` event carrying the
+   * caller-supplied message, so the daemon marks the agent errored and the
+   * composer banner stack can be verified on the real surface.
+   */
+  private scheduleFailingTurn(turn: ActiveTurn, message: string): void {
+    turn.timer = setTimeout(() => {
+      if (this.activeTurn?.turnId !== turn.turnId) {
+        return;
+      }
+      this.emitTimeline(turn.turnId, {
+        type: "assistant_message",
+        text: "Working on it…",
+      });
+      this.activeTurn = null;
+      this.emit({
+        type: "turn_failed",
+        provider: this.provider,
+        turnId: turn.turnId,
+        error: message,
+      });
+      turn.resolve({
+        sessionId: this.id,
+        finalText: "",
+        timeline: [],
+        canceled: false,
+      });
+    }, 0);
+    turn.timer.unref?.();
   }
 
   private failConfiguredRewind(): void {

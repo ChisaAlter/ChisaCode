@@ -16,6 +16,7 @@ import { AgentModeControl } from "@/composer/agent-controls/mode-control";
 import { FileDropZone } from "@/components/file-drop-zone";
 import { RewindComposerRestoreProvider } from "@/components/rewind/composer-restore";
 import type { ImageAttachment } from "@/composer/types";
+import type { ComposerBannerDescriptor } from "@/composer/banner/composer-banner-logic";
 import { getProviderIcon } from "@/components/provider-icons";
 import { ToastViewport, useToastHost } from "@/components/toast-host";
 import type { WorkspaceComposerAttachment } from "@/attachments/types";
@@ -427,6 +428,7 @@ export function useDraftPanelDescriptor(
 }
 
 const EMPTY_STREAM_ITEMS: StreamItem[] = [];
+const EMPTY_BANNERS: readonly ComposerBannerDescriptor[] = [];
 const EMPTY_PENDING_PERMISSIONS = new Map<string, PendingPermission>();
 const EMPTY_PENDING_PERMISSION_LIST: PendingPermission[] = [];
 
@@ -1229,6 +1231,25 @@ function ChatAgentReadyContent({
     [agentId, streamViewRef],
   );
 
+  // Agent run failures surface in the composer banner stack (attached above the
+  // input) instead of a standalone strip. Dismissal memory is keyed by the error
+  // message, so the same failure stays hidden while a new one still appears.
+  const agentErrorBanners = useMemo<readonly ComposerBannerDescriptor[]>(() => {
+    if (agentState.status !== "error" || !agentState.lastError) {
+      return EMPTY_BANNERS;
+    }
+    return [
+      {
+        id: "agent-run-error",
+        variant: "error",
+        title: t("panels.agent.runFailed"),
+        body: agentState.lastError,
+        message: `agent-run-error:${agentState.lastError}`,
+        testID: "agent-run-error-banner",
+      },
+    ];
+  }, [agentState.lastError, agentState.status, t]);
+
   return (
     <RewindComposerRestoreProvider text={agentInputDraft.text} setText={agentInputDraft.setText}>
       <View style={styles.root} testID={agentId ? `agent-panel-${agentId}` : undefined}>
@@ -1265,13 +1286,6 @@ function ChatAgentReadyContent({
             />
           ) : null}
 
-          {agentState.status === "error" && agentState.lastError ? (
-            <HistorySyncErrorBanner
-              title={t("panels.agent.runFailed")}
-              message={agentState.lastError}
-            />
-          ) : null}
-
           <AgentComposerSection
             agentId={agentId}
             serverId={serverId}
@@ -1281,6 +1295,7 @@ function ChatAgentReadyContent({
             cwd={cwd}
             isSubmitLoading={false}
             agentInputDraft={agentInputDraft}
+            banners={agentErrorBanners}
             onAttentionInputFocus={attentionController.clearOnInputFocus}
             onAttentionPromptSend={attentionController.clearOnPromptSend}
             onAddImages={handleAddImagesCallback}
@@ -1407,6 +1422,7 @@ function AgentComposerSection({
   cwd,
   isSubmitLoading,
   agentInputDraft,
+  banners,
   onAttentionInputFocus,
   onAttentionPromptSend,
   onAddImages,
@@ -1422,6 +1438,7 @@ function AgentComposerSection({
   cwd: string;
   isSubmitLoading: boolean;
   agentInputDraft: AgentInputDraft;
+  banners?: readonly ComposerBannerDescriptor[];
   onAttentionInputFocus: () => void;
   onAttentionPromptSend: () => void;
   onAddImages: (addImages: (images: ImageAttachment[]) => void) => void;
@@ -1447,6 +1464,7 @@ function AgentComposerSection({
       cwd={cwd}
       isSubmitLoading={isSubmitLoading}
       agentInputDraft={agentInputDraft}
+      banners={banners}
       onAttentionInputFocus={onAttentionInputFocus}
       onAttentionPromptSend={onAttentionPromptSend}
       onAddImages={onAddImages}
@@ -1464,6 +1482,7 @@ function ActiveAgentComposer({
   cwd,
   isSubmitLoading,
   agentInputDraft,
+  banners,
   onAttentionInputFocus,
   onAttentionPromptSend,
   onAddImages,
@@ -1477,6 +1496,7 @@ function ActiveAgentComposer({
   cwd: string;
   isSubmitLoading: boolean;
   agentInputDraft: AgentInputDraft;
+  banners?: readonly ComposerBannerDescriptor[];
   onAttentionInputFocus: () => void;
   onAttentionPromptSend: () => void;
   onAddImages: (addImages: (images: ImageAttachment[]) => void) => void;
@@ -1622,6 +1642,7 @@ function ActiveAgentComposer({
           onOptimisticMessageDispatched={onOptimisticMessageDispatched}
           onClientSlashCommand={handleClientSlashCommand}
           onPromptHistoryStep={onPromptHistoryStep}
+          banners={banners}
           footer={composerFooter}
           inputWrapperStyle={styles.composerInputWrapper}
         />

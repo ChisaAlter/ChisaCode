@@ -290,6 +290,28 @@ describe("MockLoadTestAgentClient", () => {
     });
   });
 
+  test("failing-turn mode emits turn_failed with the caller message and never completes", async () => {
+    vi.useFakeTimers();
+    const client = new MockLoadTestAgentClient();
+    const session = await client.createSession({
+      provider: "mock",
+      cwd: process.cwd(),
+      model: "ten-second-stream",
+    });
+    const events: AgentStreamEvent[] = [];
+    const unsubscribe = session.subscribe((event) => events.push(event));
+
+    const resultPromise = session.run("Fail the turn: 上游限流（HTTP 429）");
+    await vi.advanceTimersByTimeAsync(1_000);
+    const result = await resultPromise;
+    unsubscribe();
+
+    const failure = events.find((event) => event.type === "turn_failed");
+    expect(failure).toMatchObject({ error: "上游限流（HTTP 429）" });
+    expect(events.some((event) => event.type === "turn_completed")).toBe(false);
+    expect(result).toMatchObject({ finalText: "", canceled: false });
+  });
+
   test("agent manager coalesces adjacent assistant tokens into fewer messages", async () => {
     vi.useFakeTimers();
     const workdir = mkdtempSync(join(tmpdir(), "chisacode-mock-load-test-"));

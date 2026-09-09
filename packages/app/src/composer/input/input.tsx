@@ -140,6 +140,12 @@ export interface MessageInputProps {
   onHeightChange?: (height: number) => void;
   /** Extra styles merged onto the input wrapper (e.g. elevated background). */
   inputWrapperStyle?: import("react-native").ViewStyle;
+  /**
+   * Renders the card as the bottom half of a shared surface: squares the top
+   * edge, drops the top border and its own elevation, and ignores
+   * `inputWrapperStyle` so a banner can attach above it with no seam.
+   */
+  attachedToBanner?: boolean;
   /** Content rendered inside the bordered input surface, above the text input (e.g. attachment pills). */
   attachmentSlot?: React.ReactNode;
 }
@@ -1230,6 +1236,7 @@ interface ResolvedMessageInputProps {
   onFocusChange: ((focused: boolean) => void) | undefined;
   onHeightChange: ((height: number) => void) | undefined;
   inputWrapperStyle: import("react-native").ViewStyle | undefined;
+  attachedToBanner: boolean;
   attachmentSlot: React.ReactNode;
 }
 
@@ -1271,6 +1278,7 @@ function resolveMessageInputProps(props: MessageInputProps): ResolvedMessageInpu
     onFocusChange: props.onFocusChange,
     onHeightChange: props.onHeightChange,
     inputWrapperStyle: props.inputWrapperStyle,
+    attachedToBanner: props.attachedToBanner ?? false,
     attachmentSlot: props.attachmentSlot,
   };
 }
@@ -1320,6 +1328,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       onFocusChange,
       onHeightChange,
       inputWrapperStyle,
+      attachedToBanner,
       attachmentSlot,
     } = resolveMessageInputProps(props);
     const { t } = useTranslation();
@@ -1925,8 +1934,9 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
     }, [handleStopRealtimeVoice]);
 
     const inputWrapperSurfaceStyle = useMemo(
-      () => [styles.inputWrapper, inputWrapperStyle],
-      [inputWrapperStyle],
+      () =>
+        attachedToBanner ? styles.inputWrapperAttached : [styles.inputWrapper, inputWrapperStyle],
+      [attachedToBanner, inputWrapperStyle],
     );
     const textInputStyle = useMemo(
       () => [styles.textInput, computeTextInputHeightStyle(inputHeight, maxInputHeight)],
@@ -1967,7 +1977,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       <View ref={rootRef} style={styles.container} testID="message-input-root">
         {/* Regular input */}
         <Animated.View style={inputAnimatedStyle}>
-          <View ref={inputWrapperRef} style={inputWrapperSurfaceStyle}>
+          <View ref={inputWrapperRef} style={inputWrapperSurfaceStyle} testID="composer-input-card">
             {attachmentSlot}
             {/* Text input */}
             <View style={styles.textInputScrollWrapper}>
@@ -2100,6 +2110,32 @@ const styles = StyleSheet.create((theme: Theme) => ({
           transitionTimingFunction: "ease-in-out",
         }
       : {}),
+  },
+  // Bottom half of a shared banner+input surface (T3 port M7): the banner owns
+  // the top edge, so this card declares no top border or top radius. On web the
+  // composite elevation moves to the wrapper that owns both halves.
+  inputWrapperAttached: {
+    flexDirection: "column",
+    gap: 0,
+    backgroundColor: theme.colors.surface0,
+    borderTopWidth: 0,
+    borderRightWidth: theme.borderWidth[1],
+    borderBottomWidth: theme.borderWidth[1],
+    borderLeftWidth: theme.borderWidth[1],
+    borderColor: theme.colors.border,
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 0,
+    borderBottomLeftRadius: 18,
+    borderBottomRightRadius: 18,
+    minHeight: {
+      xs: 108,
+      md: 108,
+    },
+    paddingTop: 0,
+    paddingRight: 0,
+    paddingBottom: 0,
+    paddingLeft: 0,
+    ...(isWeb ? {} : resolveSoftComposerCardElevation()),
   },
   textInputScrollWrapper: {
     position: "relative",

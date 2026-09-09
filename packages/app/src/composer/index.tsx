@@ -1,4 +1,4 @@
-import { StyleSheet as RNStyleSheet, View, Text } from "react-native";
+import { StyleSheet as RNStyleSheet, View } from "react-native";
 import {
   useState,
   useEffect,
@@ -6,8 +6,10 @@ import {
   useCallback,
   useMemo,
   memo,
+  type Dispatch,
   type ReactElement,
   type ReactNode,
+  type SetStateAction,
 } from "react";
 import { StyleSheet } from "react-native-unistyles";
 import { useIsCompactFormFactor } from "@/constants/layout";
@@ -65,6 +67,12 @@ import { openExternalUrl } from "@/utils/open-external-url";
 import { useIsDictationReady } from "@/hooks/use-is-dictation-ready";
 import type { ClientSlashCommand } from "@/client-slash-commands";
 import { renderAttachmentTray, renderQueueTrack } from "@/composer/attachment-queue-renderers";
+import { ComposerBannerStack } from "@/composer/banner/composer-banner-stack";
+import {
+  mergeComposerBanners,
+  type ComposerBannerDescriptor,
+} from "@/composer/banner/composer-banner-logic";
+import { resolveSoftComposerCardElevation } from "@/composer/draft/soft-home-layout";
 import { useComposerAttachmentMenu } from "./attachment-menu";
 import { useComposerDeliveryController } from "./delivery-controller";
 import { useComposerSendProjectionAck } from "./use-composer-send-projection-ack";
@@ -78,6 +86,14 @@ import { buildAgentStateSelector } from "@/composer/agent-state-selector";
 type AttachmentListUpdater =
   | UserComposerAttachment[]
   | ((prev: UserComposerAttachment[]) => UserComposerAttachment[]);
+
+interface SendErrorState {
+  message: string;
+  /** Monotonic per-failure identity so a new failure always re-surfaces. */
+  seq: number;
+}
+
+const EMPTY_BANNERS: readonly ComposerBannerDescriptor[] = [];
 
 function resolveIsComposerLocked(
   submitBehavior: "clear" | "preserve-and-lock",
@@ -193,6 +209,13 @@ interface ComposerProps {
   footer?: ReactNode;
   /** When true, a parent wrapper owns the keyboard shift, so the composer skips its own. */
   externalKeyboardShift?: boolean;
+  /**
+   * External banners merged into the composer stack (agent errors, provider
+   * status). Merged with internal banners by id, external first.
+   */
+  banners?: readonly ComposerBannerDescriptor[];
+  /** Custom content pinned above the stack (user-input / approval panels). */
+  bannerSlot?: ReactNode;
 }
 
 const StableMessageInput = memo(MessageInput);
@@ -235,6 +258,8 @@ export function Composer({
   placeholder,
   footer,
   externalKeyboardShift,
+  banners: externalBanners,
+  bannerSlot,
 }: ComposerProps) {
   const { t } = useTranslation();
   const client = useHostRuntimeClient(serverId);
@@ -282,7 +307,23 @@ export function Composer({
   const [cursorIndex, setCursorIndex] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isCancellingAgent, setIsCancellingAgent] = useState(false);
-  const [sendError, setSendError] = useState<string | null>(null);
+  const [sendErrorState, setSendErrorState] = useState<SendErrorState | null>(null);
+  const sendError = sendErrorState?.message ?? null;
+  const sendErrorMessageRef = useRef<string | null>(null);
+  const sendErrorSeqRef = useRef(0);
+  // Each new failure gets a fresh sequence so a dismissed error still reappears
+  // on the next attempt, while dismissing the current one hides it.
+  const setSendError = useCallback<Dispatch<SetStateAction<string | null>>>((next) => {
+    const nextMessage = typeof next === "function" ? next(sendErrorMessageRef.current) : next;
+    sendErrorMessageRef.current = nextMessage;
+    if (!nextMessage) {
+      setSendErrorState(null);
+      return;
+    }
+    sendErrorSeqRef.current += 1;
+    setSendErrorState({ message: nextMessage, seq: sendErrorSeqRef.current });
+  }, []);
+  const [bannerAttached, setBannerAttached] = useState(false);
   const [lightboxMetadata, setLightboxMetadata] = useState<AttachmentMetadata | null>(null);
   const attachButtonRef = useRef<View | null>(null);
   const messageInputRef = useRef<MessageInputRef>(null);
@@ -357,7 +398,7 @@ export function Composer({
     if (sendError && userInput) {
       setSendError(null);
     }
-  }, [userInput, sendError]);
+  }, [userInput, sendError, setSendError]);
 
   // A send failure ends the in-flight window: release the projection busy so
   // the composer is not stuck waiting for a message the daemon never adopted.
@@ -365,7 +406,7 @@ export function Composer({
     if (sendError) {
       trackPendingSend(null);
     }
-  }, [sendError, trackPendingSend]);
+  }, [sendError, setSendError, trackPendingSend]);
 
   // Fallback timeout replaces the old 15s RPC hold: if the send is never
   // adopted and never errors, release busy and surface a retryable error.
@@ -378,7 +419,7 @@ export function Composer({
       setSendError(t("composer.sendTimeout"));
     }, 30_000);
     return () => clearTimeout(timeout);
-  }, [hasPendingSend, isServerAdopted, t, trackPendingSend]);
+  }, [hasPendingSend, isServerAdopted, setSendError, t, trackPendingSend]);
 
   useEffect(() => {
     setCursorIndex((current) => Math.min(current, userInput.length));
@@ -667,9 +708,33 @@ export function Composer({
   const isSubmitBusy = (hasPendingSend && !isServerAdopted) || isSubmitLoading;
   const messageInputAutoFocus = autoFocus && isDesktopWebBreakpoint;
   const submitLoadingPressHandler = isAgentRunning ? handleCancelAgent : undefined;
-  const sendErrorNode = useMemo(
-    () => (sendError ? <Text style={styles.sendErrorText}>{sendError}</Text> : null),
-    [sendError],
+  const internalBanners = useMemo<readonly ComposerBannerDescriptor[]>(() => {
+    if (!sendErrorState) {
+      return EMPTY_BANNERS;
+    }
+    return [
+      {
+        id: "composer-send-error",
+        variant: "error",
+        title: t("composer.sendFailed"),
+        body: sendErrorState.message,
+        message: `send-error:${sendErrorState.seq}`,
+        testID: "composer-send-error-banner",
+      },
+    ];
+  }, [sendErrorState, t]);
+  const mergedBanners = useMemo(
+    () => mergeComposerBanners(externalBanners ?? EMPTY_BANNERS, internalBanners),
+    [externalBanners, internalBanners],
+  );
+  const bannerThreadKey = `${serverId}:${agentId}`;
+  const compositeStyle = useMemo(
+    () => (bannerAttached ? styles.attachedComposite : undefined),
+    [bannerAttached],
+  );
+  const bannerAndInputStyle = useMemo(
+    () => [styles.bannerAndInput, compositeStyle],
+    [compositeStyle],
   );
   const autocompleteVisible = autocomplete.isVisible && isPaneFocused;
 
@@ -693,62 +758,71 @@ export function Composer({
         <View style={inputAreaContainerStyle}>
           <View style={styles.inputAreaContent}>
             {queueList}
-            {sendErrorNode}
 
-            <View ref={messageInputContainerRef} style={styles.messageInputContainer}>
-              <AutocompletePopover
-                visible={autocompleteVisible}
-                anchorRef={messageInputContainerRef}
-                options={autocomplete.options}
-                selectedIndex={autocomplete.selectedIndex}
-                onSelect={autocomplete.onSelectOption}
-                isLoading={autocomplete.isLoading}
-                errorMessage={autocomplete.errorMessage}
-                loadingText={autocomplete.loadingText}
-                emptyText={autocomplete.emptyText}
+            <View style={bannerAndInputStyle}>
+              <ComposerBannerStack
+                banners={mergedBanners}
+                threadKey={bannerThreadKey}
+                slot={bannerSlot}
+                onAttachedChange={setBannerAttached}
               />
 
-              {/* MessageInput handles everything: text, dictation, attachments, all buttons */}
-              <StableMessageInput
-                ref={messageInputRef}
-                value={userInput}
-                onChangeText={setUserInput}
-                onSubmit={handleSubmit}
-                hasExternalContent={hasExternalContent}
-                allowEmptySubmit={allowEmptySubmit}
-                submitButtonAccessibilityLabel={submitButtonAccessibilityLabel}
-                submitIcon={submitIcon}
-                isSubmitDisabled={isSubmitBusy}
-                isSubmitLoading={isSubmitBusy}
-                attachments={selectedAttachments}
-                cwd={cwd}
-                attachmentMenuItems={attachmentMenuItems}
-                onAttachButtonRef={handleAttachButtonRef}
-                onAddImages={addImages}
-                client={client}
-                isReadyForDictation={isDictationReady}
-                placeholder={messagePlaceholder}
-                autoFocus={messageInputAutoFocus}
-                autoFocusKey={`${serverId}:${agentId}`}
-                disabled={isSubmitLoading}
-                isPaneFocused={isPaneFocused}
-                leftContent={leftContent}
-                beforeVoiceContent={beforeVoiceContent}
-                rightContent={rightContent}
-                voiceServerId={serverId}
-                voiceAgentId={agentId}
-                isAgentRunning={isAgentRunning}
-                defaultSendBehavior={appSettings.sendBehavior}
-                onQueue={handleQueue}
-                onSubmitLoadingPress={submitLoadingPressHandler}
-                onKeyPress={handleCommandKeyPress}
-                onPromptHistoryStep={onPromptHistoryStep}
-                onSelectionChange={handleSelectionChange}
-                onFocusChange={handleFocusChange}
-                onHeightChange={onComposerHeightChange}
-                inputWrapperStyle={inputWrapperStyle}
-                attachmentSlot={attachmentTray}
-              />
+              <View ref={messageInputContainerRef} style={styles.messageInputContainer}>
+                <AutocompletePopover
+                  visible={autocompleteVisible}
+                  anchorRef={messageInputContainerRef}
+                  options={autocomplete.options}
+                  selectedIndex={autocomplete.selectedIndex}
+                  onSelect={autocomplete.onSelectOption}
+                  isLoading={autocomplete.isLoading}
+                  errorMessage={autocomplete.errorMessage}
+                  loadingText={autocomplete.loadingText}
+                  emptyText={autocomplete.emptyText}
+                />
+
+                {/* MessageInput handles everything: text, dictation, attachments, all buttons */}
+                <StableMessageInput
+                  ref={messageInputRef}
+                  value={userInput}
+                  onChangeText={setUserInput}
+                  onSubmit={handleSubmit}
+                  hasExternalContent={hasExternalContent}
+                  allowEmptySubmit={allowEmptySubmit}
+                  submitButtonAccessibilityLabel={submitButtonAccessibilityLabel}
+                  submitIcon={submitIcon}
+                  isSubmitDisabled={isSubmitBusy}
+                  isSubmitLoading={isSubmitBusy}
+                  attachments={selectedAttachments}
+                  cwd={cwd}
+                  attachmentMenuItems={attachmentMenuItems}
+                  onAttachButtonRef={handleAttachButtonRef}
+                  onAddImages={addImages}
+                  client={client}
+                  isReadyForDictation={isDictationReady}
+                  placeholder={messagePlaceholder}
+                  autoFocus={messageInputAutoFocus}
+                  autoFocusKey={`${serverId}:${agentId}`}
+                  disabled={isSubmitLoading}
+                  isPaneFocused={isPaneFocused}
+                  leftContent={leftContent}
+                  beforeVoiceContent={beforeVoiceContent}
+                  rightContent={rightContent}
+                  voiceServerId={serverId}
+                  voiceAgentId={agentId}
+                  isAgentRunning={isAgentRunning}
+                  defaultSendBehavior={appSettings.sendBehavior}
+                  onQueue={handleQueue}
+                  onSubmitLoadingPress={submitLoadingPressHandler}
+                  onKeyPress={handleCommandKeyPress}
+                  onPromptHistoryStep={onPromptHistoryStep}
+                  onSelectionChange={handleSelectionChange}
+                  onFocusChange={handleFocusChange}
+                  onHeightChange={onComposerHeightChange}
+                  inputWrapperStyle={inputWrapperStyle}
+                  attachedToBanner={bannerAttached}
+                  attachmentSlot={attachmentTray}
+                />
+              </View>
               {githubPicker}
             </View>
           </View>
@@ -863,10 +937,18 @@ const styles = StyleSheet.create((theme: Theme) => ({
     width: "100%",
     gap: theme.spacing[3],
   },
-  sendErrorText: {
-    color: theme.colors.palette.red[500],
-    fontSize: 12.5,
-    lineHeight: 16,
+  // Banner stack + input card as one unit so an attached banner touches the
+  // card with no gap (the stack itself owns no bottom padding).
+  bannerAndInput: {
+    width: "100%",
+    minWidth: 0,
+  },
+  // When a banner is attached, the composite floats as one card: on web the
+  // card drops its own elevation and this wrapper carries it; on native the
+  // card keeps its elevation (a transparent wrapper would not draw a shadow).
+  attachedComposite: {
+    borderRadius: 18,
+    ...(isWeb ? resolveSoftComposerCardElevation() : {}),
   },
 })) as unknown as Record<string, object>;
 

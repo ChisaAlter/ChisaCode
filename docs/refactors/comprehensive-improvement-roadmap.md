@@ -873,3 +873,20 @@ User asked to simplify everything; all CI-green chasing and pre-existing test fi
 - **影响范围**：`packages/app/src/stores/draft-store/index.ts`（reserveDraftAgentId：record 不存在时创建空 record 并写入 agentId，保证跨调用幂等）
 - **验证**：新增 `reserve-store.test.ts` 3 测试（无 record 时两次调用同值 / 已有 id 稳定 / 写入空 record）；27 个相关测试全绿；typecheck/lint 干净；打包 win-unpacked + 重启
 - **状态**：完成。用户复测：发送后侧栏应立即出现**一条**记录（乐观行与 server 同 key）
+
+## pnpm 迁移遗留：Metro worklets / 补丁链路失效（2026-09-09 登记，2026-09-09 完成）
+
+- **问题**：M7 横幅系统做 web 实机验证时暴露三条互相叠加的 pnpm 迁移遗留缺陷，此前模块（M1–M6）的 e2e 恰好被历史 `.worklets` 产物掩盖，未暴露：
+  1. **根 `node_modules` 缺失**：包级 `node_modules` 全是悬空符号链接（指向已删除的 `.pnpm` store），任何 vitest/typecheck 都无法解析依赖。恢复方式：`pnpm install --frozen-lockfile`。
+  2. **Metro 未接入 worklets bundle mode**：`packages/app/babel.config.js` 自 Expo SDK 57 起启用 `react-native-worklets/plugin` 的 `bundleMode: true`（Hermes V1 + Reanimated 内存回归的官方缓解），但 `packages/app/metro.config.js` 从未调用 `getBundleModeMetroConfig()`——babel 生成的 `react-native-worklets/.worklets/<hash>.js` 导入无人解析，web bundle 500。
+  3. **postinstall 补丁全部被静默跳过**：`scripts/postinstall-patches.mjs` 用 `existsSync("node_modules/<pkg>")` 判断依赖是否安装；pnpm 布局下这些包只在 `node_modules/.pnpm/<name>@<ver>/node_modules/<pkg>`（且长名会被截断为 `<前缀>_<hash>`），判断恒为 false → metro / metro-runtime / worklets / gesture-handler / draggable-flatlist / app-builder-lib 补丁一个都没应用。其中 `patches/metro+0.84.4.patch`（为 `.worklets` 路径返回合成 SHA-1）与 `patches/react-native-worklets+0.10.0.patch`（Windows 路径分隔符归一化）正是让 web bundle 可用的关键补丁。
+- **影响范围**：`packages/app/metro.config.js`（追加 `getBundleModeMetroConfig(config)` 包装，注释说明与 babel 配置的对应关系）、`scripts/postinstall-patches.mjs`（改为扫描 `.pnpm` store + 工作区符号链接 realpath，去重后 `git apply -p3 --directory=<pkgdir>`，幂等：已应用则 `--reverse --check` 跳过，路径统一 POSIX 分隔符）、根 `node_modules`（重新安装恢复）。
+- **验证**：`node scripts/postinstall-patches.mjs` 输出 `applied=6 alreadyApplied=6 skipped=1`（唯一 skip 为既有 `react-native-draggable-flatlist+4.0.3.patch` 自身格式损坏，与本修复无关，另见下方残余）；补丁落地实测：`metro/src/node-haste/DependencyGraph.js` 含 `workletsDirPath`、`react-native-worklets/bundleMode/index.js` 含 `normalizedModuleName`；web Playwright 真机 spec `e2e/composer-banner.spec.ts` 1/1 PASS（此前 500 无法加载）；composer/panels/theme/i18n 210 测试 + server mock provider 9 测试全绿。
+- **状态**：完成。**残余**：`react-native-draggable-flatlist+4.0.3.patch` 文件本身 corrupt（`git apply` 报 `corrupt patch at line 32`），该包为侧栏拖拽列表依赖，需单独核对补丁来源后重生成；当前 e2e/web 未受影响。
+
+## M7 横幅系统：跨 realm 共享 dismissal 记忆（2026-09-09 登记，2026-09-09 完成）
+
+- **问题**：横幅「关闭记忆」（同一 threadKey+message 不再出现）最初用模块级单例 store 实现。web 实机验证发现同一页面内该模块被**多次求值**（同一文档出现 3 个不同 JS realm：`globalThis` 上写入的 store 在后续求值中读不到，日志显示 3 个不同 storeId），导致 dismiss 写入 A、渲染读 B，横幅关闭后又出现。另发现 Reanimated 的 `exiting` 在 web 上不会卸载被移除的节点（`toBeHidden` 永远失败）。
+- **影响范围**：`packages/app/src/composer/banner/composer-banner-logic.ts`（`getComposerBannerDismissals()` 把 store 挂在 `globalThis.__chisacodeComposerBannerDismissals`，规避模块重复求值；`resolveComposerBannerStack` 的 `dismissed` 参数放宽为 `{ has(key) }` 查找接口）、`packages/app/src/composer/banner/composer-banner-stack.tsx`（dismiss 提交与入场/退场改为 `useSharedValue` + `withTiming` 视觉动画 + 定时器提交，不再依赖 Reanimated `exiting` 回调；本地 `dismissedKeys` 状态由 store 订阅同步）。
+- **验证**：`e2e/composer-banner.spec.ts` 真机 1/1 PASS——真实 daemon 错误路径（mock provider `turn_failed`）→ 横幅附着（computed style：卡片 `border-top-width:0`/`border-top-left-radius:0`，横幅 `border-bottom-width:0`/`border-bottom-left-radius:0`，卡片保留 1px 侧边/底部边框与 18px 底部圆角）→ 点击关闭后隐藏 → 同一会话发送不同错误消息重新出现。store 纯函数 22 测试 + 订阅通知测试全绿。
+- **状态**：完成。**残余**：agent 错误发生在**页面加载时**会让 dev 应用发生整档重载（实测 3 次 `page-load`、URL 在 workspace 与 agent 路由间往返），整档重载会重置会话级记忆（符合模块/全局语义，与 T3 一致）；跨整档重载的持久化不做（需落盘，属另一需求）。
