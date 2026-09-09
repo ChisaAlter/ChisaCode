@@ -7,6 +7,7 @@
 
 const path = require("path");
 const { getDefaultConfig } = require("expo/metro-config");
+const { getBundleModeMetroConfig } = require("react-native-worklets/bundleMode");
 
 const projectRoot = __dirname;
 const workspaceRoot = path.resolve(projectRoot, "../..");
@@ -144,4 +145,9 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
   }
 };
 
-module.exports = config;
+// `babel.config.js` enables the worklets babel plugin in bundle mode, which
+// rewrites each worklet into an import of `react-native-worklets/.worklets/
+// <hash>.js`. Those files are generated at transform time, so Metro needs the
+// worklets resolver (and module-id factory) installed or the imports never
+// resolve. Applied last so it wraps the custom resolver above.
+module.exports = getBundleModeMetroConfig(config);
