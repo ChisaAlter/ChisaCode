@@ -30,6 +30,7 @@ import { useAgentAttentionClear } from "@/hooks/use-agent-attention-clear";
 import { useAgentInitialization } from "@/hooks/use-agent-initialization";
 import { useAgentInputDraft, type AgentInputDraft } from "@/composer/draft/input-draft";
 import { useComposerPromptHistory } from "@/composer/use-composer-prompt-history";
+import { useComposerScrollCollapse } from "@/composer/use-composer-scroll-collapse";
 import { deriveComposerTasks } from "@/composer/tasks-badge";
 import { TasksBadge } from "@/composer/tasks-badge-view";
 import {
@@ -1250,6 +1251,19 @@ function ChatAgentReadyContent({
     ];
   }, [agentState.lastError, agentState.status, t]);
 
+  // Scroll-collapse (T3 port M8, web only): reading scrollback folds the
+  // composer to a single line; any expand trigger restores it.
+  const [isStreamNearBottom, setIsStreamNearBottom] = useState(true);
+  const handleStreamNearBottomChange = useCallback((value: boolean) => {
+    setIsStreamNearBottom(value);
+  }, []);
+  const scrollCollapse = useComposerScrollCollapse({
+    isNearBottom: isStreamNearBottom,
+  });
+  const handleExpandFromScrollCollapse = useCallback(() => {
+    scrollCollapse.expand();
+  }, [scrollCollapse]);
+
   return (
     <RewindComposerRestoreProvider text={agentInputDraft.text} setText={agentInputDraft.setText}>
       <View style={styles.root} testID={agentId ? `agent-panel-${agentId}` : undefined}>
@@ -1268,6 +1282,7 @@ function ChatAgentReadyContent({
                 hasAppliedAuthoritativeHistory={hasAppliedAuthoritativeHistory}
                 toast={panelToast.api}
                 onOpenWorkspaceFile={onOpenWorkspaceFile}
+                onNearBottomStateChange={handleStreamNearBottomChange}
               />
             </ReanimatedAnimated.View>
 
@@ -1296,6 +1311,9 @@ function ChatAgentReadyContent({
             isSubmitLoading={false}
             agentInputDraft={agentInputDraft}
             banners={agentErrorBanners}
+            scrollCollapsed={scrollCollapse.collapsed}
+            onExpandFromScrollCollapse={handleExpandFromScrollCollapse}
+            onComposerInputActivity={scrollCollapse.noteInput}
             onAttentionInputFocus={attentionController.clearOnInputFocus}
             onAttentionPromptSend={attentionController.clearOnPromptSend}
             onAddImages={handleAddImagesCallback}
@@ -1355,6 +1373,7 @@ function AgentStreamSection({
   hasAppliedAuthoritativeHistory,
   toast,
   onOpenWorkspaceFile,
+  onNearBottomStateChange,
 }: {
   streamViewRef: React.RefObject<AgentStreamViewHandle | null>;
   serverId: string;
@@ -1364,6 +1383,7 @@ function AgentStreamSection({
   hasAppliedAuthoritativeHistory: boolean;
   toast: ReturnType<typeof useToastHost>["api"];
   onOpenWorkspaceFile?: (request: WorkspaceFileOpenRequest) => void;
+  onNearBottomStateChange?: (isNearBottom: boolean) => void;
 }) {
   const streamItemsRaw = useSessionStore((state) =>
     agentId ? state.sessions[serverId]?.agentStreamTail?.get(agentId) : undefined,
@@ -1408,6 +1428,7 @@ function AgentStreamSection({
       isAuthoritativeHistoryReady={hasAppliedAuthoritativeHistory}
       toast={toast}
       onOpenWorkspaceFile={onOpenWorkspaceFile}
+      onNearBottomStateChange={onNearBottomStateChange}
       isTurnAnchorEnabled={isWeb}
     />
   );
@@ -1423,6 +1444,9 @@ function AgentComposerSection({
   isSubmitLoading,
   agentInputDraft,
   banners,
+  scrollCollapsed,
+  onExpandFromScrollCollapse,
+  onComposerInputActivity,
   onAttentionInputFocus,
   onAttentionPromptSend,
   onAddImages,
@@ -1439,6 +1463,9 @@ function AgentComposerSection({
   isSubmitLoading: boolean;
   agentInputDraft: AgentInputDraft;
   banners?: readonly ComposerBannerDescriptor[];
+  scrollCollapsed: boolean;
+  onExpandFromScrollCollapse: () => void;
+  onComposerInputActivity: () => void;
   onAttentionInputFocus: () => void;
   onAttentionPromptSend: () => void;
   onAddImages: (addImages: (images: ImageAttachment[]) => void) => void;
@@ -1465,6 +1492,9 @@ function AgentComposerSection({
       isSubmitLoading={isSubmitLoading}
       agentInputDraft={agentInputDraft}
       banners={banners}
+      scrollCollapsed={scrollCollapsed}
+      onExpandFromScrollCollapse={onExpandFromScrollCollapse}
+      onComposerInputActivity={onComposerInputActivity}
       onAttentionInputFocus={onAttentionInputFocus}
       onAttentionPromptSend={onAttentionPromptSend}
       onAddImages={onAddImages}
@@ -1483,6 +1513,9 @@ function ActiveAgentComposer({
   isSubmitLoading,
   agentInputDraft,
   banners,
+  scrollCollapsed,
+  onExpandFromScrollCollapse,
+  onComposerInputActivity,
   onAttentionInputFocus,
   onAttentionPromptSend,
   onAddImages,
@@ -1497,6 +1530,9 @@ function ActiveAgentComposer({
   isSubmitLoading: boolean;
   agentInputDraft: AgentInputDraft;
   banners?: readonly ComposerBannerDescriptor[];
+  scrollCollapsed: boolean;
+  onExpandFromScrollCollapse: () => void;
+  onComposerInputActivity: () => void;
   onAttentionInputFocus: () => void;
   onAttentionPromptSend: () => void;
   onAddImages: (addImages: (images: ImageAttachment[]) => void) => void;
@@ -1643,6 +1679,9 @@ function ActiveAgentComposer({
           onClientSlashCommand={handleClientSlashCommand}
           onPromptHistoryStep={onPromptHistoryStep}
           banners={banners}
+          scrollCollapsed={scrollCollapsed}
+          onExpandFromScrollCollapse={onExpandFromScrollCollapse}
+          onComposerInputActivity={onComposerInputActivity}
           footer={composerFooter}
           inputWrapperStyle={styles.composerInputWrapper}
         />

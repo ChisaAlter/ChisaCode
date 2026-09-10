@@ -242,6 +242,8 @@ export interface AgentStreamViewProps {
   onOpenWorkspaceFile?: (request: WorkspaceFileOpenRequest) => void;
   turnAnchorRequest?: TurnAnchorRequest | null;
   isTurnAnchorEnabled?: boolean;
+  /** Reports the follow-output/bottom state so the composer can scroll-collapse. */
+  onNearBottomStateChange?: (isNearBottom: boolean) => void;
 }
 
 const EMPTY_STREAM_HEAD: StreamItem[] = [];
@@ -260,6 +262,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       onOpenWorkspaceFile,
       turnAnchorRequest = null,
       isTurnAnchorEnabled = false,
+      onNearBottomStateChange,
     },
     ref,
   ) {
@@ -316,10 +319,21 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       ? undefined
       : FadeOut.duration(200);
 
+    const onNearBottomStateChangeStable = useStableEvent((value: boolean) => {
+      onNearBottomStateChange?.(value);
+    });
+    const setIsNearBottomAndReport = useCallback(
+      (value: boolean) => {
+        setIsNearBottom(value);
+        onNearBottomStateChangeStable(value);
+      },
+      [onNearBottomStateChangeStable],
+    );
+
     useEffect(() => {
-      setIsNearBottom(true);
+      setIsNearBottomAndReport(true);
       setExpandedInlineToolCallIds(new Set());
-    }, [agentId]);
+    }, [agentId, setIsNearBottomAndReport]);
 
     const handleInlinePathPress = useStableEvent(
       (target: InlinePathTarget, disposition: OpenFileDisposition) => {
@@ -905,7 +919,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
               viewportRef,
               routeBottomAnchorRequest,
               isAuthoritativeHistoryReady,
-              onNearBottomChange: setIsNearBottom,
+              onNearBottomChange: setIsNearBottomAndReport,
               onNearHistoryStart: loadOlder,
               isLoadingOlderHistory: isLoadingOlder,
               hasOlderHistory: hasOlder,

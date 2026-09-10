@@ -216,6 +216,15 @@ interface ComposerProps {
   banners?: readonly ComposerBannerDescriptor[];
   /** Custom content pinned above the stack (user-input / approval panels). */
   bannerSlot?: ReactNode;
+  /**
+   * Scroll-collapse (T3 port M8, web only): single-line pill while the user
+   * reads scrollback. Rendering only — the gesture lives in the parent.
+   */
+  scrollCollapsed?: boolean;
+  /** Called when the user pointer-downs the collapsed card (expand request). */
+  onExpandFromScrollCollapse?: () => void;
+  /** Notified on every text edit so typing suppresses scroll-collapse. */
+  onComposerInputActivity?: () => void;
 }
 
 const StableMessageInput = memo(MessageInput);
@@ -260,6 +269,9 @@ export function Composer({
   externalKeyboardShift,
   banners: externalBanners,
   bannerSlot,
+  scrollCollapsed,
+  onExpandFromScrollCollapse,
+  onComposerInputActivity,
 }: ComposerProps) {
   const { t } = useTranslation();
   const client = useHostRuntimeClient(serverId);
@@ -289,7 +301,14 @@ export function Composer({
       mobile: t("composer.mobilePlaceholder"),
     });
   const userInput = value;
-  const setUserInput = onChangeText;
+  const handleUserInputChanged = useCallback(
+    (text: string) => {
+      onComposerInputActivity?.();
+      onChangeText(text);
+    },
+    [onComposerInputActivity, onChangeText],
+  );
+  const setUserInput = handleUserInputChanged;
   const {
     selectedAttachments,
     buildOutgoingAttachments,
@@ -820,6 +839,8 @@ export function Composer({
                   onHeightChange={onComposerHeightChange}
                   inputWrapperStyle={inputWrapperStyle}
                   attachedToBanner={bannerAttached}
+                  scrollCollapsed={scrollCollapsed}
+                  onExpandFromScrollCollapse={onExpandFromScrollCollapse}
                   attachmentSlot={attachmentTray}
                 />
               </View>

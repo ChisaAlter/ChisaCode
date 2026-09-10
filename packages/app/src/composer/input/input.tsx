@@ -146,6 +146,14 @@ export interface MessageInputProps {
    * `inputWrapperStyle` so a banner can attach above it with no seam.
    */
   attachedToBanner?: boolean;
+  /**
+   * Scroll-collapse (T3 port M8, web only): renders the card as a single-line
+   * pill — cbar hidden, text truncated — while the user reads scrollback.
+   * Pointer-down on the card expands it again.
+   */
+  scrollCollapsed?: boolean;
+  /** Called when the user pointer-downs the collapsed card (expand request). */
+  onExpandFromScrollCollapse?: () => void;
   /** Content rendered inside the bordered input surface, above the text input (e.g. attachment pills). */
   attachmentSlot?: React.ReactNode;
 }
@@ -1237,6 +1245,8 @@ interface ResolvedMessageInputProps {
   onHeightChange: ((height: number) => void) | undefined;
   inputWrapperStyle: import("react-native").ViewStyle | undefined;
   attachedToBanner: boolean;
+  scrollCollapsed: boolean;
+  onExpandFromScrollCollapse: (() => void) | undefined;
   attachmentSlot: React.ReactNode;
 }
 
@@ -1279,6 +1289,8 @@ function resolveMessageInputProps(props: MessageInputProps): ResolvedMessageInpu
     onHeightChange: props.onHeightChange,
     inputWrapperStyle: props.inputWrapperStyle,
     attachedToBanner: props.attachedToBanner ?? false,
+    scrollCollapsed: props.scrollCollapsed ?? false,
+    onExpandFromScrollCollapse: props.onExpandFromScrollCollapse,
     attachmentSlot: props.attachmentSlot,
   };
 }
@@ -1287,6 +1299,37 @@ function extractErrorMessage(error: unknown): string | null {
   if (error instanceof Error) return error.message;
   if (typeof error === "string") return error;
   return null;
+}
+
+/**
+ * Resolves the collapsed-card pointer-down handler: only attached while
+ * collapsed on web, so taps expand the pill.
+ */
+function resolveCardPointerDownHandler(
+  isCollapsed: boolean,
+  expand: (() => void) | undefined,
+): (() => void) | undefined {
+  return isWeb && isCollapsed && expand ? expand : undefined;
+}
+
+/**
+ * Resolves the bordered card surface per layout mode. Declared at module level
+ * so `MessageInput` stays under the complexity lint budget.
+ */
+function resolveInputWrapperSurfaceStyle(input: {
+  attachedToBanner: boolean;
+  scrollCollapsed: boolean;
+  inputWrapperStyle: import("react-native").ViewStyle | undefined;
+}) {
+  if (input.attachedToBanner) {
+    return input.scrollCollapsed
+      ? [styles.inputWrapperAttached, styles.inputWrapperScrollCollapsed]
+      : styles.inputWrapperAttached;
+  }
+  if (input.scrollCollapsed) {
+    return [styles.inputWrapper, input.inputWrapperStyle, styles.inputWrapperScrollCollapsed];
+  }
+  return [styles.inputWrapper, input.inputWrapperStyle];
 }
 
 export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
@@ -1329,6 +1372,8 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       onHeightChange,
       inputWrapperStyle,
       attachedToBanner,
+      scrollCollapsed,
+      onExpandFromScrollCollapse,
       attachmentSlot,
     } = resolveMessageInputProps(props);
     const { t } = useTranslation();
@@ -1935,12 +1980,23 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
 
     const inputWrapperSurfaceStyle = useMemo(
       () =>
-        attachedToBanner ? styles.inputWrapperAttached : [styles.inputWrapper, inputWrapperStyle],
-      [attachedToBanner, inputWrapperStyle],
+        resolveInputWrapperSurfaceStyle({
+          attachedToBanner,
+          scrollCollapsed,
+          inputWrapperStyle,
+        }),
+      [attachedToBanner, inputWrapperStyle, scrollCollapsed],
     );
-    const textInputStyle = useMemo(
-      () => [styles.textInput, computeTextInputHeightStyle(inputHeight, maxInputHeight)],
-      [inputHeight, maxInputHeight],
+    const textInputSurfaceStyle = useMemo(
+      () =>
+        scrollCollapsed
+          ? [styles.textInput, styles.textInputScrollCollapsed]
+          : [styles.textInput, computeTextInputHeightStyle(inputHeight, maxInputHeight)],
+      [inputHeight, maxInputHeight, scrollCollapsed],
+    );
+    const handleCardPointerDown = useMemo(
+      () => resolveCardPointerDownHandler(scrollCollapsed, onExpandFromScrollCollapse),
+      [onExpandFromScrollCollapse, scrollCollapsed],
     );
     const sendButtonCombinedStyle = useMemo(
       () => [styles.sendButton, isSendButtonDisabled && styles.buttonDisabled],
@@ -1977,7 +2033,12 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       <View ref={rootRef} style={styles.container} testID="message-input-root">
         {/* Regular input */}
         <Animated.View style={inputAnimatedStyle}>
-          <View ref={inputWrapperRef} style={inputWrapperSurfaceStyle} testID="composer-input-card">
+          <View
+            ref={inputWrapperRef}
+            style={inputWrapperSurfaceStyle}
+            testID="composer-input-card"
+            onPointerDown={handleCardPointerDown}
+          >
             {attachmentSlot}
             {/* Text input */}
             <View style={styles.textInputScrollWrapper}>
@@ -1990,7 +2051,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
                 accessibilityLabel={t("composer.messageAgent")}
                 onFocus={handleInputFocus}
                 onBlur={handleInputBlur}
-                style={textInputStyle}
+                style={textInputSurfaceStyle}
                 multiline
                 scrollEnabled={isWeb ? inputHeight >= maxInputHeight : true}
                 onContentSizeChange={handleContentSizeChange}
@@ -2008,7 +2069,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
             </View>
 
             {/* Button row */}
-            <View style={styles.buttonRow}>
+            <View style={scrollCollapsed ? styles.buttonRowScrollCollapsed : styles.buttonRow}>
               {/* Toolbar left: attachment button + agent controls */}
               <View style={styles.leftButtonGroup}>
                 <AttachmentDropdown
@@ -2136,6 +2197,24 @@ const styles = StyleSheet.create((theme: Theme) => ({
     paddingBottom: 0,
     paddingLeft: 0,
     ...(isWeb ? {} : resolveSoftComposerCardElevation()),
+  },
+  // Scroll-collapse pill (T3 port M8): single line, tighter radius; the cbar
+  // below is hidden via the buttonRow style swap.
+  inputWrapperScrollCollapsed: {
+    borderRadius: 13,
+    minHeight: 0,
+  },
+  textInputScrollCollapsed: {
+    // Single visible line; overflow hidden via the wrapper.
+    height: 24,
+    overflow: "hidden",
+  },
+  buttonRowScrollCollapsed: {
+    height: 0,
+    paddingTop: 0,
+    paddingBottom: 0,
+    overflow: "hidden",
+    opacity: 0,
   },
   textInputScrollWrapper: {
     position: "relative",
