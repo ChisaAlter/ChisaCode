@@ -963,3 +963,11 @@ User asked to simplify everything; all CI-green chasing and pre-existing test fi
 - **验证**：`zoom-indicator.test.tsx` 9/9（首帧抑制含非 100% 初值/变化显示/百分比文案/fade 卸载时序/重置再显示/重复变化重启 fade 窗）；`state.test.ts` 13/13 + `clamp-browser-pane-width.test.ts` 7/7 回归；app+desktop typecheck 0 错误；lint 0/0（react-perf：memoized leading icons/style arrays/source/callbacks）。
 - **打包实机门禁**：`node scripts/build.js` 全量通过——win-unpacked + win-arm64-unpacked、`ChisaCode-Setup-1.0.3{,-x64,-arm64}.{exe,zip}` 签名+blockmap，better-sqlite3 两 arch 原生重建、native 剪枝 230MB。**过程中发现并修复一条 pnpm 迁移残余（非本模块代码引入）**：electron-builder 依赖收集器报 `production dependency not found: bl → buffer@^5.5.0`——`buffer@5.7.1` 在 lockfile 中被标 `optional: true` 且进入 `.modules.yaml` skipped（其全部消费者均为 optional/跨平台链：bl←better-sqlite3-optional、dmg-license←dmg-builder-darwin），pnpm 因此不物化该包。修复：`packages/desktop/package.json` 直 dep `"buffer": "5.7.1"` 强制物化（lockfile 同步移除其 optional 标记；`require('buffer')` 在 Node 恒解析内建模块，零运行时影响）。
 - **状态**：完成。**残余**：① 四项 UI 行为的人工验收（进度条可见性/zoom pill 渐隐/favicon 回退/清数据重载）需真机点击确认——打包已证链路，交互层未自动验；② arm64 smoke 跳过（host x64，预期）；③ `buffer` 直 dep 属 workaround——若上游 pnpm 修复 optional-only 包跳过行为或 electron-builder collector 容忍缺失，可回退。
+
+## T3 移植 M17：流式高亮缓存策略（2026-09-18 登记，2026-09-18 完成）
+
+- **交付**：`utils/highlight-cache.ts` 缓存键从 `${ext}:${code}`（整块代码原文作键，100KB 块即 100KB 键）改为 `${ext}:${hashHighlightContent(code)}`——fnv-1a 32 + 长度前缀（`{len36}.{hash36}`），不同长度输入不可能同键。LRU 升级为**双上限**：`MAX_CACHE_ENTRIES=500` + `MAX_CACHE_MEMORY_BYTES=50MB`（`estimateHighlightedSize` 按 token text×2 + 固定开销估算），超限按 LRU 序驱逐至双约束均满足；单条超限直接不缓存。`LRUCache` 泛型导出（构造注入 entries/bytes/sizeOf 三参数）使上限行为可确定性单测。流式 `cacheable:false` 语义不变（读不写，命中仅当内容与已完成块完全一致）。
+- **偏差说明**：计划键形 `{fnv1a}:{language}:{theme}` 含 theme——本实现 tokenize 结果存的是样式类别名（`HighlightStyle`），颜色在渲染层映射，**缓存值与主题无关**，加 theme 只会无谓分裂命中率；如实降维为 `{ext}:{hash}`（language 位即 ext 语法选择器）。
+- **影响范围**：`highlight-cache.ts`（hash/estimator/双上限 LRU/键替换）、`highlight-cache.test.ts`（+12 测试）。
+- **验证**：`highlight-cache.test.ts` 28/28（新增：确定性/同长异内容异键/长度前缀/unicode/hash 键命中/跨 ext 不命中/entries 驱逐/字节驱逐/读刷新续命/单条超限拒存/覆盖重写不双计/双上限同时生效/默认常量=M17 预算）；既有 16 测试全回归（含流式不写/完成命中）；app typecheck 0 错误；lint 0/0。
+- **状态**：完成。**残余**：跨语言不命中（键含 ext，预期）；实机长块流式→完成→重开命中抽检属人工项（哈希键单元证据已足）。

@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  estimateHighlightedSize,
   extensionFromPath,
+  hashHighlightContent,
   highlightToKeyedLines,
+  LRUCache,
+  MAX_CACHE_ENTRIES,
+  MAX_CACHE_MEMORY_BYTES,
   MAX_HIGHLIGHT_CHARS,
   tokenizeToLines,
 } from "./highlight-cache";
@@ -69,6 +74,136 @@ describe("tokenizeToLines", () => {
     const first = tokenizeToLines("const finished = true;", "ts");
     const streamed = tokenizeToLines("const finished = true;", "ts", { cacheable: false });
     expect(streamed).toBe(first);
+  });
+});
+
+describe("hashHighlightContent", () => {
+  it("is deterministic for identical input", () => {
+    expect(hashHighlightContent("const a = 1;")).toBe(hashHighlightContent("const a = 1;"));
+  });
+
+  it("produces different hashes for different content of the same length", () => {
+    const a = hashHighlightContent("aaaa");
+    const b = hashHighlightContent("aaab");
+    expect(a).not.toBe(b);
+  });
+
+  it("embeds the content length so different-length inputs never share a key", () => {
+    expect(hashHighlightContent("abc")).toMatch(/^3\./);
+    expect(hashHighlightContent("abcdef")).toMatch(/^6\./);
+    expect(hashHighlightContent("abc")).not.toBe(hashHighlightContent("abcdef"));
+  });
+
+  it("encodes length in base36 for long inputs", () => {
+    const content = "x".repeat(36);
+    expect(hashHighlightContent(content)).toMatch(/^10\./);
+  });
+
+  it("handles empty and unicode content without throwing", () => {
+    expect(hashHighlightContent("")).toMatch(/^0\./);
+    expect(hashHighlightContent("中文注释✓")).toBe(hashHighlightContent("中文注释✓"));
+  });
+});
+
+describe("estimateHighlightedSize", () => {
+  it("grows with token text length", () => {
+    const short = estimateHighlightedSize([[{ text: "ab", style: null }]]);
+    const long = estimateHighlightedSize([[{ text: "a".repeat(100), style: null }]]);
+    expect(long).toBeGreaterThan(short);
+  });
+
+  it("counts every line and token", () => {
+    const oneLine = estimateHighlightedSize([[{ text: "ab", style: null }]]);
+    const twoLines = estimateHighlightedSize([
+      [{ text: "ab", style: null }],
+      [{ text: "ab", style: null }],
+    ]);
+    expect(twoLines).toBeGreaterThan(oneLine);
+  });
+});
+
+describe("LRUCache", () => {
+  const sizeOf = (value: string) => value.length;
+
+  it("evicts the oldest entry when the entry cap is reached", () => {
+    const cache = new LRUCache<string, string>(3, Number.MAX_SAFE_INTEGER, sizeOf);
+    cache.set("a", "1");
+    cache.set("b", "2");
+    cache.set("c", "3");
+    cache.set("d", "4");
+    expect(cache.get("a")).toBeUndefined();
+    expect(cache.get("b")).toBe("2");
+    expect(cache.get("d")).toBe("4");
+  });
+
+  it("refreshes recency on get so a read entry survives eviction", () => {
+    const cache = new LRUCache<string, string>(2, Number.MAX_SAFE_INTEGER, sizeOf);
+    cache.set("a", "1");
+    cache.set("b", "2");
+    expect(cache.get("a")).toBe("1");
+    cache.set("c", "3");
+    expect(cache.get("b")).toBeUndefined();
+    expect(cache.get("a")).toBe("1");
+  });
+
+  it("evicts oldest entries until the byte cap has room", () => {
+    const cache = new LRUCache<string, string>(100, 10, sizeOf);
+    cache.set("a", "1234");
+    cache.set("b", "5678");
+    cache.set("c", "9012");
+    expect(cache.get("a")).toBeUndefined();
+    expect(cache.get("b")).toBe("5678");
+    expect(cache.get("c")).toBe("9012");
+  });
+
+  it("does not store an entry that alone exceeds the byte cap", () => {
+    const cache = new LRUCache<string, string>(100, 4, sizeOf);
+    cache.set("huge", "12345678");
+    expect(cache.get("huge")).toBeUndefined();
+    cache.set("ok", "12");
+    expect(cache.get("ok")).toBe("12");
+  });
+
+  it("replacing an existing key does not double-count memory", () => {
+    const cache = new LRUCache<string, string>(100, 10, sizeOf);
+    cache.set("a", "1234");
+    cache.set("a", "5678");
+    cache.set("b", "9012");
+    cache.set("c", "ab");
+    expect(cache.get("b")).toBe("9012");
+    expect(cache.size).toBe(3);
+  });
+
+  it("honors both caps simultaneously", () => {
+    const cache = new LRUCache<string, string>(2, 10, sizeOf);
+    cache.set("a", "12");
+    cache.set("b", "34");
+    cache.set("c", "56");
+    expect(cache.size).toBe(2);
+    expect(cache.get("a")).toBeUndefined();
+  });
+});
+
+describe("tokenizeToLines cache integration", () => {
+  it("serves hash-keyed hits across calls with different object identity", () => {
+    const code = "const hashKeyed = 42;";
+    const first = tokenizeToLines(code, "ts");
+    const second = tokenizeToLines(code, "ts");
+    expect(second).toBe(first);
+  });
+
+  it("does not hit across different extensions for identical content", () => {
+    const code = "const same = 1;";
+    const ts = tokenizeToLines(code, "ts");
+    const py = tokenizeToLines(code, "py");
+    expect(ts).not.toBeNull();
+    expect(py).not.toBeNull();
+    expect(py).not.toBe(ts);
+  });
+
+  it("keeps default caps aligned with the M17 budget", () => {
+    expect(MAX_CACHE_ENTRIES).toBe(500);
+    expect(MAX_CACHE_MEMORY_BYTES).toBe(50 * 1024 * 1024);
   });
 });
 

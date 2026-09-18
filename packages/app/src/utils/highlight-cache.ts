@@ -3,7 +3,7 @@ import { highlightCode, type HighlightToken } from "@chisacode/highlight";
 // Shared, theme-independent tokenization + cache for syntax highlighting.
 // Used by markdown code blocks, file preview, and tool-call detail blocks
 // (Edit diff / Write / Read). Colors are applied at render time, so the cache
-// key is just (extension, code) and one entry serves both light and dark.
+// key is just (extension, content hash) and one entry serves both light and dark.
 
 /** A highlight token paired with a stable render key */
 export interface KeyedToken {
@@ -22,29 +22,93 @@ export interface KeyedLine {
 // monospace text. Generous enough to cover the vast majority of real blocks.
 export const MAX_HIGHLIGHT_CHARS = 100_000;
 
-class LRUCache<K, V> {
-  private readonly map = new Map<K, V>();
-  constructor(private readonly max: number) {}
+// Cache bounds (T3 port M17): entry count and an estimated memory ceiling.
+// A single 100KB block tokenizes to roughly 200KB of tokens, so 50MB covers
+// ~250 large blocks — realistic sessions stay far below that.
+export const MAX_CACHE_ENTRIES = 500;
+export const MAX_CACHE_MEMORY_BYTES = 50 * 1024 * 1024;
+
+/**
+ * fnv-1a 32-bit hash of the content, prefixed by the content length so two
+ * inputs of different lengths can never share a cache key (collisions are
+ * only possible within equal-length inputs).
+ */
+export function hashHighlightContent(content: string): string {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < content.length; i++) {
+    hash ^= content.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return `${content.length.toString(36)}.${(hash >>> 0).toString(36)}`;
+}
+
+// Rough per-token overhead: object shape + style reference + array slot.
+const TOKEN_OVERHEAD_BYTES = 64;
+const LINE_OVERHEAD_BYTES = 32;
+
+/** Estimates the retained size of a tokenized block for the memory cap. */
+export function estimateHighlightedSize(lines: HighlightToken[][]): number {
+  let bytes = 0;
+  for (const line of lines) {
+    bytes += LINE_OVERHEAD_BYTES;
+    for (const token of line) {
+      bytes += TOKEN_OVERHEAD_BYTES + token.text.length * 2;
+    }
+  }
+  return bytes;
+}
+
+interface SizedEntry<V> {
+  value: V;
+  bytes: number;
+}
+
+export class LRUCache<K, V> {
+  private readonly map = new Map<K, SizedEntry<V>>();
+  private totalBytes = 0;
+
+  constructor(
+    private readonly maxEntries: number,
+    private readonly maxBytes: number,
+    private readonly sizeOf: (value: V) => number,
+  ) {}
+
+  get size(): number {
+    return this.map.size;
+  }
 
   get(key: K): V | undefined {
-    const value = this.map.get(key);
-    if (value === undefined) return undefined;
+    const entry = this.map.get(key);
+    if (entry === undefined) return undefined;
     this.map.delete(key);
-    this.map.set(key, value);
-    return value;
+    this.map.set(key, entry);
+    return entry.value;
   }
 
   set(key: K, value: V): void {
-    if (this.map.has(key)) this.map.delete(key);
-    else if (this.map.size >= this.max) {
-      const oldest = this.map.keys().next().value;
-      if (oldest !== undefined) this.map.delete(oldest);
+    const bytes = this.sizeOf(value);
+    if (bytes > this.maxBytes) return;
+    const existing = this.map.get(key);
+    if (existing !== undefined) {
+      this.totalBytes -= existing.bytes;
+      this.map.delete(key);
     }
-    this.map.set(key, value);
+    while (this.map.size >= this.maxEntries || this.totalBytes + bytes > this.maxBytes) {
+      const oldest = this.map.keys().next().value;
+      if (oldest === undefined) break;
+      this.totalBytes -= this.map.get(oldest)?.bytes ?? 0;
+      this.map.delete(oldest);
+    }
+    this.map.set(key, { value, bytes });
+    this.totalBytes += bytes;
   }
 }
 
-const tokenizationCache = new LRUCache<string, HighlightToken[][]>(200);
+const tokenizationCache = new LRUCache<string, HighlightToken[][]>(
+  MAX_CACHE_ENTRIES,
+  MAX_CACHE_MEMORY_BYTES,
+  estimateHighlightedSize,
+);
 
 /**
  * Tokenizes code into per-line highlight tokens, cached by extension and content. Returns null when the language is
@@ -60,7 +124,7 @@ export function tokenizeToLines(
 ): HighlightToken[][] | null {
   if (!ext) return null;
   if (code.length > MAX_HIGHLIGHT_CHARS) return null;
-  const cacheKey = `${ext}:${code}`;
+  const cacheKey = `${ext}:${hashHighlightContent(code)}`;
   const cached = tokenizationCache.get(cacheKey);
   if (cached) return cached;
   let lines: HighlightToken[][];
@@ -71,8 +135,8 @@ export function tokenizeToLines(
   }
   // Streaming input must not pollute the shared LRU: half-rendered fence
   // content would evict completed blocks (reference implementation behavior).
-  // An exact cache hit above is still safe — the key is the full content, so a
-  // hit can only be a finished block.
+  // An exact cache hit above is still safe — the key is a full-content hash, so
+  // a hit can only be a finished block.
   if (options.cacheable !== false) {
     tokenizationCache.set(cacheKey, lines);
   }
