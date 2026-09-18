@@ -6,7 +6,7 @@ ChisaCode is a local-first app for monitoring and controlling local AI coding ag
 
 ## Repository map
 
-This is an npm workspace monorepo:
+This is a pnpm workspace monorepo (`pnpm install`, not `npm ci`):
 
 - `packages/protocol` — Shared WebSocket schemas, provider manifests, and protocol types
 - `packages/client` — Daemon WebSocket driver and SDK facade

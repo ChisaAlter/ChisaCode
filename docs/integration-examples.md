@@ -23,18 +23,19 @@
 
 ```typescript
 // ❌ 不推荐: 使用 setTimeout
-test('agent completes task', async () => {
-  const agent = new Agent()
-  agent.run('task')
-  
+test("agent completes task", async () => {
+  const agent = new Agent();
+  agent.run("task");
+
   // 等待 1 秒，希望任务完成
-  await new Promise(resolve => setTimeout(resolve, 1000))
-  
-  expect(agent.status).toBe('idle')
-})
+  await new Promise((resolve) => setTimeout(resolve, 1000));
+
+  expect(agent.status).toBe("idle");
+});
 ```
 
 **问题**:
+
 - 如果任务用时 > 1 秒，测试失败
 - 如果任务用时 < 1 秒，浪费时间
 - CI 环境速度不同，导致 Flaky
@@ -43,22 +44,23 @@ test('agent completes task', async () => {
 
 ```typescript
 // ✅ 推荐: 使用 TestableQueue
-import { TestableQueue } from '@server/utils/testable-queue'
+import { TestableQueue } from "@server/utils/testable-queue";
 
-test('agent completes task', async () => {
-  const queue = new TestableQueue()
-  const agent = new Agent(queue)
-  
-  agent.run('task')
-  
+test("agent completes task", async () => {
+  const queue = new TestableQueue();
+  const agent = new Agent(queue);
+
+  agent.run("task");
+
   // 等待所有异步任务完成
-  await queue.drain()
-  
-  expect(agent.status).toBe('idle')
-})
+  await queue.drain();
+
+  expect(agent.status).toBe("idle");
+});
 ```
 
 **收益**:
+
 - ✅ 测试立即完成（不浪费时间）
 - ✅ 100% 确定性（无 Flaky）
 - ✅ 速度提升 5-10x
@@ -70,20 +72,18 @@ test('agent completes task', async () => {
 ```typescript
 // packages/server/src/services/my-service.ts
 
-import { TestableQueue } from '@server/utils/testable-queue'
+import { TestableQueue } from "@server/utils/testable-queue";
 
 export class MyService {
-  constructor(
-    private queue = new TestableQueue()
-  ) {}
-  
+  constructor(private queue = new TestableQueue()) {}
+
   async processTask(task: Task) {
     // 将异步操作包装在 queue 中
     return this.queue.enqueue(async () => {
-      await this.doWork(task)
-    })
+      await this.doWork(task);
+    });
   }
-  
+
   private async doWork(task: Task) {
     // 实际工作
   }
@@ -95,35 +95,35 @@ export class MyService {
 ```typescript
 // packages/server/src/services/my-service.test.ts
 
-import { describe, test, expect } from 'vitest'
-import { TestableQueue } from '@server/utils/testable-queue'
-import { MyService } from './my-service'
+import { describe, test, expect } from "vitest";
+import { TestableQueue } from "@server/utils/testable-queue";
+import { MyService } from "./my-service";
 
-describe('MyService', () => {
-  test('should process task and complete', async () => {
-    const queue = new TestableQueue()
-    const service = new MyService(queue)
-    
-    const task = { id: '1', data: 'test' }
-    service.processTask(task)
-    
+describe("MyService", () => {
+  test("should process task and complete", async () => {
+    const queue = new TestableQueue();
+    const service = new MyService(queue);
+
+    const task = { id: "1", data: "test" };
+    service.processTask(task);
+
     // 等待所有任务完成
-    await queue.drain()
-    
-    expect(service.isIdle()).toBe(true)
-  })
-  
-  test('should timeout if task hangs', async () => {
-    const queue = new TestableQueue()
-    const service = new MyService(queue)
-    
-    const hangingTask = { id: '2', data: 'hang' }
-    service.processTask(hangingTask)
-    
+    await queue.drain();
+
+    expect(service.isIdle()).toBe(true);
+  });
+
+  test("should timeout if task hangs", async () => {
+    const queue = new TestableQueue();
+    const service = new MyService(queue);
+
+    const hangingTask = { id: "2", data: "hang" };
+    service.processTask(hangingTask);
+
     // 超时保护
-    await expect(queue.drain(1000)).rejects.toThrow('Timeout')
-  })
-})
+    await expect(queue.drain(1000)).rejects.toThrow("Timeout");
+  });
+});
 ```
 
 ---
@@ -137,111 +137,109 @@ describe('MyService', () => {
 ```typescript
 // ❌ 不推荐: 手动创建所有依赖
 class UserService {
-  private db: Database
-  private cache: Cache
-  private logger: Logger
-  
+  private db: Database;
+  private cache: Cache;
+  private logger: Logger;
+
   constructor() {
-    this.db = new Database({ host: 'localhost' })
-    this.cache = new Cache({ ttl: 60 })
-    this.logger = createLogger('user-service')
+    this.db = new Database({ host: "localhost" });
+    this.cache = new Cache({ ttl: 60 });
+    this.logger = createLogger("user-service");
   }
 }
 
 // 测试时很痛苦
-test('user service test', () => {
+test("user service test", () => {
   // 必须 mock 所有依赖
-  const mockDb = { query: vi.fn() }
-  const mockCache = { get: vi.fn(), set: vi.fn() }
-  const mockLogger = { info: vi.fn(), error: vi.fn() }
-  
+  const mockDb = { query: vi.fn() };
+  const mockCache = { get: vi.fn(), set: vi.fn() };
+  const mockLogger = { info: vi.fn(), error: vi.fn() };
+
   // 无法直接注入，只能通过 prototype 替换
-  vi.spyOn(Database.prototype, 'query').mockImplementation(mockDb.query)
+  vi.spyOn(Database.prototype, "query").mockImplementation(mockDb.query);
   // ...
-})
+});
 ```
 
 **修改后**（使用 DI Container）:
 
 ```typescript
 // ✅ 推荐: 使用 DI Container
-import { DIContainer } from '@server/core/di-container'
+import { DIContainer } from "@server/core/di-container";
 
 // 1. 定义服务
 class UserService {
   constructor(
     private db: Database,
     private cache: Cache,
-    private logger: Logger
+    private logger: Logger,
   ) {}
-  
+
   async getUser(id: string) {
-    this.logger.info(`Fetching user ${id}`)
-    const cached = await this.cache.get(`user:${id}`)
-    if (cached) return cached
-    
-    const user = await this.db.query('SELECT * FROM users WHERE id = ?', [id])
-    await this.cache.set(`user:${id}`, user)
-    return user
+    this.logger.info(`Fetching user ${id}`);
+    const cached = await this.cache.get(`user:${id}`);
+    if (cached) return cached;
+
+    const user = await this.db.query("SELECT * FROM users WHERE id = ?", [id]);
+    await this.cache.set(`user:${id}`, user);
+    return user;
   }
 }
 
 // 2. 设置容器（生产环境）
 export function createProductionContainer() {
-  const container = new DIContainer()
-  
-  container.register('database', () => new Database({ host: 'localhost' }))
-  container.register('cache', () => new Cache({ ttl: 60 }))
-  container.register('logger', () => createLogger('app'))
-  
-  container.register('userService', (c) => new UserService(
-    c.get('database'),
-    c.get('cache'),
-    c.get('logger')
-  ))
-  
-  return container
+  const container = new DIContainer();
+
+  container.register("database", () => new Database({ host: "localhost" }));
+  container.register("cache", () => new Cache({ ttl: 60 }));
+  container.register("logger", () => createLogger("app"));
+
+  container.register(
+    "userService",
+    (c) => new UserService(c.get("database"), c.get("cache"), c.get("logger")),
+  );
+
+  return container;
 }
 
 // 3. 使用
-const container = createProductionContainer()
-const userService = container.get('userService')
+const container = createProductionContainer();
+const userService = container.get("userService");
 ```
 
 **测试中使用**:
 
 ```typescript
 // ✅ 测试时轻松 mock
-import { describe, test, expect, vi } from 'vitest'
-import { createTestContainer } from '@server/core/di-container'
+import { describe, test, expect, vi } from "vitest";
+import { createTestContainer } from "@server/core/di-container";
 
-describe('UserService', () => {
-  test('should fetch user from cache', async () => {
+describe("UserService", () => {
+  test("should fetch user from cache", async () => {
     // 创建测试容器，所有依赖都是 mock
     const container = createTestContainer({
       database: { query: vi.fn() },
-      cache: { 
-        get: vi.fn().mockResolvedValue({ id: '1', name: 'Alice' }),
-        set: vi.fn()
+      cache: {
+        get: vi.fn().mockResolvedValue({ id: "1", name: "Alice" }),
+        set: vi.fn(),
       },
-      logger: { info: vi.fn(), error: vi.fn() }
-    })
-    
+      logger: { info: vi.fn(), error: vi.fn() },
+    });
+
     // 注入真实服务
-    container.register('userService', (c) => new UserService(
-      c.get('database'),
-      c.get('cache'),
-      c.get('logger')
-    ))
-    
-    const userService = container.get('userService')
-    const user = await userService.getUser('1')
-    
-    expect(user).toEqual({ id: '1', name: 'Alice' })
-    expect(container.get('cache').get).toHaveBeenCalledWith('user:1')
-    expect(container.get('database').query).not.toHaveBeenCalled() // 从缓存读取
-  })
-})
+    container.register(
+      "userService",
+      (c) => new UserService(c.get("database"), c.get("cache"), c.get("logger")),
+    );
+
+    const userService = container.get("userService");
+    const user = await userService.getUser("1");
+
+    expect(user).toEqual({ id: "1", name: "Alice" });
+    expect(container.get("cache").get).toHaveBeenCalledWith("user:1");
+    expect(container.get("database").query).not.toHaveBeenCalled(); // 从缓存读取
+  });
+});
 ```
 
 ---
@@ -263,26 +261,32 @@ describe('UserService', () => {
 // packages/server/src/services/schedule/schedule-events.ts
 
 export type ScheduleCommand =
-  | { type: 'create_schedule'; scheduleId: string; cron: string; prompt: string }
-  | { type: 'pause_schedule'; timestamp: number }
-  | { type: 'resume_schedule'; timestamp: number }
-  | { type: 'execute_schedule'; runId: string }
-  | { type: 'delete_schedule' }
+  | { type: "create_schedule"; scheduleId: string; cron: string; prompt: string }
+  | { type: "pause_schedule"; timestamp: number }
+  | { type: "resume_schedule"; timestamp: number }
+  | { type: "execute_schedule"; runId: string }
+  | { type: "delete_schedule" };
 
 export type ScheduleEvent =
-  | { type: 'schedule_created'; scheduleId: string; cron: string; prompt: string; timestamp: number }
-  | { type: 'schedule_paused'; timestamp: number }
-  | { type: 'schedule_resumed'; timestamp: number }
-  | { type: 'schedule_executed'; runId: string; result: 'success' | 'failure'; timestamp: number }
-  | { type: 'schedule_deleted'; timestamp: number }
+  | {
+      type: "schedule_created";
+      scheduleId: string;
+      cron: string;
+      prompt: string;
+      timestamp: number;
+    }
+  | { type: "schedule_paused"; timestamp: number }
+  | { type: "schedule_resumed"; timestamp: number }
+  | { type: "schedule_executed"; runId: string; result: "success" | "failure"; timestamp: number }
+  | { type: "schedule_deleted"; timestamp: number };
 
 export interface ScheduleState {
-  scheduleId: string | null
-  cron: string | null
-  prompt: string | null
-  status: 'idle' | 'active' | 'paused' | 'deleted'
-  executionCount: number
-  lastExecutedAt: number | null
+  scheduleId: string | null;
+  cron: string | null;
+  prompt: string | null;
+  status: "idle" | "active" | "paused" | "deleted";
+  executionCount: number;
+  lastExecutedAt: number | null;
 }
 ```
 
@@ -291,8 +295,8 @@ export interface ScheduleState {
 ```typescript
 // packages/server/src/services/schedule/schedule-decider.ts
 
-import type { Decider } from '@server/core/event-sourcing'
-import type { ScheduleCommand, ScheduleEvent, ScheduleState } from './schedule-events'
+import type { Decider } from "@server/core/event-sourcing";
+import type { ScheduleCommand, ScheduleEvent, ScheduleState } from "./schedule-events";
 
 export const scheduleDecider: Decider<ScheduleCommand, ScheduleEvent, ScheduleState> = {
   // 初始状态
@@ -300,93 +304,97 @@ export const scheduleDecider: Decider<ScheduleCommand, ScheduleEvent, ScheduleSt
     scheduleId: null,
     cron: null,
     prompt: null,
-    status: 'idle',
+    status: "idle",
     executionCount: 0,
-    lastExecutedAt: null
+    lastExecutedAt: null,
   },
-  
+
   // 命令 → 事件（业务逻辑）
   decide: (command, state) => {
     switch (command.type) {
-      case 'create_schedule':
+      case "create_schedule":
         if (state.scheduleId) {
-          throw new Error('Schedule already exists')
+          throw new Error("Schedule already exists");
         }
-        return [{
-          type: 'schedule_created',
-          scheduleId: command.scheduleId,
-          cron: command.cron,
-          prompt: command.prompt,
-          timestamp: Date.now()
-        }]
-      
-      case 'pause_schedule':
-        if (state.status !== 'active') {
-          throw new Error('Can only pause active schedule')
+        return [
+          {
+            type: "schedule_created",
+            scheduleId: command.scheduleId,
+            cron: command.cron,
+            prompt: command.prompt,
+            timestamp: Date.now(),
+          },
+        ];
+
+      case "pause_schedule":
+        if (state.status !== "active") {
+          throw new Error("Can only pause active schedule");
         }
-        return [{ type: 'schedule_paused', timestamp: command.timestamp }]
-      
-      case 'resume_schedule':
-        if (state.status !== 'paused') {
-          throw new Error('Can only resume paused schedule')
+        return [{ type: "schedule_paused", timestamp: command.timestamp }];
+
+      case "resume_schedule":
+        if (state.status !== "paused") {
+          throw new Error("Can only resume paused schedule");
         }
-        return [{ type: 'schedule_resumed', timestamp: command.timestamp }]
-      
-      case 'execute_schedule':
-        if (state.status !== 'active') {
-          throw new Error('Cannot execute inactive schedule')
+        return [{ type: "schedule_resumed", timestamp: command.timestamp }];
+
+      case "execute_schedule":
+        if (state.status !== "active") {
+          throw new Error("Cannot execute inactive schedule");
         }
-        return [{
-          type: 'schedule_executed',
-          runId: command.runId,
-          result: 'success',
-          timestamp: Date.now()
-        }]
-      
-      case 'delete_schedule':
-        if (state.status === 'deleted') {
-          throw new Error('Schedule already deleted')
+        return [
+          {
+            type: "schedule_executed",
+            runId: command.runId,
+            result: "success",
+            timestamp: Date.now(),
+          },
+        ];
+
+      case "delete_schedule":
+        if (state.status === "deleted") {
+          throw new Error("Schedule already deleted");
         }
-        return [{ type: 'schedule_deleted', timestamp: Date.now() }]
-      
+        return [{ type: "schedule_deleted", timestamp: Date.now() }];
+
       default:
-        return []
+        return [];
     }
   },
-  
+
   // 事件 → 状态（状态演化）
   evolve: (state, event) => {
     switch (event.type) {
-      case 'schedule_created':
+      case "schedule_created":
         return {
           ...state,
           scheduleId: event.scheduleId,
           cron: event.cron,
           prompt: event.prompt,
-          status: 'active' as const
-        }
-      
-      case 'schedule_paused':
-        return { ...state, status: 'paused' as const }
-      
-      case 'schedule_resumed':
-        return { ...state, status: 'active' as const }
-      
-      case 'schedule_executed':
+          status: "active" as const,
+        };
+
+      case "schedule_paused":
+        return { ...state, status: "paused" as const };
+
+      case "schedule_resumed":
+        return { ...state, status: "active" as const };
+
+      case "schedule_executed":
         return {
           ...state,
           executionCount: state.executionCount + 1,
-          lastExecutedAt: event.timestamp
-        }
-      
-      case 'schedule_deleted':
-        return { ...state, status: 'deleted' as const }
-      
+          lastExecutedAt: event.timestamp,
+        };
+
+      case "schedule_deleted":
+        return { ...state, status: "deleted" as const };
+
       default:
-        return state
+        return state;
     }
-  }
-}
+  },
+};
 ```
 
 **3. 使用 EventSourcedAggregate**
@@ -394,65 +402,57 @@ export const scheduleDecider: Decider<ScheduleCommand, ScheduleEvent, ScheduleSt
 ```typescript
 // packages/server/src/services/schedule/schedule-service.ts
 
-import { FileEventStore, EventSourcedAggregate } from '@server/core/event-sourcing'
-import { scheduleDecider } from './schedule-decider'
-import type { ScheduleCommand } from './schedule-events'
+import { FileEventStore, EventSourcedAggregate } from "@server/core/event-sourcing";
+import { scheduleDecider } from "./schedule-decider";
+import type { ScheduleCommand } from "./schedule-events";
 
 export class ScheduleService {
-  private eventStore: FileEventStore
-  
+  private eventStore: FileEventStore;
+
   constructor(dataDir: string) {
-    this.eventStore = new FileEventStore(dataDir)
+    this.eventStore = new FileEventStore(dataDir);
   }
-  
+
   async createSchedule(id: string, cron: string, prompt: string) {
-    const aggregate = new EventSourcedAggregate(
-      id,
-      scheduleDecider,
-      this.eventStore
-    )
-    
+    const aggregate = new EventSourcedAggregate(id, scheduleDecider, this.eventStore);
+
     await aggregate.execute({
-      type: 'create_schedule',
+      type: "create_schedule",
       scheduleId: id,
       cron,
-      prompt
-    })
-    
-    return aggregate.getState()
+      prompt,
+    });
+
+    return aggregate.getState();
   }
-  
+
   async pauseSchedule(id: string) {
-    const aggregate = new EventSourcedAggregate(
-      id,
-      scheduleDecider,
-      this.eventStore
-    )
-    
+    const aggregate = new EventSourcedAggregate(id, scheduleDecider, this.eventStore);
+
     await aggregate.execute({
-      type: 'pause_schedule',
-      timestamp: Date.now()
-    })
-    
-    return aggregate.getState()
+      type: "pause_schedule",
+      timestamp: Date.now(),
+    });
+
+    return aggregate.getState();
   }
-  
+
   async getScheduleHistory(id: string) {
     // 完整审计日志
-    return await this.eventStore.getEvents(id)
+    return await this.eventStore.getEvents(id);
   }
-  
+
   async replayScheduleAt(id: string, timestamp: number) {
     // 时间旅行：重放到指定时间点
-    const events = await this.eventStore.getEvents(id)
-    const eventsUntil = events.filter(e => e.timestamp <= timestamp)
-    
-    let state = scheduleDecider.initialState
+    const events = await this.eventStore.getEvents(id);
+    const eventsUntil = events.filter((e) => e.timestamp <= timestamp);
+
+    let state = scheduleDecider.initialState;
     for (const event of eventsUntil) {
-      state = scheduleDecider.evolve(state, event.data)
+      state = scheduleDecider.evolve(state, event.data);
     }
-    
-    return state
+
+    return state;
   }
 }
 ```
@@ -462,53 +462,54 @@ export class ScheduleService {
 ```typescript
 // packages/server/src/services/schedule/schedule-service.test.ts
 
-import { describe, test, expect } from 'vitest'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { ScheduleService } from './schedule-service'
+import { describe, test, expect } from "vitest";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { ScheduleService } from "./schedule-service";
 
-describe('ScheduleService (Event Sourced)', () => {
-  test('should create and pause schedule', async () => {
-    const tempDir = join(tmpdir(), `schedule-test-${Date.now()}`)
-    const service = new ScheduleService(tempDir)
-    
+describe("ScheduleService (Event Sourced)", () => {
+  test("should create and pause schedule", async () => {
+    const tempDir = join(tmpdir(), `schedule-test-${Date.now()}`);
+    const service = new ScheduleService(tempDir);
+
     // 创建
-    const created = await service.createSchedule('sched-1', '0 9 * * *', 'daily task')
-    expect(created.status).toBe('active')
-    
+    const created = await service.createSchedule("sched-1", "0 9 * * *", "daily task");
+    expect(created.status).toBe("active");
+
     // 暂停
-    const paused = await service.pauseSchedule('sched-1')
-    expect(paused.status).toBe('paused')
-    
+    const paused = await service.pauseSchedule("sched-1");
+    expect(paused.status).toBe("paused");
+
     // 查看历史
-    const history = await service.getScheduleHistory('sched-1')
-    expect(history).toHaveLength(2)
-    expect(history[0].data.type).toBe('schedule_created')
-    expect(history[1].data.type).toBe('schedule_paused')
-  })
-  
-  test('should replay state at any point in time', async () => {
-    const tempDir = join(tmpdir(), `schedule-test-${Date.now()}`)
-    const service = new ScheduleService(tempDir)
-    
-    await service.createSchedule('sched-2', '0 9 * * *', 'task')
-    const timestamp1 = Date.now()
-    
-    await new Promise(r => setTimeout(r, 10))
-    await service.pauseSchedule('sched-2')
-    
+    const history = await service.getScheduleHistory("sched-1");
+    expect(history).toHaveLength(2);
+    expect(history[0].data.type).toBe("schedule_created");
+    expect(history[1].data.type).toBe("schedule_paused");
+  });
+
+  test("should replay state at any point in time", async () => {
+    const tempDir = join(tmpdir(), `schedule-test-${Date.now()}`);
+    const service = new ScheduleService(tempDir);
+
+    await service.createSchedule("sched-2", "0 9 * * *", "task");
+    const timestamp1 = Date.now();
+
+    await new Promise((r) => setTimeout(r, 10));
+    await service.pauseSchedule("sched-2");
+
     // 时间旅行：回到暂停前
-    const stateBefore = await service.replayScheduleAt('sched-2', timestamp1)
-    expect(stateBefore.status).toBe('active')
-    
+    const stateBefore = await service.replayScheduleAt("sched-2", timestamp1);
+    expect(stateBefore.status).toBe("active");
+
     // 当前状态
-    const stateNow = await service.replayScheduleAt('sched-2', Date.now())
-    expect(stateNow.status).toBe('paused')
-  })
-})
+    const stateNow = await service.replayScheduleAt("sched-2", Date.now());
+    expect(stateNow.status).toBe("paused");
+  });
+});
 ```
 
 **收益**:
+
 - ✅ 完整审计日志（每个操作都有记录）
 - ✅ 时间旅行调试（重放任意时间点）
 - ✅ 确定性测试（纯函数 decider）
@@ -526,19 +527,19 @@ describe('ScheduleService (Event Sourced)', () => {
 // ❌ 各种不同的错误处理
 class AgentService {
   async getAgent(id: string) {
-    const agent = await this.storage.find(id)
+    const agent = await this.storage.find(id);
     if (!agent) {
-      throw new Error('Agent not found')  // 字符串错误
+      throw new Error("Agent not found"); // 字符串错误
     }
-    return agent
+    return agent;
   }
-  
+
   async callProvider(prompt: string) {
     try {
-      return await this.provider.call(prompt)
+      return await this.provider.call(prompt);
     } catch (error) {
-      console.error('Provider failed:', error)  // console.log
-      throw error  // 原样抛出
+      console.error("Provider failed:", error); // console.log
+      throw error; // 原样抛出
     }
   }
 }
@@ -548,48 +549,42 @@ class AgentService {
 
 ```typescript
 // ✅ 使用统一错误类型
-import { 
-  NotFoundError, 
-  ProviderError, 
-  withRetry,
-  ErrorHandler
-} from '@server/core/errors'
+import { NotFoundError, ProviderError, withRetry, ErrorHandler } from "@server/core/errors";
 
 class AgentService {
   constructor(
     private storage: AgentStorage,
     private provider: AgentProvider,
-    private logger: Logger
+    private logger: Logger,
   ) {}
-  
+
   async getAgent(id: string) {
-    const agent = await this.storage.find(id)
+    const agent = await this.storage.find(id);
     if (!agent) {
-      throw new NotFoundError('Agent', id)  // 类型化错误
+      throw new NotFoundError("Agent", id); // 类型化错误
     }
-    return agent
+    return agent;
   }
-  
+
   async callProvider(prompt: string) {
     // 自动重试（最多 3 次）
     return await withRetry(
       async () => {
         try {
-          return await this.provider.call(prompt)
+          return await this.provider.call(prompt);
         } catch (error) {
-          throw new ProviderError(
-            this.provider.id,
-            'API call failed',
-            { prompt, originalError: error }
-          )
+          throw new ProviderError(this.provider.id, "API call failed", {
+            prompt,
+            originalError: error,
+          });
         }
       },
       {
         maxAttempts: 3,
         baseDelayMs: 1000,
-        logger: this.logger
-      }
-    )
+        logger: this.logger,
+      },
+    );
   }
 }
 ```
@@ -599,34 +594,34 @@ class AgentService {
 ```typescript
 // packages/server/src/server/api/agents-routes.ts
 
-import { Router } from 'express'
-import { ErrorHandler } from '@server/core/errors'
+import { Router } from "express";
+import { ErrorHandler } from "@server/core/errors";
 
-const router = Router()
+const router = Router();
 
-router.get('/agents/:id', async (req, res) => {
+router.get("/agents/:id", async (req, res) => {
   try {
-    const agent = await agentService.getAgent(req.params.id)
-    res.json(agent)
+    const agent = await agentService.getAgent(req.params.id);
+    res.json(agent);
   } catch (error) {
     // 统一错误转换
-    const httpResponse = ErrorHandler.toHTTPResponse(error)
-    res.status(httpResponse.statusCode).json(httpResponse.body)
+    const httpResponse = ErrorHandler.toHTTPResponse(error);
+    res.status(httpResponse.statusCode).json(httpResponse.body);
   }
-})
+});
 
-router.post('/agents/:id/run', async (req, res) => {
+router.post("/agents/:id/run", async (req, res) => {
   try {
-    const result = await agentService.callProvider(req.body.prompt)
-    res.json(result)
+    const result = await agentService.callProvider(req.body.prompt);
+    res.json(result);
   } catch (error) {
-    ErrorHandler.log(error, logger)  // 结构化日志
-    const httpResponse = ErrorHandler.toHTTPResponse(error)
-    res.status(httpResponse.statusCode).json(httpResponse.body)
+    ErrorHandler.log(error, logger); // 结构化日志
+    const httpResponse = ErrorHandler.toHTTPResponse(error);
+    res.status(httpResponse.statusCode).json(httpResponse.body);
   }
-})
+});
 
-export { router as agentsRouter }
+export { router as agentsRouter };
 ```
 
 **HTTP 响应示例**:
@@ -666,20 +661,20 @@ export { router as agentsRouter }
 ```typescript
 // packages/server/src/services/example-service.ts
 
-import { DIContainer } from '@server/core/di-container'
-import { TestableQueue } from '@server/utils/testable-queue'
-import { FileEventStore, EventSourcedAggregate } from '@server/core/event-sourcing'
-import { NotFoundError, withRetry, ErrorHandler } from '@server/core/errors'
-import type { Logger } from 'pino'
+import { DIContainer } from "@server/core/di-container";
+import { TestableQueue } from "@server/utils/testable-queue";
+import { FileEventStore, EventSourcedAggregate } from "@server/core/event-sourcing";
+import { NotFoundError, withRetry, ErrorHandler } from "@server/core/errors";
+import type { Logger } from "pino";
 
 // 1. 定义接口
 interface Database {
-  query(sql: string, params: unknown[]): Promise<unknown>
+  query(sql: string, params: unknown[]): Promise<unknown>;
 }
 
 interface Cache {
-  get(key: string): Promise<unknown | null>
-  set(key: string, value: unknown): Promise<void>
+  get(key: string): Promise<unknown | null>;
+  set(key: string, value: unknown): Promise<void>;
 }
 
 // 2. 实现服务
@@ -689,73 +684,74 @@ export class ExampleService {
     private cache: Cache,
     private queue: TestableQueue,
     private eventStore: FileEventStore,
-    private logger: Logger
+    private logger: Logger,
   ) {}
-  
+
   async processItem(id: string) {
     // 使用队列管理异步任务
     return this.queue.enqueue(async () => {
-      this.logger.info({ id }, 'Processing item')
-      
+      this.logger.info({ id }, "Processing item");
+
       // 使用缓存
-      const cached = await this.cache.get(`item:${id}`)
-      if (cached) return cached
-      
+      const cached = await this.cache.get(`item:${id}`);
+      if (cached) return cached;
+
       // 使用错误处理 + 重试
       const item = await withRetry(
         async () => {
-          const result = await this.db.query(
-            'SELECT * FROM items WHERE id = ?',
-            [id]
-          )
+          const result = await this.db.query("SELECT * FROM items WHERE id = ?", [id]);
           if (!result) {
-            throw new NotFoundError('Item', id)
+            throw new NotFoundError("Item", id);
           }
-          return result
+          return result;
         },
-        { maxAttempts: 3, logger: this.logger }
-      )
-      
-      await this.cache.set(`item:${id}`, item)
-      return item
-    })
+        { maxAttempts: 3, logger: this.logger },
+      );
+
+      await this.cache.set(`item:${id}`, item);
+      return item;
+    });
   }
 }
 
 // 3. 设置容器
 export function createExampleServiceContainer(config: {
-  dbHost: string
-  cacheHost: string
-  dataDir: string
+  dbHost: string;
+  cacheHost: string;
+  dataDir: string;
 }) {
-  const container = new DIContainer()
-  
-  container.register('database', () => new DatabaseImpl(config.dbHost))
-  container.register('cache', () => new CacheImpl(config.cacheHost))
-  container.register('queue', () => new TestableQueue())
-  container.register('eventStore', () => new FileEventStore(config.dataDir))
-  container.register('logger', () => createLogger('example'))
-  
-  container.register('exampleService', (c) => new ExampleService(
-    c.get('database'),
-    c.get('cache'),
-    c.get('queue'),
-    c.get('eventStore'),
-    c.get('logger')
-  ))
-  
-  return container
+  const container = new DIContainer();
+
+  container.register("database", () => new DatabaseImpl(config.dbHost));
+  container.register("cache", () => new CacheImpl(config.cacheHost));
+  container.register("queue", () => new TestableQueue());
+  container.register("eventStore", () => new FileEventStore(config.dataDir));
+  container.register("logger", () => createLogger("example"));
+
+  container.register(
+    "exampleService",
+    (c) =>
+      new ExampleService(
+        c.get("database"),
+        c.get("cache"),
+        c.get("queue"),
+        c.get("eventStore"),
+        c.get("logger"),
+      ),
+  );
+
+  return container;
 }
 
 // 4. 使用
 const container = createExampleServiceContainer({
-  dbHost: 'localhost',
-  cacheHost: 'localhost',
-  dataDir: '/var/lib/app/events'
-})
+  dbHost: "localhost",
+  cacheHost: "localhost",
+  dataDir: "/var/lib/app/events",
+});
 
-const service = container.get('exampleService')
-await service.processItem('item-123')
+const service = container.get("exampleService");
+await service.processItem("item-123");
 ```
 
 **测试**:
@@ -763,54 +759,58 @@ await service.processItem('item-123')
 ```typescript
 // packages/server/src/services/example-service.test.ts
 
-import { describe, test, expect, vi } from 'vitest'
-import { createTestContainer } from '@server/core/di-container'
-import { TestableQueue } from '@server/utils/testable-queue'
-import { FileEventStore } from '@server/core/event-sourcing'
-import { ExampleService } from './example-service'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { describe, test, expect, vi } from "vitest";
+import { createTestContainer } from "@server/core/di-container";
+import { TestableQueue } from "@server/utils/testable-queue";
+import { FileEventStore } from "@server/core/event-sourcing";
+import { ExampleService } from "./example-service";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
-describe('ExampleService', () => {
-  test('should process item with all patterns', async () => {
+describe("ExampleService", () => {
+  test("should process item with all patterns", async () => {
     // 创建测试容器
-    const tempDir = join(tmpdir(), `test-${Date.now()}`)
-    const queue = new TestableQueue()
-    
+    const tempDir = join(tmpdir(), `test-${Date.now()}`);
+    const queue = new TestableQueue();
+
     const container = createTestContainer({
       database: {
-        query: vi.fn().mockResolvedValue({ id: '1', name: 'Test' })
+        query: vi.fn().mockResolvedValue({ id: "1", name: "Test" }),
       },
       cache: {
         get: vi.fn().mockResolvedValue(null),
-        set: vi.fn()
+        set: vi.fn(),
       },
       queue,
       eventStore: new FileEventStore(tempDir),
-      logger: { info: vi.fn(), error: vi.fn() }
-    })
-    
-    container.register('exampleService', (c) => new ExampleService(
-      c.get('database'),
-      c.get('cache'),
-      c.get('queue'),
-      c.get('eventStore'),
-      c.get('logger')
-    ))
-    
-    const service = container.get('exampleService')
-    
+      logger: { info: vi.fn(), error: vi.fn() },
+    });
+
+    container.register(
+      "exampleService",
+      (c) =>
+        new ExampleService(
+          c.get("database"),
+          c.get("cache"),
+          c.get("queue"),
+          c.get("eventStore"),
+          c.get("logger"),
+        ),
+    );
+
+    const service = container.get("exampleService");
+
     // 执行
-    service.processItem('1')
-    
+    service.processItem("1");
+
     // 等待队列完成
-    await queue.drain()
-    
+    await queue.drain();
+
     // 验证
-    expect(container.get('database').query).toHaveBeenCalled()
-    expect(container.get('cache').set).toHaveBeenCalledWith('item:1', { id: '1', name: 'Test' })
-  })
-})
+    expect(container.get("database").query).toHaveBeenCalled();
+    expect(container.get("cache").set).toHaveBeenCalledWith("item:1", { id: "1", name: "Test" });
+  });
+});
 ```
 
 ---
@@ -901,5 +901,5 @@ grep -r "throw new Error" packages/server/src --include="*.ts" | wc -l
 
 ---
 
-*最后更新: 2026-09-05*  
-*版本: 1.0.0*
+_最后更新: 2026-09-05_  
+_版本: 1.0.0_

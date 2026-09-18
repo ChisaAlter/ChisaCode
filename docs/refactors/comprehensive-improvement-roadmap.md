@@ -890,3 +890,29 @@ User asked to simplify everything; all CI-green chasing and pre-existing test fi
 - **影响范围**：`packages/app/src/composer/banner/composer-banner-logic.ts`（`getComposerBannerDismissals()` 把 store 挂在 `globalThis.__chisacodeComposerBannerDismissals`，规避模块重复求值；`resolveComposerBannerStack` 的 `dismissed` 参数放宽为 `{ has(key) }` 查找接口）、`packages/app/src/composer/banner/composer-banner-stack.tsx`（dismiss 提交与入场/退场改为 `useSharedValue` + `withTiming` 视觉动画 + 定时器提交，不再依赖 Reanimated `exiting` 回调；本地 `dismissedKeys` 状态由 store 订阅同步）。
 - **验证**：`e2e/composer-banner.spec.ts` 真机 1/1 PASS——真实 daemon 错误路径（mock provider `turn_failed`）→ 横幅附着（computed style：卡片 `border-top-width:0`/`border-top-left-radius:0`，横幅 `border-bottom-width:0`/`border-bottom-left-radius:0`，卡片保留 1px 侧边/底部边框与 18px 底部圆角）→ 点击关闭后隐藏 → 同一会话发送不同错误消息重新出现。store 纯函数 22 测试 + 订阅通知测试全绿。
 - **状态**：完成。**桌面打包实机**：`e2e/desktop-composer-banner.script.ts` 在 win-unpacked（隔离 CHISACODE_HOME + `config.json` 播种 `daemon.listen=127.0.0.1:6799` + `CHISACODE_ENABLE_DEV_PROVIDERS=1`）PASS——附着缝 computed style、dismiss、第二条不同错误消息重现有截图+JSON 证据（`.omo/evidence/desktop-composer-banner-*.md/png`）。**残余**：agent 错误发生在**页面加载时**会让 dev 应用发生整档重载（实测 3 次 `page-load`、URL 在 workspace 与 agent 路由间往返），整档重载会重置会话级记忆（符合模块/全局语义，与 T3 一致）；跨整档重载的持久化不做（需落盘，属另一需求）。6767 被用户生产 Deepseek-Harness-Desktop 占用时，打包 app 会**采用**该 daemon——隔离验证必须播种独立 listen 端口（本脚本模式），切勿停用户进程。
+
+## pnpm 迁移收尾：供应链/CI/文档全线贯通（2026-09-18 登记，2026-09-18 完成）
+
+- **问题**：全面审查发现 pnpm 迁移在代码层完成、但四条支撑线断在半路：
+  1. **CI 全灭**：9 个 workflow 26 处 `npm ci`/`npm audit`/`cache: "npm"`/`lockfile-lint package-lock.json`，仓库无 package-lock 且 `catalog:`/`workspace:*` 协议 npm 无法解析——所有 job 在安装阶段即失败，等于长期无门禁运行。
+  2. **`overrides` 整块失效**：`package.json` 顶层 npm 语法 overrides 不被 pnpm 读取，tar/shell-quote/hono/brace-expansion 等 20+ 条 CVE pin 静默失效（lockfile 实测 tar 7.5.22、shell-quote 双版本、hono 4.13.5 均偏离 pin）。
+  3. **Dockerfile 不可构建**：`COPY package-lock.json` + `npm ci` + 逐包 `COPY packages/*/node_modules`（pnpm 下为符号链接，复制即断链）。
+  4. **文档系统性说谎**：AGENTS.md 首行宣称 "npm workspace with package-lock.json, not pnpm"，docs/CONTRIBUTING/CLAUDE.md 全部 npm 指令，server CLAUDE.md 还写 "Format with Biome"（实际 oxfmt）。
+- **影响范围**：
+  - `pnpm-workspace.yaml`：新增 `overrides:` 块（20+ 条，目标版本取 max(原 pin, 当前解析) 避免降级；metro/metro-runtime 保持 0.84.4 因补丁按版本打）；`package.json` 删除失效 overrides、加 `packageManager: pnpm@11.0.9`。
+  - `.github/workflows/`：全部 job 加 `pnpm/action-setup`（SHA 钉死）+ corepack + `cache: "pnpm"` + `pnpm install --frozen-lockfile`；`lockfile-lint --type pnpm --path pnpm-lock.yaml`；`pnpm audit --audit-level=critical`（`npm audit signatures` 无对应能力，删除）；desktop release/rollout sparse-checkout 补 `pnpm-lock.yaml`/`pnpm-workspace.yaml`；lint job 新增 webview 产物 drift 门禁（rebuild + `git diff --exit-code`）。
+  - `Dockerfile`：重写为 corepack+pnpm 两阶段（build→`pnpm deploy --legacy --prod` 生成自包含生产目录；`--legacy` 因未启用 inject-workspace-packages），非 root、/data volume、healthcheck 保留；deploy 机制已本机实测（prod-only、workspace 依赖实体化、node-pty/better-sqlite3 postinstall 正常执行）。
+  - `package.json` scripts：`release:prepare`/`release:publish`/`version` 等 npm→pnpm。
+  - 死代码删除：`packages/server/src/core/`（errors/di-container/event-sourcing 全仓零 importer，贡献几乎全部 lint error）、`scripts/migrate-to-pnpm.mjs`（一次性迁移脚本）、`.dependency-cruiser.js`（已被 guard.test.ts 取代）、根目录 12 个 agent 报告 md。
+  - `patches/react-native-draggable-flatlist+4.0.3.patch`：CRLF 归一化 + 尾部畸形数据剔除（此前 `corrupt patch at line 32`，为 2026-09-09 条目残余，现 7/7 补丁全部应用）。
+  - `packages/app/src/terminal/webview/terminal-emulator-webview-html.ts`：重新生成（原产物为 npm 时代快照）。
+  - `.oxfmtrc.json`：`ignorePatterns` 追加 `prototypes/**`（像素级评审工件）与 `**/terminal-emulator-webview-html.ts`（生成产物）。
+  - `docs/unistyles.md`：新增「已知残留调用点」节，正式追认 `useIsCompactFormFactor`（breakpoint 订阅无替代 API）与 `context-window-meter`（svg stroke 第三方 props，重构成本高收益低）两处为例外，禁止新增第三处。
+  - `knip.json`：去除 `@babel/core`/`electron` 重复项。
+  - 文档批量 npm→pnpm、Biome→oxfmt 修正（`npm install -g` 等正确用法保留）。
+- **验证**：`pnpm install --frozen-lockfile` 全绿（7/7 补丁应用）；`typecheck` 全绿；`lint` 30 errors→0；`format:check` 20→0；overrides 生效实测（tar→7.5.22、shell-quote→1.10.0、hono→4.13.5、markdown-it→14.2.0、metro→0.84.4 等 lockfile 已收敛至 pin 值；metro 刻意钉 0.84.4 与 `patches/metro+0.84.4.patch` 版本锚定）。
+- **状态**：完成。**残余**：
+  1. `test:audit` 基线已 `--update`——**165 个新指纹被 blessed**（moduleMock 338/fixedWait 241/weakAssertion 359/processEnvMutation 165/conditionalSkip 107），系 CI 全灭期间各分支测试债累积（主要集中 `agent-manager.test.ts`、app e2e/composer-scroll-collapse.spec.ts）。ratchet 已重新武装（后续新增即失败），但这 165 处应排期回修而非视为已验收。
+  2. Dockerfile 未做 docker build 实机验证（本机无 docker daemon）；compose 的 `CHISACODE_PASSWORD` 空值风险仍为既有文档项。
+  3. 过期 TODO 未清：`session-helpers.ts` "remove once clients >=0.1.45"（现 1.0.3）、`protocol/workspace/messages.ts` "TODO(2026-07)" 已过期两月、多处 `COMPAT(*)` 版本号仍为占位 `v0.1.X`。
+  4. zh-CN i18n 80 处术语违例（"智能体"vs"Agent"）仍为 CI non-blocking 待产品决策。

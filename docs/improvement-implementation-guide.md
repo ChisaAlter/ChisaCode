@@ -41,6 +41,7 @@ node scripts/check-bundle-size.mjs --analyze
 ```
 
 **预期结果**：
+
 - ✅ 依赖安装成功
 - ✅ 所有新测试通过
 - ✅ Bundle 分析报告生成
@@ -51,18 +52,18 @@ node scripts/check-bundle-size.mjs --analyze
 
 ### 已完成的交付物
 
-| 文件 | 用途 | 状态 |
-|------|------|------|
-| `pnpm-workspace.yaml` | pnpm workspace + catalog 配置 | ✅ 已创建 |
-| `scripts/migrate-to-pnpm.mjs` | 自动迁移脚本 | ✅ 已创建 |
-| `packages/app/tsconfig.json` | 源码导入配置 | ✅ 已更新 |
-| `packages/app/metro.config.js` | Metro 源码解析 | ✅ 已创建 |
-| `packages/server/src/utils/testable-queue.ts` | 可测试队列模式 | ✅ 已创建 |
-| `packages/server/src/utils/testable-queue.test.ts` | 测试示例 | ✅ 已创建 |
-| `packages/server/src/core/di-container.ts` | 依赖注入容器 | ✅ 已创建 |
-| `packages/server/src/core/di-container.test.ts` | DI 测试 | ✅ 已创建 |
-| `scripts/bundle-budgets.mjs` | Bundle 预算配置 | ✅ 已创建 |
-| `scripts/check-bundle-size.mjs` | Bundle 检查工具 | ✅ 已创建 |
+| 文件                                               | 用途                          | 状态      |
+| -------------------------------------------------- | ----------------------------- | --------- |
+| `pnpm-workspace.yaml`                              | pnpm workspace + catalog 配置 | ✅ 已创建 |
+| `scripts/migrate-to-pnpm.mjs`                      | 自动迁移脚本                  | ✅ 已创建 |
+| `packages/app/tsconfig.json`                       | 源码导入配置                  | ✅ 已更新 |
+| `packages/app/metro.config.js`                     | Metro 源码解析                | ✅ 已创建 |
+| `packages/server/src/utils/testable-queue.ts`      | 可测试队列模式                | ✅ 已创建 |
+| `packages/server/src/utils/testable-queue.test.ts` | 测试示例                      | ✅ 已创建 |
+| `packages/server/src/core/di-container.ts`         | 依赖注入容器                  | ✅ 已创建 |
+| `packages/server/src/core/di-container.test.ts`    | DI 测试                       | ✅ 已创建 |
+| `scripts/bundle-budgets.mjs`                       | Bundle 预算配置               | ✅ 已创建 |
+| `scripts/check-bundle-size.mjs`                    | Bundle 检查工具               | ✅ 已创建 |
 
 ### 第 1 周：pnpm 迁移
 
@@ -92,6 +93,7 @@ node scripts/check-bundle-size.mjs --analyze
 ```
 
 **验证清单**：
+
 - [ ] `pnpm install` 成功
 - [ ] `pnpm run build` 成功
 - [ ] `pnpm run dev` 正常工作
@@ -103,6 +105,7 @@ node scripts/check-bundle-size.mjs --analyze
 **目标**：消除构建步骤，测试更稳定
 
 **周一-周二：源码导入**
+
 ```bash
 # 1. 已更新的文件已就位
 # 2. 验证 Metro 配置工作
@@ -117,6 +120,7 @@ npm run typecheck  # 应该直接读源码
 ```
 
 **周三-周四：TestableQueue 重构**
+
 ```bash
 # 1. 找一个使用 setTimeout 的测试
 grep -r "setTimeout.*resolve" packages/server/src --include="*.test.ts"
@@ -144,11 +148,13 @@ npx vitest run --reporter=verbose
 ```
 
 **周五：集成到真实服务**
+
 - 在 AgentManager 中集成 TestableQueue
 - 运行完整测试套件
 - 性能对比
 
 **验证清单**：
+
 - [ ] HMR 延迟 < 1 秒
 - [ ] 无需手动 `build:client`
 - [ ] 至少 5 个测试重构完成
@@ -157,6 +163,7 @@ npx vitest run --reporter=verbose
 ### 第 3 周：DI 容器 + Bundle 监控
 
 **周一-周三：DI 重构**
+
 ```typescript
 // 1. 选择一个服务重构（如 AgentStorage）
 // packages/server/src/server/agent/agent-storage.ts
@@ -164,7 +171,7 @@ npx vitest run --reporter=verbose
 // 修改前：
 export class AgentManager {
   private storage = new AgentStorage()
-  
+
   async createAgent(config: AgentConfig) {
     await this.storage.save(...)
   }
@@ -176,7 +183,7 @@ export class AgentManager {
     storage: AgentStorage
     websocket: WebSocketService
   }) {}
-  
+
   static create(deps: AgentManagerDeps) {
     return new AgentManager(deps)
   }
@@ -196,6 +203,7 @@ const manager = AgentManager.create({ storage: mockStorage, ... })
 ```
 
 **周四-周五：Bundle 监控**
+
 ```bash
 # 1. 运行 Bundle 分析
 node scripts/check-bundle-size.mjs --analyze
@@ -222,6 +230,7 @@ jobs:
 ```
 
 **验证清单**：
+
 - [ ] 至少 2 个服务用 DI 重构
 - [ ] 测试速度提升 2-3x
 - [ ] Bundle 检查在 CI 中运行
@@ -233,12 +242,12 @@ jobs:
 
 ### 已完成的交付物
 
-| 文件 | 用途 | 状态 |
-|------|------|------|
-| `packages/server/src/core/event-sourcing.ts` | 事件溯源核心 | ✅ 已创建 |
+| 文件                                              | 用途         | 状态      |
+| ------------------------------------------------- | ------------ | --------- |
+| `packages/server/src/core/event-sourcing.ts`      | 事件溯源核心 | ✅ 已创建 |
 | `packages/server/src/core/event-sourcing.test.ts` | 事件溯源测试 | ✅ 已创建 |
-| `packages/server/src/core/errors.ts` | 统一错误处理 | ✅ 已创建 |
-| `packages/server/src/core/errors.test.ts` | 错误处理测试 | ✅ 已创建 |
+| `packages/server/src/core/errors.ts`              | 统一错误处理 | ✅ 已创建 |
+| `packages/server/src/core/errors.test.ts`         | 错误处理测试 | ✅ 已创建 |
 
 ### 第 4-5 周：事件溯源试点（可选）
 
@@ -251,10 +260,10 @@ jobs:
 // packages/server/src/server/schedule/schedule-events.ts
 
 type ScheduleEvent =
-  | { type: 'schedule_created'; id: string; cron: string; prompt: string }
-  | { type: 'schedule_paused'; timestamp: number }
-  | { type: 'schedule_resumed'; timestamp: number }
-  | { type: 'schedule_executed'; runId: string; result: any }
+  | { type: "schedule_created"; id: string; cron: string; prompt: string }
+  | { type: "schedule_paused"; timestamp: number }
+  | { type: "schedule_resumed"; timestamp: number }
+  | { type: "schedule_executed"; runId: string; result: any };
 
 // Week 5: 集成到现有 Schedule Service
 // 保持向后兼容：
@@ -264,6 +273,7 @@ type ScheduleEvent =
 ```
 
 **收益验证**：
+
 - 审计日志：所有调度操作可追溯
 - 调试：可重放任意时间点
 - 测试：确定性事件重放
@@ -273,6 +283,7 @@ type ScheduleEvent =
 **目标**：统一错误类型和处理模式
 
 **Week 6：重构现有错误**
+
 ```bash
 # 1. 搜索所有 throw 语句
 grep -r "throw new Error" packages/server/src --include="*.ts" | wc -l
@@ -293,34 +304,37 @@ throw new NotFoundError('Agent', agentId)
 ```
 
 **Week 7：集成到 API 和日志**
+
 ```typescript
 // 1. HTTP handler 中使用
-app.get('/api/agents/:id', async (req, res) => {
+app.get("/api/agents/:id", async (req, res) => {
   try {
-    const agent = await agentManager.getAgent(req.params.id)
-    res.json(agent)
+    const agent = await agentManager.getAgent(req.params.id);
+    res.json(agent);
   } catch (error) {
-    const response = ErrorHandler.toHTTPResponse(error)
-    res.status(response.statusCode).json(response.body)
+    const response = ErrorHandler.toHTTPResponse(error);
+    res.status(response.statusCode).json(response.body);
   }
-})
+});
 
 // 2. 日志集成
 try {
-  await operation()
+  await operation();
 } catch (error) {
-  ErrorHandler.log(error, logger)
-  throw error
+  ErrorHandler.log(error, logger);
+  throw error;
 }
 
 // 3. Retry 包装
-const result = await withRetry(
-  () => provider.callAPI(),
-  { maxAttempts: 3, baseDelayMs: 1000, logger }
-)
+const result = await withRetry(() => provider.callAPI(), {
+  maxAttempts: 3,
+  baseDelayMs: 1000,
+  logger,
+});
 ```
 
 **验证清单**：
+
 - [ ] 50%+ 错误使用新类型
 - [ ] HTTP 响应统一
 - [ ] 错误日志结构化
@@ -400,7 +414,7 @@ function process(data: unknown) {
 
 \`\`\`bash
 pnpm install
-pnpm run dev  # 启动所有服务
+pnpm run dev # 启动所有服务
 \`\`\`
 
 ## HMR 工作原理
@@ -420,7 +434,7 @@ pnpm run dev  # 启动所有服务
 - 抛出类型化错误（NotFoundError, ValidationError 等）
 - 使用 withRetry 包装可重试操作
 - ErrorHandler.log 记录错误
-\`\`\`
+  \`\`\`
 ```
 
 ---
@@ -449,13 +463,14 @@ class AnalyticsService extends Effect.Service<AnalyticsService>()('Analytics', {
       })
     }
   })
-}) 
+})
 
 // 3. 与现有服务并存
 // 不需要全部重写
 ```
 
 **收益评估**：
+
 - ✅ 类型安全的错误处理
 - ✅ 资源自动清理
 - ✅ 测试更容易
@@ -463,6 +478,7 @@ class AnalyticsService extends Effect.Service<AnalyticsService>()('Analytics', {
 - ⚠️ 生态较小
 
 **决策点**：
+
 - 团队是否熟悉 FP？
 - 是否值得引入新范式？
 - 是否有足够时间培训？
@@ -473,15 +489,15 @@ class AnalyticsService extends Effect.Service<AnalyticsService>()('Analytics', {
 
 ### 关键绩效指标（KPI）
 
-| 指标 | 当前 | 目标（3 个月） | 测量方法 |
-|------|------|----------------|----------|
-| **代码库大小** | 3.2 GB | < 1.2 GB | `du -sh .` |
-| **依赖安装时间** | ~5 分钟 | < 2 分钟 | `time pnpm install` |
-| **HMR 延迟** | 5-10 秒 | < 1 秒 | 手动测试 |
-| **测试运行时间** | ~15 分钟 | < 8 分钟 | CI 时间 |
-| **Flaky 测试率** | ~20% | < 5% | CI 重试率 |
-| **`any` 使用** | 317 处 | < 150 处 | `grep -r ": any"` |
-| **Bundle 大小** | 未测量 | 在预算内 | Bundle checker |
+| 指标             | 当前     | 目标（3 个月） | 测量方法            |
+| ---------------- | -------- | -------------- | ------------------- |
+| **代码库大小**   | 3.2 GB   | < 1.2 GB       | `du -sh .`          |
+| **依赖安装时间** | ~5 分钟  | < 2 分钟       | `time pnpm install` |
+| **HMR 延迟**     | 5-10 秒  | < 1 秒         | 手动测试            |
+| **测试运行时间** | ~15 分钟 | < 8 分钟       | CI 时间             |
+| **Flaky 测试率** | ~20%     | < 5%           | CI 重试率           |
+| **`any` 使用**   | 317 处   | < 150 处       | `grep -r ": any"`   |
+| **Bundle 大小**  | 未测量   | 在预算内       | Bundle checker      |
 
 ### 定性指标
 
@@ -496,13 +512,13 @@ class AnalyticsService extends Effect.Service<AnalyticsService>()('Analytics', {
 
 ### 主要风险
 
-| 风险 | 概率 | 影响 | 缓解措施 |
-|------|------|------|----------|
-| pnpm 不兼容某些依赖 | 中 | 高 | 保留 npm fallback，逐步迁移 |
-| 源码导入破坏构建 | 低 | 高 | 保持 dist/ 构建并行，验证后切换 |
-| DI 重构引入 bug | 中 | 中 | 增量重构，完整测试覆盖 |
-| 事件溯源复杂度 | 低 | 中 | 仅用于新功能，可选特性 |
-| 团队学习曲线 | 中 | 中 | 文档培训，Pair programming |
+| 风险                | 概率 | 影响 | 缓解措施                        |
+| ------------------- | ---- | ---- | ------------------------------- |
+| pnpm 不兼容某些依赖 | 中   | 高   | 保留 npm fallback，逐步迁移     |
+| 源码导入破坏构建    | 低   | 高   | 保持 dist/ 构建并行，验证后切换 |
+| DI 重构引入 bug     | 中   | 中   | 增量重构，完整测试覆盖          |
+| 事件溯源复杂度      | 低   | 中   | 仅用于新功能，可选特性          |
+| 团队学习曲线        | 中   | 中   | 文档培训，Pair programming      |
 
 ### 回滚计划
 
@@ -526,11 +542,13 @@ git revert <commit-sha>  # 回退特定重构
 ## 📚 延伸阅读
 
 ### 内部文档
+
 - `docs/improvement-plan.md` - 本文档
 - `docs/architecture.md` - 系统架构
 - `docs/testing.md` - 测试策略
 
 ### 外部资源
+
 - [pnpm 文档](https://pnpm.io/)
 - [Vite 文档](https://vitejs.dev/)
 - [Effect 文档](https://effect.website/) - 可选
@@ -543,6 +561,7 @@ git revert <commit-sha>  # 回退特定重构
 复制此清单到你的项目管理工具（Jira/Linear/GitHub Issues）
 
 ### Week 1: pnpm 迁移
+
 - [ ] 运行 migrate-to-pnpm.mjs
 - [ ] pnpm install 成功
 - [ ] 所有构建通过
@@ -551,6 +570,7 @@ git revert <commit-sha>  # 回退特定重构
 - [ ] 团队培训完成
 
 ### Week 2: 源码导入 + TestableQueue
+
 - [ ] Metro 配置更新
 - [ ] HMR < 1 秒验证
 - [ ] 5+ 测试重构
@@ -558,24 +578,28 @@ git revert <commit-sha>  # 回退特定重构
 - [ ] 文档更新
 
 ### Week 3: DI + Bundle
+
 - [ ] 2+ 服务 DI 重构
 - [ ] Bundle checker 运行
 - [ ] CI 集成
 - [ ] 依赖审计完成
 
 ### Week 4-5: 事件溯源（可选）
+
 - [ ] Schedule service 试点
 - [ ] 测试通过
 - [ ] 审计日志验证
 - [ ] 文档编写
 
 ### Week 6-7: 错误处理
+
 - [ ] 50%+ 错误重构
 - [ ] HTTP 统一响应
 - [ ] Retry 逻辑集成
 - [ ] 日志结构化
 
 ### Week 8-10: DX 提升
+
 - [ ] Vite 集成（web）
 - [ ] `any` 减少 50%
 - [ ] 开发者文档更新
@@ -610,5 +634,5 @@ git revert <commit-sha>  # 回退特定重构
 
 ---
 
-*最后更新：2026-09-04*
-*版本：1.0.0*
+_最后更新：2026-09-04_
+_版本：1.0.0_

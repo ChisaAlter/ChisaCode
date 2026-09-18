@@ -2,7 +2,7 @@
 
 ## Sources Of Truth
 
-- Use Node.js 22 or newer from the active `PATH`; the repository does not pin an exact Node version. This is an npm workspace monorepo with `package-lock.json`, not pnpm/yarn.
+- Use Node.js 22 or newer from the active `PATH`; the repository does not pin an exact Node version. This is a **pnpm workspace** monorepo (`pnpm-lock.yaml` + `pnpm-workspace.yaml`, version pinned via the `packageManager` field). `npm ci`/`npm install` do NOT work here — `catalog:`/`workspace:` specifiers will fail; use pnpm commands.
 - `docs/` holds repo-specific architecture, workflow, and gotcha docs. For non-trivial work, list it and skim the relevant file before editing.
 - `CLAUDE.md` has longer standing guidance; prefer this file for the compact checklist and consult the docs it references for details.
 
@@ -33,7 +33,7 @@ These align with the Quick Check before Any Change, Improvement Tracking, and Te
 
 ## Commands
 
-- Install with `npm ci`; CI uses Node 22 and npm cache.
+- Install with `pnpm install --frozen-lockfile`; CI uses Node 22 and the pnpm store cache.
 - Dev all surfaces: `npm run dev` on macOS/Linux, `npm run dev:win` on Windows.
 - Focused dev: `npm run dev:server`, `npm run dev:app`, `npm run dev:desktop`.
 - Build dependency stacks instead of guessing order: `npm run build:client` (`protocol -> client`), `npm run build:server-deps` (`highlight -> relay -> protocol -> client`), `npm run build:server` (`server-deps -> server -> cli`), `npm run build:app-deps` (`highlight -> protocol -> client -> expo-two-way-audio`).

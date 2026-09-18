@@ -60,6 +60,44 @@ catalogs:
 patchedDependencies:
   app-builder-lib@26.8.1: patches/app-builder-lib@26.8.1.patch
 
+# Security / compat pins migrated from the old npm `overrides` block (which pnpm
+# never read). Rule used during migration: never pin below the version the
+# lockfile already resolved — targets were bumped to the resolved version where
+# the original pin would have downgraded. metro/metro-runtime stay at 0.84.4
+# because patches/metro+0.84.4.patch and patches/metro-runtime+0.84.4.patch are
+# version-scoped — bumping them silently drops the patches in postinstall.
+overrides:
+  "@types/node": ^22.10.0
+  "@xmldom/xmldom": 0.8.13
+  "ajv@8.11.0": 8.20.0
+  "anymatch>picomatch": 2.3.2
+  "brace-expansion@1.1.12": 1.1.18
+  "brace-expansion@2.0.2": 2.1.4
+  "brace-expansion@5.0.4": 5.0.9
+  form-data: 4.0.6
+  hono: 4.13.5
+  "jest-util>picomatch": 2.3.2
+  "js-yaml@3.14.2": 3.15.2
+  lightningcss: 1.33.0
+  linkify-it: 5.0.2
+  markdown-it: 14.2.0
+  metro: 0.84.4
+  metro-runtime: 0.84.4
+  "micromatch>picomatch": 2.3.2
+  node-forge: 1.4.0
+  picomatch: 4.0.7
+  "postcss@8.4.49": 8.5.28
+  "postcss@8.5.8": 8.5.28
+  react: 19.2.3
+  react-dom: 19.2.3
+  "react-native-markdown-display>markdown-it": 14.2.0
+  react-native-reanimated: 4.5.0
+  react-native-worklets: 0.10.0
+  react-test-renderer: 19.2.3
+  shell-quote: 1.10.0
+  tar: 7.5.22
+  ws: 8.21.0
+
 # pnpm 11 auto-verifies node_modules before every `pnpm exec`/run and will
 # purge the workspace install to a production graph mid-build (it truncated
 # the root install during `expo export`). Installs here are always explicit.
