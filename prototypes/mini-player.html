@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>M14 Mini Player 原型</title>
+    <style>
+      :root {
+        --bg: #fbfbfc;
+        --panel: #ffffff;
+        --panel-soft: #f7f7f8;
+        --panel-hover: #f1f2f4;
+        --text: #1e232b;
+        --muted: #657081;
+        --faint: #a3abb8;
+        --border: #dfe3e8;
+        --primary: #1a1d26;
+        --accent: #3a5ef0;
+        --shadow: 0 16px 40px rgba(25, 32, 44, 0.18);
+        --radius-panel: 14px;
+        --radius-card: 10px;
+        font-family: ui-sans-serif, "Segoe UI", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; min-height: 100vh; color: var(--text); background: var(--bg); padding: 32px 24px 64px; }
+      h1 { font-size: 22px; font-weight: 700; margin: 0 0 4px; letter-spacing: -0.01em; }
+      .sub { color: var(--muted); font-size: 13px; margin: 0 0 24px; max-width: 880px; }
+      /* --- workspace mock --- */
+      .workspace {
+        position: relative; display: flex; height: 560px;
+        border: 1px solid var(--border); border-radius: var(--radius-panel);
+        overflow: hidden; background: var(--panel); user-select: none;
+      }
+      .conv { flex: 1; padding: 18px; display: flex; flex-direction: column; gap: 12px; overflow: auto; }
+      .msg { background: var(--panel-soft); border: 1px solid var(--border); border-radius: var(--radius-card); padding: 10px 14px; font-size: 13px; line-height: 1.55; }
+      .msg .who { font-size: 11px; font-weight: 600; color: var(--faint); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
+      /* --- right panel: browser pane host --- */
+      .pane { width: 380px; flex: none; border-left: 1px solid var(--border); display: flex; flex-direction: column; }
+      .chrome { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--border); background: var(--panel-soft); }
+      .chrome .url { flex: 1; font-size: 12px; color: var(--muted); background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 4px 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .chrome button { width: 26px; height: 26px; border: none; background: none; border-radius: 6px; color: var(--muted); cursor: pointer; font-size: 13px; }
+      .chrome button:hover { background: var(--panel-hover); color: var(--text); }
+      .webview-host { flex: 1; position: relative; background: #fff; }
+      .pane-empty { position: absolute; inset: 0; display: grid; place-items: center; color: var(--faint); font-size: 12.5px; }
+      /* --- fake webview content (the imperative element being moved) --- */
+      .webview { position: absolute; inset: 0; overflow: auto; background: #fff; font-size: 12px; }
+      .wv-hero { background: linear-gradient(135deg, #eef2ff, #fdf2f8); padding: 22px 18px; }
+      .wv-hero h2 { margin: 0 0 4px; font-size: 16px; }
+      .wv-hero p { margin: 0; color: var(--muted); }
+      .wv-body { padding: 14px 18px; display: flex; flex-direction: column; gap: 8px; color: var(--muted); }
+      .wv-body .line { height: 10px; border-radius: 5px; background: var(--panel-hover); }
+      .wv-body .line.short { width: 55%; }
+      /* --- mini player (the deliverable) --- */
+      .mini {
+        position: absolute; z-index: 30;
+        width: 320px; height: 200px; min-width: 240px; min-height: 150px;
+        border-radius: var(--radius-card); overflow: hidden;
+        border: 1px solid var(--border);
+        box-shadow: var(--shadow);
+        background: #fff;
+      }
+      .mini .wv-host { position: absolute; inset: 0; }
+      .mini-bar {
+        position: absolute; top: 0; left: 0; right: 0; height: 28px;
+        display: flex; align-items: center; gap: 6px; padding: 0 8px;
+        background: linear-gradient(rgba(20,23,31,0.55), rgba(20,23,31,0.0));
+        cursor: grab; opacity: 0; transition: opacity 0.15s; z-index: 2;
+      }
+      .mini:hover .mini-bar, .mini.dragging .mini-bar { opacity: 1; }
+      .mini-bar .dot { width: 6px; height: 6px; border-radius: 999px; background: rgba(255,255,255,0.85); }
+      .mini-bar .title { font-size: 11px; color: rgba(255,255,255,0.9); text-shadow: 0 1px 2px rgba(0,0,0,0.4); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .mini-bar button {
+        margin-left: auto; width: 22px; height: 22px; border: none; border-radius: 6px;
+        background: rgba(20,23,31,0.55); color: #fff; cursor: pointer; font-size: 11px;
+      }
+      .mini-bar button + button { margin-left: 0; }
+      .mini-bar button:hover { background: rgba(20,23,31,0.8); }
+      .mini-resize {
+        position: absolute; right: 0; bottom: 0; width: 16px; height: 16px;
+        cursor: nwse-resize; z-index: 3;
+      }
+      .mini-resize::after {
+        content: ""; position: absolute; right: 3px; bottom: 3px;
+        width: 8px; height: 8px; border-right: 2px solid var(--faint); border-bottom: 2px solid var(--faint);
+      }
+      /* --- demo controls --- */
+      .demo { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 20px; }
+      .demo button { font: inherit; font-size: 12.5px; padding: 6px 12px; border: 1px solid var(--border); background: var(--panel); border-radius: 8px; cursor: pointer; color: var(--muted); }
+      .demo button:hover { color: var(--text); border-color: var(--faint); }
+      .note { font-size: 12px; color: var(--faint); line-height: 1.6; margin-top: 12px; }
+      .spec { font-family: ui-monospace, Consolas, monospace; font-size: 11.5px; color: var(--muted); margin-top: 6px; }
+    </style>
+  </head>
+  <body>
+    <h1>M14 Mini Player</h1>
+    <p class="sub">
+      浏览器面板可「弹出」为浮动 Mini Player：imperative <code>&lt;webview&gt;</code> 元素在两个 React host div
+      间迁移（React 节点永不 reparent），同 partition 会话保持。拖拽、右下缩放、hover 控制条——位置/尺寸会话内有效，不持久化。
+    </p>
+
+    <div class="workspace" id="ws">
+      <div class="conv">
+        <div class="msg"><div class="who">Agent</div>已在浏览器打开文档页，你可以把面板弹出为小窗继续对话。</div>
+        <div class="msg"><div class="who">User</div>弹出到 mini player，帮我继续改左边这段。</div>
+        <div class="msg"><div class="who">Agent</div>好的，面板保持浮在右下角，随时可拖可缩放。</div>
+      </div>
+      <div class="pane">
+        <div class="chrome">
+          <button title="后退">‹</button><button title="前进">›</button><button title="刷新">⟳</button>
+          <div class="url">localhost:3000/docs/getting-started</div>
+          <button id="popout" title="弹出 Mini Player">⧉</button>
+          <button title="更多">⋯</button>
+        </div>
+        <div class="webview-host" id="panelHost">
+          <div class="webview" id="wv">
+            <div class="wv-hero"><h2>Getting Started</h2><p>ChisaCode 文档 — 本地优先的 agent 控制台</p></div>
+            <div class="wv-body">
+              <div class="line"></div><div class="line"></div><div class="line short"></div>
+              <div class="line"></div><div class="line"></div><div class="line short"></div>
+            </div>
+          </div>
+          <div class="pane-empty" id="paneEmpty" style="display:none">webview 已弹出到 Mini Player</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="demo">
+      <button onclick="popOut()">弹出 Mini Player</button>
+      <button onclick="popIn()">移回面板</button>
+      <button onclick="jump('br')">跳到右下</button>
+      <button onclick="jump('tl')">跳到左上（clamp 验证）</button>
+    </div>
+    <p class="note">
+      演示点：①「⧉」弹出——webview 内容（登录态/滚动位置即同一 DOM 元素）被 appendChild 到 mini 卡内，面板显示占位；②顶条拖拽整卡、右下手柄缩放（MIN 240×150）；③控制条仅 hover 显示；④「移回面板」归还 webview。
+      <span class="spec">EDGE_GAP=12 · DEFAULT 320×200 · MIN 240×150 · clamp(pos, container, bottomInset) 防出界</span>
+    </p>
+
+    <script>
+      const ws = document.getElementById("ws");
+      const wv = document.getElementById("wv");
+      const panelHost = document.getElementById("panelHost");
+      const paneEmpty = document.getElementById("paneEmpty");
+      const EDGE_GAP = 12, MIN_W = 240, MIN_H = 150;
+      let mini = null;
+
+      function clamp(v, lo, hi) { return Math.max(lo, Math.min(v, hi)); }
+
+      function popOut() {
+        if (mini) return;
+        mini = document.createElement("div");
+        mini.className = "mini";
+        const r = ws.getBoundingClientRect();
+        mini.style.left = (r.width - 320 - EDGE_GAP) + "px";
+        mini.style.top = (r.height - 200 - EDGE_GAP) + "px";
+        mini.innerHTML =
+          '<div class="wv-host"></div>' +
+          '<div class="mini-bar"><span class="dot"></span><span class="title">localhost:3000/docs/getting-started</span>' +
+          '<button title="移回面板" onclick="popIn()">⇱</button><button title="关闭" onclick="popIn()">×</button></div>' +
+          '<div class="mini-resize"></div>';
+        ws.appendChild(mini);
+        // the actual deliverable: move the SAME webview node into the mini host
+        mini.querySelector(".wv-host").appendChild(wv);
+        paneEmpty.style.display = "grid";
+        wireDrag(); wireResize();
+      }
+      function popIn() {
+        if (!mini) return;
+        panelHost.insertBefore(wv, paneEmpty);
+        paneEmpty.style.display = "none";
+        mini.remove(); mini = null;
+      }
+      function jump(where) {
+        if (!mini) popOut();
+        const r = ws.getBoundingClientRect();
+        if (where === "br") { mini.style.left = (r.width - mini.offsetWidth - EDGE_GAP) + "px"; mini.style.top = (r.height - mini.offsetHeight - EDGE_GAP) + "px"; }
+        else { mini.style.left = "-80px"; mini.style.top = "-60px"; clampPos(); }
+      }
+      function clampPos() {
+        const r = ws.getBoundingClientRect();
+        mini.style.left = clamp(parseInt(mini.style.left), EDGE_GAP, r.width - mini.offsetWidth - EDGE_GAP) + "px";
+        mini.style.top = clamp(parseInt(mini.style.top), EDGE_GAP, r.height - mini.offsetHeight - EDGE_GAP) + "px";
+      }
+      function wireDrag() {
+        const bar = mini.querySelector(".mini-bar");
+        bar.addEventListener("pointerdown", (e) => {
+          if (e.target.tagName === "BUTTON") return;
+          mini.classList.add("dragging");
+          bar.setPointerCapture(e.pointerId);
+          const sx = e.clientX - mini.offsetLeft, sy = e.clientY - mini.offsetTop;
+          const move = (ev) => {
+            const r = ws.getBoundingClientRect();
+            mini.style.left = clamp(ev.clientX - sx, EDGE_GAP, r.width - mini.offsetWidth - EDGE_GAP) + "px";
+            mini.style.top = clamp(ev.clientY - sy, EDGE_GAP, r.height - mini.offsetHeight - EDGE_GAP) + "px";
+          };
+          const up = () => { mini.classList.remove("dragging"); bar.removeEventListener("pointermove", move); bar.removeEventListener("pointerup", up); };
+          bar.addEventListener("pointermove", move);
+          bar.addEventListener("pointerup", up);
+        });
+      }
+      function wireResize() {
+        const h = mini.querySelector(".mini-resize");
+        h.addEventListener("pointerdown", (e) => {
+          h.setPointerCapture(e.pointerId);
+          const sw = mini.offsetWidth - e.clientX, sh = mini.offsetHeight - e.clientY;
+          const move = (ev) => {
+            const r = ws.getBoundingClientRect();
+            mini.style.width = clamp(ev.clientX + sw, MIN_W, r.width - mini.offsetLeft - EDGE_GAP) + "px";
+            mini.style.height = clamp(ev.clientY + sh, MIN_H, r.height - mini.offsetTop - EDGE_GAP) + "px";
+          };
+          const up = () => { h.removeEventListener("pointermove", move); h.removeEventListener("pointerup", up); };
+          h.addEventListener("pointermove", move);
+          h.addEventListener("pointerup", up);
+        });
+      }
+      document.getElementById("popout").onclick = popOut;
+    </script>
+  </body>
+</html>
