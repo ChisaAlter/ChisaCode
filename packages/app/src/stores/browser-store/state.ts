@@ -7,6 +7,8 @@ export interface BrowserRecord {
   canGoForward: boolean;
   faviconUrl: string | null;
   lastError: string | null;
+  /** Custom right-rail width chosen by dragging the pane's left-edge handle (px). */
+  paneWidth: number | null;
   createdAt: number;
 }
 
@@ -55,6 +57,7 @@ export function createBrowserRecord(input: {
     canGoForward: false,
     faviconUrl: null,
     lastError: null,
+    paneWidth: null,
     createdAt: input.now,
   };
 }
@@ -86,7 +89,8 @@ export function applyBrowserPatch<S extends BrowserIndexState>(
     nextRecord.canGoBack === existing.canGoBack &&
     nextRecord.canGoForward === existing.canGoForward &&
     nextRecord.faviconUrl === existing.faviconUrl &&
-    nextRecord.lastError === existing.lastError
+    nextRecord.lastError === existing.lastError &&
+    nextRecord.paneWidth === existing.paneWidth
   ) {
     return state;
   }

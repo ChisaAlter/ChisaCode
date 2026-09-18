@@ -916,3 +916,50 @@ User asked to simplify everything; all CI-green chasing and pre-existing test fi
   2. Dockerfile 未做 docker build 实机验证（本机无 docker daemon）；compose 的 `CHISACODE_PASSWORD` 空值风险仍为既有文档项。
   3. 过期 TODO 未清：`session-helpers.ts` "remove once clients >=0.1.45"（现 1.0.3）、`protocol/workspace/messages.ts` "TODO(2026-07)" 已过期两月、多处 `COMPAT(*)` 版本号仍为占位 `v0.1.X`。
   4. zh-CN i18n 80 处术语违例（"智能体"vs"Agent"）仍为 CI non-blocking 待产品决策。
+
+## T3 移植 M6+18：任务/多步骤进度徽章（2026-09-18 补登，2026-09-09 完成）
+
+- **补登说明**：本条目为 2026-09-18 进度对抗审查发现缺失后补登（T3 计划 §2 要求每模块登记，M6+18/M8 当时漏登）。
+- **交付**：从 `todo_list` + task entries（`extractTaskEntriesFromToolCall`）派生任务/多步骤摘要（T3 agent-spawn 概念按审查 #8 裁决不移植，如实声明）。分段彩条（completed/in_progress/pending）+ "n/m" 计数 + 可展开列表，inline 与 drawer 两变体。
+- **影响范围**：`packages/app/src/composer/tasks-badge.ts`（49 行派生逻辑）、`tasks-badge-view.tsx`（134 行）、`tasks-badge.test.ts`（69 行单测）、`agent-panel.tsx` 接线、`i18n`。
+- **验证**：`desktop-tasks-badge.script.ts` 打包 Electron 门禁（mock todo-list mode）；web e2e；提交 `c01874e74`（实现）+ `e71022fc2`（打包门禁）。
+- **状态**：完成。**残余**（随提交如实声明）：任务耗时统计粒度粗（徽章暂只显示状态，不显示每步耗时）；6767 被占期间的 desktop smoke 需复跑确认。
+
+## T3 移植 M8：Composer 滚动折叠（2026-09-18 补登，2026-09-09 完成）
+
+- **补登说明**：同上，2026-09-18 补登。
+- **交付**：阅读 scrollback 时 wheel 上滚折叠 composer（无附件时生效——附件存在不折叠，对齐 M15 语义）；聚焦/pointerdown/回底恢复（复用 `useComposerFocusState.restoreAfterTimelineReachedEnd` 概念）。`scrollCollapsed` 为独立折叠维度。
+- **影响范围**：`use-composer-scroll-collapse.ts`（97 行）、`input/composer-scroll-gesture.ts`（99 行手势状态机）+ 13 单测、`input.tsx`（95 行接线）、`composer/index.tsx`、`agent-panel.tsx`、`view.tsx`；原型 `prototypes/composer-scroll-collapse.html` 先批准。
+- **验证**：`e2e/composer-scroll-collapse.spec.ts` web spec + `e2e/desktop-scroll-collapse.script.ts` 打包 Electron 实机（隔离端口 6803 + 独立 CHISACODE_HOME：114px→46px 折叠隐藏 cbar→点击恢复 114px，截图证据）；手势状态机 13 单测；提交 `e78974e46`（实现）+ `36f70948e`（原型）。
+- **状态**：完成。**残余**：① `scrollCollapsed` 与 M15 Resting Layout 合并为单一折叠状态机属 M15 范围，届时迁移（当前文件缺 M15 合并指针注释，随 M15 一并补）；② `composer-scroll-collapse.spec.ts:60,87` 两处 `waitForTimeout(120)` 已入 test-audit 基线，下一个触碰该 spec 的模块改为 `waitForFunction` 断言折叠态 style；③ native 无 wheel 折叠（声明）。
+
+## T3 移植 M9：服务端 Delta 缓冲（2026-09-18 登记，2026-09-18 完成）
+
+- **交付**：按修订规格扩展 `agent-stream-coalescer.ts`（不新建独立缓冲层）：`AGENT_STREAM_COALESCE_DEFAULT_WINDOW_MS` 60→**300**；新增 `AGENT_STREAM_COALESCE_DEFAULT_MAX_BUFFERED_CHARS=24_000` 溢出阈值——`PendingTextEntry` 累计字符达上限立即 spill flush（不等窗）；`enabled` 逃生门（false 时 `handle()` 恒返回 false，事件直通——语义优于计划的 windowMs=0 伪直通，如实注明偏差）。`AgentManagerOptions` 新增 `enableAssistantTextBuffering`/`agentStreamCoalesceMaxBufferedChars`（与既有 `agentStreamCoalesceWindowMs` 测试旋钮同构接线）。
+- **影响范围**：`agent-stream-coalescer.ts`（options+spill+enabled）、`agent-manager.ts`（options 声明+构造接线）、`agent-stream-coalescer.test.ts`（60ms 硬编码断言全部改为常量引用 + 新增 7 测试）。
+- **验证**：`agent-stream-coalescer.test.ts` 30/30（含新增：spill 立即 flush/跨 delta 累计/tool_call 不计入/flush 后重置/spill 折叠单 item/disabled 全直通/事件边界 flushFor）；`agent-manager-stream-coalescing.test.ts` 21/21 + `agent-manager-gen-ui-integration.test.ts` 6/6 回归；server typecheck 0 错误；lint 0/0。
+- **状态**：完成。**残余**：300ms 首字延迟（对比 60ms 现状；可接受，`enableAssistantTextBuffering` 可关）；真实 provider delta 粒度差异逐 provider 验证（mock 先行）；打包 Electron 实机流式体感对照列为后续验证。
+
+## T3 移植 M11：选择文本引用工具栏（2026-09-18 登记，2026-09-18 完成）
+
+- **交付**：web-only 选区工具栏——`assistant-selection-toolbar.tsx`（native 空 stub）+ `.web.tsx`（`useAssistantSelection` 监听 `selectionchange`，选区锚点须落在 `assistant-message-surface` 容器内，>5000 字符忽略；工具栏 portal 进共享 `getOverlayRoot()`，`mousedown` preventDefault 保选区，Escape 关闭）。两个动作：复制（`navigator.clipboard`）+ 引用（`> ` 逐行 blockquote 追加进草稿）。
+- **Composer 通道**：与计划的 `onInsertText` prop 偏差——改用新 `ComposerInsertTextContext`（`composer/composer-insert-text-context.ts`），由 `agent-panel.tsx` 提供（`useStableEvent` 包 `agentInputDraft`：非空草稿 `当前\n\n引用` 追加，空草稿直接置引用），避免跨整棵 stream 树 prop drilling；无 provider 时引用按钮自动隐藏。
+- **影响范围**：新增 `composer-insert-text-context.ts`、`assistant-selection-toolbar.{tsx,web.tsx,test.tsx}`；`message.tsx`（`assistant-message-surface` ref + 挂载）、`agent-panel.tsx`（Provider）、`lib/overlay-root.ts`（`OVERLAY_Z.selectionToolbar=5`）、`i18n`（`stream.copySelection`/`stream.citeSelection` 中英）。
+- **验证**：`assistant-selection-toolbar.test.tsx` 7/7 jsdom 行为测试（容器内显示/容器外隐藏/折叠消失/blockquote 插入/无 provider 隐藏引用钮/引用后清选区/Escape）；`message.test.tsx` 6/6 回归；app typecheck 0 错误；lint 0/0。
+- **状态**：完成。**残余**：① 工具栏固定定位在选区 rect 上方，滚动不跟随（选区随页面滚动时 DOM Selection 变化会自然重算/消失，未做 scroll listener 吸附——T3 原行为同）；② `mousedown` 仅阻止默认行为，不阻止焦点转移——点击按钮后焦点落在按钮上（引用后用户需手动点回 composer，T3 同）；③ 每条 assistant message 一个 `selectionchange` 监听器（长会话监听数随消息数增长，监听器体积极小；如成为问题再上移到 stream 级单监听）。
+
+## T3 移植 M13：浏览器面板调整大小（2026-09-18 登记，2026-09-18 完成）
+
+- **交付**：右栏（right rail）浏览器面板的拖拽调整宽度——`utils/clamp-browser-pane-width.ts`（`BROWSER_PANE_MIN_WIDTH=360`，上限 `floor(viewportWidth*0.7)`，窄视口时 min 优先）；`BrowserRecord` 新增 `paneWidth` 字段（zustand persist 自动持久化，重开恢复）；`browser-pane.electron.tsx` 在 `webviewWrap` 左缘渲染 `role="separator"` 拖拽柄（4px 命中区，hover/drag 时 1px 蓝色高亮，`cursor: col-resize`，`aria-orientation="vertical"`）。拖拽过程经 rAF 直接写 rail 的 inline `width`/`maxWidth`（不触发 React 逐帧重渲），**仅在拖拽结束时**写 `updateBrowser({paneWidth})`；`workspace-right-panel.tsx` 在 `activeSurface==="browser"` 且存在 `paneWidth` 时以 `[styles.rail, {width, maxWidth:"70%"}]` 渲染。
+- **偏差说明**：计划建议复用 `explorer-sidebar` 的 `Gesture.Pan`+Reanimated 模式；实际改用原生 DOM 事件（`mousedown`/`mousemove`/`mouseup` + rAF）——因为被调整的目标（rail）位于父组件而非本组件，DOM 直写在 `.electron.tsx`（web 文件）中更诚实且满足"拖拽结束才写 store"的要求，如实注明。
+- **影响范围**：新增 `clamp-browser-pane-width.ts`、`clamp-browser-pane-width.test.ts`（7 测试）；`stores/browser-store/state.ts`（`paneWidth` 字段+相等性比对）、`state.test.ts`（record 形状断言更新）；`browser-pane.electron.tsx`（handle+drag effect）、`workspace-right-panel.tsx`（动态 rail 宽度）、`i18n`（`browser.resizePane` 中英）。
+- **验证**：`clamp-browser-pane-width.test.ts` 7/7（范围内保留/min 钳制/70% 上限/取整/窄视口 min 优先/非有限输入回退/未知视口）；`state.test.ts` 13/13 回归；app typecheck 0 错误；lint 0/0。
+- **状态**：完成。**残余**：① 打包 Electron 实机验证（拖拽→宽度变化→重开恢复）待做——本机无 Electron 运行验证；② <720px 视口 min 360 挤压对话列（panel 优先，计划内已知行为）；③ `paneWidth` 持久化于 zustand localStorage，跨设备不同步（与 T3 对齐）。
+
+## T3 移植 M16：浏览器 Chrome 增强（2026-09-18 登记，2026-09-18 完成）
+
+- **交付**：Electron 浏览器 chrome 四项增强——① `chromeRow` 底部 2px 加载进度条（`BROWSER_PROGRESS_CSS`：`position:absolute; bottom:-1px`，60% 宽渐变条 `translateX` GPU 合成动画，`isLoading` 时挂载）；② `browser-favicon-icon.tsx`（webview `faviconUrl` → `<Image>`，`onError`/无 URL 时回退 muted Globe2，`faviconUrl` 变化重置失败态）；③ `zoom-indicator.tsx`（百分比 pill：首帧抑制 → 变化即显 → 1500ms 后 fade → +300ms 卸载；`zoomLevelToPercent`=1.2^n 对数换算、`clampZoomLevel` ±5 钳制）+ `chromeRight` 内 −/+ 步进钮（step 0.5，边界 disabled），webview `getZoomLevel`/`setZoomLevel`（dom-ready 同步初值），**与窗口级 zoom 完全独立**；④ `browser-more-menu.tsx` 三点菜单（Reload/Reset zoom/DevTools/元素选择器/清除浏览数据），既有 DevTools+元素选择器从 `chromeRight` 迁入（`isDev` 门禁不变、行为不变），`clearPartition` 复用既有 desktop bridge 后 `reload()`。
+- **影响范围**：新增 `browser-favicon-icon.tsx`、`zoom-indicator.tsx`、`browser-more-menu.tsx`、`zoom-indicator.test.tsx`（9 测试）；`browser-pane.electron.tsx`（进度条+favicon+zoom 状态/按钮/菜单接线、`ElectronWebview` 接口补 `getZoomLevel`/`setZoomLevel`、移除迁移走的图标/样式）、`i18n`（`moreMenu`/`zoomIn`/`zoomOut`/`zoomReset`/`clearData` 中英）。
+- **验证**：`zoom-indicator.test.tsx` 9/9（首帧抑制含非 100% 初值/变化显示/百分比文案/fade 卸载时序/重置再显示/重复变化重启 fade 窗）；`state.test.ts` 13/13 + `clamp-browser-pane-width.test.ts` 7/7 回归；app+desktop typecheck 0 错误；lint 0/0（react-perf：memoized leading icons/style arrays/source/callbacks）。
+- **打包实机门禁**：`node scripts/build.js` 全量通过——win-unpacked + win-arm64-unpacked、`ChisaCode-Setup-1.0.3{,-x64,-arm64}.{exe,zip}` 签名+blockmap，better-sqlite3 两 arch 原生重建、native 剪枝 230MB。**过程中发现并修复一条 pnpm 迁移残余（非本模块代码引入）**：electron-builder 依赖收集器报 `production dependency not found: bl → buffer@^5.5.0`——`buffer@5.7.1` 在 lockfile 中被标 `optional: true` 且进入 `.modules.yaml` skipped（其全部消费者均为 optional/跨平台链：bl←better-sqlite3-optional、dmg-license←dmg-builder-darwin），pnpm 因此不物化该包。修复：`packages/desktop/package.json` 直 dep `"buffer": "5.7.1"` 强制物化（lockfile 同步移除其 optional 标记；`require('buffer')` 在 Node 恒解析内建模块，零运行时影响）。
+- **状态**：完成。**残余**：① 四项 UI 行为的人工验收（进度条可见性/zoom pill 渐隐/favicon 回退/清数据重载）需真机点击确认——打包已证链路，交互层未自动验；② arm64 smoke 跳过（host x64，预期）；③ `buffer` 直 dep 属 workaround——若上游 pnpm 修复 optional-only 包跳过行为或 electron-builder collector 容忍缺失，可回退。

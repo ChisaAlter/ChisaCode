@@ -775,6 +775,12 @@ export const resources = {
         crashedTitle: "页面已崩溃",
         crashedBody: "浏览器页面的渲染进程意外退出。",
         crashedReload: "重新加载",
+        resizePane: "调整面板宽度",
+        moreMenu: "更多选项",
+        zoomIn: "放大",
+        zoomOut: "缩小",
+        zoomReset: "重置缩放",
+        clearData: "清除浏览数据",
       },
       terminal: {
         title: "终端",
@@ -1401,6 +1407,8 @@ export const resources = {
         thinkingRunning: "正在推理",
         changedFilesTitle: "变更文件",
         changedFilesToggle: "展开或收起变更文件列表",
+        copySelection: "复制",
+        citeSelection: "引用",
       },
       review: {
         editComment: "编辑评论",
@@ -2822,6 +2830,12 @@ export const resources = {
         crashedTitle: "Page crashed",
         crashedBody: "The browser page's renderer process exited unexpectedly.",
         crashedReload: "Reload",
+        resizePane: "Resize panel",
+        moreMenu: "More options",
+        zoomIn: "Zoom in",
+        zoomOut: "Zoom out",
+        zoomReset: "Reset zoom",
+        clearData: "Clear browsing data",
       },
       message: {
         copyMessage: "Copy message",
@@ -3433,6 +3447,8 @@ export const resources = {
         thinkingRunning: "Reasoning...",
         changedFilesTitle: "Changed files",
         changedFilesToggle: "Expand or collapse changed files",
+        copySelection: "Copy",
+        citeSelection: "Quote",
       },
       review: {
         editComment: "Edit comment",

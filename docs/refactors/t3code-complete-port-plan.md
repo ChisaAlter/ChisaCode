@@ -349,7 +349,11 @@ export function suppressActiveComposerScrollGesture(state, now): ComposerScrollG
 
 ### 模块 9：服务端 Delta 缓冲 — P1
 
-**裁决**（审查 #2）：不照搬 T3 纯事件边界 flush（纯文本回复会"卡到完成"）。三取最早：**300ms 时间窗 / 非文本事件边界 / 24KB 溢出**。已验证客户端 delta-append 语义（stream.ts:351 `appendAssistantMessage`）——大块 flush 行为不变。
+**裁决**（审查 #2）：不照搬 T3 纯事件边界 flush（纯文本回复会"卡到完成"）。三取最早：**300ms 时间窗 / 非文本事件边界 / 24KB 溢出**。已验证客户端 delta-append 语义（types/stream.ts:351 `appendAssistantMessage`）——大块 flush 行为不变。
+
+**修订**（2026-09-18 进度审查）：**改扩展现有 `agent-stream-coalescer.ts`，不再新建 `AssistantTextBuffer`**。实证：该 coalescer 已实现三条 flush 路径中的两条——可配置 `windowMs`（默认 60ms，`AGENT_STREAM_COALESCE_DEFAULT_WINDOW_MS`，`agent-manager.ts:561` 接线）与非文本事件边界 flush（`agent-session-event-pipeline-controller.ts:163` 对非可合并事件先 `flushFor`）。独立缓冲层会变成与 coalescer 并存的双定时器/双 flush 体系，排序交互复杂且收益重叠。本模块实际缺口只剩：**① 默认窗 60→300ms；② `maxBufferedChars` 溢出阈值（现有 append 路径无大小上限）；③ `enableAssistantTextBuffering` 逃生门（映射为 coalescer window=0/直通）**。改造量 ~40 行 + 测试；协议零变更不变。
+
+<details><summary>原规格（备查）：新建 assistant-text-buffer.ts 独立缓冲层</summary>
 
 **新文件** `packages/server/src/server/agent/assistant-text-buffer.ts`：
 
@@ -375,6 +379,17 @@ export class AssistantTextBuffer {
 **测试**：`assistant-text-buffer.test.ts` ≥14（追加/时间窗/溢出/事件边界/按 turn 清理/并发消息 id/关停 clear）；`agent-stream-coalescer.test.ts` 回归；server 集成（fake provider 高频 delta → 断言下发次数 ≈ 每 300ms 一次）
 **验证**：打包 Electron 实机流式体感对照（开/关 flag，长回复打字感不消失）
 **残余**：300ms 首字延迟（对比逐 token；可接受，flag 可关）；真实 provider delta 粒度差异逐 provider 验证（mock 先行，真实列为后续验证）
+
+</details>
+
+**修订后规格**（2026-09-18，替代上方独立缓冲层）：
+
+- `agent-stream-coalescer.ts`：`AgentStreamCoalescerOptions` 新增 `maxBufferedChars?: number`（默认 24_000）。`PendingTextEntry.text` 追加累计长度超限 → 立即 flush 并记溢出路径 trace；`AGENT_STREAM_COALESCE_DEFAULT_WINDOW_MS` 60 → **300**。
+- `agent-manager.ts`：`AgentManagerOptions` 新 `enableAssistantTextBuffering?: boolean`（默认 true）→ false 时 coalescer `windowMs=0`（等价直通逐事件下发，逃生门语义不变）。
+- **协议零变更**（仍 `assistant_message`，粒度变粗）。
+- **测试**：`agent-stream-coalescer.test.ts` 新增 ≥8（300ms 默认窗/溢出阈值立即 flush/非文本事件边界 flush 既有断言保留/flag=off 直通/追加累计长度计数）；server 集成（fake provider 高频 delta → 断言下发次数 ≈ 每 300ms 一次）。
+- **验证**：打包 Electron 实机流式体感对照（开/关 flag，长回复打字感不消失）。
+- **残余**：300ms 首字延迟（对比 60ms 现状；可接受，flag 可关）；真实 provider delta 粒度差异逐 provider 验证（mock 先行）。
 
 ---
 
@@ -671,25 +686,27 @@ export function buildTraitsTriggerDisplay(options: TraitOptionDescriptor[]): str
 ## 4. 模块顺序与依赖
 
 ```
-M1 提示历史 ──┐
-M2 稳定行 ────┼─ 无相互依赖，按序逐个交付
-M5 崩溃恢复 ──┤
-M3 端口扫描 ──┘
-M4 变更树（依赖 M2 的比较器接入点）
-M7 横幅系统（M12/M22 的宿主）
-M8 滚动折叠（M15 会并走其状态机）
-M9 Delta 缓冲
-M6+18 任务徽章（依赖 M7 bannerSlot）
-M11 引用工具栏
-M12 审批面板（依赖 M7；含流内卡移除+e2e 迁移）
-M13 面板 resize
+M1 提示历史 ──┐ ✅ 2026-09-08
+M2 稳定行 ────┼─ ✅ 2026-09-08
+M5 崩溃恢复 ──┤ ✅ 2026-09-08
+M3 端口扫描 ──┘ ✅ 2026-09-08
+M4 变更树 ✅ 2026-09-08（依赖 M2 的比较器接入点）
+M7 横幅系统 ✅ 2026-09-09（M12/M22 的宿主已就位：bannerSlot prop）
+M8 滚动折叠 ✅ 2026-09-09（M15 会并走其状态机——合并指针注释缺失，见 §6）
+M9 Delta 缓冲 ✅ 2026-09-18（已重定范围：扩展 coalescer，见模块 9 修订）
+M6+18 任务徽章 ✅ 2026-09-09（依赖 M7 bannerSlot；提前于 M9 交付，依赖已满足）
+M11 引用工具栏 ✅ 2026-09-18（ComposerInsertTextContext 代替 onInsertText prop，见 roadmap 条目）
+M12 审批面板 ⬅ 下一个（依赖 M7；含流内卡移除+e2e 迁移——流内卡实证仍在 view.tsx:128）
+M13 面板 resize ✅ 2026-09-18（DOM 事件+rAF 代替 Gesture.Pan，见 roadmap 条目）
 M14 Mini Player
 M19 控件基元（M15 前置）
 M15 静止布局（依赖 M19 + M8 合并）
-M16 Chrome 增强
+M16 Chrome 增强 ✅ 2026-09-18（打包门禁顺手修复 pnpm buffer@5.7.1 skipped 残余，见 roadmap 条目）
 M17 高亮缓存
 M20-M28 按序打磨
 ```
+
+**进度快照（2026-09-18 复核）**：12/26 完成。P0 全清（M1–M5）；P1 完成 M6+18/M7/M8/M9/M11，剩 M14；P2 完成 M13/M16，剩 M12/M15/M17/M19；P3 未动（M20–M27）；P4 未动（M28）。M10 已按审查 #1 移除。
 
 ## 5. 跨模块门禁
 
@@ -698,3 +715,39 @@ M20-M28 按序打磨
 - 核心回归：M2/M4/M7/M8/M12 触碰 agent-stream/composer 核心 → 全量跑既有相关测试
 - 桌面验证：停运行中 app → `expo export` → desktop `tsc` → electron-builder → win-unpacked 实机
 - 收尾：整体对抗审查 → roadmap 全量登记 → 命名残余汇总
+
+## 6. 进度对抗审查与修订（2026-09-18）
+
+对全部 8 个"已完成"声明做了符号级实证，对全部剩余模块做了前提复核。裁决如下：
+
+| #   | 发现                                                                                            | 证据                                                                                                                                                                                                                                                                                                               | 裁决                                                                                                                                                    |
+| --- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | **M9 前提已过期** —— 计划开新缓冲层，但 `agent-stream-coalescer.ts` 已实现三 flush 路径中的两条 | `AGENT_STREAM_COALESCE_DEFAULT_WINDOW_MS=60`（可配置，agent-manager.ts:561）；非文本事件边界 flush 已在 pipeline-controller.ts:163（`flushFor`）                                                                                                                                                                   | **M9 重定范围**：扩展 coalescer（window 60→300 + `maxBufferedChars` 溢出 + flag 逃生门），不再新建 `AssistantTextBuffer`。改造量 ~40 行 vs 双缓冲层并存 |
+| 2   | **流程违规：M6+18 与 M8 无 roadmap 完成登记**                                                   | roadmap 仅有 M1–M5/M7 条目；§2 铁律"每模块登记"                                                                                                                                                                                                                                                                    | 已补登（roadmap 2026-09-18 条目）。后续模块不得以"已提交"代替登记                                                                                       |
+| 3   | **M8 缺 M15 合并指针注释**                                                                      | `use-composer-scroll-collapse.ts` 无任何 M15/resting 字样；M15 规格要求"M8 注释指明"                                                                                                                                                                                                                               | 登记残余；M15 落地时合并并补注释，不单独返工                                                                                                            |
+| 4   | **行号引用漂移**（低风险）                                                                      | `running-turn-footer.tsx` 已移至 `agent-stream/`；`stream.ts` → `types/stream.ts`                                                                                                                                                                                                                                  | 计划内行号视为"符号锚点"，实现时以 grep 符号为准；已核对 TurnCopyButton(message.tsx:985)/LiveElapsed(:526)/view.tsx:128 权限卡仍命中                    |
+| 5   | **已完成模块证据核验通过**                                                                      | M1 `use-composer-prompt-history.ts`；M2 `stable-layout.test.ts`+组缓存；M3 `use-discovered-servers.ts`+COMPAT v1.0.4 门禁；M4 `build-turn-diff-tree.ts`+TurnChanges；M5 `webview-crash-recovery.ts`；M6+18 `tasks-badge-view.tsx`；M7 `composer-banner-stack.tsx`+bannerSlot；M8 `use-composer-scroll-collapse.ts` | 无注水，全部真实落地                                                                                                                                    |
+| 6   | **排序偏差无害** —— M6+18 提前于 M9 交付                                                        | 其唯一依赖 M7 bannerSlot 已满足                                                                                                                                                                                                                                                                                    | 追认；修订后顺序以 §4 快照为准                                                                                                                          |
+| 7   | **T3 分支自身新增测试债**                                                                       | `composer-scroll-collapse.spec.ts:60,87` 两处 `waitForTimeout(120)` 已入 test-audit 新基线                                                                                                                                                                                                                         | 登记残余：下一个触碰该 spec 的模块负责改为 `waitForFunction`（断言折叠态 style），不顺延                                                                |
+| 8   | **M21 前提复核**                                                                                | `LiveElapsed`（100ms setInterval+setState）全仓零使用，确为死代码                                                                                                                                                                                                                                                  | 计划维持（删除前再 grep 一次）                                                                                                                          |
+| 9   | **外部环境已变（利好）**                                                                        | pnpm 迁移收尾完成（CI/lockfile/补丁链全通），M7 期间暴露的 worklets/补丁缺陷已修                                                                                                                                                                                                                                   | "打包 Electron 实机"验证路径恢复可靠——M12/M14/M15 原型+实机门禁按原计划执行，无需降级                                                                   |
+
+**修订后执行序**（更新 §4）：
+
+```
+M9（已重定范围：扩展 coalescer ~40 行，先做，P1 性能收益性价比最高）
+→ M11 引用工具栏（P1，纯 app 层，无依赖）
+→ M12 审批面板（P2，最大 UX 变更：原型 → 流内卡移除 → e2e 迁移；依赖 M7 ✅）
+→ M13 面板 resize → M14 Mini Player（原型门禁）→ M19 控件基元
+→ M15 静止布局（合并 M8 scrollCollapsed + 补指针注释）
+→ M16 Chrome 增强 → M17 高亮缓存 → M20–M28 按序
+```
+
+**命名残余汇总（随本期滚动更新）**：
+
+- M10：需协议层 `user-input.requested` 事件（独立项）
+- M4："打开 diff" 需 diff 内容 RPC（独立项）；点击走文件预览 tab
+- M9 修订：300ms 首字延迟可接受；真实 provider delta 粒度逐 provider 验证
+- M8→M15：scrollCollapsed 状态机合并 + 指针注释补登
+- M6+18/M8：roadmap 登记已于 2026-09-18 补（见 comprehensive-improvement-roadmap）
+- scroll-collapse spec fixedWait×2：下个触碰模块修掉

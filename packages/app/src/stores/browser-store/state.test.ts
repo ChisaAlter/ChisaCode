@@ -57,6 +57,7 @@ describe("createBrowserRecord", () => {
       canGoForward: false,
       faviconUrl: null,
       lastError: null,
+      paneWidth: null,
       createdAt: 1000,
     });
   });
