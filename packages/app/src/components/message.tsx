@@ -103,6 +103,7 @@ import { isWeb, isNative } from "@/constants/platform";
 import type { AgentCapabilityFlags } from "@chisacode/protocol/agent-types";
 import { RewindMenu, type RewindMode } from "@/components/rewind/rewind-menu";
 import { useRewindAgentMutation } from "@/components/rewind/use-rewind-agent-mutation";
+import { AssistantSelectionToolbar } from "./assistant-selection-toolbar";
 export { MessageOuterSpacingProvider } from "./expandable-badge";
 export type { InlinePathTarget } from "@/assistant-file-links";
 
@@ -1332,9 +1333,11 @@ export const AssistantMessage = memo(function AssistantMessage({
     [spacing],
   );
 
+  const surfaceRef = useRef<View>(null);
+
   return (
     <View testID="assistant-message" style={assistantContainerStyle}>
-      <View testID="assistant-message-surface" style={assistantSurfaceStyle}>
+      <View ref={surfaceRef} testID="assistant-message-surface" style={assistantSurfaceStyle}>
         {keyedBlocks.map(({ key, block }, index) => (
           <AssistantMessageBlockContainer
             key={key}
@@ -1350,6 +1353,7 @@ export const AssistantMessage = memo(function AssistantMessage({
           </AssistantMessageBlockContainer>
         ))}
       </View>
+      <AssistantSelectionToolbar containerRef={surfaceRef} />
     </View>
   );
 });

@@ -20,6 +20,7 @@ export function getOverlayRoot(): HTMLElement {
 }
 
 export const OVERLAY_Z = {
+  selectionToolbar: 5,
   modal: 10,
   toast: 20,
 } as const;

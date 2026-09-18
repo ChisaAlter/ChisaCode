@@ -15,6 +15,8 @@ import { Composer } from "@/composer";
 import { AgentModeControl } from "@/composer/agent-controls/mode-control";
 import { FileDropZone } from "@/components/file-drop-zone";
 import { RewindComposerRestoreProvider } from "@/components/rewind/composer-restore";
+import { ComposerInsertTextContext } from "@/composer/composer-insert-text-context";
+import { useStableEvent } from "@/hooks/use-stable-event";
 import type { ImageAttachment } from "@/composer/types";
 import type { ComposerBannerDescriptor } from "@/composer/banner/composer-banner-logic";
 import { getProviderIcon } from "@/components/provider-icons";
@@ -1216,6 +1218,13 @@ function ChatAgentReadyContent({
     }),
   });
 
+  // Selection toolbar (T3 port M11, web only): "Quote" appends the selected
+  // passage to the composer draft as a markdown blockquote.
+  const insertComposerText = useStableEvent((snippet: string) => {
+    const current = agentInputDraft.text;
+    agentInputDraft.setText(current.trim().length > 0 ? `${current}\n\n${snippet}` : snippet);
+  });
+
   // Anchor the just-sent row near the top so the reply grows below it. The
   // composer dispatches the optimistic user message id (stable across server
   // adoption), which avoids racing the daemon: the optimistic entry can be
@@ -1265,71 +1274,73 @@ function ChatAgentReadyContent({
   }, [scrollCollapse]);
 
   return (
-    <RewindComposerRestoreProvider text={agentInputDraft.text} setText={agentInputDraft.setText}>
-      <View style={styles.root} testID={agentId ? `agent-panel-${agentId}` : undefined}>
-        <FileDropZone onFilesDropped={handleFilesDropped} disabled={isArchivingCurrentAgent}>
-          {/* The centered ConversationAspectColumn lives on the center-column shell
+    <ComposerInsertTextContext.Provider value={insertComposerText}>
+      <RewindComposerRestoreProvider text={agentInputDraft.text} setText={agentInputDraft.setText}>
+        <View style={styles.root} testID={agentId ? `agent-panel-${agentId}` : undefined}>
+          <FileDropZone onFilesDropped={handleFilesDropped} disabled={isArchivingCurrentAgent}>
+            {/* The centered ConversationAspectColumn lives on the center-column shell
               (workspace-center-column.tsx), not here — it stays mounted across agent
               switches so the conversation width never re-measures and never flashes. */}
-          <View style={styles.contentContainer}>
-            <ReanimatedAnimated.View style={animatedContentStyle}>
-              <AgentStreamSection
-                streamViewRef={streamViewRef}
-                serverId={serverId}
-                agentId={agentId}
-                agent={effectiveAgent}
-                routeBottomAnchorRequest={routeBottomAnchorRequest}
-                hasAppliedAuthoritativeHistory={hasAppliedAuthoritativeHistory}
-                toast={panelToast.api}
-                onOpenWorkspaceFile={onOpenWorkspaceFile}
-                onNearBottomStateChange={handleStreamNearBottomChange}
-              />
-            </ReanimatedAnimated.View>
+            <View style={styles.contentContainer}>
+              <ReanimatedAnimated.View style={animatedContentStyle}>
+                <AgentStreamSection
+                  streamViewRef={streamViewRef}
+                  serverId={serverId}
+                  agentId={agentId}
+                  agent={effectiveAgent}
+                  routeBottomAnchorRequest={routeBottomAnchorRequest}
+                  hasAppliedAuthoritativeHistory={hasAppliedAuthoritativeHistory}
+                  toast={panelToast.api}
+                  onOpenWorkspaceFile={onOpenWorkspaceFile}
+                  onNearBottomStateChange={handleStreamNearBottomChange}
+                />
+              </ReanimatedAnimated.View>
 
-            {showHistorySyncOverlay ? (
-              <HistorySyncProgressBanner
-                title={t("panels.agent.historySyncingTitle")}
-                subtitle={t("panels.agent.historySyncingSubtitle")}
+              {showHistorySyncOverlay ? (
+                <HistorySyncProgressBanner
+                  title={t("panels.agent.historySyncingTitle")}
+                  subtitle={t("panels.agent.historySyncingSubtitle")}
+                />
+              ) : null}
+            </View>
+
+            {historySyncErrorMessage ? (
+              <HistorySyncErrorBanner
+                title={t("panels.agent.historySyncFailed")}
+                message={historySyncErrorMessage}
               />
             ) : null}
-          </View>
 
-          {historySyncErrorMessage ? (
-            <HistorySyncErrorBanner
-              title={t("panels.agent.historySyncFailed")}
-              message={historySyncErrorMessage}
+            <AgentComposerSection
+              agentId={agentId}
+              serverId={serverId}
+              isPaneFocused={isPaneFocused}
+              isArchivingCurrentAgent={isArchivingCurrentAgent}
+              archivedAt={agentState.archivedAt}
+              cwd={cwd}
+              isSubmitLoading={false}
+              agentInputDraft={agentInputDraft}
+              banners={agentErrorBanners}
+              scrollCollapsed={scrollCollapse.collapsed}
+              onExpandFromScrollCollapse={handleExpandFromScrollCollapse}
+              onComposerInputActivity={scrollCollapse.noteInput}
+              onAttentionInputFocus={attentionController.clearOnInputFocus}
+              onAttentionPromptSend={attentionController.clearOnPromptSend}
+              onAddImages={handleAddImagesCallback}
+              onComposerHeightChange={handleComposerHeightChange}
+              onMessageSent={handleMessageSent}
+              onOptimisticMessageDispatched={handleOptimisticMessageDispatched}
             />
-          ) : null}
 
-          <AgentComposerSection
-            agentId={agentId}
-            serverId={serverId}
-            isPaneFocused={isPaneFocused}
-            isArchivingCurrentAgent={isArchivingCurrentAgent}
-            archivedAt={agentState.archivedAt}
-            cwd={cwd}
-            isSubmitLoading={false}
-            agentInputDraft={agentInputDraft}
-            banners={agentErrorBanners}
-            scrollCollapsed={scrollCollapse.collapsed}
-            onExpandFromScrollCollapse={handleExpandFromScrollCollapse}
-            onComposerInputActivity={scrollCollapse.noteInput}
-            onAttentionInputFocus={attentionController.clearOnInputFocus}
-            onAttentionPromptSend={attentionController.clearOnPromptSend}
-            onAddImages={handleAddImagesCallback}
-            onComposerHeightChange={handleComposerHeightChange}
-            onMessageSent={handleMessageSent}
-            onOptimisticMessageDispatched={handleOptimisticMessageDispatched}
-          />
-
-          <ToastViewport
-            toasts={panelToast.toasts}
-            onDismiss={panelToast.dismiss}
-            placement="panel"
-          />
-        </FileDropZone>
-      </View>
-    </RewindComposerRestoreProvider>
+            <ToastViewport
+              toasts={panelToast.toasts}
+              onDismiss={panelToast.dismiss}
+              placement="panel"
+            />
+          </FileDropZone>
+        </View>
+      </RewindComposerRestoreProvider>
+    </ComposerInsertTextContext.Provider>
   );
 }
 
