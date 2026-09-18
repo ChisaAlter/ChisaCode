@@ -170,6 +170,9 @@ export interface AgentManagerOptions {
   ) => EffectiveMcpServersResult | undefined;
   usageStore?: UsageStore;
   agentStreamCoalesceWindowMs?: number;
+  agentStreamCoalesceMaxBufferedChars?: number;
+  /** Escape hatch for assistant text buffering; defaults to enabled. */
+  enableAssistantTextBuffering?: boolean;
   rescueTimeouts?: AgentSessionRescueTimeouts;
   /**
    * Stalls longer than this (no stream events) end the foreground turn via
@@ -559,6 +562,8 @@ export class AgentManager {
     });
     this.agentStreamCoalescer = new AgentStreamCoalescer({
       windowMs: options.agentStreamCoalesceWindowMs ?? AGENT_STREAM_COALESCE_DEFAULT_WINDOW_MS,
+      maxBufferedChars: options.agentStreamCoalesceMaxBufferedChars,
+      enabled: options.enableAssistantTextBuffering ?? true,
       timers: { setTimeout, clearTimeout },
       onFlush: (input) => this.timelineEvents.onCoalescedFlush(input),
     });

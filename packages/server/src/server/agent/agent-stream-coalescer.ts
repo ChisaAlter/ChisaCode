@@ -1,6 +1,7 @@
 import type { AgentProvider, AgentStreamEvent, AgentTimelineItem } from "./agent-sdk-types.js";
 
-export const AGENT_STREAM_COALESCE_DEFAULT_WINDOW_MS = 60;
+export const AGENT_STREAM_COALESCE_DEFAULT_WINDOW_MS = 300;
+export const AGENT_STREAM_COALESCE_DEFAULT_MAX_BUFFERED_CHARS = 24_000;
 
 type CoalescableTextKind = "assistant_message" | "reasoning";
 type CoalescableTimelineKind = CoalescableTextKind | "tool_call";
@@ -24,6 +25,13 @@ export interface AgentStreamCoalescerFlush {
 
 export interface AgentStreamCoalescerOptions {
   windowMs?: number;
+  /**
+   * Accumulated text characters that trigger an immediate spill flush instead
+   * of waiting for the window — bounds buffer growth under high-rate deltas.
+   */
+  maxBufferedChars?: number;
+  /** Escape hatch: when false, `handle` never buffers and events pass through. */
+  enabled?: boolean;
   timers: AgentStreamCoalescerTimers;
   onFlush: (payload: AgentStreamCoalescerFlush) => void;
 }
@@ -49,6 +57,7 @@ interface PendingAgentStreamBuffer {
   agentId: string;
   entries: PendingAgentStreamEntry[];
   toolCallEntryIndexes: Map<string, number>;
+  bufferedTextChars: number;
   timer: ReturnType<typeof setTimeout> | null;
   flushing: boolean;
 }
@@ -78,14 +87,23 @@ export class AgentStreamCoalescer {
   private readonly onFlush: (payload: AgentStreamCoalescerFlush) => void;
   private readonly timers: AgentStreamCoalescerTimers;
   private readonly windowMs: number;
+  private readonly maxBufferedChars: number;
+  private readonly enabled: boolean;
 
   constructor(options: AgentStreamCoalescerOptions) {
     this.windowMs = options.windowMs ?? AGENT_STREAM_COALESCE_DEFAULT_WINDOW_MS;
+    this.maxBufferedChars =
+      options.maxBufferedChars ?? AGENT_STREAM_COALESCE_DEFAULT_MAX_BUFFERED_CHARS;
+    this.enabled = options.enabled ?? true;
     this.timers = options.timers;
     this.onFlush = options.onFlush;
   }
 
   handle(agentId: string, event: AgentStreamEvent): boolean {
+    if (!this.enabled) {
+      return false;
+    }
+
     if (!isCoalescableTimelineEvent(event)) {
       return false;
     }
@@ -97,7 +115,7 @@ export class AgentStreamCoalescer {
     const buffer = this.getOrCreateBuffer(agentId);
     this.appendToBuffer(buffer, event);
 
-    if (isTerminalToolCall(event.item)) {
+    if (isTerminalToolCall(event.item) || buffer.bufferedTextChars >= this.maxBufferedChars) {
       this.flushBuffer(agentId);
       return true;
     }
@@ -138,6 +156,7 @@ export class AgentStreamCoalescer {
       agentId,
       entries: [],
       toolCallEntryIndexes: new Map(),
+      bufferedTextChars: 0,
       timer: null,
       flushing: false,
     };
@@ -147,6 +166,7 @@ export class AgentStreamCoalescer {
 
   private appendToBuffer(buffer: PendingAgentStreamBuffer, event: CoalescableTimelineEvent): void {
     if (isTextTimelineItem(event.item)) {
+      buffer.bufferedTextChars += event.item.text.length;
       buffer.entries.push({
         kind: "text",
         item: event.item,
@@ -210,6 +230,7 @@ export class AgentStreamCoalescer {
     const entries = buffer.entries;
     buffer.entries = [];
     buffer.toolCallEntryIndexes.clear();
+    buffer.bufferedTextChars = 0;
     buffer.flushing = true;
 
     try {
