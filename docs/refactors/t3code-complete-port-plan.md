@@ -699,14 +699,14 @@ M11 引用工具栏 ✅ 2026-09-18（ComposerInsertTextContext 代替 onInsertTe
 M12 审批面板 ⬅ 下一个（依赖 M7；含流内卡移除+e2e 迁移——流内卡实证仍在 view.tsx:128）
 M13 面板 resize ✅ 2026-09-18（DOM 事件+rAF 代替 Gesture.Pan，见 roadmap 条目）
 M14 Mini Player
-M19 控件基元（M15 前置）
+M19 控件基元 ✅ 2026-09-18（composerControlStyle+迁移 input.tsx+测量纯函数，见 roadmap 条目）
 M15 静止布局（依赖 M19 + M8 合并）
 M16 Chrome 增强 ✅ 2026-09-18（打包门禁顺手修复 pnpm buffer@5.7.1 skipped 残余，见 roadmap 条目）
 M17 高亮缓存 ✅ 2026-09-18（键降维 {ext}:{hash}——缓存值与主题无关，见 roadmap 条目）
 M20-M28 按序打磨
 ```
 
-**进度快照（2026-09-18 复核）**：13/26 完成。P0 全清（M1–M5）；P1 完成 M6+18/M7/M8/M9/M11，剩 M14；P2 完成 M13/M16/M17，剩 M12/M15/M19；P3 未动（M20–M27）；P4 未动（M28）。M10 已按审查 #1 移除。
+**进度快照（2026-09-18 二复核）**：14/26 完成。P0 全清（M1–M5）；P1 完成 M6+18/M7/M8/M9/M11，剩 M14；P2 完成 M13/M16/M17/M19，剩 M12/M15；P3 未动（M20–M27）；P4 未动（M28）。M10 已按审查 #1 移除。
 
 ## 5. 跨模块门禁
 

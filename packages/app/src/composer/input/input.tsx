@@ -66,6 +66,7 @@ import { resolveSoftComposerCardElevation } from "@/composer/draft/soft-home-lay
 import { COMPOSER_VOICE_UI_VISIBLE } from "@/composer/voice-visibility";
 import { useComposerHeightMirror } from "./height-mirror";
 import { computeCanStartDictation } from "./state";
+import { ComposerControlIcon, composerControlStyle } from "./composer-control";
 import {
   type PromptHistoryDirection,
   isCursorOnFirstLine,
@@ -210,10 +211,7 @@ function AttachButtonIcon({
 }) {
   return (
     <View ref={onAttachButtonRef} collapsable={false} style={styles.attachButtonAnchor}>
-      <ThemedPlus
-        size={buttonIconSize}
-        style={hovered ? styles.iconForeground : styles.iconForegroundMuted}
-      />
+      <ComposerControlIcon icon={Plus} size={buttonIconSize} hovered={hovered} />
     </View>
   );
 }
@@ -298,11 +296,13 @@ function VoiceButtonIcon({
   if (isDictating) {
     return <Square size={buttonIconSize} color="white" fill="white" />;
   }
-  const iconStyle = hovered ? styles.iconForeground : styles.iconForegroundMuted;
-  if (isMutedRealtime) {
-    return <ThemedMicOff size={buttonIconSize} style={iconStyle} />;
-  }
-  return <ThemedMic size={buttonIconSize} style={iconStyle} />;
+  return (
+    <ComposerControlIcon
+      icon={isMutedRealtime ? MicOff : Mic}
+      size={buttonIconSize}
+      hovered={hovered}
+    />
+  );
 }
 
 type ShortcutChord = NonNullable<React.ComponentProps<typeof Shortcut>["chord"]>;
@@ -351,9 +351,9 @@ function SendButtonContent({
     return <ThemedActivityIndicator size="small" style={styles.iconPrimaryForeground} />;
   }
   if (submitIcon === "return") {
-    return <ThemedCornerDownLeft size={buttonIconSize} style={styles.iconPrimaryForeground} />;
+    return <ComposerControlIcon icon={CornerDownLeft} size={buttonIconSize} tone="onPrimary" />;
   }
-  return <ThemedArrowUp size={buttonIconSize} style={styles.iconPrimaryForeground} />;
+  return <ComposerControlIcon icon={ArrowUp} size={buttonIconSize} tone="onPrimary" />;
 }
 
 function resolveSubmitAccessibilityLabel(input: {
@@ -1955,22 +1955,20 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       onFocusChange?.(false);
     }, [onFocusChange]);
 
-    const attachButtonStyle = useCallback(
-      ({ hovered }: { hovered?: boolean }) => [
-        styles.attachButton,
-        Boolean(hovered) && styles.iconButtonHovered,
-        (!isConnected || disabled) && styles.buttonDisabled,
-      ],
+    const attachButtonStyle = useMemo(
+      () =>
+        composerControlStyle({ size: "sm", variant: "ghost", disabled: !isConnected || disabled }),
       [isConnected, disabled],
     );
 
-    const voiceButtonStyle = useCallback(
-      ({ hovered }: { hovered?: boolean }) => [
-        styles.voiceButton,
-        Boolean(hovered) && !isDictating && styles.iconButtonHovered,
-        !isDictationStartEnabled && styles.buttonDisabled,
-        isDictating && styles.voiceButtonRecording,
-      ],
+    const voiceButtonStyle = useMemo(
+      () =>
+        composerControlStyle({
+          size: "sm",
+          variant: "ghost",
+          active: isDictating,
+          disabled: !isDictationStartEnabled,
+        }),
       [isDictating, isDictationStartEnabled],
     );
 
@@ -1998,10 +1996,15 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       () => resolveCardPointerDownHandler(scrollCollapsed, onExpandFromScrollCollapse),
       [onExpandFromScrollCollapse, scrollCollapsed],
     );
-    const sendButtonCombinedStyle = useMemo(
-      () => [styles.sendButton, isSendButtonDisabled && styles.buttonDisabled],
-      [isSendButtonDisabled],
-    );
+    const sendButtonCombinedStyle = useMemo(() => {
+      const resolve = composerControlStyle({
+        size: "md",
+        variant: "primary",
+        shape: "circle",
+        disabled: isSendButtonDisabled,
+      });
+      return (state: { hovered?: boolean }) => [resolve(state), styles.sendButtonMargin];
+    }, [isSendButtonDisabled]);
     const overlayContainerStyle = useMemo(
       () => [staticStyles.overlayContainer, overlayAnimatedStyle],
       [overlayAnimatedStyle],
@@ -2272,42 +2275,15 @@ const styles = StyleSheet.create((theme: Theme) => ({
     gap: 4,
     marginLeft: "auto",
   },
-  // Soft .t-icon: 32 r10 pen-bar chip.
-  attachButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-  },
   attachButtonAnchor: {
     width: 32,
     height: 32,
     alignItems: "center",
     justifyContent: "center",
   },
-  voiceButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  voiceButtonRecording: {
-    backgroundColor: theme.colors.destructive,
-  },
   // Soft .send — design --send #1a1d26 (primary), not accent blue.
-  sendButton: {
-    width: 34,
-    height: 34,
-    borderRadius: theme.borderRadius.full,
-    backgroundColor: theme.colors.primary,
-    alignItems: "center",
-    justifyContent: "center",
+  sendButtonMargin: {
     marginLeft: theme.spacing[1],
-  },
-  iconButtonHovered: {
-    backgroundColor: theme.colors.surface1,
   },
   tooltipRow: {
     flexDirection: "row",
@@ -2318,15 +2294,6 @@ const styles = StyleSheet.create((theme: Theme) => ({
     fontSize: 12.5,
     lineHeight: 16,
     color: theme.colors.popoverForeground,
-  },
-  buttonDisabled: {
-    opacity: 0.5,
-  },
-  iconForeground: {
-    color: theme.colors.foreground,
-  },
-  iconForegroundMuted: {
-    color: theme.colors.foregroundMuted,
   },
   iconAccentForeground: {
     color: theme.colors.accentForeground,
@@ -2351,11 +2318,6 @@ const staticStyles = RNStyleSheet.create({
   },
 });
 
-const ThemedPlus = withUnistyles(Plus);
-const ThemedMic = withUnistyles(Mic);
-const ThemedMicOff = withUnistyles(MicOff);
-const ThemedArrowUp = withUnistyles(ArrowUp);
-const ThemedCornerDownLeft = withUnistyles(CornerDownLeft);
 const ThemedActivityIndicator = withUnistyles(ActivityIndicator);
 const ThemedTextInput = withUnistyles(TextInput);
 
