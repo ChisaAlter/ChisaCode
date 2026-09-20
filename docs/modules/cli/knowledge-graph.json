@@ -76,7 +76,7 @@
       "id": "file:packages/cli/package.json",
       "type": "config",
       "path": "packages/cli/package.json",
-      "lines": 51,
+      "lines": 52,
       "imports": [
         "node:fs"
       ]

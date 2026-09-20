@@ -19,7 +19,7 @@
     "exports": null,
     "scripts": {
       "build": "npm --prefix ../.. run build:server && npm run build:main && node scripts/build.js",
-      "build:x64": "npm --prefix ../.. run build:server && npm run build:main && cd ../app && cross-env CHISACODE_WEB_PLATFORM=electron npx expo export --platform web && cd ../desktop && node scripts/build-x64.js",
+      "build:x64": "npm --prefix ../.. run build:server && npm run build:main && node scripts/build-x64.js",
       "build:main": "tsc -p tsconfig.json",
       "dev": "./scripts/dev.sh",
       "dev:win": "powershell ./scripts/dev.ps1",
@@ -82,7 +82,7 @@
       "id": "file:packages/desktop/package.json",
       "type": "config",
       "path": "packages/desktop/package.json",
-      "lines": 52,
+      "lines": 55,
       "imports": []
     },
     {
@@ -96,7 +96,7 @@
       "id": "file:packages/desktop/scripts/after-pack.js",
       "type": "support",
       "path": "packages/desktop/scripts/after-pack.js",
-      "lines": 228,
+      "lines": 279,
       "imports": [
         "./smoke-packaged-desktop-app.js",
         "@electron/rebuild",
@@ -133,10 +133,12 @@
       "id": "file:packages/desktop/scripts/build-x64.js",
       "type": "support",
       "path": "packages/desktop/scripts/build-x64.js",
-      "lines": 49,
+      "lines": 157,
       "imports": [
         "app-builder-lib",
         "electron-builder",
+        "node:child_process",
+        "node:fs",
         "node:path"
       ]
     },

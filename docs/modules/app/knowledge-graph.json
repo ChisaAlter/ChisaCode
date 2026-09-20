@@ -47,15 +47,15 @@
     }
   },
   "stats": {
-    "files": 1328,
+    "files": 1376,
     "categories": {
-      "config": 41,
-      "test": 411,
-      "support": 77,
+      "config": 43,
+      "test": 427,
+      "support": 84,
       "docs": 2,
-      "source": 797
+      "source": 820
     },
-    "internalImportEdges": 3615,
+    "internalImportEdges": 3726,
     "workspaceDependencies": [
       "client",
       "expo-two-way-audio",
@@ -130,6 +130,7 @@
       "node:child_process",
       "node:crypto",
       "node:fs",
+      "node:http",
       "node:module",
       "node:net",
       "node:os",
@@ -299,6 +300,57 @@
       ]
     },
     {
+      "id": "file:packages/app/e2e/composer-banner.spec.ts",
+      "type": "test",
+      "path": "packages/app/e2e/composer-banner.spec.ts",
+      "lines": 89,
+      "imports": [
+        "./fixtures",
+        "./helpers/agent-stream",
+        "./helpers/composer",
+        "./helpers/seed-client",
+        "./helpers/server-id",
+        "./helpers/workspace",
+        "@/utils/host-routes",
+        "@playwright/test"
+      ]
+    },
+    {
+      "id": "file:packages/app/e2e/composer-scroll-collapse.spec.ts",
+      "type": "test",
+      "path": "packages/app/e2e/composer-scroll-collapse.spec.ts",
+      "lines": 134,
+      "imports": [
+        "./fixtures",
+        "./helpers/agent-stream",
+        "./helpers/composer",
+        "./helpers/seed-client",
+        "./helpers/server-id",
+        "./helpers/workspace",
+        "@/utils/host-routes",
+        "@playwright/test"
+      ]
+    },
+    {
+      "id": "file:packages/app/e2e/desktop-composer-banner.script.ts",
+      "type": "support",
+      "path": "packages/app/e2e/desktop-composer-banner.script.ts",
+      "lines": 320,
+      "imports": [
+        "../src/utils/host-routes",
+        "./helpers/node-ws-factory",
+        "./helpers/workspace",
+        "node:child_process",
+        "node:crypto",
+        "node:fs",
+        "node:net",
+        "node:os",
+        "node:path",
+        "node:url",
+        "playwright"
+      ]
+    },
+    {
       "id": "file:packages/app/e2e/desktop-conversation-switch-width.script.ts",
       "type": "support",
       "path": "packages/app/e2e/desktop-conversation-switch-width.script.ts",
@@ -309,6 +361,27 @@
         "node:child_process",
         "node:crypto",
         "node:fs",
+        "node:net",
+        "node:os",
+        "node:path",
+        "node:url",
+        "playwright"
+      ]
+    },
+    {
+      "id": "file:packages/app/e2e/desktop-discovered-servers.script.ts",
+      "type": "support",
+      "path": "packages/app/e2e/desktop-discovered-servers.script.ts",
+      "lines": 394,
+      "imports": [
+        "./helpers/mock-agent",
+        "./helpers/node-ws-factory",
+        "./helpers/workspace",
+        "@playwright/test",
+        "node:child_process",
+        "node:crypto",
+        "node:fs",
+        "node:http",
         "node:net",
         "node:os",
         "node:path",
@@ -416,6 +489,28 @@
       ]
     },
     {
+      "id": "file:packages/app/e2e/desktop-prompt-history.script.ts",
+      "type": "support",
+      "path": "packages/app/e2e/desktop-prompt-history.script.ts",
+      "lines": 363,
+      "imports": [
+        "./helpers/app",
+        "./helpers/composer",
+        "./helpers/mock-agent",
+        "./helpers/node-ws-factory",
+        "./helpers/workspace",
+        "@playwright/test",
+        "node:child_process",
+        "node:crypto",
+        "node:fs",
+        "node:net",
+        "node:os",
+        "node:path",
+        "node:url",
+        "playwright"
+      ]
+    },
+    {
       "id": "file:packages/app/e2e/desktop-provider-first-round.script.ts",
       "type": "support",
       "path": "packages/app/e2e/desktop-provider-first-round.script.ts",
@@ -440,6 +535,25 @@
         "node:net",
         "node:os",
         "node:path",
+        "playwright"
+      ]
+    },
+    {
+      "id": "file:packages/app/e2e/desktop-scroll-collapse.script.ts",
+      "type": "support",
+      "path": "packages/app/e2e/desktop-scroll-collapse.script.ts",
+      "lines": 336,
+      "imports": [
+        "../src/utils/host-routes",
+        "./helpers/node-ws-factory",
+        "./helpers/workspace",
+        "node:child_process",
+        "node:crypto",
+        "node:fs",
+        "node:net",
+        "node:os",
+        "node:path",
+        "node:url",
         "playwright"
       ]
     },
@@ -578,6 +692,25 @@
       ]
     },
     {
+      "id": "file:packages/app/e2e/desktop-tasks-badge.script.ts",
+      "type": "support",
+      "path": "packages/app/e2e/desktop-tasks-badge.script.ts",
+      "lines": 272,
+      "imports": [
+        "../src/utils/host-routes",
+        "./helpers/node-ws-factory",
+        "./helpers/workspace",
+        "node:child_process",
+        "node:crypto",
+        "node:fs",
+        "node:net",
+        "node:os",
+        "node:path",
+        "node:url",
+        "playwright"
+      ]
+    },
+    {
       "id": "file:packages/app/e2e/desktop-updates.spec.ts",
       "type": "test",
       "path": "packages/app/e2e/desktop-updates.spec.ts",
@@ -652,7 +785,7 @@
       "id": "file:packages/app/e2e/global-setup.ts",
       "type": "support",
       "path": "packages/app/e2e/global-setup.ts",
-      "lines": 883,
+      "lines": 915,
       "imports": [
         "./helpers/chisacode-home-fork",
         "./helpers/workspace",
@@ -1133,6 +1266,18 @@
       ]
     },
     {
+      "id": "file:packages/app/e2e/prompt-history.spec.ts",
+      "type": "test",
+      "path": "packages/app/e2e/prompt-history.spec.ts",
+      "lines": 57,
+      "imports": [
+        "./fixtures",
+        "./helpers/agent-stream",
+        "./helpers/app",
+        "./helpers/composer"
+      ]
+    },
+    {
       "id": "file:packages/app/e2e/rewind-flow.claude.real.spec.ts",
       "type": "test",
       "path": "packages/app/e2e/rewind-flow.claude.real.spec.ts",
@@ -1349,6 +1494,18 @@
       ]
     },
     {
+      "id": "file:packages/app/e2e/turn-changes-tree.spec.ts",
+      "type": "test",
+      "path": "packages/app/e2e/turn-changes-tree.spec.ts",
+      "lines": 54,
+      "imports": [
+        "./fixtures",
+        "./helpers/agent-stream",
+        "./helpers/composer",
+        "@playwright/test"
+      ]
+    },
+    {
       "id": "file:packages/app/e2e/user-message-contract.ui-contract.spec.ts",
       "type": "test",
       "path": "packages/app/e2e/user-message-contract.ui-contract.spec.ts",
@@ -1489,6 +1646,13 @@
         "eslint-config-expo/flat",
         "eslint/config"
       ]
+    },
+    {
+      "id": "file:packages/app/expo-env.d.ts",
+      "type": "support",
+      "path": "packages/app/expo-env.d.ts",
+      "lines": 3,
+      "imports": []
     },
     {
       "id": "file:packages/app/global.d.ts",
@@ -1676,6 +1840,13 @@
       "imports": []
     },
     {
+      "id": "file:packages/app/metro-shims/diagnostics-channel.js",
+      "type": "support",
+      "path": "packages/app/metro-shims/diagnostics-channel.js",
+      "lines": 56,
+      "imports": []
+    },
+    {
       "id": "file:packages/app/metro.config.cjs",
       "type": "config",
       "path": "packages/app/metro.config.cjs",
@@ -1686,6 +1857,17 @@
         "metro-resolver",
         "path",
         "react-native-reanimated/metro-config",
+        "react-native-worklets/bundleMode"
+      ]
+    },
+    {
+      "id": "file:packages/app/metro.config.js",
+      "type": "config",
+      "path": "packages/app/metro.config.js",
+      "lines": 154,
+      "imports": [
+        "expo/metro-config",
+        "path",
         "react-native-worklets/bundleMode"
       ]
     },
@@ -1735,7 +1917,7 @@
       "id": "file:packages/app/package.json",
       "type": "config",
       "path": "packages/app/package.json",
-      "lines": 143,
+      "lines": 144,
       "imports": [
         "node:fs"
       ]
@@ -1951,7 +2133,7 @@
       "id": "file:packages/app/src/agent-stream/layout.ts",
       "type": "source",
       "path": "packages/app/src/agent-stream/layout.ts",
-      "lines": 328,
+      "lines": 395,
       "imports": [
         "./spacing",
         "./strategy",
@@ -2051,6 +2233,30 @@
       "imports": [
         "@/styles/theme",
         "@/types/stream"
+      ]
+    },
+    {
+      "id": "file:packages/app/src/agent-stream/stable-layout.test.ts",
+      "type": "test",
+      "path": "packages/app/src/agent-stream/stable-layout.test.ts",
+      "lines": 447,
+      "imports": [
+        "./layout",
+        "./stable-layout",
+        "./strategy",
+        "./strategy-resolver",
+        "@/types/stream",
+        "vitest"
+      ]
+    },
+    {
+      "id": "file:packages/app/src/agent-stream/stable-layout.ts",
+      "type": "source",
+      "path": "packages/app/src/agent-stream/stable-layout.ts",
+      "lines": 176,
+      "imports": [
+        "./layout",
+        "react"
       ]
     },
     {
@@ -2218,12 +2424,13 @@
       "id": "file:packages/app/src/agent-stream/view.tsx",
       "type": "source",
       "path": "packages/app/src/agent-stream/view.tsx",
-      "lines": 1508,
+      "lines": 1547,
       "imports": [
         "./bottom-anchor-controller",
         "./layout",
         "./model",
         "./permission-response",
+        "./stable-layout",
         "./strategy",
         "./strategy-resolver",
         "./turn-fold",
@@ -2236,6 +2443,7 @@
         "@/components/toast-host",
         "@/components/tool-call-details",
         "@/components/tool-call-sheet",
+        "@/components/turn-changes-tree",
         "@/constants/layout",
         "@/constants/platform",
         "@/generative-ui/generative-ui-renderer",
@@ -2280,7 +2488,7 @@
       "id": "file:packages/app/src/agent-stream/web-virtualization.ts",
       "type": "source",
       "path": "packages/app/src/agent-stream/web-virtualization.ts",
-      "lines": 95,
+      "lines": 102,
       "imports": [
         "@/types/stream",
         "@/utils/assistant-message-height-estimate"
@@ -3213,6 +3421,47 @@
       ]
     },
     {
+      "id": "file:packages/app/src/components/assistant-selection-toolbar.test.tsx",
+      "type": "test",
+      "path": "packages/app/src/components/assistant-selection-toolbar.test.tsx",
+      "lines": 189,
+      "imports": [
+        "./assistant-selection-toolbar",
+        "@/composer/composer-insert-text-context",
+        "@testing-library/react",
+        "react",
+        "react-native",
+        "vitest"
+      ]
+    },
+    {
+      "id": "file:packages/app/src/components/assistant-selection-toolbar.tsx",
+      "type": "source",
+      "path": "packages/app/src/components/assistant-selection-toolbar.tsx",
+      "lines": 16,
+      "imports": [
+        "react",
+        "react-native"
+      ]
+    },
+    {
+      "id": "file:packages/app/src/components/assistant-selection-toolbar.web.tsx",
+      "type": "source",
+      "path": "packages/app/src/components/assistant-selection-toolbar.web.tsx",
+      "lines": 240,
+      "imports": [
+        "./assistant-selection-toolbar",
+        "@/composer/composer-insert-text-context",
+        "@/constants/platform",
+        "@/lib/overlay-root",
+        "react",
+        "react-dom",
+        "react-i18next",
+        "react-native",
+        "react-native-unistyles"
+      ]
+    },
+    {
       "id": "file:packages/app/src/components/attachment-lightbox.test.tsx",
       "type": "test",
       "path": "packages/app/src/components/attachment-lightbox.test.tsx",
@@ -3286,18 +3535,52 @@
       ]
     },
     {
+      "id": "file:packages/app/src/components/browser-favicon-icon.tsx",
+      "type": "source",
+      "path": "packages/app/src/components/browser-favicon-icon.tsx",
+      "lines": 47,
+      "imports": [
+        "@/styles/theme",
+        "lucide-react-native",
+        "react",
+        "react-native",
+        "react-native-unistyles"
+      ]
+    },
+    {
+      "id": "file:packages/app/src/components/browser-more-menu.tsx",
+      "type": "source",
+      "path": "packages/app/src/components/browser-more-menu.tsx",
+      "lines": 160,
+      "imports": [
+        "@/components/ui/dropdown-menu",
+        "@/styles/theme",
+        "lucide-react-native",
+        "react",
+        "react-i18next",
+        "react-native",
+        "react-native-unistyles"
+      ]
+    },
+    {
       "id": "file:packages/app/src/components/browser-pane.electron.tsx",
       "type": "source",
       "path": "packages/app/src/components/browser-pane.electron.tsx",
-      "lines": 1168,
+      "lines": 1590,
       "imports": [
         "@/attachments/types",
         "@/attachments/workspace-attachments-store",
+        "@/components/browser-favicon-icon",
+        "@/components/browser-more-menu",
+        "@/components/webview-crash-recovery",
+        "@/components/zoom-indicator",
         "@/constants/layout",
         "@/constants/platform",
         "@/desktop/host",
+        "@/hooks/use-discovered-servers",
         "@/stores/browser-store",
         "@/styles/theme",
+        "@/utils/clamp-browser-pane-width",
         "lucide-react-native",
         "react",
         "react-i18next",
@@ -3325,6 +3608,26 @@
         "react-i18next",
         "react-native",
         "react-native-unistyles"
+      ]
+    },
+    {
+      "id": "file:packages/app/src/components/build-turn-diff-tree.test.ts",
+      "type": "test",
+      "path": "packages/app/src/components/build-turn-diff-tree.test.ts",
+      "lines": 125,
+      "imports": [
+        "./build-turn-diff-tree",
+        "@/types/stream",
+        "vitest"
+      ]
+    },
+    {
+      "id": "file:packages/app/src/components/build-turn-diff-tree.ts",
+      "type": "source",
+      "path": "packages/app/src/components/build-turn-diff-tree.ts",
+      "lines": 136,
+      "imports": [
+        "@/types/stream"
       ]
     },
     {
@@ -4573,8 +4876,9 @@
       "id": "file:packages/app/src/components/message.tsx",
       "type": "source",
       "path": "packages/app/src/components/message.tsx",
-      "lines": 2085,
+      "lines": 2089,
       "imports": [
+        "./assistant-selection-toolbar",
         "./expandable-badge",
         "./message-compaction-label",
         "./message-markdown",
@@ -5542,6 +5846,23 @@
       ]
     },
     {
+      "id": "file:packages/app/src/components/turn-changes-tree.tsx",
+      "type": "source",
+      "path": "packages/app/src/components/turn-changes-tree.tsx",
+      "lines": 275,
+      "imports": [
+        "@/components/build-turn-diff-tree",
+        "@/components/diff-stat",
+        "@/constants/theme",
+        "@/styles/theme",
+        "@/types/stream",
+        "react",
+        "react-i18next",
+        "react-native",
+        "react-native-unistyles"
+      ]
+    },
+    {
       "id": "file:packages/app/src/components/ui/agent-status-indicator.tsx",
       "type": "source",
       "path": "packages/app/src/components/ui/agent-status-indicator.tsx",
@@ -6031,6 +6352,23 @@
       ]
     },
     {
+      "id": "file:packages/app/src/components/webview-crash-recovery.test.ts",
+      "type": "test",
+      "path": "packages/app/src/components/webview-crash-recovery.test.ts",
+      "lines": 86,
+      "imports": [
+        "./webview-crash-recovery",
+        "vitest"
+      ]
+    },
+    {
+      "id": "file:packages/app/src/components/webview-crash-recovery.ts",
+      "type": "source",
+      "path": "packages/app/src/components/webview-crash-recovery.ts",
+      "lines": 53,
+      "imports": []
+    },
+    {
       "id": "file:packages/app/src/components/welcome-screen.tsx",
       "type": "source",
       "path": "packages/app/src/components/welcome-screen.tsx",
@@ -6183,6 +6521,29 @@
         "@tanstack/react-query",
         "expo-router",
         "react"
+      ]
+    },
+    {
+      "id": "file:packages/app/src/components/zoom-indicator.test.tsx",
+      "type": "test",
+      "path": "packages/app/src/components/zoom-indicator.test.tsx",
+      "lines": 102,
+      "imports": [
+        "./zoom-indicator",
+        "@testing-library/react",
+        "react",
+        "vitest"
+      ]
+    },
+    {
+      "id": "file:packages/app/src/components/zoom-indicator.tsx",
+      "type": "source",
+      "path": "packages/app/src/components/zoom-indicator.tsx",
+      "lines": 97,
+      "imports": [
+        "react",
+        "react-native",
+        "react-native-unistyles"
       ]
     },
     {
@@ -6558,6 +6919,64 @@
       ]
     },
     {
+      "id": "file:packages/app/src/composer/banner/composer-banner-logic.test.ts",
+      "type": "test",
+      "path": "packages/app/src/composer/banner/composer-banner-logic.test.ts",
+      "lines": 237,
+      "imports": [
+        "./composer-banner-logic",
+        "vitest"
+      ]
+    },
+    {
+      "id": "file:packages/app/src/composer/banner/composer-banner-logic.ts",
+      "type": "source",
+      "path": "packages/app/src/composer/banner/composer-banner-logic.ts",
+      "lines": 234,
+      "imports": [
+        "react"
+      ]
+    },
+    {
+      "id": "file:packages/app/src/composer/banner/composer-banner-stack.tsx",
+      "type": "source",
+      "path": "packages/app/src/composer/banner/composer-banner-stack.tsx",
+      "lines": 332,
+      "imports": [
+        "./composer-banner",
+        "./composer-banner-logic",
+        "@/constants/platform",
+        "react",
+        "react-i18next",
+        "react-native",
+        "react-native-reanimated",
+        "react-native-unistyles"
+      ]
+    },
+    {
+      "id": "file:packages/app/src/composer/banner/composer-banner.tsx",
+      "type": "source",
+      "path": "packages/app/src/composer/banner/composer-banner.tsx",
+      "lines": 518,
+      "imports": [
+        "./composer-banner-logic",
+        "@/styles/theme",
+        "lucide-react-native",
+        "react",
+        "react-native",
+        "react-native-unistyles"
+      ]
+    },
+    {
+      "id": "file:packages/app/src/composer/composer-insert-text-context.ts",
+      "type": "source",
+      "path": "packages/app/src/composer/composer-insert-text-context.ts",
+      "lines": 11,
+      "imports": [
+        "react"
+      ]
+    },
+    {
       "id": "file:packages/app/src/composer/delivery-controller.ts",
       "type": "source",
       "path": "packages/app/src/composer/delivery-controller.ts",
@@ -6852,11 +7271,12 @@
       "id": "file:packages/app/src/composer/index.tsx",
       "type": "source",
       "path": "packages/app/src/composer/index.tsx",
-      "lines": 870,
+      "lines": 982,
       "imports": [
         "./attachment-menu",
         "./delivery-controller",
         "./github/picker",
+        "./input/composer-prompt-history",
         "./input/input",
         "./keyboard-controller",
         "./queue-controller",
@@ -6876,6 +7296,9 @@
         "@/composer/agent-state-selector",
         "@/composer/attachment-queue-renderers",
         "@/composer/attachments/workspace",
+        "@/composer/banner/composer-banner-logic",
+        "@/composer/banner/composer-banner-stack",
+        "@/composer/draft/soft-home-layout",
         "@/constants/layout",
         "@/constants/platform",
         "@/contexts/toast-context",
@@ -6898,6 +7321,68 @@
         "react-native-unistyles",
         "zustand/shallow"
       ]
+    },
+    {
+      "id": "file:packages/app/src/composer/input/composer-control.test.tsx",
+      "type": "test",
+      "path": "packages/app/src/composer/input/composer-control.test.tsx",
+      "lines": 180,
+      "imports": [
+        "./composer-control",
+        "@testing-library/react",
+        "lucide-react-native",
+        "react",
+        "vitest"
+      ]
+    },
+    {
+      "id": "file:packages/app/src/composer/input/composer-control.tsx",
+      "type": "source",
+      "path": "packages/app/src/composer/input/composer-control.tsx",
+      "lines": 251,
+      "imports": [
+        "lucide-react-native",
+        "react",
+        "react-native",
+        "react-native-unistyles"
+      ]
+    },
+    {
+      "id": "file:packages/app/src/composer/input/composer-prompt-history.test.ts",
+      "type": "test",
+      "path": "packages/app/src/composer/input/composer-prompt-history.test.ts",
+      "lines": 152,
+      "imports": [
+        "./composer-prompt-history",
+        "@/types/stream",
+        "vitest"
+      ]
+    },
+    {
+      "id": "file:packages/app/src/composer/input/composer-prompt-history.ts",
+      "type": "source",
+      "path": "packages/app/src/composer/input/composer-prompt-history.ts",
+      "lines": 104,
+      "imports": [
+        "@/types/stream"
+      ]
+    },
+    {
+      "id": "file:packages/app/src/composer/input/composer-scroll-gesture.test.ts",
+      "type": "test",
+      "path": "packages/app/src/composer/input/composer-scroll-gesture.test.ts",
+      "lines": 140,
+      "imports": [
+        "./composer-scroll-gesture",
+        "vitest"
+      ]
+    },
+    {
+      "id": "file:packages/app/src/composer/input/composer-scroll-gesture.ts",
+      "type": "source",
+      "path": "packages/app/src/composer/input/composer-scroll-gesture.ts",
+      "lines": 100,
+      "imports": []
     },
     {
       "id": "file:packages/app/src/composer/input/height-mirror.d.ts",
@@ -6930,8 +7415,10 @@
       "id": "file:packages/app/src/composer/input/input.tsx",
       "type": "source",
       "path": "packages/app/src/composer/input/input.tsx",
-      "lines": 2197,
+      "lines": 2328,
       "imports": [
+        "./composer-control",
+        "./composer-prompt-history",
         "./height-mirror",
         "./state",
         "@/attachments/types",
@@ -6968,6 +7455,23 @@
         "react-native-reanimated",
         "react-native-unistyles"
       ]
+    },
+    {
+      "id": "file:packages/app/src/composer/input/resting-composer-controls-measurement.test.ts",
+      "type": "test",
+      "path": "packages/app/src/composer/input/resting-composer-controls-measurement.test.ts",
+      "lines": 166,
+      "imports": [
+        "./resting-composer-controls-measurement",
+        "vitest"
+      ]
+    },
+    {
+      "id": "file:packages/app/src/composer/input/resting-composer-controls-measurement.ts",
+      "type": "source",
+      "path": "packages/app/src/composer/input/resting-composer-controls-measurement.ts",
+      "lines": 127,
+      "imports": []
     },
     {
       "id": "file:packages/app/src/composer/input/state.test.ts",
@@ -7075,12 +7579,70 @@
       "imports": []
     },
     {
+      "id": "file:packages/app/src/composer/tasks-badge-view.tsx",
+      "type": "source",
+      "path": "packages/app/src/composer/tasks-badge-view.tsx",
+      "lines": 135,
+      "imports": [
+        "@/composer/tasks-badge",
+        "@/constants/theme",
+        "@/styles/theme",
+        "react",
+        "react-i18next",
+        "react-native",
+        "react-native-unistyles"
+      ]
+    },
+    {
+      "id": "file:packages/app/src/composer/tasks-badge.test.ts",
+      "type": "test",
+      "path": "packages/app/src/composer/tasks-badge.test.ts",
+      "lines": 70,
+      "imports": [
+        "./tasks-badge",
+        "@/types/stream",
+        "vitest"
+      ]
+    },
+    {
+      "id": "file:packages/app/src/composer/tasks-badge.ts",
+      "type": "source",
+      "path": "packages/app/src/composer/tasks-badge.ts",
+      "lines": 50,
+      "imports": [
+        "@/types/stream"
+      ]
+    },
+    {
       "id": "file:packages/app/src/composer/types.ts",
       "type": "source",
       "path": "packages/app/src/composer/types.ts",
       "lines": 11,
       "imports": [
         "@/attachments/types"
+      ]
+    },
+    {
+      "id": "file:packages/app/src/composer/use-composer-prompt-history.ts",
+      "type": "source",
+      "path": "packages/app/src/composer/use-composer-prompt-history.ts",
+      "lines": 75,
+      "imports": [
+        "@/composer/input/composer-prompt-history",
+        "@/stores/session-store",
+        "@/types/stream",
+        "react"
+      ]
+    },
+    {
+      "id": "file:packages/app/src/composer/use-composer-scroll-collapse.ts",
+      "type": "source",
+      "path": "packages/app/src/composer/use-composer-scroll-collapse.ts",
+      "lines": 98,
+      "imports": [
+        "./input/composer-scroll-gesture",
+        "@/constants/platform",
+        "react"
       ]
     },
     {
@@ -9638,6 +10200,17 @@
       ]
     },
     {
+      "id": "file:packages/app/src/hooks/use-discovered-servers.ts",
+      "type": "source",
+      "path": "packages/app/src/hooks/use-discovered-servers.ts",
+      "lines": 96,
+      "imports": [
+        "@/runtime/host-runtime",
+        "@chisacode/protocol/messages",
+        "react"
+      ]
+    },
+    {
       "id": "file:packages/app/src/hooks/use-draft-agent-features.ts",
       "type": "source",
       "path": "packages/app/src/hooks/use-draft-agent-features.ts",
@@ -10357,7 +10930,7 @@
       "id": "file:packages/app/src/i18n/index.ts",
       "type": "source",
       "path": "packages/app/src/i18n/index.ts",
-      "lines": 4021,
+      "lines": 4069,
       "imports": [
         "@/hooks/use-settings",
         "i18next",
@@ -10482,7 +11055,7 @@
       "id": "file:packages/app/src/lib/overlay-root.ts",
       "type": "source",
       "path": "packages/app/src/lib/overlay-root.ts",
-      "lines": 26,
+      "lines": 27,
       "imports": []
     },
     {
@@ -10588,7 +11161,7 @@
       "id": "file:packages/app/src/panels/agent-panel.tsx",
       "type": "source",
       "path": "packages/app/src/panels/agent-panel.tsx",
-      "lines": 1847,
+      "lines": 1944,
       "imports": [
         "@/agent-stream/view",
         "@/attachments/types",
@@ -10601,9 +11174,15 @@
         "@/components/toast-host",
         "@/composer",
         "@/composer/agent-controls/mode-control",
+        "@/composer/banner/composer-banner-logic",
+        "@/composer/composer-insert-text-context",
         "@/composer/draft/input-draft",
         "@/composer/draft/workspace-tab",
+        "@/composer/tasks-badge",
+        "@/composer/tasks-badge-view",
         "@/composer/types",
+        "@/composer/use-composer-prompt-history",
+        "@/composer/use-composer-scroll-collapse",
         "@/constants/layout",
         "@/constants/platform",
         "@/hooks/agent-history-query-key",
@@ -10612,6 +11191,7 @@
         "@/hooks/use-agent-screen-state-machine",
         "@/hooks/use-archive-agent",
         "@/hooks/use-keyboard-shift-style",
+        "@/hooks/use-stable-event",
         "@/panels/draft-panel-descriptor",
         "@/panels/pane-context",
         "@/panels/panel-registry",
@@ -12613,7 +13193,7 @@
       "id": "file:packages/app/src/screens/workspace/workspace-right-panel.tsx",
       "type": "source",
       "path": "packages/app/src/screens/workspace/workspace-right-panel.tsx",
-      "lines": 432,
+      "lines": 453,
       "imports": [
         "@/components/browser-pane",
         "@/components/file-explorer-pane",
@@ -12621,6 +13201,7 @@
         "@/constants/layout",
         "@/constants/platform",
         "@/git/diff-pane",
+        "@/stores/browser-store",
         "@/stores/panel-store",
         "@/styles/theme",
         "lucide-react-native",
@@ -13190,7 +13771,7 @@
       "id": "file:packages/app/src/stores/browser-store/state.test.ts",
       "type": "test",
       "path": "packages/app/src/stores/browser-store/state.test.ts",
-      "lines": 149,
+      "lines": 150,
       "imports": [
         "./state",
         "vitest"
@@ -13200,7 +13781,7 @@
       "id": "file:packages/app/src/stores/browser-store/state.ts",
       "type": "source",
       "path": "packages/app/src/stores/browser-store/state.ts",
-      "lines": 131,
+      "lines": 135,
       "imports": []
     },
     {
@@ -13733,7 +14314,7 @@
       "id": "file:packages/app/src/styles/reanimated-unistyles-boundary.test.ts",
       "type": "test",
       "path": "packages/app/src/styles/reanimated-unistyles-boundary.test.ts",
-      "lines": 116,
+      "lines": 117,
       "imports": [
         "node:fs",
         "vitest"
@@ -13773,7 +14354,7 @@
       "id": "file:packages/app/src/styles/theme.ts",
       "type": "source",
       "path": "packages/app/src/styles/theme.ts",
-      "lines": 921,
+      "lines": 927,
       "imports": [
         "@chisacode/highlight"
       ]
@@ -14175,7 +14756,7 @@
       "id": "file:packages/app/src/terminal/webview/terminal-emulator-webview-html.ts",
       "type": "source",
       "path": "packages/app/src/terminal/webview/terminal-emulator-webview-html.ts",
-      "lines": 6,
+      "lines": 5,
       "imports": []
     },
     {
@@ -14779,6 +15360,23 @@
       "imports": []
     },
     {
+      "id": "file:packages/app/src/utils/clamp-browser-pane-width.test.ts",
+      "type": "test",
+      "path": "packages/app/src/utils/clamp-browser-pane-width.test.ts",
+      "lines": 37,
+      "imports": [
+        "./clamp-browser-pane-width",
+        "vitest"
+      ]
+    },
+    {
+      "id": "file:packages/app/src/utils/clamp-browser-pane-width.ts",
+      "type": "source",
+      "path": "packages/app/src/utils/clamp-browser-pane-width.ts",
+      "lines": 19,
+      "imports": []
+    },
+    {
       "id": "file:packages/app/src/utils/client-id.test.ts",
       "type": "test",
       "path": "packages/app/src/utils/client-id.test.ts",
@@ -15198,7 +15796,7 @@
       "id": "file:packages/app/src/utils/highlight-cache.test.ts",
       "type": "test",
       "path": "packages/app/src/utils/highlight-cache.test.ts",
-      "lines": 91,
+      "lines": 226,
       "imports": [
         "./highlight-cache",
         "vitest"
@@ -15208,7 +15806,7 @@
       "id": "file:packages/app/src/utils/highlight-cache.ts",
       "type": "source",
       "path": "packages/app/src/utils/highlight-cache.ts",
-      "lines": 122,
+      "lines": 186,
       "imports": [
         "@chisacode/highlight"
       ]
@@ -16586,6 +17184,13 @@
       ]
     },
     {
+      "id": "file:packages/app/test-results/.last-run.json",
+      "type": "config",
+      "path": "packages/app/test-results/.last-run.json",
+      "lines": 4,
+      "imports": []
+    },
+    {
       "id": "file:packages/app/test-stubs/react-native-safe-area-context.js",
       "type": "support",
       "path": "packages/app/test-stubs/react-native-safe-area-context.js",
@@ -16653,7 +17258,7 @@
       "id": "file:packages/app/tsconfig.json",
       "type": "config",
       "path": "packages/app/tsconfig.json",
-      "lines": 18,
+      "lines": 24,
       "imports": []
     },
     {
@@ -16960,6 +17565,108 @@
       "specifier": "./helpers/mock-agent"
     },
     {
+      "source": "file:packages/app/e2e/composer-banner.spec.ts",
+      "target": "file:packages/app/e2e/fixtures.ts",
+      "type": "imports",
+      "specifier": "./fixtures"
+    },
+    {
+      "source": "file:packages/app/e2e/composer-banner.spec.ts",
+      "target": "file:packages/app/e2e/helpers/agent-stream.ts",
+      "type": "imports",
+      "specifier": "./helpers/agent-stream"
+    },
+    {
+      "source": "file:packages/app/e2e/composer-banner.spec.ts",
+      "target": "file:packages/app/e2e/helpers/composer.ts",
+      "type": "imports",
+      "specifier": "./helpers/composer"
+    },
+    {
+      "source": "file:packages/app/e2e/composer-banner.spec.ts",
+      "target": "file:packages/app/e2e/helpers/seed-client.ts",
+      "type": "imports",
+      "specifier": "./helpers/seed-client"
+    },
+    {
+      "source": "file:packages/app/e2e/composer-banner.spec.ts",
+      "target": "file:packages/app/e2e/helpers/server-id.ts",
+      "type": "imports",
+      "specifier": "./helpers/server-id"
+    },
+    {
+      "source": "file:packages/app/e2e/composer-banner.spec.ts",
+      "target": "file:packages/app/e2e/helpers/workspace.ts",
+      "type": "imports",
+      "specifier": "./helpers/workspace"
+    },
+    {
+      "source": "file:packages/app/e2e/composer-banner.spec.ts",
+      "target": "file:packages/app/src/utils/host-routes.ts",
+      "type": "imports",
+      "specifier": "@/utils/host-routes"
+    },
+    {
+      "source": "file:packages/app/e2e/composer-scroll-collapse.spec.ts",
+      "target": "file:packages/app/e2e/fixtures.ts",
+      "type": "imports",
+      "specifier": "./fixtures"
+    },
+    {
+      "source": "file:packages/app/e2e/composer-scroll-collapse.spec.ts",
+      "target": "file:packages/app/e2e/helpers/agent-stream.ts",
+      "type": "imports",
+      "specifier": "./helpers/agent-stream"
+    },
+    {
+      "source": "file:packages/app/e2e/composer-scroll-collapse.spec.ts",
+      "target": "file:packages/app/e2e/helpers/composer.ts",
+      "type": "imports",
+      "specifier": "./helpers/composer"
+    },
+    {
+      "source": "file:packages/app/e2e/composer-scroll-collapse.spec.ts",
+      "target": "file:packages/app/e2e/helpers/seed-client.ts",
+      "type": "imports",
+      "specifier": "./helpers/seed-client"
+    },
+    {
+      "source": "file:packages/app/e2e/composer-scroll-collapse.spec.ts",
+      "target": "file:packages/app/e2e/helpers/server-id.ts",
+      "type": "imports",
+      "specifier": "./helpers/server-id"
+    },
+    {
+      "source": "file:packages/app/e2e/composer-scroll-collapse.spec.ts",
+      "target": "file:packages/app/e2e/helpers/workspace.ts",
+      "type": "imports",
+      "specifier": "./helpers/workspace"
+    },
+    {
+      "source": "file:packages/app/e2e/composer-scroll-collapse.spec.ts",
+      "target": "file:packages/app/src/utils/host-routes.ts",
+      "type": "imports",
+      "specifier": "@/utils/host-routes"
+    },
+    {
+      "source": "file:packages/app/e2e/desktop-composer-banner.script.ts",
+      "target": "file:packages/app/src/utils/host-routes.ts",
+      "type": "imports",
+      "specifier": "../src/utils/host-routes"
+    },
+    {
+      "source": "file:packages/app/e2e/desktop-composer-banner.script.ts",
+      "target": "file:packages/app/e2e/helpers/node-ws-factory.ts",
+      "type": "imports",
+      "specifier": "./helpers/node-ws-factory"
+    },
+    {
+      "source": "file:packages/app/e2e/desktop-composer-banner.script.ts",
+      "target": "file:packages/app/e2e/helpers/workspace.ts",
+      "type": "imports",
+      "specifier": "./helpers/workspace"
+    },
+    {
       "source": "file:packages/app/e2e/desktop-conversation-switch-width.script.ts",
       "target": "file:packages/app/e2e/helpers/node-ws-factory.ts",
       "type": "imports",
@@ -16967,6 +17674,24 @@
     },
     {
       "source": "file:packages/app/e2e/desktop-conversation-switch-width.script.ts",
+      "target": "file:packages/app/e2e/helpers/workspace.ts",
+      "type": "imports",
+      "specifier": "./helpers/workspace"
+    },
+    {
+      "source": "file:packages/app/e2e/desktop-discovered-servers.script.ts",
+      "target": "file:packages/app/e2e/helpers/mock-agent.ts",
+      "type": "imports",
+      "specifier": "./helpers/mock-agent"
+    },
+    {
+      "source": "file:packages/app/e2e/desktop-discovered-servers.script.ts",
+      "target": "file:packages/app/e2e/helpers/node-ws-factory.ts",
+      "type": "imports",
+      "specifier": "./helpers/node-ws-factory"
+    },
+    {
+      "source": "file:packages/app/e2e/desktop-discovered-servers.script.ts",
       "target": "file:packages/app/e2e/helpers/workspace.ts",
       "type": "imports",
       "specifier": "./helpers/workspace"
@@ -17069,6 +17794,54 @@
     },
     {
       "source": "file:packages/app/e2e/desktop-packaged-slices.script.ts",
+      "target": "file:packages/app/e2e/helpers/workspace.ts",
+      "type": "imports",
+      "specifier": "./helpers/workspace"
+    },
+    {
+      "source": "file:packages/app/e2e/desktop-prompt-history.script.ts",
+      "target": "file:packages/app/e2e/helpers/app.ts",
+      "type": "imports",
+      "specifier": "./helpers/app"
+    },
+    {
+      "source": "file:packages/app/e2e/desktop-prompt-history.script.ts",
+      "target": "file:packages/app/e2e/helpers/composer.ts",
+      "type": "imports",
+      "specifier": "./helpers/composer"
+    },
+    {
+      "source": "file:packages/app/e2e/desktop-prompt-history.script.ts",
+      "target": "file:packages/app/e2e/helpers/mock-agent.ts",
+      "type": "imports",
+      "specifier": "./helpers/mock-agent"
+    },
+    {
+      "source": "file:packages/app/e2e/desktop-prompt-history.script.ts",
+      "target": "file:packages/app/e2e/helpers/node-ws-factory.ts",
+      "type": "imports",
+      "specifier": "./helpers/node-ws-factory"
+    },
+    {
+      "source": "file:packages/app/e2e/desktop-prompt-history.script.ts",
+      "target": "file:packages/app/e2e/helpers/workspace.ts",
+      "type": "imports",
+      "specifier": "./helpers/workspace"
+    },
+    {
+      "source": "file:packages/app/e2e/desktop-scroll-collapse.script.ts",
+      "target": "file:packages/app/src/utils/host-routes.ts",
+      "type": "imports",
+      "specifier": "../src/utils/host-routes"
+    },
+    {
+      "source": "file:packages/app/e2e/desktop-scroll-collapse.script.ts",
+      "target": "file:packages/app/e2e/helpers/node-ws-factory.ts",
+      "type": "imports",
+      "specifier": "./helpers/node-ws-factory"
+    },
+    {
+      "source": "file:packages/app/e2e/desktop-scroll-collapse.script.ts",
       "target": "file:packages/app/e2e/helpers/workspace.ts",
       "type": "imports",
       "specifier": "./helpers/workspace"
@@ -17189,6 +17962,24 @@
     },
     {
       "source": "file:packages/app/e2e/desktop-status-drift-probe.script.ts",
+      "target": "file:packages/app/e2e/helpers/workspace.ts",
+      "type": "imports",
+      "specifier": "./helpers/workspace"
+    },
+    {
+      "source": "file:packages/app/e2e/desktop-tasks-badge.script.ts",
+      "target": "file:packages/app/src/utils/host-routes.ts",
+      "type": "imports",
+      "specifier": "../src/utils/host-routes"
+    },
+    {
+      "source": "file:packages/app/e2e/desktop-tasks-badge.script.ts",
+      "target": "file:packages/app/e2e/helpers/node-ws-factory.ts",
+      "type": "imports",
+      "specifier": "./helpers/node-ws-factory"
+    },
+    {
+      "source": "file:packages/app/e2e/desktop-tasks-badge.script.ts",
       "target": "file:packages/app/e2e/helpers/workspace.ts",
       "type": "imports",
       "specifier": "./helpers/workspace"
@@ -17896,6 +18687,30 @@
       "specifier": "./helpers/seed-client"
     },
     {
+      "source": "file:packages/app/e2e/prompt-history.spec.ts",
+      "target": "file:packages/app/e2e/fixtures.ts",
+      "type": "imports",
+      "specifier": "./fixtures"
+    },
+    {
+      "source": "file:packages/app/e2e/prompt-history.spec.ts",
+      "target": "file:packages/app/e2e/helpers/agent-stream.ts",
+      "type": "imports",
+      "specifier": "./helpers/agent-stream"
+    },
+    {
+      "source": "file:packages/app/e2e/prompt-history.spec.ts",
+      "target": "file:packages/app/e2e/helpers/app.ts",
+      "type": "imports",
+      "specifier": "./helpers/app"
+    },
+    {
+      "source": "file:packages/app/e2e/prompt-history.spec.ts",
+      "target": "file:packages/app/e2e/helpers/composer.ts",
+      "type": "imports",
+      "specifier": "./helpers/composer"
+    },
+    {
       "source": "file:packages/app/e2e/rewind-flow.claude.real.spec.ts",
       "target": "file:packages/app/e2e/rewind-flow.shared.ts",
       "type": "imports",
@@ -18251,6 +19066,24 @@
     },
     {
       "source": "file:packages/app/e2e/turn-anchor.spec.ts",
+      "target": "file:packages/app/e2e/helpers/composer.ts",
+      "type": "imports",
+      "specifier": "./helpers/composer"
+    },
+    {
+      "source": "file:packages/app/e2e/turn-changes-tree.spec.ts",
+      "target": "file:packages/app/e2e/fixtures.ts",
+      "type": "imports",
+      "specifier": "./fixtures"
+    },
+    {
+      "source": "file:packages/app/e2e/turn-changes-tree.spec.ts",
+      "target": "file:packages/app/e2e/helpers/agent-stream.ts",
+      "type": "imports",
+      "specifier": "./helpers/agent-stream"
+    },
+    {
+      "source": "file:packages/app/e2e/turn-changes-tree.spec.ts",
       "target": "file:packages/app/e2e/helpers/composer.ts",
       "type": "imports",
       "specifier": "./helpers/composer"
@@ -18850,6 +19683,42 @@
       "specifier": "@/types/stream"
     },
     {
+      "source": "file:packages/app/src/agent-stream/stable-layout.test.ts",
+      "target": "file:packages/app/src/agent-stream/layout.ts",
+      "type": "imports",
+      "specifier": "./layout"
+    },
+    {
+      "source": "file:packages/app/src/agent-stream/stable-layout.test.ts",
+      "target": "file:packages/app/src/agent-stream/stable-layout.ts",
+      "type": "imports",
+      "specifier": "./stable-layout"
+    },
+    {
+      "source": "file:packages/app/src/agent-stream/stable-layout.test.ts",
+      "target": "file:packages/app/src/agent-stream/strategy.ts",
+      "type": "imports",
+      "specifier": "./strategy"
+    },
+    {
+      "source": "file:packages/app/src/agent-stream/stable-layout.test.ts",
+      "target": "file:packages/app/src/agent-stream/strategy-resolver.ts",
+      "type": "imports",
+      "specifier": "./strategy-resolver"
+    },
+    {
+      "source": "file:packages/app/src/agent-stream/stable-layout.test.ts",
+      "target": "file:packages/app/src/types/stream.ts",
+      "type": "imports",
+      "specifier": "@/types/stream"
+    },
+    {
+      "source": "file:packages/app/src/agent-stream/stable-layout.ts",
+      "target": "file:packages/app/src/agent-stream/layout.ts",
+      "type": "imports",
+      "specifier": "./layout"
+    },
+    {
       "source": "file:packages/app/src/agent-stream/strategy-native.tsx",
       "target": "file:packages/app/src/agent-stream/bottom-anchor-controller.ts",
       "type": "imports",
@@ -19067,6 +19936,12 @@
     },
     {
       "source": "file:packages/app/src/agent-stream/view.tsx",
+      "target": "file:packages/app/src/agent-stream/stable-layout.ts",
+      "type": "imports",
+      "specifier": "./stable-layout"
+    },
+    {
+      "source": "file:packages/app/src/agent-stream/view.tsx",
       "target": "file:packages/app/src/agent-stream/strategy.ts",
       "type": "imports",
       "specifier": "./strategy"
@@ -19136,6 +20011,12 @@
       "target": "file:packages/app/src/components/tool-call-sheet.tsx",
       "type": "imports",
       "specifier": "@/components/tool-call-sheet"
+    },
+    {
+      "source": "file:packages/app/src/agent-stream/view.tsx",
+      "target": "file:packages/app/src/components/turn-changes-tree.tsx",
+      "type": "imports",
+      "specifier": "@/components/turn-changes-tree"
     },
     {
       "source": "file:packages/app/src/agent-stream/view.tsx",
@@ -20920,6 +21801,42 @@
       "specifier": "@/utils/user-visible-error"
     },
     {
+      "source": "file:packages/app/src/components/assistant-selection-toolbar.test.tsx",
+      "target": "file:packages/app/src/components/assistant-selection-toolbar.tsx",
+      "type": "imports",
+      "specifier": "./assistant-selection-toolbar"
+    },
+    {
+      "source": "file:packages/app/src/components/assistant-selection-toolbar.test.tsx",
+      "target": "file:packages/app/src/composer/composer-insert-text-context.ts",
+      "type": "imports",
+      "specifier": "@/composer/composer-insert-text-context"
+    },
+    {
+      "source": "file:packages/app/src/components/assistant-selection-toolbar.web.tsx",
+      "target": "file:packages/app/src/components/assistant-selection-toolbar.tsx",
+      "type": "imports",
+      "specifier": "./assistant-selection-toolbar"
+    },
+    {
+      "source": "file:packages/app/src/components/assistant-selection-toolbar.web.tsx",
+      "target": "file:packages/app/src/composer/composer-insert-text-context.ts",
+      "type": "imports",
+      "specifier": "@/composer/composer-insert-text-context"
+    },
+    {
+      "source": "file:packages/app/src/components/assistant-selection-toolbar.web.tsx",
+      "target": "file:packages/app/src/constants/platform.ts",
+      "type": "imports",
+      "specifier": "@/constants/platform"
+    },
+    {
+      "source": "file:packages/app/src/components/assistant-selection-toolbar.web.tsx",
+      "target": "file:packages/app/src/lib/overlay-root.ts",
+      "type": "imports",
+      "specifier": "@/lib/overlay-root"
+    },
+    {
       "source": "file:packages/app/src/components/attachment-lightbox.test.tsx",
       "target": "file:packages/app/src/components/attachment-lightbox.tsx",
       "type": "imports",
@@ -21034,6 +21951,24 @@
       "specifier": "@/styles/theme"
     },
     {
+      "source": "file:packages/app/src/components/browser-favicon-icon.tsx",
+      "target": "file:packages/app/src/styles/theme.ts",
+      "type": "imports",
+      "specifier": "@/styles/theme"
+    },
+    {
+      "source": "file:packages/app/src/components/browser-more-menu.tsx",
+      "target": "file:packages/app/src/components/ui/dropdown-menu.tsx",
+      "type": "imports",
+      "specifier": "@/components/ui/dropdown-menu"
+    },
+    {
+      "source": "file:packages/app/src/components/browser-more-menu.tsx",
+      "target": "file:packages/app/src/styles/theme.ts",
+      "type": "imports",
+      "specifier": "@/styles/theme"
+    },
+    {
       "source": "file:packages/app/src/components/browser-pane.electron.tsx",
       "target": "file:packages/app/src/attachments/types.ts",
       "type": "imports",
@@ -21044,6 +21979,30 @@
       "target": "file:packages/app/src/attachments/workspace-attachments-store.ts",
       "type": "imports",
       "specifier": "@/attachments/workspace-attachments-store"
+    },
+    {
+      "source": "file:packages/app/src/components/browser-pane.electron.tsx",
+      "target": "file:packages/app/src/components/browser-favicon-icon.tsx",
+      "type": "imports",
+      "specifier": "@/components/browser-favicon-icon"
+    },
+    {
+      "source": "file:packages/app/src/components/browser-pane.electron.tsx",
+      "target": "file:packages/app/src/components/browser-more-menu.tsx",
+      "type": "imports",
+      "specifier": "@/components/browser-more-menu"
+    },
+    {
+      "source": "file:packages/app/src/components/browser-pane.electron.tsx",
+      "target": "file:packages/app/src/components/webview-crash-recovery.ts",
+      "type": "imports",
+      "specifier": "@/components/webview-crash-recovery"
+    },
+    {
+      "source": "file:packages/app/src/components/browser-pane.electron.tsx",
+      "target": "file:packages/app/src/components/zoom-indicator.tsx",
+      "type": "imports",
+      "specifier": "@/components/zoom-indicator"
     },
     {
       "source": "file:packages/app/src/components/browser-pane.electron.tsx",
@@ -21065,6 +22024,12 @@
     },
     {
       "source": "file:packages/app/src/components/browser-pane.electron.tsx",
+      "target": "file:packages/app/src/hooks/use-discovered-servers.ts",
+      "type": "imports",
+      "specifier": "@/hooks/use-discovered-servers"
+    },
+    {
+      "source": "file:packages/app/src/components/browser-pane.electron.tsx",
       "target": "file:packages/app/src/stores/browser-store/index.ts",
       "type": "imports",
       "specifier": "@/stores/browser-store"
@@ -21074,6 +22039,30 @@
       "target": "file:packages/app/src/styles/theme.ts",
       "type": "imports",
       "specifier": "@/styles/theme"
+    },
+    {
+      "source": "file:packages/app/src/components/browser-pane.electron.tsx",
+      "target": "file:packages/app/src/utils/clamp-browser-pane-width.ts",
+      "type": "imports",
+      "specifier": "@/utils/clamp-browser-pane-width"
+    },
+    {
+      "source": "file:packages/app/src/components/build-turn-diff-tree.test.ts",
+      "target": "file:packages/app/src/components/build-turn-diff-tree.ts",
+      "type": "imports",
+      "specifier": "./build-turn-diff-tree"
+    },
+    {
+      "source": "file:packages/app/src/components/build-turn-diff-tree.test.ts",
+      "target": "file:packages/app/src/types/stream.ts",
+      "type": "imports",
+      "specifier": "@/types/stream"
+    },
+    {
+      "source": "file:packages/app/src/components/build-turn-diff-tree.ts",
+      "target": "file:packages/app/src/types/stream.ts",
+      "type": "imports",
+      "specifier": "@/types/stream"
     },
     {
       "source": "file:packages/app/src/components/code-insets.ts",
@@ -22760,6 +23749,12 @@
       "target": "file:packages/app/src/components/thought-message.tsx",
       "type": "imports",
       "specifier": "./thought-message"
+    },
+    {
+      "source": "file:packages/app/src/components/message.tsx",
+      "target": "file:packages/app/src/components/assistant-selection-toolbar.tsx",
+      "type": "imports",
+      "specifier": "./assistant-selection-toolbar"
     },
     {
       "source": "file:packages/app/src/components/message.tsx",
@@ -24778,6 +25773,36 @@
       "specifier": "@chisacode/protocol/agent-types"
     },
     {
+      "source": "file:packages/app/src/components/turn-changes-tree.tsx",
+      "target": "file:packages/app/src/components/build-turn-diff-tree.ts",
+      "type": "imports",
+      "specifier": "@/components/build-turn-diff-tree"
+    },
+    {
+      "source": "file:packages/app/src/components/turn-changes-tree.tsx",
+      "target": "file:packages/app/src/components/diff-stat.tsx",
+      "type": "imports",
+      "specifier": "@/components/diff-stat"
+    },
+    {
+      "source": "file:packages/app/src/components/turn-changes-tree.tsx",
+      "target": "file:packages/app/src/constants/theme.ts",
+      "type": "imports",
+      "specifier": "@/constants/theme"
+    },
+    {
+      "source": "file:packages/app/src/components/turn-changes-tree.tsx",
+      "target": "file:packages/app/src/styles/theme.ts",
+      "type": "imports",
+      "specifier": "@/styles/theme"
+    },
+    {
+      "source": "file:packages/app/src/components/turn-changes-tree.tsx",
+      "target": "file:packages/app/src/types/stream.ts",
+      "type": "imports",
+      "specifier": "@/types/stream"
+    },
+    {
       "source": "file:packages/app/src/components/ui/agent-status-indicator.tsx",
       "target": "file:packages/app/src/components/ui/loading-spinner.tsx",
       "type": "imports",
@@ -25180,6 +26205,12 @@
       "specifier": "@/styles/unistyles-inline-style"
     },
     {
+      "source": "file:packages/app/src/components/webview-crash-recovery.test.ts",
+      "target": "file:packages/app/src/components/webview-crash-recovery.ts",
+      "type": "imports",
+      "specifier": "./webview-crash-recovery"
+    },
+    {
       "source": "file:packages/app/src/components/welcome-screen.tsx",
       "target": "file:packages/app/src/components/add-host-modal.tsx",
       "type": "imports",
@@ -25550,6 +26581,12 @@
       "target": "file:packages/app/src/stores/session-store-hooks/index.ts",
       "type": "imports",
       "specifier": "@/stores/session-store-hooks"
+    },
+    {
+      "source": "file:packages/app/src/components/zoom-indicator.test.tsx",
+      "target": "file:packages/app/src/components/zoom-indicator.tsx",
+      "type": "imports",
+      "specifier": "./zoom-indicator"
     },
     {
       "source": "file:packages/app/src/composer/actions.test.ts",
@@ -26248,6 +27285,42 @@
       "specifier": "@/styles/theme"
     },
     {
+      "source": "file:packages/app/src/composer/banner/composer-banner-logic.test.ts",
+      "target": "file:packages/app/src/composer/banner/composer-banner-logic.ts",
+      "type": "imports",
+      "specifier": "./composer-banner-logic"
+    },
+    {
+      "source": "file:packages/app/src/composer/banner/composer-banner-stack.tsx",
+      "target": "file:packages/app/src/composer/banner/composer-banner.tsx",
+      "type": "imports",
+      "specifier": "./composer-banner"
+    },
+    {
+      "source": "file:packages/app/src/composer/banner/composer-banner-stack.tsx",
+      "target": "file:packages/app/src/composer/banner/composer-banner-logic.ts",
+      "type": "imports",
+      "specifier": "./composer-banner-logic"
+    },
+    {
+      "source": "file:packages/app/src/composer/banner/composer-banner-stack.tsx",
+      "target": "file:packages/app/src/constants/platform.ts",
+      "type": "imports",
+      "specifier": "@/constants/platform"
+    },
+    {
+      "source": "file:packages/app/src/composer/banner/composer-banner.tsx",
+      "target": "file:packages/app/src/composer/banner/composer-banner-logic.ts",
+      "type": "imports",
+      "specifier": "./composer-banner-logic"
+    },
+    {
+      "source": "file:packages/app/src/composer/banner/composer-banner.tsx",
+      "target": "file:packages/app/src/styles/theme.ts",
+      "type": "imports",
+      "specifier": "@/styles/theme"
+    },
+    {
       "source": "file:packages/app/src/composer/delivery-controller.ts",
       "target": "file:packages/app/src/attachments/types.ts",
       "type": "imports",
@@ -26903,6 +27976,12 @@
     },
     {
       "source": "file:packages/app/src/composer/index.tsx",
+      "target": "file:packages/app/src/composer/input/composer-prompt-history.ts",
+      "type": "imports",
+      "specifier": "./input/composer-prompt-history"
+    },
+    {
+      "source": "file:packages/app/src/composer/index.tsx",
       "target": "file:packages/app/src/composer/input/input.tsx",
       "type": "imports",
       "specifier": "./input/input"
@@ -27017,6 +28096,24 @@
     },
     {
       "source": "file:packages/app/src/composer/index.tsx",
+      "target": "file:packages/app/src/composer/banner/composer-banner-logic.ts",
+      "type": "imports",
+      "specifier": "@/composer/banner/composer-banner-logic"
+    },
+    {
+      "source": "file:packages/app/src/composer/index.tsx",
+      "target": "file:packages/app/src/composer/banner/composer-banner-stack.tsx",
+      "type": "imports",
+      "specifier": "@/composer/banner/composer-banner-stack"
+    },
+    {
+      "source": "file:packages/app/src/composer/index.tsx",
+      "target": "file:packages/app/src/composer/draft/soft-home-layout.ts",
+      "type": "imports",
+      "specifier": "@/composer/draft/soft-home-layout"
+    },
+    {
+      "source": "file:packages/app/src/composer/index.tsx",
       "target": "file:packages/app/src/constants/layout.ts",
       "type": "imports",
       "specifier": "@/constants/layout"
@@ -27106,10 +28203,52 @@
       "specifier": "@/utils/web-focus"
     },
     {
+      "source": "file:packages/app/src/composer/input/composer-control.test.tsx",
+      "target": "file:packages/app/src/composer/input/composer-control.tsx",
+      "type": "imports",
+      "specifier": "./composer-control"
+    },
+    {
+      "source": "file:packages/app/src/composer/input/composer-prompt-history.test.ts",
+      "target": "file:packages/app/src/composer/input/composer-prompt-history.ts",
+      "type": "imports",
+      "specifier": "./composer-prompt-history"
+    },
+    {
+      "source": "file:packages/app/src/composer/input/composer-prompt-history.test.ts",
+      "target": "file:packages/app/src/types/stream.ts",
+      "type": "imports",
+      "specifier": "@/types/stream"
+    },
+    {
+      "source": "file:packages/app/src/composer/input/composer-prompt-history.ts",
+      "target": "file:packages/app/src/types/stream.ts",
+      "type": "imports",
+      "specifier": "@/types/stream"
+    },
+    {
+      "source": "file:packages/app/src/composer/input/composer-scroll-gesture.test.ts",
+      "target": "file:packages/app/src/composer/input/composer-scroll-gesture.ts",
+      "type": "imports",
+      "specifier": "./composer-scroll-gesture"
+    },
+    {
       "source": "file:packages/app/src/composer/input/height-mirror.d.ts",
       "target": "file:packages/app/src/composer/input/height-mirror.native.ts",
       "type": "imports",
       "specifier": "./height-mirror.native"
+    },
+    {
+      "source": "file:packages/app/src/composer/input/input.tsx",
+      "target": "file:packages/app/src/composer/input/composer-control.tsx",
+      "type": "imports",
+      "specifier": "./composer-control"
+    },
+    {
+      "source": "file:packages/app/src/composer/input/input.tsx",
+      "target": "file:packages/app/src/composer/input/composer-prompt-history.ts",
+      "type": "imports",
+      "specifier": "./composer-prompt-history"
     },
     {
       "source": "file:packages/app/src/composer/input/input.tsx",
@@ -27284,6 +28423,12 @@
       "target": "module:client",
       "type": "depends_on",
       "specifier": "@chisacode/client/internal/daemon-client"
+    },
+    {
+      "source": "file:packages/app/src/composer/input/resting-composer-controls-measurement.test.ts",
+      "target": "file:packages/app/src/composer/input/resting-composer-controls-measurement.ts",
+      "type": "imports",
+      "specifier": "./resting-composer-controls-measurement"
     },
     {
       "source": "file:packages/app/src/composer/input/state.test.ts",
@@ -27478,10 +28623,76 @@
       "specifier": "./submit"
     },
     {
+      "source": "file:packages/app/src/composer/tasks-badge-view.tsx",
+      "target": "file:packages/app/src/composer/tasks-badge.ts",
+      "type": "imports",
+      "specifier": "@/composer/tasks-badge"
+    },
+    {
+      "source": "file:packages/app/src/composer/tasks-badge-view.tsx",
+      "target": "file:packages/app/src/constants/theme.ts",
+      "type": "imports",
+      "specifier": "@/constants/theme"
+    },
+    {
+      "source": "file:packages/app/src/composer/tasks-badge-view.tsx",
+      "target": "file:packages/app/src/styles/theme.ts",
+      "type": "imports",
+      "specifier": "@/styles/theme"
+    },
+    {
+      "source": "file:packages/app/src/composer/tasks-badge.test.ts",
+      "target": "file:packages/app/src/composer/tasks-badge.ts",
+      "type": "imports",
+      "specifier": "./tasks-badge"
+    },
+    {
+      "source": "file:packages/app/src/composer/tasks-badge.test.ts",
+      "target": "file:packages/app/src/types/stream.ts",
+      "type": "imports",
+      "specifier": "@/types/stream"
+    },
+    {
+      "source": "file:packages/app/src/composer/tasks-badge.ts",
+      "target": "file:packages/app/src/types/stream.ts",
+      "type": "imports",
+      "specifier": "@/types/stream"
+    },
+    {
       "source": "file:packages/app/src/composer/types.ts",
       "target": "file:packages/app/src/attachments/types.ts",
       "type": "imports",
       "specifier": "@/attachments/types"
+    },
+    {
+      "source": "file:packages/app/src/composer/use-composer-prompt-history.ts",
+      "target": "file:packages/app/src/composer/input/composer-prompt-history.ts",
+      "type": "imports",
+      "specifier": "@/composer/input/composer-prompt-history"
+    },
+    {
+      "source": "file:packages/app/src/composer/use-composer-prompt-history.ts",
+      "target": "file:packages/app/src/stores/session-store.ts",
+      "type": "imports",
+      "specifier": "@/stores/session-store"
+    },
+    {
+      "source": "file:packages/app/src/composer/use-composer-prompt-history.ts",
+      "target": "file:packages/app/src/types/stream.ts",
+      "type": "imports",
+      "specifier": "@/types/stream"
+    },
+    {
+      "source": "file:packages/app/src/composer/use-composer-scroll-collapse.ts",
+      "target": "file:packages/app/src/composer/input/composer-scroll-gesture.ts",
+      "type": "imports",
+      "specifier": "./input/composer-scroll-gesture"
+    },
+    {
+      "source": "file:packages/app/src/composer/use-composer-scroll-collapse.ts",
+      "target": "file:packages/app/src/constants/platform.ts",
+      "type": "imports",
+      "specifier": "@/constants/platform"
     },
     {
       "source": "file:packages/app/src/composer/use-composer-send-projection-ack.test.tsx",
@@ -30952,6 +32163,18 @@
       "specifier": "@/utils/attempt-guard"
     },
     {
+      "source": "file:packages/app/src/hooks/use-discovered-servers.ts",
+      "target": "file:packages/app/src/runtime/host-runtime.ts",
+      "type": "imports",
+      "specifier": "@/runtime/host-runtime"
+    },
+    {
+      "source": "module:app",
+      "target": "module:protocol",
+      "type": "depends_on",
+      "specifier": "@chisacode/protocol/messages"
+    },
+    {
       "source": "file:packages/app/src/hooks/use-draft-agent-features.ts",
       "target": "file:packages/app/src/hooks/feature-preferences.ts",
       "type": "imports",
@@ -32129,6 +33352,18 @@
     },
     {
       "source": "file:packages/app/src/panels/agent-panel.tsx",
+      "target": "file:packages/app/src/composer/banner/composer-banner-logic.ts",
+      "type": "imports",
+      "specifier": "@/composer/banner/composer-banner-logic"
+    },
+    {
+      "source": "file:packages/app/src/panels/agent-panel.tsx",
+      "target": "file:packages/app/src/composer/composer-insert-text-context.ts",
+      "type": "imports",
+      "specifier": "@/composer/composer-insert-text-context"
+    },
+    {
+      "source": "file:packages/app/src/panels/agent-panel.tsx",
       "target": "file:packages/app/src/composer/draft/input-draft.ts",
       "type": "imports",
       "specifier": "@/composer/draft/input-draft"
@@ -32141,9 +33376,33 @@
     },
     {
       "source": "file:packages/app/src/panels/agent-panel.tsx",
+      "target": "file:packages/app/src/composer/tasks-badge.ts",
+      "type": "imports",
+      "specifier": "@/composer/tasks-badge"
+    },
+    {
+      "source": "file:packages/app/src/panels/agent-panel.tsx",
+      "target": "file:packages/app/src/composer/tasks-badge-view.tsx",
+      "type": "imports",
+      "specifier": "@/composer/tasks-badge-view"
+    },
+    {
+      "source": "file:packages/app/src/panels/agent-panel.tsx",
       "target": "file:packages/app/src/composer/types.ts",
       "type": "imports",
       "specifier": "@/composer/types"
+    },
+    {
+      "source": "file:packages/app/src/panels/agent-panel.tsx",
+      "target": "file:packages/app/src/composer/use-composer-prompt-history.ts",
+      "type": "imports",
+      "specifier": "@/composer/use-composer-prompt-history"
+    },
+    {
+      "source": "file:packages/app/src/panels/agent-panel.tsx",
+      "target": "file:packages/app/src/composer/use-composer-scroll-collapse.ts",
+      "type": "imports",
+      "specifier": "@/composer/use-composer-scroll-collapse"
     },
     {
       "source": "file:packages/app/src/panels/agent-panel.tsx",
@@ -32192,6 +33451,12 @@
       "target": "file:packages/app/src/hooks/use-keyboard-shift-style.ts",
       "type": "imports",
       "specifier": "@/hooks/use-keyboard-shift-style"
+    },
+    {
+      "source": "file:packages/app/src/panels/agent-panel.tsx",
+      "target": "file:packages/app/src/hooks/use-stable-event.ts",
+      "type": "imports",
+      "specifier": "@/hooks/use-stable-event"
     },
     {
       "source": "file:packages/app/src/panels/agent-panel.tsx",
@@ -36119,6 +37384,12 @@
     },
     {
       "source": "file:packages/app/src/screens/workspace/workspace-right-panel.tsx",
+      "target": "file:packages/app/src/stores/browser-store/index.ts",
+      "type": "imports",
+      "specifier": "@/stores/browser-store"
+    },
+    {
+      "source": "file:packages/app/src/screens/workspace/workspace-right-panel.tsx",
       "target": "file:packages/app/src/stores/panel-store/index.ts",
       "type": "imports",
       "specifier": "@/stores/panel-store"
@@ -38774,6 +40045,12 @@
       "target": "file:packages/app/src/utils/branch-suggestions.ts",
       "type": "imports",
       "specifier": "./branch-suggestions"
+    },
+    {
+      "source": "file:packages/app/src/utils/clamp-browser-pane-width.test.ts",
+      "target": "file:packages/app/src/utils/clamp-browser-pane-width.ts",
+      "type": "imports",
+      "specifier": "./clamp-browser-pane-width"
     },
     {
       "source": "file:packages/app/src/utils/client-id.test.ts",

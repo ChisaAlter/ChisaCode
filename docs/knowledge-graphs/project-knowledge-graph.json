@@ -28,13 +28,13 @@
         "protocol"
       ],
       "dependedOnBy": [],
-      "fileCount": 1328,
+      "fileCount": 1376,
       "categories": {
-        "config": 41,
-        "test": 411,
-        "support": 77,
+        "config": 43,
+        "test": 427,
+        "support": 84,
         "docs": 2,
-        "source": 797
+        "source": 820
       }
     },
     {
@@ -138,10 +138,10 @@
       "dependedOnBy": [
         "app"
       ],
-      "fileCount": 35,
+      "fileCount": 32,
       "categories": {
         "support": 5,
-        "config": 18,
+        "config": 15,
         "docs": 5,
         "test": 2,
         "source": 5
@@ -249,13 +249,13 @@
         "cli",
         "desktop"
       ],
-      "fileCount": 857,
+      "fileCount": 864,
       "categories": {
+        "config": 28,
         "docs": 4,
-        "config": 27,
         "support": 15,
-        "test": 363,
-        "source": 448
+        "test": 366,
+        "source": 451
       }
     }
   ],

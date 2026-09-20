@@ -57,15 +57,15 @@
     }
   },
   "stats": {
-    "files": 857,
+    "files": 864,
     "categories": {
+      "config": 28,
       "docs": 4,
-      "config": 27,
       "support": 15,
-      "test": 363,
-      "source": 448
+      "test": 366,
+      "source": 451
     },
-    "internalImportEdges": 2742,
+    "internalImportEdges": 2752,
     "workspaceDependencies": [
       "client",
       "highlight",
@@ -134,6 +134,13 @@
   },
   "nodes": [
     {
+      "id": "file:packages/server/.chisacode-context/725466058f949b06.json",
+      "type": "config",
+      "path": "packages/server/.chisacode-context/725466058f949b06.json",
+      "lines": 8,
+      "imports": []
+    },
+    {
       "id": "file:packages/server/AGENTS.md",
       "type": "docs",
       "path": "packages/server/AGENTS.md",
@@ -144,7 +151,7 @@
       "id": "file:packages/server/CLAUDE.md",
       "type": "docs",
       "path": "packages/server/CLAUDE.md",
-      "lines": 190,
+      "lines": 191,
       "imports": []
     },
     {
@@ -808,7 +815,7 @@
       "id": "file:packages/server/src/server/agent/agent-manager.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/agent-manager.ts",
-      "lines": 1567,
+      "lines": 1572,
       "imports": [
         "../../terminal/terminal-manager.js",
         "../git-snapshot.js",
@@ -1300,7 +1307,7 @@
       "id": "file:packages/server/src/server/agent/agent-stream-coalescer.test.ts",
       "type": "test",
       "path": "packages/server/src/server/agent/agent-stream-coalescer.test.ts",
-      "lines": 674,
+      "lines": 778,
       "imports": [
         "./agent-sdk-types.js",
         "./agent-stream-coalescer.js",
@@ -1311,7 +1318,7 @@
       "id": "file:packages/server/src/server/agent/agent-stream-coalescer.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/agent-stream-coalescer.ts",
-      "lines": 258,
+      "lines": 279,
       "imports": [
         "./agent-sdk-types.js"
       ]
@@ -3956,7 +3963,7 @@
       "id": "file:packages/server/src/server/agent/providers/mock-load-test-agent.test.ts",
       "type": "test",
       "path": "packages/server/src/server/agent/providers/mock-load-test-agent.test.ts",
-      "lines": 354,
+      "lines": 416,
       "imports": [
         "../../../test-utils/test-logger.js",
         "../agent-manager.js",
@@ -3972,7 +3979,7 @@
       "id": "file:packages/server/src/server/agent/providers/mock-load-test-agent.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/providers/mock-load-test-agent.ts",
-      "lines": 1246,
+      "lines": 1351,
       "imports": [
         "../agent-sdk-types.js",
         "@chisacode/protocol/provider-manifest",
@@ -7593,6 +7600,50 @@
       ]
     },
     {
+      "id": "file:packages/server/src/server/preview/port-scanner-controller.ts",
+      "type": "source",
+      "path": "packages/server/src/server/preview/port-scanner-controller.ts",
+      "lines": 155,
+      "imports": [
+        "./port-scanner.js",
+        "node:fs",
+        "node:os",
+        "node:path"
+      ]
+    },
+    {
+      "id": "file:packages/server/src/server/preview/port-scanner.integration.test.ts",
+      "type": "test",
+      "path": "packages/server/src/server/preview/port-scanner.integration.test.ts",
+      "lines": 53,
+      "imports": [
+        "./port-scanner",
+        "./port-scanner-controller",
+        "node:http",
+        "vitest"
+      ]
+    },
+    {
+      "id": "file:packages/server/src/server/preview/port-scanner.test.ts",
+      "type": "test",
+      "path": "packages/server/src/server/preview/port-scanner.test.ts",
+      "lines": 233,
+      "imports": [
+        "./port-scanner",
+        "./port-scanner-controller",
+        "vitest"
+      ]
+    },
+    {
+      "id": "file:packages/server/src/server/preview/port-scanner.ts",
+      "type": "source",
+      "path": "packages/server/src/server/preview/port-scanner.ts",
+      "lines": 173,
+      "imports": [
+        "node:child_process"
+      ]
+    },
+    {
       "id": "file:packages/server/src/server/private-files.test.ts",
       "type": "test",
       "path": "packages/server/src/server/private-files.test.ts",
@@ -8567,7 +8618,7 @@
       "id": "file:packages/server/src/server/session.ts",
       "type": "source",
       "path": "packages/server/src/server/session.ts",
-      "lines": 2190,
+      "lines": 2244,
       "imports": [
         "../services/github-service.js",
         "../terminal/terminal-manager.js",
@@ -8597,6 +8648,8 @@
         "./loop-service.js",
         "./messages.js",
         "./persistence-hooks.js",
+        "./preview/port-scanner-controller.js",
+        "./preview/port-scanner.js",
         "./push/token-store.js",
         "./schedule/service.js",
         "./script-health-monitor.js",
@@ -9695,7 +9748,7 @@
       "id": "file:packages/server/src/server/websocket-server.ts",
       "type": "source",
       "path": "packages/server/src/server/websocket-server.ts",
-      "lines": 2254,
+      "lines": 2271,
       "imports": [
         "../services/github-service.js",
         "../terminal/terminal-manager.js",
@@ -9714,6 +9767,8 @@
         "./log-metadata.js",
         "./loop-service.js",
         "./messages.js",
+        "./preview/port-scanner-controller.js",
+        "./preview/port-scanner.js",
         "./push/notifications.js",
         "./push/token-store.js",
         "./relay-device-credential-store.js",
@@ -11528,7 +11583,7 @@
       "id": "file:packages/server/src/utils/spawn.test.ts",
       "type": "test",
       "path": "packages/server/src/utils/spawn.test.ts",
-      "lines": 1666,
+      "lines": 1675,
       "imports": [
         "../server/chisacode-env.js",
         "./spawn.js",
@@ -11574,6 +11629,23 @@
       "type": "source",
       "path": "packages/server/src/utils/string-command-shell.ts",
       "lines": 43,
+      "imports": []
+    },
+    {
+      "id": "file:packages/server/src/utils/testable-queue.test.ts",
+      "type": "test",
+      "path": "packages/server/src/utils/testable-queue.test.ts",
+      "lines": 119,
+      "imports": [
+        "../utils/testable-queue",
+        "vitest"
+      ]
+    },
+    {
+      "id": "file:packages/server/src/utils/testable-queue.ts",
+      "type": "source",
+      "path": "packages/server/src/utils/testable-queue.ts",
+      "lines": 130,
       "imports": []
     },
     {
@@ -23095,6 +23167,36 @@
       "specifier": "../utils/atomic-write.js"
     },
     {
+      "source": "file:packages/server/src/server/preview/port-scanner-controller.ts",
+      "target": "file:packages/server/src/server/preview/port-scanner.ts",
+      "type": "imports",
+      "specifier": "./port-scanner.js"
+    },
+    {
+      "source": "file:packages/server/src/server/preview/port-scanner.integration.test.ts",
+      "target": "file:packages/server/src/server/preview/port-scanner.ts",
+      "type": "imports",
+      "specifier": "./port-scanner"
+    },
+    {
+      "source": "file:packages/server/src/server/preview/port-scanner.integration.test.ts",
+      "target": "file:packages/server/src/server/preview/port-scanner-controller.ts",
+      "type": "imports",
+      "specifier": "./port-scanner-controller"
+    },
+    {
+      "source": "file:packages/server/src/server/preview/port-scanner.test.ts",
+      "target": "file:packages/server/src/server/preview/port-scanner.ts",
+      "type": "imports",
+      "specifier": "./port-scanner"
+    },
+    {
+      "source": "file:packages/server/src/server/preview/port-scanner.test.ts",
+      "target": "file:packages/server/src/server/preview/port-scanner-controller.ts",
+      "type": "imports",
+      "specifier": "./port-scanner-controller"
+    },
+    {
       "source": "file:packages/server/src/server/private-files.test.ts",
       "target": "file:packages/server/src/server/private-files.ts",
       "type": "imports",
@@ -25010,6 +25112,18 @@
     },
     {
       "source": "file:packages/server/src/server/session.ts",
+      "target": "file:packages/server/src/server/preview/port-scanner-controller.ts",
+      "type": "imports",
+      "specifier": "./preview/port-scanner-controller.js"
+    },
+    {
+      "source": "file:packages/server/src/server/session.ts",
+      "target": "file:packages/server/src/server/preview/port-scanner.ts",
+      "type": "imports",
+      "specifier": "./preview/port-scanner.js"
+    },
+    {
+      "source": "file:packages/server/src/server/session.ts",
       "target": "file:packages/server/src/server/push/token-store.ts",
       "type": "imports",
       "specifier": "./push/token-store.js"
@@ -26639,6 +26753,18 @@
       "target": "file:packages/server/src/server/messages.ts",
       "type": "imports",
       "specifier": "./messages.js"
+    },
+    {
+      "source": "file:packages/server/src/server/websocket-server.ts",
+      "target": "file:packages/server/src/server/preview/port-scanner-controller.ts",
+      "type": "imports",
+      "specifier": "./preview/port-scanner-controller.js"
+    },
+    {
+      "source": "file:packages/server/src/server/websocket-server.ts",
+      "target": "file:packages/server/src/server/preview/port-scanner.ts",
+      "type": "imports",
+      "specifier": "./preview/port-scanner.js"
     },
     {
       "source": "file:packages/server/src/server/websocket-server.ts",
@@ -29147,6 +29273,12 @@
       "target": "file:packages/server/src/utils/string-command-shell.ts",
       "type": "imports",
       "specifier": "./string-command-shell.js"
+    },
+    {
+      "source": "file:packages/server/src/utils/testable-queue.test.ts",
+      "target": "file:packages/server/src/utils/testable-queue.ts",
+      "type": "imports",
+      "specifier": "../utils/testable-queue"
     },
     {
       "source": "file:packages/server/src/utils/tool-call-parsers.test.ts",

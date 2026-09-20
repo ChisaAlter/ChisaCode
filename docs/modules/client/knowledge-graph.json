@@ -305,7 +305,7 @@
       "id": "file:packages/client/src/daemon-client-connection-controller.ts",
       "type": "source",
       "path": "packages/client/src/daemon-client-connection-controller.ts",
-      "lines": 824,
+      "lines": 827,
       "imports": [
         "./daemon-client-transport.js",
         "./relay-device-credentials.js",
@@ -340,7 +340,7 @@
       "id": "file:packages/client/src/daemon-client-inbound-controller.ts",
       "type": "source",
       "path": "packages/client/src/daemon-client-inbound-controller.ts",
-      "lines": 393,
+      "lines": 399,
       "imports": [
         "./daemon-client-connection-controller.js",
         "./daemon-client-file-transfer.js",
@@ -583,7 +583,7 @@
       "id": "file:packages/client/src/daemon-client.ts",
       "type": "source",
       "path": "packages/client/src/daemon-client.ts",
-      "lines": 1838,
+      "lines": 1854,
       "imports": [
         "./daemon-client-agent-extension-commands.js",
         "./daemon-client-agent-interaction.js",
