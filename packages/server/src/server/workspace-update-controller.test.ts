@@ -103,4 +103,27 @@ describe("WorkspaceUpdateController", () => {
       workspace: { activityAt: "2026-07-14T00:00:01.000Z" },
     });
   });
+
+  test("emitUpdateForCwd without a subscription performs no registry or descriptor work", async () => {
+    const emitted: unknown[] = [];
+    const listWorkspaceRecords = vi.fn(async () => []);
+    const buildDescriptorMap = vi.fn(async () => new Map<string, WorkspaceDescriptorPayload>());
+    const controller = new WorkspaceUpdateController({
+      sessionLogger: asSessionLogger({ error: vi.fn() }),
+      emit: (message) => emitted.push(message),
+      buildDescriptorMap,
+      listWorkspaceRecords,
+      resolveWorkspaceIdForCwd: (cwd) => cwd,
+      matchesFilter: () => true,
+      shouldSkipGitState: () => false,
+      recordGitState: vi.fn(),
+      reconcileWorkspaceRecords: async () => new Set(),
+    });
+
+    await controller.emitUpdateForCwd("/tmp/project/ws-1");
+
+    expect(listWorkspaceRecords).not.toHaveBeenCalled();
+    expect(buildDescriptorMap).not.toHaveBeenCalled();
+    expect(emitted).toEqual([]);
+  });
 });

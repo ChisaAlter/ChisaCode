@@ -32,9 +32,28 @@ describe("provider catalog", () => {
       expect(entry.title).not.toBe("");
       expect(entry.description).not.toBe("");
       expect(entry.installLink).toMatch(/^https:\/\//);
-      expect(entry.command.length).toBeGreaterThan(0);
-      expect(entry.command[0]).not.toBe("");
+      if (entry.command) {
+        expect(entry.command.length).toBeGreaterThan(0);
+        expect(entry.command[0]).not.toBe("");
+      }
     }
+  });
+
+  it("keeps dsh command-less so the managed --config launch is never replaced", () => {
+    // The built-in dsh client spawns `dsh-acp-demo --config <managed cordis.yml>`
+    // itself; a catalog command would become a replace-mode override that
+    // bypasses the managed composition (docs/dsh-upstream-contract.md §2).
+    expect(findProvider("dsh").command).toBeUndefined();
+    expect(buildAcpProviderConfigPatch(findProvider("dsh"))).toEqual({
+      providers: {
+        dsh: {
+          enabled: true,
+          label: "DeepSeek Harness",
+          description: "DeepSeek's official coding-agent harness via ACP (automation transport)",
+          env: {},
+        },
+      },
+    });
   });
 
   it("maps a catalog entry to a supported daemon provider config patch", () => {

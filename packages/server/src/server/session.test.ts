@@ -2454,7 +2454,10 @@ describe("session checkout status handling", () => {
     });
 
     expect(workspaceGitService.getSnapshot).toHaveBeenCalledTimes(1);
-    expect(workspaceGitService.getSnapshot).toHaveBeenCalledWith("/tmp/service-worktree");
+    expect(workspaceGitService.getSnapshot).toHaveBeenCalledWith("/tmp/service-worktree", {
+      includeGitHub: false,
+      reason: "checkout-status",
+    });
     expect(checkoutGitMocks.getCheckoutStatus).not.toHaveBeenCalled();
     expect(messages).toContainEqual({
       type: "checkout_status_response",
@@ -2478,7 +2481,7 @@ describe("session checkout status handling", () => {
     });
   });
 
-  test("returns fresh service data on the first checkout status read for a cwd", async () => {
+  test("falls back to fresh service data when the snapshot cache misses", async () => {
     const messages: unknown[] = [];
     const workspaceGitService = {
       getSnapshot: vi.fn().mockResolvedValue(
@@ -2502,7 +2505,7 @@ describe("session checkout status handling", () => {
       requestId: "request-cold-status",
     });
 
-    expect(workspaceGitService.peekSnapshot).not.toHaveBeenCalled();
+    expect(workspaceGitService.peekSnapshot).toHaveBeenCalledWith("/tmp/cold-worktree");
     expect(workspaceGitService.getSnapshot).toHaveBeenCalledTimes(1);
     expect(messages).toContainEqual({
       type: "checkout_status_response",
@@ -2514,6 +2517,45 @@ describe("session checkout status handling", () => {
         aheadBehind: { ahead: 4, behind: 0 },
         error: null,
         requestId: "request-cold-status",
+      }),
+    });
+  });
+
+  test("serves checkout status from the warm snapshot cache without a fresh fetch", async () => {
+    const messages: unknown[] = [];
+    const workspaceGitService = {
+      getSnapshot: vi.fn(),
+      peekSnapshot: vi.fn(() =>
+        createWorkspaceGitSnapshot("/tmp/warm-worktree", {
+          git: {
+            currentBranch: "cached-branch",
+            isDirty: true,
+            aheadBehind: { ahead: 1, behind: 0 },
+            aheadOfOrigin: 1,
+            behindOfOrigin: 0,
+          },
+        }),
+      ),
+    };
+    const session = createSessionForTest({ workspaceGitService, messages });
+
+    await session.handleMessage({
+      type: "checkout_status_request",
+      cwd: "/tmp/warm-worktree",
+      requestId: "request-warm-status",
+    });
+
+    expect(workspaceGitService.peekSnapshot).toHaveBeenCalledWith("/tmp/warm-worktree");
+    expect(workspaceGitService.getSnapshot).not.toHaveBeenCalled();
+    expect(messages).toContainEqual({
+      type: "checkout_status_response",
+      payload: expect.objectContaining({
+        cwd: "/tmp/warm-worktree",
+        isGit: true,
+        currentBranch: "cached-branch",
+        isDirty: true,
+        error: null,
+        requestId: "request-warm-status",
       }),
     });
   });

@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useToast } from "@/contexts/toast-context";
 import { confirmDialog } from "@/utils/confirm-dialog";
@@ -30,13 +30,19 @@ interface UseSidebarV2BulkActionsInput {
 
 /**
  * Bulk multi-select actions for SidebarV2, matching T3's multi-select menu.
+ * Callbacks read the latest input through a ref so their identity stays
+ * stable across renders — a prerequisite for the memoized sidebar rows.
  */
 export function useSidebarV2BulkActions(input: UseSidebarV2BulkActionsInput) {
   const { t } = useTranslation();
   const toast = useToast();
 
+  const inputRef = useRef(input);
+  inputRef.current = input;
+
   const handleBulkSettle = useCallback(() => {
-    const selected = resolveSelectedThreads(input.selectedThreadKeys, input.threadByKey);
+    const current = inputRef.current;
+    const selected = resolveSelectedThreads(current.selectedThreadKeys, current.threadByKey);
     const coParkingKeys = new Set(
       selected.map((thread) => sidebarV2ThreadKey(thread.serverId, thread.id)),
     );
@@ -44,19 +50,20 @@ export function useSidebarV2BulkActions(input: UseSidebarV2BulkActionsInput) {
       if (thread.settledOverride === "settled") {
         continue;
       }
-      input.handleSettle(thread, { coParkingKeys });
+      current.handleSettle(thread, { coParkingKeys });
     }
-    input.clearSelection();
-  }, [input]);
+    current.clearSelection();
+  }, []);
 
   const handleBulkSnooze = useCallback(
     (preset: SnoozePreset) => {
-      const selected = resolveSelectedThreads(input.selectedThreadKeys, input.threadByKey);
+      const current = inputRef.current;
+      const selected = resolveSelectedThreads(current.selectedThreadKeys, current.threadByKey);
       const coParkingKeys = new Set(
         selected.map((thread) => sidebarV2ThreadKey(thread.serverId, thread.id)),
       );
       for (const thread of selected) {
-        input.handleSnooze(thread, preset.snoozedUntil, {
+        current.handleSnooze(thread, preset.snoozedUntil, {
           coParkingKeys,
           skipUndoToast: true,
           whenLabel: preset.whenLabel,
@@ -66,29 +73,32 @@ export function useSidebarV2BulkActions(input: UseSidebarV2BulkActionsInput) {
         variant: "success",
         durationMs: 5_000,
       });
-      input.clearSelection();
+      current.clearSelection();
     },
-    [input, t, toast],
+    [t, toast],
   );
 
   const handleBulkMarkUnread = useCallback(() => {
-    const selected = resolveSelectedThreads(input.selectedThreadKeys, input.threadByKey);
+    const current = inputRef.current;
+    const selected = resolveSelectedThreads(current.selectedThreadKeys, current.threadByKey);
     for (const thread of selected) {
-      input.handleMarkUnread(thread);
+      current.handleMarkUnread(thread);
     }
-    input.clearSelection();
-  }, [input]);
+    current.clearSelection();
+  }, []);
 
   const handleBulkRegenerateTitle = useCallback(() => {
-    const selected = resolveSelectedThreads(input.selectedThreadKeys, input.threadByKey);
+    const current = inputRef.current;
+    const selected = resolveSelectedThreads(current.selectedThreadKeys, current.threadByKey);
     for (const thread of selected) {
-      input.handleRegenerateTitle(thread);
+      current.handleRegenerateTitle(thread);
     }
-    input.clearSelection();
-  }, [input]);
+    current.clearSelection();
+  }, []);
 
   const handleBulkDelete = useCallback(() => {
-    const selected = resolveSelectedThreads(input.selectedThreadKeys, input.threadByKey);
+    const current = inputRef.current;
+    const selected = resolveSelectedThreads(current.selectedThreadKeys, current.threadByKey);
     if (selected.length === 0) {
       return;
     }
@@ -103,20 +113,32 @@ export function useSidebarV2BulkActions(input: UseSidebarV2BulkActionsInput) {
       if (!confirmed) {
         return;
       }
+      const live = inputRef.current;
       for (const thread of selected) {
-        input.handleDelete(thread, { skipConfirm: true });
+        live.handleDelete(thread, { skipConfirm: true });
       }
-      input.clearSelection();
+      live.clearSelection();
     })();
-  }, [input, t]);
+  }, [t]);
 
-  const bulkMenuCapabilities = useMemo(() => {
+  const computedCapabilities = useMemo(() => {
     const selected = resolveSelectedThreads(input.selectedThreadKeys, input.threadByKey);
     return {
       canSnoozeAll: canSnoozeAllSelected(selected, input.snoozeNow, canSnooze),
       canRegenerateTitle: selected.length > 0,
     };
   }, [input.selectedThreadKeys, input.snoozeNow, input.threadByKey]);
+
+  // Keep the capabilities object identity stable while its values are
+  // unchanged so it does not defeat row memoization on unrelated updates.
+  const capabilitiesRef = useRef(computedCapabilities);
+  if (
+    capabilitiesRef.current.canSnoozeAll !== computedCapabilities.canSnoozeAll ||
+    capabilitiesRef.current.canRegenerateTitle !== computedCapabilities.canRegenerateTitle
+  ) {
+    capabilitiesRef.current = computedCapabilities;
+  }
+  const bulkMenuCapabilities = capabilitiesRef.current;
 
   const bulkMenuCallbacks = useMemo(
     () => ({

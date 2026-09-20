@@ -429,6 +429,10 @@ export class EncryptedChannel {
       })();
 
       if (ciphertext) {
+        // `plaintext` may be a string even when the peer sent binary: decrypt
+        // reconstructs the frame type via a UTF-8 heuristic (see the frame-type
+        // contract note in crypto.ts decrypt). Consumers must sniff content,
+        // never trust string-vs-ArrayBuffer.
         const { plaintext, seq, salt } = decrypt(this.sharedKey, ciphertext);
         this.enforceReplayProtection(seq, salt);
         this.events.onmessage?.(plaintext);

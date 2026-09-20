@@ -28,6 +28,11 @@ const IGNORE_DIRS = new Set([
   ".expo",
   ".next",
   ".turbo",
+  // Wrangler writes throwaway bundles under packages/relay/.wrangler/tmp when
+  // the relay dev server runs. They are gitignored, so graphs generated on a
+  // machine that has them diverge from CI's clean-checkout regeneration and
+  // trip the knowledge-graph-drift gate.
+  ".wrangler",
   "android",
   "build",
   "coverage",
@@ -408,7 +413,8 @@ function analyzeModule(module, packageNameToModuleId) {
 
   return {
     version: "1.0.0",
-    generatedAt: new Date().toISOString(),
+    // No wall-clock timestamp: output must be byte-identical across runs so
+    // the CI drift gate can diff regenerated graphs against the committed ones.
     generator: "scripts/generate-modular-knowledge-graphs.mjs",
     module: {
       id: module.id,
@@ -455,7 +461,6 @@ function buildProjectGraph(modules, moduleGraphs) {
   const rootPackage = readJson(path.join(ROOT, "package.json"));
   return {
     version: "1.0.0",
-    generatedAt: new Date().toISOString(),
     generator: "scripts/generate-modular-knowledge-graphs.mjs",
     project: {
       name: rootPackage.name,
@@ -502,7 +507,6 @@ function main() {
   writeJson(path.join(UNDERSTAND_ROOT, "knowledge-graph.json"), projectGraph);
   writeJson(path.join(UNDERSTAND_ROOT, "modular-index.json"), {
     version: "1.0.0",
-    generatedAt: projectGraph.generatedAt,
     projectGraph: "docs/knowledge-graphs/project-knowledge-graph.json",
     moduleGraphs: projectGraph.modules.map((module) => ({
       id: module.id,

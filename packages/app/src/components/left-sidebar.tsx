@@ -105,6 +105,7 @@ import { buildSidebarLiveAgents, mergeSidebarSessionSources } from "@/utils/side
 import { useSidebarOrderStore, type SidebarViewMode } from "@/stores/sidebar-order-store";
 import { useSidebarV2Store } from "@/sidebar-v2/store";
 import { SidebarAgentListSkeleton } from "./sidebar-agent-list-skeleton";
+import { SidebarCalloutSlot } from "./sidebar-callout-slot";
 import { SidebarSessionList } from "./sidebar-session-list";
 
 const DESKTOP_SIDEBAR_ANIMATION_CONFIG = {
@@ -1380,14 +1381,14 @@ function MobileSidebar({
     () => [staticStyles.backdrop, backdropAnimatedStyle],
     [backdropAnimatedStyle],
   );
-  // Soft .drawer: --nav surface, not workspace shell wash.
+  // Soft .drawer: --nav surface, not workspace shell wash. The theme surface is
+  // painted by `styles.mobileSidebarBackground` on a plain child View below:
+  // the Animated.View style array must stay free of Unistyles registered
+  // styles, or Reanimated's CSSManager crashes on mount with "an empty object
+  // is not a valid style value" (the 390px mobile-web boot crash; same root
+  // cause as the explorer-sidebar fix — see reanimated-unistyles-boundary.test.ts).
   const mobileSidebarStyle = useMemo(
-    () => [
-      staticStyles.mobileSidebar,
-      styles.mobileSidebarSurface,
-      mobileSidebarInsetStyle,
-      sidebarAnimatedStyle,
-    ],
+    () => [staticStyles.mobileSidebar, mobileSidebarInsetStyle, sidebarAnimatedStyle],
     [mobileSidebarInsetStyle, sidebarAnimatedStyle],
   );
   return (
@@ -1404,6 +1405,7 @@ function MobileSidebar({
 
       <GestureDetector gesture={closeGesture} touchAction="pan-y">
         <Animated.View style={mobileSidebarStyle} pointerEvents="auto">
+          <View style={styles.mobileSidebarBackground} pointerEvents="none" />
           <GlassSurface variant="chrome" style={styles.sidebarContent}>
             <SidebarTopActions
               onCloseSidebar={closeToAgent}
@@ -1445,6 +1447,11 @@ function MobileSidebar({
                 searchQuery={searchQuery}
               />
             )}
+
+            {/* Callout viewport (app updates, worktree setup, Rosetta). Removed by
+                accident in the June 2026 desktop layout rework; the callout sources
+                keep publishing into the context, so without this slot nothing renders. */}
+            <SidebarCalloutSlot />
 
             <SidebarFooter
               activeServerId={activeServerId}
@@ -1617,6 +1624,10 @@ function DesktopSidebar({
             searchQuery={searchQuery}
           />
         )}
+
+        {/* Callout viewport (app updates, worktree setup, Rosetta) — same
+            restoration as the mobile sidebar above. */}
+        <SidebarCalloutSlot />
 
         <SidebarFooter
           activeServerId={activeServerId}
@@ -2024,8 +2035,15 @@ const styles = StyleSheet.create((theme) => ({
   hostStatusDotError: {
     backgroundColor: theme.colors.palette.red[500],
   },
-  // Soft .drawer: --nav surface for the animated mobile shell.
-  mobileSidebarSurface: {
+  // Soft .drawer: --nav surface for the animated mobile shell. Painted on a
+  // plain absolute-fill child View — never on the Animated.View itself (see
+  // the Reanimated × Unistyles crash note at mobileSidebarStyle).
+  mobileSidebarBackground: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     backgroundColor: theme.colors.surfaceSidebar,
   },
   // Soft .host .lbl: 12.5px.

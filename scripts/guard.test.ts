@@ -151,4 +151,27 @@ describe("architecture guards", () => {
     const newViolations = violations.filter((v) => !KNOWN_VIOLATIONS.has(v));
     expect(newViolations).toEqual([]);
   });
+
+  test("COMPAT comments must carry a concrete version, not the v0.1.X placeholder", () => {
+    // CLAUDE.md documents the COMPAT comment *template* with a literal
+    // "v0.1.X"; source files must replace the placeholder with the real
+    // version the shim shipped in, otherwise the cleanup grep
+    // (`rg "COMPAT\("`) produces entries nobody can act on. This file lives
+    // in scripts/, outside the scanned packages/*/src roots, so the literal
+    // below cannot trip its own check.
+    const placeholder = "v0.1.X";
+    const packagesDir = path.join(ROOT, "packages");
+    const violations: string[] = [];
+    for (const pkg of readdirSync(packagesDir, { withFileTypes: true })) {
+      if (!pkg.isDirectory()) continue;
+      const srcDir = path.join(packagesDir, pkg.name, "src");
+      for (const f of collectSourceFiles(srcDir)) {
+        const content = readFileSync(f, "utf8");
+        if (content.includes(placeholder)) {
+          violations.push(relToRoot(f));
+        }
+      }
+    }
+    expect(violations).toEqual([]);
+  });
 });

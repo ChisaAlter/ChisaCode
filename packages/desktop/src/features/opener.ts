@@ -24,7 +24,14 @@ export function isAllowedExternalUrl(value: unknown): value is string {
 }
 
 export function isAllowedLocalPath(value: unknown): value is string {
-  return typeof value === "string" && !value.includes("\0") && path.isAbsolute(value);
+  // Accept both path flavors regardless of host platform: `path.isAbsolute`
+  // is platform-bound, and a foreign-flavor path fails harmlessly later in
+  // `shell.openPath` while staying valid input (absolute, no null bytes).
+  return (
+    typeof value === "string" &&
+    !value.includes("\0") &&
+    (path.win32.isAbsolute(value) || path.posix.isAbsolute(value))
+  );
 }
 
 export function registerOpenerHandlers(): void {

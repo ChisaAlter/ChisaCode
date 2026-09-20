@@ -1168,7 +1168,7 @@ function SidebarHostItem({ serverId, label, isSelected, isLocal, onSelect }: Sid
       style={isSelected ? selectedHostSidebarItemStyle : hostSidebarItemStyle}
     >
       {isLocal ? (
-        <View style={sidebarStyles.localDot} />
+        <View style={sidebarStyles.localDot} testID="settings-host-local-marker" />
       ) : (
         <ThemedIconHost
           Icon={Server}

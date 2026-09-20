@@ -353,6 +353,19 @@ export function decrypt(sharedKey: SharedKey, data: ArrayBuffer): DecryptResult 
   }
 
   const plaintextBuffer = toArrayBuffer(opened);
+  // IMPLICIT FRAME-TYPE CONTRACT (do not change without auditing all consumers):
+  // the wire format carries no string-vs-binary marker, so the sender's frame
+  // type is reconstructed heuristically — plaintext that decodes as valid
+  // UTF-8 is delivered as a string, anything else as an ArrayBuffer. Binary
+  // protocol frames whose bytes happen to be valid UTF-8 (all opcodes
+  // 0x01-0x05/0x10-0x12 are valid UTF-8 lead bytes) are therefore delivered
+  // as strings. This is safe only because (a) valid UTF-8 round-trips
+  // byte-for-byte through decode -> encode, and (b) every consumer re-detects
+  // frame kind by content, not by delivered type: the daemon re-encodes
+  // strings to UTF-8 bytes and opcode-sniffs (websocket-server.ts
+  // bufferFromWsData/maybeHandleBinaryFrame), and the client does the same
+  // (daemon-client-inbound-controller.ts handle + protocol asUint8Array).
+  // Covered by e2ee-frame-type.test.ts.
   let plaintext: string | ArrayBuffer;
   try {
     plaintext = new TextDecoder("utf-8", { fatal: true }).decode(plaintextBuffer);

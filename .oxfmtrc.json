@@ -18,6 +18,8 @@
     ".omo/**",
     ".omc/**",
     "prototypes/**",
-    "**/terminal-emulator-webview-html.ts"
+    "**/terminal-emulator-webview-html.ts",
+    "docs/knowledge-graphs/**",
+    "docs/modules/**/knowledge-graph.json"
   ]
 }

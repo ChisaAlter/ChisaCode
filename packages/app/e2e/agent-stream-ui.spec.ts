@@ -1,3 +1,4 @@
+import { expect } from "@playwright/test";
 import { test } from "./fixtures";
 import {
   awaitAssistantMessage,
@@ -50,15 +51,22 @@ test.describe("Agent stream UI", () => {
     const workspace = await withWorkspace({ prefix: "stream-first-app-turn-timer-" });
     await workspace.navigateTo();
     await clickNewChat(page);
-    await page.getByText("Model defaults are still loading").waitFor({
-      state: "hidden",
-      timeout: 30_000,
-    });
     const prompt = "Stream briefly for first app-created turn timer test.";
     const composer = composerInput(page);
     await composer.fill(prompt);
-    await page.getByTestId("composer-send-button").filter({ visible: true }).first().click();
-    await page.getByText(prompt, { exact: true }).first().waitFor({ state: "visible" });
+    // The composer intentionally keeps the model empty until the provider
+    // snapshot for this fresh workspace scope resolves (~1-2s), and a send in
+    // that window is rejected with "Model defaults are still loading". There is
+    // no locale-stable positive readiness signal, so retry the send until the
+    // *sent user message* renders. The success check must be the user-message
+    // element — matching the raw prompt text also hits the still-filled
+    // composer draft, which reports success for a rejected send.
+    const sendButton = page.getByTestId("composer-send-button").filter({ visible: true }).first();
+    const sentMessage = page.getByTestId("user-message").filter({ hasText: prompt }).first();
+    await expect(async () => {
+      await sendButton.click();
+      await sentMessage.waitFor({ state: "visible", timeout: 5_000 });
+    }).toPass({ intervals: [1_000, 2_000, 4_000], timeout: 30_000 });
     await awaitAssistantMessage(page);
     await expectInlineWorkingIndicator(page);
     await page.getByTestId("turn-working-elapsed").waitFor({ state: "visible", timeout: 5_000 });

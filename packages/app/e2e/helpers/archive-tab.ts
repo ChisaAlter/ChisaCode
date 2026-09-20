@@ -69,10 +69,12 @@ export async function createIdleAgent(
   client: IdleAgentSeedClient,
   input: { cwd: string; title: string },
 ): Promise<ArchiveTabAgent> {
+  // The shared e2e daemon only ships the mock provider (CI has no real
+  // providers installed); no initial prompt is sent so the agent idles at once.
   const created = await client.createAgent({
-    provider: "opencode",
-    model: "opencode/gpt-5-nano",
-    modeId: "bypassPermissions",
+    provider: "mock",
+    model: "ten-second-stream",
+    modeId: "load-test",
     cwd: input.cwd,
     title: input.title,
   });
@@ -191,15 +193,6 @@ export async function expectWorkspaceArchiveOutcome(
   await expectWorkspaceTabVisible(page, input.survivingAgentId);
 }
 
-export async function closeWorkspaceAgentTab(page: Page, agentId: string): Promise<void> {
-  const closeButton = page.getByTestId(`workspace-agent-close-${agentId}`).filter({
-    visible: true,
-  });
-  await expect(closeButton.first()).toBeVisible({ timeout: 30_000 });
-  await closeButton.first().click();
-  await expectWorkspaceTabHidden(page, agentId);
-}
-
 export async function expectArchivedAgentFocused(page: Page, agentId: string): Promise<void> {
   await expectWorkspaceTabVisible(page, agentId);
   await expect(
@@ -220,15 +213,10 @@ export async function reloadWorkspace(page: Page, workspaceId: string): Promise<
 
 export async function openSessions(page: Page): Promise<void> {
   const serverId = getServerId();
-  const currentSessionsButton = page.getByTestId("sidebar-all-sessions");
-  const legacySessionsButton = page.getByTestId("sidebar-sessions");
-  if (await currentSessionsButton.isVisible().catch(() => false)) {
-    await currentSessionsButton.click();
-  } else if (await legacySessionsButton.isVisible().catch(() => false)) {
-    await legacySessionsButton.click();
-  } else {
-    await navigateToRoute(page, buildHostSessionsRoute(serverId));
-  }
+  // Navigate by route directly. The sidebar no longer exposes a dedicated
+  // Sessions button on desktop ("sidebar-sessions" is now a list container,
+  // not a navigation control), so clicking testIDs silently did nothing.
+  await navigateToRoute(page, buildHostSessionsRoute(serverId));
   await expect(page).toHaveURL(new RegExp(`${buildHostSessionsRoute(getServerId())}$`), {
     timeout: 30_000,
   });

@@ -665,6 +665,17 @@ function createRelayTransportAdapter(
   return relayTransport;
 }
 
+/**
+ * Wraps an open E2EE channel as a socket the WebSocket server can attach.
+ *
+ * Frame-type caveat: messages emitted from this socket may arrive as a string
+ * even when the client sent a binary protocol frame — the relay E2EE codec
+ * reconstructs string-vs-binary via a UTF-8 heuristic (see the frame-type
+ * contract note in @chisacode/relay crypto.ts decrypt). This is safe because
+ * the WebSocket server re-encodes strings to UTF-8 bytes (lossless for valid
+ * UTF-8) and detects binary frames by opcode sniffing, never by frame type
+ * (websocket-server.ts bufferFromWsData + maybeHandleBinaryFrame).
+ */
 function createEncryptedSocket(channel: EncryptedChannel, emitter: EventEmitter): RelaySocketLike {
   let readyState = 1;
 

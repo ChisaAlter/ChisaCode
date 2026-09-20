@@ -715,8 +715,12 @@ export class AgentDirectoryHandler implements DisposableHandler {
   async publishAgentUpdate(agent: ManagedAgent): Promise<void> {
     try {
       const subscription = this.agentUpdatesSubscription;
-      const payload = await this.buildAgentPayload(agent);
+      // Hot path: agent_state events land here for every client session.
+      // Snapshot payload projection is only needed when this session actually
+      // subscribed to agent updates; the workspace update below only needs
+      // the agent's cwd, which is available on the managed agent directly.
       if (subscription) {
+        const payload = await this.buildAgentPayload(agent);
         const project = await this.buildProjectPlacementForCwd(payload.cwd, {
           refreshGit: false,
           fallback: true,
@@ -738,7 +742,7 @@ export class AgentDirectoryHandler implements DisposableHandler {
         );
       }
 
-      await this.context.emitWorkspaceUpdateForCwd(payload.cwd);
+      await this.context.emitWorkspaceUpdateForCwd(agent.cwd);
     } catch (error) {
       this.context.sessionLogger.error({ err: error }, "Failed to emit agent update");
     }

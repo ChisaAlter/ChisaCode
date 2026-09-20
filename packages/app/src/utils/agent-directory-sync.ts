@@ -1,4 +1,5 @@
 import type { FetchAgentsEntry } from "@chisacode/client/internal/daemon-client";
+import { useCreateFlowStore } from "@/stores/create-flow-store";
 import { type Agent, useSessionStore } from "@/stores/session-store";
 import { derivePendingPermissionKey, normalizeAgentSnapshot } from "@/utils/agent-snapshots";
 import { resolveProjectPlacement } from "@/utils/project-placement";
@@ -48,15 +49,25 @@ export function buildAgentDirectoryState(input: {
 }
 
 /**
- * Merges a just-created or optimistic local agent into a fetched directory map so
- * a concurrent directory refresh cannot wipe rows that the UI already knows about.
- * @param input Fetched agents plus local agents that must survive the replace
- * @returns Directory map with newer local agents preserved
+ * Merges just-created or optimistic local agents into a fetched directory map so
+ * a concurrent directory refresh cannot wipe rows that the UI already knows about,
+ * while still letting the fetch drop agents the daemon no longer reports.
+ *
+ * A local agent missing from the fetch survives only when it is still protected:
+ * either an in-flight optimistic create tracks it, or its local timestamps are
+ * newer than the moment the fetch started (the fetch snapshot cannot know about
+ * it yet). Everything else missing from the fetch is authoritatively stale —
+ * archived or deleted on the daemon — and is dropped.
+ * @param input Fetched agents, local agents, protected optimistic ids, and the fetch start time
+ * @returns Directory map with protected/newer local agents preserved
  */
 export function mergeLocalAgentsIntoFetchedDirectory(input: {
   fetchedAgents: Map<string, Agent>;
   localAgents: Iterable<Agent>;
+  protectedAgentIds?: ReadonlySet<string>;
+  fetchStartedAt?: Date | null;
 }): Map<string, Agent> {
+  const fetchStartedAtMs = input.fetchStartedAt ? input.fetchStartedAt.getTime() : null;
   let next: Map<string, Agent> | null = null;
   for (const local of input.localAgents) {
     if (local.archivedAt) {
@@ -64,6 +75,17 @@ export function mergeLocalAgentsIntoFetchedDirectory(input: {
     }
     const fetched = input.fetchedAgents.get(local.id);
     if (!fetched) {
+      const isProtectedOptimistic = input.protectedAgentIds?.has(local.id) ?? false;
+      // When the fetch start time is unknown, keep the conservative legacy
+      // behavior of preserving the row rather than risking a vanishing
+      // just-created agent.
+      const isNewerThanFetch =
+        fetchStartedAtMs === null ||
+        local.createdAt.getTime() > fetchStartedAtMs ||
+        local.updatedAt.getTime() > fetchStartedAtMs;
+      if (!isProtectedOptimistic && !isNewerThanFetch) {
+        continue;
+      }
       next ??= new Map(input.fetchedAgents);
       next.set(local.id, local);
       continue;
@@ -82,13 +104,32 @@ export function mergeLocalAgentsIntoFetchedDirectory(input: {
 }
 
 /**
+ * Collects agent ids with an in-flight optimistic create for a server so a
+ * concurrent directory replace cannot wipe their sidebar rows.
+ * @param serverId The server whose pending optimistic creates to collect
+ * @returns Set of agent ids that must survive a directory replace
+ */
+function collectPendingOptimisticAgentIds(serverId: string): ReadonlySet<string> {
+  const pendingIds = new Set<string>();
+  for (const pending of Object.values(useCreateFlowStore.getState().pendingByDraftId)) {
+    if (pending.serverId === serverId && pending.agentId && pending.lifecycle !== "abandoned") {
+      pendingIds.add(pending.agentId);
+    }
+  }
+  return pendingIds;
+}
+
+/**
  * Replaces the session-store agent directory for a server with fetched entries
- * @param input Server id and daemon fetch results for that server
+ * @param input Server id, daemon fetch results, and the time the fetch started
+ * (used to protect local rows the fetch snapshot cannot know about; omit only
+ * when unknown, which conservatively preserves local-only rows)
  * @returns The agents map written into the session store
  */
 export function replaceFetchedAgentDirectory(input: {
   serverId: string;
   entries: FetchAgentsEntry[];
+  fetchStartedAt?: Date | null;
 }): { agents: Map<string, Agent> } {
   const { agents: fetchedAgents, pendingPermissions } = buildAgentDirectoryState(input);
   const store = useSessionStore.getState();
@@ -97,6 +138,8 @@ export function replaceFetchedAgentDirectory(input: {
     ? mergeLocalAgentsIntoFetchedDirectory({
         fetchedAgents,
         localAgents: previousAgents.values(),
+        protectedAgentIds: collectPendingOptimisticAgentIds(input.serverId),
+        fetchStartedAt: input.fetchStartedAt ?? null,
       })
     : fetchedAgents;
 

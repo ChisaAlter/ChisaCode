@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Pressable,
   Text,
@@ -129,7 +129,7 @@ function resolveStatusSlotIconStatus(
   return null;
 }
 
-export function SidebarV2Row({
+function SidebarV2RowComponent({
   thread,
   variant,
   variantAction,
@@ -502,6 +502,13 @@ export function SidebarV2Row({
     </ContextMenu>
   );
 }
+
+/**
+ * Memoized sidebar row. Thread objects, row handlers, and bulk-menu callbacks
+ * all keep stable identities upstream (see SidebarV2), so the default shallow
+ * props comparison skips re-rendering rows untouched by an update.
+ */
+export const SidebarV2Row = memo(SidebarV2RowComponent);
 
 /** Capabilities and callbacks derived from props for the row's context menu. */
 function useRowMenu(input: {

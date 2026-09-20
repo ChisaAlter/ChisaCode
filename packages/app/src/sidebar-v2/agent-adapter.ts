@@ -236,6 +236,34 @@ export function isAgentInMotion(status: string): boolean {
   return IN_MOTION_STATUSES.has(status);
 }
 
+interface SidebarThreadCacheEntry {
+  workspace: SidebarV2WorkspaceHint | null;
+  thread: SidebarV2Thread;
+}
+
+/**
+ * Creates an identity cache for sidebar thread view models. Aggregated agent
+ * wrappers keep their identity across unrelated updates (see
+ * createAggregatedAgentCache), so reusing the derived thread object lets
+ * memoized rows skip re-rendering when a different agent changes.
+ * @returns A function mirroring agentToSidebarThread with identity reuse
+ */
+export function createSidebarThreadCache(): (
+  agent: AggregatedAgent,
+  workspace: SidebarV2WorkspaceHint | null,
+) => SidebarV2Thread {
+  const cache = new WeakMap<AggregatedAgent, SidebarThreadCacheEntry>();
+  return (agent, workspace) => {
+    const cached = cache.get(agent);
+    if (cached && cached.workspace === workspace) {
+      return cached.thread;
+    }
+    const thread = agentToSidebarThread(agent, workspace);
+    cache.set(agent, { workspace, thread });
+    return thread;
+  };
+}
+
 /**
  * Builds a workspace lookup by normalized directory for enriching agent rows.
  * @param workspaces The workspace descriptors to index

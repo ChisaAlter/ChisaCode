@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { resolve } from "node:path";
+import { resolve, win32 } from "node:path";
 
 /**
  * Lifecycle states for a destructive worktree mutation.
@@ -74,7 +74,12 @@ export class WorkspaceMutationCoordinator {
    * @returns Normalized absolute path key
    */
   canonicalize(path: string): string {
-    let normalized = resolve(path).replace(/\\/g, "/").replace(/\/$/, "");
+    // Drive-letter and UNC inputs must canonicalize identically on every
+    // platform: POSIX resolve() would treat "C:\\x" as relative and prefix cwd.
+    const isWindowsStyle = /^[a-zA-Z]:[\\/]|^\\\\/.test(path);
+    let normalized = (isWindowsStyle ? win32.resolve(path) : resolve(path))
+      .replace(/\\/g, "/")
+      .replace(/\/$/, "");
     if (/^[a-zA-Z]:\//.test(normalized)) {
       normalized = normalized.toLowerCase();
     }

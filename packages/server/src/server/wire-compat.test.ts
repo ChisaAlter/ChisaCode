@@ -141,6 +141,14 @@ class InMemoryAgentManager {
     return this.timelineStore.fetch("agent-1", options);
   }
 
+  getHydrationState(_agentId: string): "idle" | "hydrating" | "hydrated" {
+    return "hydrated";
+  }
+
+  getHydrationPromise(_agentId: string): Promise<void> | undefined {
+    return undefined;
+  }
+
   listAgents() {
     return [];
   }

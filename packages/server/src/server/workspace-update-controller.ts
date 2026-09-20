@@ -157,6 +157,12 @@ export class WorkspaceUpdateController {
     cwd: string,
     options?: { skipReconcile?: boolean; dedupeGitState?: boolean },
   ): Promise<void> {
+    // Hot path: this runs on every agent state event. Without a subscription
+    // the descriptor rebuild below would be discarded anyway, so skip the
+    // registry listing and workspace resolution entirely.
+    if (!this.subscription) {
+      return;
+    }
     const workspaces = await this.options.listWorkspaceRecords();
     const workspaceId = this.options.resolveWorkspaceIdForCwd(cwd, workspaces);
     await this.emitUpdatesForWorkspaceIds([workspaceId], options);

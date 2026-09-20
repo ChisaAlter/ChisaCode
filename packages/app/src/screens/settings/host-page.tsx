@@ -122,7 +122,8 @@ export function HostPage({ serverId, onHostRemoved }: HostPageProps) {
   );
 
   // COMPAT(cindyModules): only show the Agent Intelligence section when the daemon
-  // advertises the Cindy modules. Drop the gate when floor >= v0.1.X.
+  // advertises the Cindy modules. Added in v0.1.102; drop the gate no earlier
+  // than 2027-07-29 when client/daemon floor >= v0.1.102.
   const cindyModulesEnabled = useSessionStore(
     (state) => state.sessions[serverId]?.serverInfo?.features?.cindyModules === true,
   );

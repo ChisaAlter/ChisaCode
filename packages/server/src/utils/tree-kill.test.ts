@@ -2066,7 +2066,14 @@ describe("terminateProcessTreeWithFallback", () => {
 
       expect(result).toBe("killed");
       await waitFor(() => !isProcessRunning(pid ?? -1), 5_000, "fallback did not kill the child");
-      expect(child.exitCode).not.toBeNull();
+      // A SIGKILLed child reports signalCode (exitCode stays null); wait for
+      // the exit event to be dispatched before asserting.
+      await waitFor(
+        () => child.exitCode !== null || child.signalCode !== null,
+        5_000,
+        "child exit event was not observed",
+      );
+      expect(child.exitCode !== null || child.signalCode !== null).toBe(true);
     } finally {
       try {
         process.kill(pid ?? -1, "SIGKILL");

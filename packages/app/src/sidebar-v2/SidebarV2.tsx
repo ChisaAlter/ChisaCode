@@ -32,7 +32,7 @@ import {
   type SidebarV2ProjectSnapshot,
 } from "./projects";
 import {
-  agentToSidebarThread,
+  createSidebarThreadCache,
   findWorkspaceForAgent,
   buildWorkspaceDirectoryIndex,
   type SidebarV2Thread,
@@ -154,11 +154,19 @@ export function SidebarV2({
     [workspaces],
   );
 
+  // Thread objects keep their identity while the underlying agent wrapper and
+  // workspace hint are unchanged, so memoized rows skip re-rendering when a
+  // different agent updates.
+  const threadCacheRef = useRef<ReturnType<typeof createSidebarThreadCache> | null>(null);
+  threadCacheRef.current ??= createSidebarThreadCache();
+
   const threads = useMemo<SidebarV2Thread[]>(() => {
     if (!activeServerId) return [];
+    const toThread = threadCacheRef.current;
+    if (!toThread) return [];
     return agents
       .filter((agent) => agent.serverId === activeServerId)
-      .map((agent) => agentToSidebarThread(agent, findWorkspaceForAgent(agent, workspaceIndex)));
+      .map((agent) => toThread(agent, findWorkspaceForAgent(agent, workspaceIndex)));
   }, [activeServerId, agents, workspaceIndex]);
 
   const projectMembers = useMemo(
@@ -656,57 +664,103 @@ export function SidebarV2({
     [rangeSelectThreads],
   );
 
-  const rowHandlers = useMemo(() => {
-    const byId = new Map<string, RowHandlers>();
-    const fallback: RowHandlers = {
-      onPress: () => undefined,
-      onRename: () => undefined,
-      onSettle: () => undefined,
-      onUnsettle: () => undefined,
-      onSnooze: () => undefined,
-      onUnsnooze: () => undefined,
-      onDelete: () => undefined,
-      onCopyPath: () => undefined,
-      onCopyBranch: () => undefined,
-      onMarkUnread: () => undefined,
-      onRegenerateTitle: () => undefined,
-      onModSelect: () => undefined,
-      onRangeSelect: () => undefined,
-    };
-    for (const thread of threads) {
-      byId.set(thread.id, {
-        onPress: () => handleOpenThread(thread),
-        onRename: (title) => handleRename(thread, title),
-        onSettle: () => handleSettle(thread),
-        onUnsettle: () => handleUnsettle(thread),
-        onSnooze: (untilIso, whenLabel) => handleSnooze(thread, untilIso, { whenLabel }),
-        onUnsnooze: () => handleUnsnooze(thread),
-        onDelete: () => handleDelete(thread),
-        onCopyPath: () => handleCopyPath(thread),
-        onCopyBranch: () => handleCopyBranch(thread),
-        onMarkUnread: () => handleMarkUnread(thread),
-        onRegenerateTitle: () => handleRegenerateTitle(thread),
-        onModSelect: () => handleRowModSelect(thread),
-        onRangeSelect: () => handleRowRangeSelect(thread),
-      });
-    }
-    return { byId, fallback };
-  }, [
-    handleCopyBranch,
-    handleCopyPath,
-    handleDelete,
-    handleMarkUnread,
+  // Row handlers keep a stable identity per thread id (a prerequisite for the
+  // memoized rows): the callbacks resolve the latest thread object and action
+  // implementations through refs instead of closing over them.
+  const latestRowActionsRef = useRef({
     handleOpenThread,
-    handleRegenerateTitle,
     handleRename,
+    handleSettle,
+    handleUnsettle,
+    handleSnooze,
+    handleUnsnooze,
+    handleDelete,
+    handleCopyPath,
+    handleCopyBranch,
+    handleMarkUnread,
+    handleRegenerateTitle,
     handleRowModSelect,
     handleRowRangeSelect,
+  });
+  latestRowActionsRef.current = {
+    handleOpenThread,
+    handleRename,
     handleSettle,
-    handleSnooze,
     handleUnsettle,
+    handleSnooze,
     handleUnsnooze,
-    threads,
-  ]);
+    handleDelete,
+    handleCopyPath,
+    handleCopyBranch,
+    handleMarkUnread,
+    handleRegenerateTitle,
+    handleRowModSelect,
+    handleRowRangeSelect,
+  };
+
+  const threadsById = useMemo(() => {
+    const byId = new Map<string, SidebarV2Thread>();
+    for (const thread of threads) {
+      byId.set(thread.id, thread);
+    }
+    return byId;
+  }, [threads]);
+  const threadsByIdRef = useRef(threadsById);
+  threadsByIdRef.current = threadsById;
+
+  const rowHandlersByIdRef = useRef(new Map<string, RowHandlers>());
+  const getRowHandlers = useCallback((threadId: string): RowHandlers => {
+    const existing = rowHandlersByIdRef.current.get(threadId);
+    if (existing) {
+      return existing;
+    }
+    const withThread = (action: (thread: SidebarV2Thread) => void) => () => {
+      const thread = threadsByIdRef.current.get(threadId);
+      if (thread) {
+        action(thread);
+      }
+    };
+    const handlers: RowHandlers = {
+      onPress: withThread((thread) => latestRowActionsRef.current.handleOpenThread(thread)),
+      onRename: (title) => {
+        const thread = threadsByIdRef.current.get(threadId);
+        if (thread) {
+          latestRowActionsRef.current.handleRename(thread, title);
+        }
+      },
+      onSettle: withThread((thread) => latestRowActionsRef.current.handleSettle(thread)),
+      onUnsettle: withThread((thread) => latestRowActionsRef.current.handleUnsettle(thread)),
+      onSnooze: (untilIso, whenLabel) => {
+        const thread = threadsByIdRef.current.get(threadId);
+        if (thread) {
+          latestRowActionsRef.current.handleSnooze(thread, untilIso, { whenLabel });
+        }
+      },
+      onUnsnooze: withThread((thread) => latestRowActionsRef.current.handleUnsnooze(thread)),
+      onDelete: withThread((thread) => latestRowActionsRef.current.handleDelete(thread)),
+      onCopyPath: withThread((thread) => latestRowActionsRef.current.handleCopyPath(thread)),
+      onCopyBranch: withThread((thread) => latestRowActionsRef.current.handleCopyBranch(thread)),
+      onMarkUnread: withThread((thread) => latestRowActionsRef.current.handleMarkUnread(thread)),
+      onRegenerateTitle: withThread((thread) =>
+        latestRowActionsRef.current.handleRegenerateTitle(thread),
+      ),
+      onModSelect: withThread((thread) => latestRowActionsRef.current.handleRowModSelect(thread)),
+      onRangeSelect: withThread((thread) =>
+        latestRowActionsRef.current.handleRowRangeSelect(thread),
+      ),
+    };
+    rowHandlersByIdRef.current.set(threadId, handlers);
+    return handlers;
+  }, []);
+
+  useEffect(() => {
+    const cache = rowHandlersByIdRef.current;
+    for (const threadId of cache.keys()) {
+      if (!threadsById.has(threadId)) {
+        cache.delete(threadId);
+      }
+    }
+  }, [threadsById]);
 
   const noProjects = projectSnapshots.length === 0;
   const noThreads = threads.length === 0;
@@ -733,16 +787,16 @@ export function SidebarV2({
         selectedCount={selectedThreadKeys.length}
         bulkMenuCapabilities={bulkMenuCapabilities}
         bulkMenuCallbacks={bulkMenuCallbacks}
-        {...(rowHandlers.byId.get(thread.id) ?? rowHandlers.fallback)}
+        {...getRowHandlers(thread.id)}
       />
     ),
     [
       bulkMenuCallbacks,
       bulkMenuCapabilities,
+      getRowHandlers,
       isMultiSelectMode,
       now,
       resolveUnseenCompletion,
-      rowHandlers,
       normalizedSelectedAgentId,
       selectedThreadKeys,
       snoozeNow,
@@ -771,16 +825,16 @@ export function SidebarV2({
         selectedCount={selectedThreadKeys.length}
         bulkMenuCapabilities={bulkMenuCapabilities}
         bulkMenuCallbacks={bulkMenuCallbacks}
-        {...(rowHandlers.byId.get(thread.id) ?? rowHandlers.fallback)}
+        {...getRowHandlers(thread.id)}
       />
     ),
     [
       bulkMenuCallbacks,
       bulkMenuCapabilities,
+      getRowHandlers,
       isMultiSelectMode,
       now,
       resolveUnseenCompletion,
-      rowHandlers,
       normalizedSelectedAgentId,
       selectedThreadKeys,
       snoozeNow,
@@ -809,16 +863,16 @@ export function SidebarV2({
         selectedCount={selectedThreadKeys.length}
         bulkMenuCapabilities={bulkMenuCapabilities}
         bulkMenuCallbacks={bulkMenuCallbacks}
-        {...(rowHandlers.byId.get(thread.id) ?? rowHandlers.fallback)}
+        {...getRowHandlers(thread.id)}
       />
     ),
     [
       bulkMenuCallbacks,
       bulkMenuCapabilities,
+      getRowHandlers,
       isMultiSelectMode,
       now,
       resolveUnseenCompletion,
-      rowHandlers,
       normalizedSelectedAgentId,
       selectedThreadKeys,
       snoozeNow,

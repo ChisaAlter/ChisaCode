@@ -1033,6 +1033,10 @@ export async function createChisaCodeDaemon(
     registry: agentStorage,
     usageStore,
     appendSystemPrompt: config.appendSystemPrompt,
+    // Project-context TOC caches are daemon-owned state. Never write them into
+    // the agent cwd: an untracked cache dir dirties user checkouts and makes
+    // `git worktree remove` fail during worktree archive.
+    projectContextCacheDir: path.join(config.chisacodeHome, "context"),
     resolveCachedModels: (cwd, provider) => {
       const entry = providerSnapshotManager
         .getSnapshot(cwd)

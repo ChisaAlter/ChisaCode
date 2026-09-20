@@ -32,7 +32,10 @@ concurrency:
 env:
   SOURCE_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}
   # exact-sha-gate: prefer tag/ref identity; manual branch checkout is discouraged.
-  CHECKOUT_REF: ${{ env.SOURCE_TAG }}
+  # NOTE: workflow-level `env` cannot reference the `env` context (`env.SOURCE_TAG`
+  # here made the whole file invalid and every push produced a 0s startup-failure
+  # run), so the SOURCE_TAG expression is duplicated verbatim.
+  CHECKOUT_REF: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}
   SHOULD_PUBLISH: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.publish != 'false' }}
 
 jobs:

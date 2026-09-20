@@ -41,3 +41,30 @@ export function toWorktreeWireError(error: unknown): WorktreeWireError {
 export function toWorktreeRequestError(error: unknown): WorktreeRequestError {
   return new WorktreeRequestError(toWorktreeWireError(error));
 }
+
+/** Wire payload for an agent-create failure: message plus a stable code. */
+export interface AgentCreateWireError {
+  code: string;
+  message: string;
+}
+
+/**
+ * Maps an agent-create failure to its wire error payload. Worktree error codes
+ * win; otherwise a typed error carrying a stable string `code` (e.g. the dsh
+ * provider's DSH_MISSING_API_KEY credential preflight) surfaces that code so
+ * new clients can localize by code, while old clients keep displaying the
+ * message text unchanged.
+ * @param error The thrown create failure
+ * @returns Stable code plus the human-readable message
+ */
+export function toAgentCreateWireError(error: unknown): AgentCreateWireError {
+  const wireError = toWorktreeWireError(error);
+  if (wireError.code !== "unknown") {
+    return wireError;
+  }
+  const code = error instanceof Error ? Reflect.get(error, "code") : undefined;
+  if (typeof code === "string" && code.length > 0) {
+    return { code, message: wireError.message };
+  }
+  return wireError;
+}

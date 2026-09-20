@@ -2,7 +2,7 @@
 
 ChisaCode is a local-first app for monitoring and controlling local AI coding agents from desktop, mobile, web, and CLI clients. It connects to your actual development environment; the daemon is local-first; selected providers/gateways may receive prompts.
 
-**Built-in providers:** Claude, Codex, OpenCode, Pi, Kimi Code, and Grok Build. Custom providers can extend those providers or use `extends: "acp"` for Agent Client Protocol commands.
+**Built-in providers:** Claude, Codex, OpenCode, Pi, Kimi Code, Grok Build, and DeepSeek Harness (`dsh`). Custom providers can extend those providers or use `extends: "acp"` for Agent Client Protocol commands.
 
 ## Repository map
 
@@ -140,7 +140,7 @@ The app runs on iOS, Android, web (browser), and web (Electron desktop). Code is
   ```
   Import as `@/components/browser-pane` — Electron desktop gets the `.electron.tsx` file, browser web gets `.web.tsx`, and native gets the native/base implementation.
 - **NEVER use raw DOM APIs without `isWeb` guard.** DOM APIs crash native. Casting a RN ref to `HTMLElement` is a red flag — ensure the block is web-only.
-- **NEVER use `onPointerEnter`/`onPointerLeave`.** They don't fire on native iOS.
+- **Never rely on `onPointerEnter`/`onPointerLeave` for native behavior.** They are DOM events and don't fire on native iOS. On web they are exactly the canonical hover pattern — a plain `View` with `onPointerEnter`/`onPointerLeave` per [docs/hover.md](docs/hover.md) — and don't need an `isWeb` gate (on native, hover is unreachable and visibility is driven by `isNative`/`isCompact`).
 - **Hover only works on web.** React Native's `onHoverIn`/`onHoverOut` on `Pressable` does NOT fire on native iOS/iPad — the underlying W3C pointer events are behind disabled experimental flags. For hover-to-show UI (kebab menus, action buttons), use `isHovered || isNative || isCompact` so the controls are always visible on native and hover-to-show on web.
 - **Don't use Platform.OS as a proxy for layout capabilities.** Use breakpoints for layout decisions, not platform checks.
 - **Import `isWeb`/`isNative` from `@/constants/platform`.** Never write `const isWeb = Platform.OS === "web"` locally.

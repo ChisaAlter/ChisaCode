@@ -170,6 +170,7 @@ import {
   type WaitForFinishResult,
 } from "./daemon-client-agent-waits.js";
 
+export { AgentCreateError } from "./daemon-client-agent-lifecycle.js";
 export type { FileReadResult } from "./daemon-client-file-transfer.js";
 export type {
   ConnectionState,

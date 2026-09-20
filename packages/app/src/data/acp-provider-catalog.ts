@@ -4,7 +4,13 @@ export interface AcpProviderCatalogEntry {
   description: string;
   version: string;
   installLink: string;
-  command: readonly [string, ...string[]];
+  /**
+   * Launcher argv written into the daemon config as a replace-mode command
+   * override. Omit it for providers whose built-in client manages its own
+   * launch composition (e.g. dsh materializes a managed cordis.yml and appends
+   * `--config <path>` itself) — a replace-mode override would bypass that.
+   */
+  command?: readonly [string, ...string[]];
   env?: Readonly<Record<string, string>>;
 }
 
@@ -63,6 +69,10 @@ export const ACP_PROVIDER_CATALOG: AcpProviderCatalogEntry[] = [
     description: "DeepSeek's official coding-agent harness via ACP (automation transport)",
     version: "next",
     installLink: "https://github.com/deepseek-ai/deepseek-harness",
-    command: ["dsh-acp-demo"],
+    // No command on purpose: the built-in dsh client spawns
+    // `dsh-acp-demo --config <managed cordis.yml>` itself
+    // (docs/dsh-upstream-contract.md §2). Writing `["dsh-acp-demo"]` here
+    // would become a replace-mode override that drops the managed --config
+    // and boots against an unrelated ./cordis.yml.
   },
 ];

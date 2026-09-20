@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { SessionOutboundMessage } from "@chisacode/protocol/messages";
 
-import { AgentLifecycleClient } from "./daemon-client-agent-lifecycle.js";
+import { AgentCreateError, AgentLifecycleClient } from "./daemon-client-agent-lifecycle.js";
 
 interface CommandParams {
   requestId?: string;
@@ -136,6 +136,42 @@ describe("AgentLifecycleClient", () => {
       autoArchive: true,
       attachments: [{ type: "github_pr", number: 123, title: "Review" }],
     });
+  });
+
+  it("surfaces the daemon errorCode as a typed AgentCreateError for localization", async () => {
+    const harness = createAgentLifecycleHarness();
+
+    harness.setNextStatus({
+      status: "agent_create_failed",
+      requestId: "create-coded",
+      error: "DeepSeek Harness 尚未配置 API 密钥",
+      errorCode: "DSH_MISSING_API_KEY",
+    });
+    const codedFailure = harness.client.createAgent({
+      provider: "acp",
+      cwd: "/repo",
+      requestId: "create-coded",
+    });
+    await expect(codedFailure).rejects.toBeInstanceOf(AgentCreateError);
+    await expect(codedFailure).rejects.toMatchObject({
+      message: "DeepSeek Harness 尚未配置 API 密钥",
+      code: "DSH_MISSING_API_KEY",
+    });
+
+    // Old daemons omit errorCode entirely: the typed error still surfaces
+    // the message with an undefined code (protocol back-compat).
+    harness.setNextStatus({
+      status: "agent_create_failed",
+      requestId: "create-legacy",
+      error: "legacy failure",
+    });
+    const legacyFailure = harness.client.createAgent({
+      provider: "acp",
+      cwd: "/repo",
+      requestId: "create-legacy",
+    });
+    await expect(legacyFailure).rejects.toBeInstanceOf(AgentCreateError);
+    await expect(legacyFailure).rejects.toMatchObject({ message: "legacy failure" });
   });
 
   it("keeps provider-handle imports distinct from legacy provider sessions", async () => {

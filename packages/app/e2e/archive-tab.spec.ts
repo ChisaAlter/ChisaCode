@@ -6,7 +6,6 @@ import {
   archiveAgentFromDaemon,
   archiveAgentFromSessions,
   clickSessionRow,
-  closeWorkspaceAgentTab,
   createIdleAgent,
   expectArchivedAgentFocused,
   expectSessionRowArchived,
@@ -105,6 +104,9 @@ test.describe("Archive tab reconciliation", () => {
     }
   });
 
+  // The workspace is a single content slot now (multi-tab UI was removed), so
+  // "closed tab" translates to: another agent holds the slot, and clicking the
+  // archived session must reopen and focus the archived agent.
   test("clicking an archived session reopens its closed tab focused", async ({ page }) => {
     const archived = await createIdleAgent(client, {
       cwd: tempRepo.path,
@@ -116,8 +118,8 @@ test.describe("Archive tab reconciliation", () => {
     });
 
     await resetSeededPageState(page);
+    // Ends with the surviving agent focused, so the archived agent is off-slot.
     await openWorkspaceWithAgents(page, [archived, surviving]);
-    await closeWorkspaceAgentTab(page, archived.id);
     await archiveAgentFromDaemon(client, archived.id);
     await openSessions(page);
     await expectSessionRowArchived(page, archived.title);

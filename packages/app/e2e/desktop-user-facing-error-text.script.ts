@@ -83,10 +83,9 @@ function prepareIsolatedHome(home: string): void {
 }
 
 function composerInput(page: Page) {
-  return page
-    .getByTestId("composer-input")
-    .or(page.getByPlaceholder(/给智能体发消息|Message|消息/i))
-    .first();
+  // No composer testID exists anymore; locate by accessible placeholder like
+  // the shared helpers/app.ts composerInput does.
+  return page.getByPlaceholder(/给智能体发消息|Message|消息/i).first();
 }
 
 async function main(): Promise<void> {

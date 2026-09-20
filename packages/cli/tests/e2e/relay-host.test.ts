@@ -131,12 +131,25 @@ async function probeRelayConnection(offerUrl: string): Promise<boolean> {
     serverId: offer.serverId,
     role: "client",
   });
+  // The daemon requires relay device auth by default; pair with the offer's
+  // one-time bootstrap token like a real first-time client would.
+  const pairingToken = offer.authBootstrap?.pairingToken;
   const client = new DaemonClient({
     url,
     clientId: `relay-probe-${Date.now()}`,
     clientType: "cli",
     connectTimeoutMs: 4000,
     e2ee: { enabled: true, daemonPublicKeyB64: offer.daemonPublicKeyB64 },
+    ...(pairingToken
+      ? {
+          relayDeviceAuth: {
+            version: 1 as const,
+            serverId: offer.serverId,
+            deviceId: `dev_probe_${Date.now().toString(16)}`,
+            pairingToken,
+          },
+        }
+      : {}),
     reconnect: { enabled: false },
     webSocketFactory: (target: string, opts?: { headers?: Record<string, string> }) =>
       new WebSocket(target, { headers: opts?.headers }) as unknown as ReturnType<
@@ -224,9 +237,22 @@ async function waitForDaemonRelayRegistered(offerUrl: string, timeoutMs = 30_000
     const directAgents = JSON.parse(direct.stdout.trim() || "[]");
     expect(Array.isArray(directAgents)).toBe(true);
 
-    const relay = await ctx.chisacode(["ls", "--json", "--host", offerUrl], {
+    // The registration probe consumed the first offer's one-time pairing
+    // token, so hand the CLI a fresh offer — same as a user re-generating a
+    // pairing URL for each new device.
+    const cliOffer = await generateLocalPairingOffer({
+      chisacodeHome: ctx.chisacodeHome,
+      relayEnabled: true,
+      relayEndpoint: `127.0.0.1:${relayPort}`,
+      relayPublicEndpoint: `127.0.0.1:${relayPort}`,
+      includeQr: false,
+    });
+    if (!cliOffer.url) throw new Error("generateLocalPairingOffer returned no URL for CLI run");
+    const cliOfferUrl = cliOffer.url;
+
+    const relay = await ctx.chisacode(["ls", "--json", "--host", cliOfferUrl], {
       timeout: 30_000,
-      env: { CHISACODE_HOST: offerUrl },
+      env: { CHISACODE_HOST: cliOfferUrl },
     });
     expect(relay.exitCode, `relay ls failed: ${relay.stderr}\nstdout: ${relay.stdout}`).toBe(0);
     const relayAgents = JSON.parse(relay.stdout.trim() || "[]");

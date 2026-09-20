@@ -203,14 +203,18 @@ export function migrateProviderSettings(
   return ProviderOverridesSchema.parse(migrated);
 }
 
-// Env vars that indicate a running Claude Code session. If the daemon itself is
-// launched from inside Claude Code (e.g. by a ChisaCode agent), these leak into
-// child processes and cause "cannot be launched inside another session" errors.
+// Env vars that indicate a running parent agent session. If the daemon itself
+// is launched from inside such a session (e.g. by a ChisaCode agent), these
+// leak into child processes and change their behavior:
+// - CLAUDE*: Claude Code refuses to launch inside another session.
+// - DSH_SNAPSHOT: carries dsh rewind semantics; the upstream contract
+//   (docs/dsh-upstream-contract.md §2) forbids passing it through to spawns.
 const PARENT_SESSION_ENV_VARS = [
   "CLAUDECODE",
   "CLAUDE_CODE_ENTRYPOINT",
   "CLAUDE_CODE_SSE_PORT",
   "CLAUDE_AGENT_SDK_VERSION",
+  "DSH_SNAPSHOT",
 ];
 
 export interface ProviderEnvOptions {

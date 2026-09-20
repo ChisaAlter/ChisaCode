@@ -17,7 +17,9 @@ export function buildAcpProviderConfigPatch(
         enabled: true,
         label: entry.title,
         description: entry.description,
-        command: [...entry.command],
+        // Entries without a command (e.g. dsh) rely on the built-in client's
+        // own managed launch; writing a command would replace-mode it away.
+        ...(entry.command ? { command: [...entry.command] } : {}),
         env: entry.env ? { ...entry.env } : {},
       },
     },

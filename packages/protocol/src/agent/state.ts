@@ -28,11 +28,14 @@ const AgentCapabilityFlagsSchema: z.ZodType<AgentCapabilityFlags> = z.object({
   supportsMcpServers: z.boolean(),
   supportsReasoningStream: z.boolean(),
   supportsToolInvocations: z.boolean(),
-  // COMPAT(rewind): added in v0.1.X, drop when floor >= v0.1.X.
+  // COMPAT(rewind): added no later than v1.0.0 (2026-06-15); drop the optional
+  // defaults no earlier than 2026-12-15 when client/daemon floor >= v1.0.0.
   supportsRewindConversation: z.boolean().optional().default(false),
-  // COMPAT(rewind): added in v0.1.X, drop when floor >= v0.1.X.
+  // COMPAT(rewind): added no later than v1.0.0 (2026-06-15); drop the optional
+  // defaults no earlier than 2026-12-15 when client/daemon floor >= v1.0.0.
   supportsRewindFiles: z.boolean().optional().default(false),
-  // COMPAT(rewind): added in v0.1.X, drop when floor >= v0.1.X.
+  // COMPAT(rewind): added no later than v1.0.0 (2026-06-15); drop the optional
+  // defaults no earlier than 2026-12-15 when client/daemon floor >= v1.0.0.
   supportsRewindBoth: z.boolean().optional().default(false),
 });
 

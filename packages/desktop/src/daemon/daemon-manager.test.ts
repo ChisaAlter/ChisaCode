@@ -1,4 +1,5 @@
 import { EventEmitter } from "node:events";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -532,16 +533,29 @@ describe("resolveDesktopDaemonStatus", () => {
 });
 
 describe("shouldRestartForVersion", () => {
+  // resolveDesktopAppVersion reads the real workspace package.json in dev, so
+  // derive the expected version from the same file instead of hardcoding it.
+  const workspaceVersion = (
+    JSON.parse(readFileSync(path.join(__dirname, "..", "..", "package.json"), "utf-8")) as {
+      version: string;
+    }
+  ).version;
+
   it("returns false when versions match", () => {
-    // resolveDesktopAppVersion reads the real workspace package.json (1.0.2)
-    const matched = runningDaemonStatus({ version: "1.0.2" });
+    const matched = runningDaemonStatus({ version: workspaceVersion });
     expect(shouldRestartForVersion(matched)).toBe(false);
-    expect(shouldRestartForVersion(runningDaemonStatus({ version: "v1.0.2" }))).toBe(false);
+    expect(shouldRestartForVersion(runningDaemonStatus({ version: `v${workspaceVersion}` }))).toBe(
+      false,
+    );
   });
 
   it("returns true when versions differ", () => {
-    expect(shouldRestartForVersion(runningDaemonStatus({ version: "1.0.1" }))).toBe(true);
-    expect(shouldRestartForVersion(runningDaemonStatus({ version: "2.0.0" }))).toBe(true);
+    expect(
+      shouldRestartForVersion(runningDaemonStatus({ version: `${workspaceVersion}-rc.1` })),
+    ).toBe(true);
+    expect(shouldRestartForVersion(runningDaemonStatus({ version: "0.0.0-never-shipped" }))).toBe(
+      true,
+    );
   });
 
   it("returns false when daemon is not desktop-managed", () => {

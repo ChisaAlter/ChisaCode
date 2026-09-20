@@ -438,6 +438,7 @@ The changelog covers **stable-to-stable**. Betas are not represented. When you p
 ### Stable release (or promotion)
 
 - [ ] Run the pre-release sanity check (see above) and address any findings
+- [ ] dsh upstream contract re-verification: if `npm view @deepseek-ai/dsh dist-tags` / `npm view @deepseek-ai/dsh-acp-demo dist-tags` show a newer version than the banner in `docs/dsh-upstream-contract.md`, re-verify per its §9 and update the banner (upstream is in rc cadence with declared breaking changes)
 - [ ] Ensure the intended release commit is already committed and the git worktree is clean before versioning
 - [ ] Run `npm run check:node` to verify Node.js 22 or newer
 - [ ] Ensure local `npm run format:check`, `npm run lint`, and `npm run typecheck` pass on that exact commit

@@ -1,6 +1,5 @@
 {
   "version": "1.0.0",
-  "generatedAt": "2026-08-22T09:09:45.547Z",
   "generator": "scripts/generate-modular-knowledge-graphs.mjs",
   "module": {
     "id": "desktop",
@@ -38,7 +37,9 @@
       "source": 41
     },
     "internalImportEdges": 94,
-    "workspaceDependencies": ["server"],
+    "workspaceDependencies": [
+      "server"
+    ],
     "externalDependencies": [
       "@electron/rebuild",
       "app-builder-lib",
@@ -110,7 +111,11 @@
       "type": "support",
       "path": "packages/desktop/scripts/after-sign.js",
       "lines": 23,
-      "imports": ["./asar-integrity-resource.js", "./smoke-packaged-desktop-app.js", "node:path"]
+      "imports": [
+        "./asar-integrity-resource.js",
+        "./smoke-packaged-desktop-app.js",
+        "node:path"
+      ]
     },
     {
       "id": "file:packages/desktop/scripts/asar-integrity-resource.js",
@@ -129,21 +134,35 @@
       "type": "support",
       "path": "packages/desktop/scripts/build-x64.js",
       "lines": 49,
-      "imports": ["app-builder-lib", "electron-builder", "node:path"]
+      "imports": [
+        "app-builder-lib",
+        "electron-builder",
+        "node:path"
+      ]
     },
     {
       "id": "file:packages/desktop/scripts/build.js",
       "type": "support",
       "path": "packages/desktop/scripts/build.js",
       "lines": 42,
-      "imports": ["app-builder-lib", "electron-builder", "node:path"]
+      "imports": [
+        "app-builder-lib",
+        "electron-builder",
+        "node:path"
+      ]
     },
     {
       "id": "file:packages/desktop/scripts/smoke-packaged-desktop-app.js",
       "type": "support",
       "path": "packages/desktop/scripts/smoke-packaged-desktop-app.js",
       "lines": 609,
-      "imports": ["node:child_process", "node:fs", "node:os", "node:path", "node:timers/promises"]
+      "imports": [
+        "node:child_process",
+        "node:fs",
+        "node:os",
+        "node:path",
+        "node:timers/promises"
+      ]
     },
     {
       "id": "file:packages/desktop/scripts/smoke-packaged-desktop-app.test.ts",
@@ -166,14 +185,22 @@
       "type": "support",
       "path": "packages/desktop/scripts/verify-electron-cdp.mjs",
       "lines": 596,
-      "imports": ["node:fs/promises", "node:path", "node:process", "playwright"]
+      "imports": [
+        "node:fs/promises",
+        "node:path",
+        "node:process",
+        "playwright"
+      ]
     },
     {
       "id": "file:packages/desktop/src/browser-webview-security.test.ts",
       "type": "test",
       "path": "packages/desktop/src/browser-webview-security.test.ts",
       "lines": 125,
-      "imports": ["./browser-webview-security", "vitest"]
+      "imports": [
+        "./browser-webview-security",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/desktop/src/browser-webview-security.ts",
@@ -201,7 +228,11 @@
       "type": "test",
       "path": "packages/desktop/src/daemon/cli/external.test.ts",
       "lines": 92,
-      "imports": ["./external", "node:events", "vitest"]
+      "imports": [
+        "./external",
+        "node:events",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/desktop/src/daemon/cli/external.ts",
@@ -221,24 +252,31 @@
       "type": "test",
       "path": "packages/desktop/src/daemon/cli/passthrough.test.ts",
       "lines": 156,
-      "imports": ["./passthrough", "vitest"]
+      "imports": [
+        "./passthrough",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/desktop/src/daemon/cli/passthrough.ts",
       "type": "source",
       "path": "packages/desktop/src/daemon/cli/passthrough.ts",
       "lines": 73,
-      "imports": ["./entrypoints.js", "node:url"]
+      "imports": [
+        "./entrypoints.js",
+        "node:url"
+      ]
     },
     {
       "id": "file:packages/desktop/src/daemon/daemon-manager.test.ts",
       "type": "test",
       "path": "packages/desktop/src/daemon/daemon-manager.test.ts",
-      "lines": 560,
+      "lines": 574,
       "imports": [
         "../settings/desktop-settings",
         "./daemon-manager",
         "node:events",
+        "node:fs",
         "node:path",
         "vitest"
       ]
@@ -275,21 +313,32 @@
       "type": "test",
       "path": "packages/desktop/src/daemon/desktop-packaging.test.ts",
       "lines": 68,
-      "imports": ["node:fs", "node:path", "node:url", "vitest"]
+      "imports": [
+        "node:fs",
+        "node:path",
+        "node:url",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/desktop/src/daemon/local-transport.ts",
       "type": "source",
       "path": "packages/desktop/src/daemon/local-transport.ts",
       "lines": 237,
-      "imports": ["electron", "ws"]
+      "imports": [
+        "electron",
+        "ws"
+      ]
     },
     {
       "id": "file:packages/desktop/src/daemon/node-entrypoint-launcher.test.ts",
       "type": "test",
       "path": "packages/desktop/src/daemon/node-entrypoint-launcher.test.ts",
       "lines": 115,
-      "imports": ["./node-entrypoint-launcher", "vitest"]
+      "imports": [
+        "./node-entrypoint-launcher",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/desktop/src/daemon/node-entrypoint-launcher.ts",
@@ -303,42 +352,62 @@
       "type": "test",
       "path": "packages/desktop/src/daemon/node-entrypoint-runner.test.ts",
       "lines": 67,
-      "imports": ["./node-entrypoint-runner", "node:fs", "node:os", "node:path", "vitest"]
+      "imports": [
+        "./node-entrypoint-runner",
+        "node:fs",
+        "node:os",
+        "node:path",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/desktop/src/daemon/node-entrypoint-runner.ts",
       "type": "source",
       "path": "packages/desktop/src/daemon/node-entrypoint-runner.ts",
       "lines": 26,
-      "imports": ["node:url"]
+      "imports": [
+        "node:url"
+      ]
     },
     {
       "id": "file:packages/desktop/src/daemon/package-paths.ts",
       "type": "source",
       "path": "packages/desktop/src/daemon/package-paths.ts",
       "lines": 52,
-      "imports": ["node:fs", "node:path"]
+      "imports": [
+        "node:fs",
+        "node:path"
+      ]
     },
     {
       "id": "file:packages/desktop/src/daemon/quit-lifecycle.test.ts",
       "type": "test",
       "path": "packages/desktop/src/daemon/quit-lifecycle.test.ts",
       "lines": 119,
-      "imports": ["../settings/desktop-settings", "./quit-lifecycle", "vitest"]
+      "imports": [
+        "../settings/desktop-settings",
+        "./quit-lifecycle",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/desktop/src/daemon/quit-lifecycle.ts",
       "type": "source",
       "path": "packages/desktop/src/daemon/quit-lifecycle.ts",
       "lines": 78,
-      "imports": ["../settings/desktop-settings.js"]
+      "imports": [
+        "../settings/desktop-settings.js"
+      ]
     },
     {
       "id": "file:packages/desktop/src/daemon/runtime-paths.test.ts",
       "type": "test",
       "path": "packages/desktop/src/daemon/runtime-paths.test.ts",
       "lines": 77,
-      "imports": ["./runtime-paths", "vitest"]
+      "imports": [
+        "./runtime-paths",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/desktop/src/daemon/runtime-paths.ts",
@@ -359,7 +428,10 @@
       "type": "test",
       "path": "packages/desktop/src/desktop-startup.test.ts",
       "lines": 112,
-      "imports": ["./desktop-startup", "vitest"]
+      "imports": [
+        "./desktop-startup",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/desktop/src/desktop-startup.ts",
@@ -417,14 +489,20 @@
       "type": "source",
       "path": "packages/desktop/src/features/browser-webviews.ts",
       "lines": 51,
-      "imports": ["electron"]
+      "imports": [
+        "electron"
+      ]
     },
     {
       "id": "file:packages/desktop/src/features/dialogs.ts",
       "type": "source",
       "path": "packages/desktop/src/features/dialogs.ts",
       "lines": 110,
-      "imports": ["../i18n.js", "../settings/desktop-settings.js", "electron"]
+      "imports": [
+        "../i18n.js",
+        "../settings/desktop-settings.js",
+        "electron"
+      ]
     },
     {
       "id": "file:packages/desktop/src/features/menu.ts",
@@ -443,20 +521,28 @@
       "type": "source",
       "path": "packages/desktop/src/features/notifications.ts",
       "lines": 143,
-      "imports": ["electron", "node:fs", "node:path"]
+      "imports": [
+        "electron",
+        "node:fs",
+        "node:path"
+      ]
     },
     {
       "id": "file:packages/desktop/src/features/opener.test.ts",
       "type": "test",
       "path": "packages/desktop/src/features/opener.test.ts",
-      "lines": 108,
-      "imports": ["./opener", "electron", "vitest"]
+      "lines": 109,
+      "imports": [
+        "./opener",
+        "electron",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/desktop/src/features/opener.ts",
       "type": "source",
       "path": "packages/desktop/src/features/opener.ts",
-      "lines": 63,
+      "lines": 70,
       "imports": [
         "../daemon/daemon-manager.js",
         "../i18n.js",
@@ -470,21 +556,31 @@
       "type": "source",
       "path": "packages/desktop/src/features/react-devtools.ts",
       "lines": 119,
-      "imports": ["electron", "node:fs", "node:fs/promises", "node:path", "unzip-crx-3"]
+      "imports": [
+        "electron",
+        "node:fs",
+        "node:fs/promises",
+        "node:path",
+        "unzip-crx-3"
+      ]
     },
     {
       "id": "file:packages/desktop/src/i18n.ts",
       "type": "source",
       "path": "packages/desktop/src/i18n.ts",
       "lines": 110,
-      "imports": ["./settings/desktop-settings.js"]
+      "imports": [
+        "./settings/desktop-settings.js"
+      ]
     },
     {
       "id": "file:packages/desktop/src/integrations/cli-install/index.ts",
       "type": "source",
       "path": "packages/desktop/src/integrations/cli-install/index.ts",
       "lines": 2,
-      "imports": ["./install.js"]
+      "imports": [
+        "./install.js"
+      ]
     },
     {
       "id": "file:packages/desktop/src/integrations/cli-install/install.ts",
@@ -505,7 +601,10 @@
       "type": "test",
       "path": "packages/desktop/src/integrations/cli-install/path.test.ts",
       "lines": 49,
-      "imports": ["./path", "vitest"]
+      "imports": [
+        "./path",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/desktop/src/integrations/cli-install/path.ts",
@@ -519,28 +618,45 @@
       "type": "source",
       "path": "packages/desktop/src/integrations/cli-install/paths.ts",
       "lines": 32,
-      "imports": ["electron", "node:os", "node:path"]
+      "imports": [
+        "electron",
+        "node:os",
+        "node:path"
+      ]
     },
     {
       "id": "file:packages/desktop/src/integrations/cli-install/shell-rc.ts",
       "type": "source",
       "path": "packages/desktop/src/integrations/cli-install/shell-rc.ts",
       "lines": 98,
-      "imports": ["electron-log/main", "node:fs", "node:os", "node:path"]
+      "imports": [
+        "electron-log/main",
+        "node:fs",
+        "node:os",
+        "node:path"
+      ]
     },
     {
       "id": "file:packages/desktop/src/integrations/skills/index.ts",
       "type": "source",
       "path": "packages/desktop/src/integrations/skills/index.ts",
       "lines": 14,
-      "imports": ["./operations.js"]
+      "imports": [
+        "./operations.js"
+      ]
     },
     {
       "id": "file:packages/desktop/src/integrations/skills/operations.test.ts",
       "type": "test",
       "path": "packages/desktop/src/integrations/skills/operations.test.ts",
       "lines": 502,
-      "imports": ["./operations", "node:fs", "node:os", "node:path", "vitest"]
+      "imports": [
+        "./operations",
+        "node:fs",
+        "node:os",
+        "node:path",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/desktop/src/integrations/skills/operations.ts",
@@ -563,28 +679,46 @@
       "type": "source",
       "path": "packages/desktop/src/integrations/skills/paths.ts",
       "lines": 23,
-      "imports": ["electron", "node:os", "node:path"]
+      "imports": [
+        "electron",
+        "node:os",
+        "node:path"
+      ]
     },
     {
       "id": "file:packages/desktop/src/integrations/skills/sync.test.ts",
       "type": "test",
       "path": "packages/desktop/src/integrations/skills/sync.test.ts",
       "lines": 305,
-      "imports": ["./sync", "node:fs", "node:os", "node:path", "vitest"]
+      "imports": [
+        "./sync",
+        "node:fs",
+        "node:os",
+        "node:path",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/desktop/src/integrations/skills/sync.ts",
       "type": "source",
       "path": "packages/desktop/src/integrations/skills/sync.ts",
       "lines": 114,
-      "imports": ["node:fs", "node:path"]
+      "imports": [
+        "node:fs",
+        "node:path"
+      ]
     },
     {
       "id": "file:packages/desktop/src/login-shell-env.ts",
       "type": "source",
       "path": "packages/desktop/src/login-shell-env.ts",
       "lines": 232,
-      "imports": ["node:child_process", "node:crypto", "node:os", "node:path"]
+      "imports": [
+        "node:child_process",
+        "node:crypto",
+        "node:os",
+        "node:path"
+      ]
     },
     {
       "id": "file:packages/desktop/src/main.ts",
@@ -623,77 +757,117 @@
       "type": "test",
       "path": "packages/desktop/src/open-project-routing.test.ts",
       "lines": 74,
-      "imports": ["./open-project-routing", "node:fs", "node:os", "node:path", "vitest"]
+      "imports": [
+        "./open-project-routing",
+        "node:fs",
+        "node:os",
+        "node:path",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/desktop/src/open-project-routing.ts",
       "type": "source",
       "path": "packages/desktop/src/open-project-routing.ts",
       "lines": 44,
-      "imports": ["node:fs", "node:path"]
+      "imports": [
+        "node:fs",
+        "node:path"
+      ]
     },
     {
       "id": "file:packages/desktop/src/preload.test.ts",
       "type": "test",
       "path": "packages/desktop/src/preload.test.ts",
       "lines": 234,
-      "imports": ["./preload", "vitest"]
+      "imports": [
+        "./preload",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/desktop/src/preload.ts",
       "type": "source",
       "path": "packages/desktop/src/preload.ts",
       "lines": 160,
-      "imports": ["electron"]
+      "imports": [
+        "electron"
+      ]
     },
     {
       "id": "file:packages/desktop/src/settings/desktop-settings-commands.test.ts",
       "type": "test",
       "path": "packages/desktop/src/settings/desktop-settings-commands.test.ts",
       "lines": 70,
-      "imports": ["./desktop-settings", "./desktop-settings-commands", "vitest"]
+      "imports": [
+        "./desktop-settings",
+        "./desktop-settings-commands",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/desktop/src/settings/desktop-settings-commands.ts",
       "type": "source",
       "path": "packages/desktop/src/settings/desktop-settings-commands.ts",
       "lines": 26,
-      "imports": ["./desktop-settings.js"]
+      "imports": [
+        "./desktop-settings.js"
+      ]
     },
     {
       "id": "file:packages/desktop/src/settings/desktop-settings-electron.ts",
       "type": "source",
       "path": "packages/desktop/src/settings/desktop-settings-electron.ts",
       "lines": 13,
-      "imports": ["./desktop-settings.js", "electron"]
+      "imports": [
+        "./desktop-settings.js",
+        "electron"
+      ]
     },
     {
       "id": "file:packages/desktop/src/settings/desktop-settings.test.ts",
       "type": "test",
       "path": "packages/desktop/src/settings/desktop-settings.test.ts",
       "lines": 203,
-      "imports": ["./desktop-settings", "node:fs/promises", "node:os", "node:path", "vitest"]
+      "imports": [
+        "./desktop-settings",
+        "node:fs/promises",
+        "node:os",
+        "node:path",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/desktop/src/settings/desktop-settings.ts",
       "type": "source",
       "path": "packages/desktop/src/settings/desktop-settings.ts",
       "lines": 332,
-      "imports": ["../features/auto-updater.js", "node:crypto", "node:fs/promises", "node:path"]
+      "imports": [
+        "../features/auto-updater.js",
+        "node:crypto",
+        "node:fs/promises",
+        "node:path"
+      ]
     },
     {
       "id": "file:packages/desktop/src/system/arm64-translation.test.ts",
       "type": "test",
       "path": "packages/desktop/src/system/arm64-translation.test.ts",
       "lines": 60,
-      "imports": ["./arm64-translation", "vitest"]
+      "imports": [
+        "./arm64-translation",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/desktop/src/system/arm64-translation.ts",
       "type": "source",
       "path": "packages/desktop/src/system/arm64-translation.ts",
       "lines": 45,
-      "imports": ["electron", "node:child_process"]
+      "imports": [
+        "electron",
+        "node:child_process"
+      ]
     },
     {
       "id": "file:packages/desktop/src/vendor.d.ts",
@@ -707,21 +881,29 @@
       "type": "test",
       "path": "packages/desktop/src/window/compositor-watchdog/index.test.ts",
       "lines": 37,
-      "imports": [".", "vitest"]
+      "imports": [
+        ".",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/desktop/src/window/compositor-watchdog/index.ts",
       "type": "source",
       "path": "packages/desktop/src/window/compositor-watchdog/index.ts",
       "lines": 159,
-      "imports": ["electron"]
+      "imports": [
+        "electron"
+      ]
     },
     {
       "id": "file:packages/desktop/src/window/window-manager.test.ts",
       "type": "test",
       "path": "packages/desktop/src/window/window-manager.test.ts",
       "lines": 192,
-      "imports": ["./window-manager", "vitest"]
+      "imports": [
+        "./window-manager",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/desktop/src/window/window-manager.ts",
