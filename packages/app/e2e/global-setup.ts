@@ -1,4 +1,4 @@
-import { spawn, type ChildProcess, execFileSync, execSync } from "node:child_process";
+import { spawn, spawnSync, type ChildProcess, execFileSync, execSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { chmod, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -211,11 +211,14 @@ let chisacodeHome: string | null = null;
 let fakeToolBinDir: string | null = null;
 let relayProcess: ChildProcess | null = null;
 
+// The monorepo installs with pnpm (pnpm-lock.yaml is the only lockfile); `npx`
+// rejects the catalog: protocol with npm's EOVERRIDE before running anything.
+// `pnpm exec` resolves the same per-package node_modules/.bin binaries.
 function spawnNpx(args: string[], options: Parameters<typeof spawn>[2]): ChildProcess {
   if (process.platform === "win32") {
-    return spawn("cmd.exe", ["/d", "/s", "/c", "npx", ...args], options);
+    return spawn("cmd.exe", ["/d", "/s", "/c", "pnpm", "exec", ...args], options);
   }
-  return spawn("npx", args, options);
+  return spawn("pnpm", ["exec", ...args], options);
 }
 
 function resolvePathCommand(command: string): string {
@@ -230,6 +233,19 @@ function resolvePathCommand(command: string): string {
     );
   }
   return candidates[0] ?? command;
+}
+
+// pnpm keeps package binaries under the owning package's node_modules/.bin
+// instead of hoisting them to the PATH, so PATH lookups miss them.
+function resolvePackageBin(packageDir: string, bin: string): string {
+  const binDir = path.join(packageDir, "node_modules", ".bin");
+  if (process.platform === "win32") {
+    const cmdPath = path.join(binDir, `${bin}.CMD`);
+    if (existsSync(cmdPath)) return cmdPath;
+  }
+  const posixPath = path.join(binDir, bin);
+  if (existsSync(posixPath)) return posixPath;
+  return resolvePathCommand(bin);
 }
 
 function spawnResolvedCommand(
@@ -408,18 +424,30 @@ function decodeOfferFromFragmentUrl(url: string): OfferPayload {
 }
 
 function loadPairingOfferFromCli(repoRoot: string, chisacodeHomePath: string): OfferPayload {
-  const stdout = execFileSync(
-    process.execPath,
-    ["--import", "tsx", "packages/cli/src/index.ts", "daemon", "pair", "--json"],
-    {
-      cwd: repoRoot,
-      env: {
-        ...process.env,
-        CHISACODE_HOME: chisacodeHomePath,
-      },
-      encoding: "utf8",
-    },
-  );
+  const cliDir = path.join(repoRoot, "packages", "cli");
+  const tsxBin = resolvePackageBin(cliDir, "tsx");
+  const cliArgs = ["packages/cli/src/index.ts", "daemon", "pair", "--json"];
+  const spawnEnv = {
+    ...process.env,
+    CHISACODE_HOME: chisacodeHomePath,
+  };
+  // `node --import tsx` cannot resolve tsx from the repo root under pnpm's
+  // per-package layout, and .CMD shims need cmd.exe on Windows.
+  const result =
+    process.platform === "win32"
+      ? spawnSync("cmd.exe", ["/d", "/s", "/c", tsxBin, ...cliArgs], {
+          cwd: repoRoot,
+          env: spawnEnv,
+          encoding: "utf8",
+        })
+      : spawnSync(tsxBin, cliArgs, { cwd: repoRoot, env: spawnEnv, encoding: "utf8" });
+  if (result.error) {
+    throw result.error;
+  }
+  const stdout = result.stdout ?? "";
+  if (result.status !== 0) {
+    throw new Error(`chisacode daemon pair exited ${result.status}: ${result.stderr ?? ""}`);
+  }
   const payload = JSON.parse(stdout) as { relayEnabled?: boolean; url?: string | null };
   if (payload.relayEnabled !== true || typeof payload.url !== "string") {
     throw new Error(`Unexpected daemon pair response: ${stdout}`);
@@ -679,8 +707,12 @@ function startMetro(metroPort: number, buffer: ReturnType<typeof createLineBuffe
       ...process.env,
       BROWSER: "none",
       NODE_OPTIONS: metroNodeOptions,
+      // Expo reads stdin for interactive key commands; an "ignore" stdin
+      // (NUL on Windows) delivers instant EOF and makes expo exit silently
+      // mid-instantiation. A held-open pipe keeps it alive for the run.
+      CI: "1",
     },
-    stdio: ["ignore", "pipe", "pipe"],
+    stdio: ["pipe", "pipe", "pipe"],
     detached: false,
   });
 
@@ -722,7 +754,7 @@ interface DaemonSpawnArgs {
 
 function startDaemon(args: DaemonSpawnArgs): ChildProcess {
   const serverDir = path.resolve(__dirname, "../../..", "packages/server");
-  const tsxBin = resolvePathCommand("tsx");
+  const tsxBin = resolvePackageBin(serverDir, "tsx");
   const { openAiUsable, localModelsDir } = args.dictation;
 
   const child = spawnResolvedCommand(tsxBin, ["scripts/supervisor-entrypoint.ts", "--dev"], {

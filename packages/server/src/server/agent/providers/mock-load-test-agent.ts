@@ -116,6 +116,10 @@ type CycleEvent =
   | { kind: "reasoning_token"; text: string }
   | { kind: "tool_running"; callId: string; name: string; detail: ToolCallDetail }
   | { kind: "tool_completed"; callId: string; name: string; detail: ToolCallDetail }
+  | {
+      kind: "turn_changes";
+      changedFiles: { path: string; additions?: number; deletions?: number }[];
+    }
   | { kind: "usage" };
 
 interface LargeAgentStreamPayloadRequest {
@@ -494,6 +498,21 @@ function buildTrailingToolRunQueue(turnId: string): CycleEvent[] {
   });
 
   queue.push(...buildCycleToolEvents(turnId, 1));
+  // Trailing turn_changes (T3 port M4): the completed turn's changed-files
+  // tree, attached by the app to the last assistant message of the turn.
+  queue.push({
+    kind: "turn_changes",
+    changedFiles: [
+      { path: "packages/app/src/hooks/use-scroll-anchor.ts", additions: 8, deletions: 3 },
+      { path: "packages/app/src/components/conversation-list.tsx", additions: 4, deletions: 1 },
+      {
+        path: "packages/app/src/components/sidebar-status-view.tsx",
+        additions: 12,
+        deletions: 2,
+      },
+      { path: "docs/refactors/roadmap.md", additions: 3 },
+    ],
+  });
   queue.push({ kind: "usage" });
   return queue;
 }
@@ -507,6 +526,22 @@ function shouldEmitCodeFence(prompt: AgentPromptInput): boolean {
   return /stream\s+(?:a\s+)?(?:code\s+)?fence|highlight\s+(?:this\s+)?fence/i.test(
     promptToText(prompt),
   );
+}
+
+/** Prompt mode for the composer tasks-badge gate: `Emit a todo list.` */
+function shouldEmitTodoList(prompt: AgentPromptInput): boolean {
+  return /emit\s+(?:a\s+)?todo\s+list/i.test(promptToText(prompt));
+}
+
+/**
+ * Prompt mode for the composer banner gate: fail the turn with a
+ * caller-supplied message so the real daemon error path can be exercised.
+ * `Fail the turn: <message>`.
+ */
+function parseFailingTurnPrompt(prompt: AgentPromptInput): string | null {
+  const match = /fail\s+(?:the\s+)?turn:\s*(.+)/i.exec(promptToText(prompt));
+  const message = match?.[1]?.trim();
+  return message ? message : null;
 }
 
 function buildCodeFenceQueue(): CycleEvent[] {
@@ -686,6 +721,7 @@ export class MockLoadTestAgentSession implements AgentSession {
 
     const largePayload = parseLargeAgentStreamPayloadPrompt(prompt);
     const stress = parseAgentStreamStressPrompt(prompt);
+    const failingMessage = parseFailingTurnPrompt(prompt);
     if (options?.outputSchema) {
       this.scheduleStructuredOutputTurn(turn, options.outputSchema);
     } else if (shouldEmitPlanApprovalPrompt(prompt)) {
@@ -694,6 +730,10 @@ export class MockLoadTestAgentSession implements AgentSession {
       this.scheduleLargePayloadTurn(turn, largePayload);
     } else if (stress) {
       this.scheduleStressTurn(turn, stress);
+    } else if (failingMessage) {
+      this.scheduleFailingTurn(turn, failingMessage);
+    } else if (shouldEmitTodoList(prompt)) {
+      this.scheduleTodoListTurn(turn);
     } else if (shouldEmitTrailingToolRun(prompt)) {
       this.scheduleTrailingToolRunTurn(turn);
     } else if (shouldEmitCodeFence(prompt)) {
@@ -850,6 +890,63 @@ export class MockLoadTestAgentSession implements AgentSession {
     turn.finishTextWhenQueueDrained = "Synthetic code fence stream complete";
     turn.queue = buildCodeFenceQueue();
     this.schedule(turn, 0);
+  }
+
+  /**
+   * Single-shot turn that ends in a `turn_failed` event carrying the
+   * caller-supplied message, so the daemon marks the agent errored and the
+   * composer banner stack can be verified on the real surface.
+   */
+  private scheduleFailingTurn(turn: ActiveTurn, message: string): void {
+    turn.timer = setTimeout(() => {
+      if (this.activeTurn?.turnId !== turn.turnId) {
+        return;
+      }
+      this.emitTimeline(turn.turnId, {
+        type: "assistant_message",
+        text: "Working on it…",
+      });
+      this.activeTurn = null;
+      this.emit({
+        type: "turn_failed",
+        provider: this.provider,
+        turnId: turn.turnId,
+        error: message,
+      });
+      turn.resolve({
+        sessionId: this.id,
+        finalText: "",
+        timeline: [],
+        canceled: false,
+      });
+    }, 0);
+    turn.timer.unref?.();
+  }
+
+  /**
+   * Single-shot turn that emits a todo list (mixed completion states) then a
+   * closing line, so the composer tasks badge renders on the real surface.
+   */
+  private scheduleTodoListTurn(turn: ActiveTurn): void {
+    turn.timer = setTimeout(() => {
+      if (this.activeTurn?.turnId !== turn.turnId) {
+        return;
+      }
+      this.emitTimeline(turn.turnId, {
+        type: "todo",
+        items: [
+          { text: "扫描仓库结构", completed: true },
+          { text: "实现横幅系统", completed: true },
+          { text: "补齐桌面验证", completed: false },
+        ],
+      });
+      this.emitTimeline(turn.turnId, {
+        type: "assistant_message",
+        text: "任务清单已同步，剩余 1 项待完成。",
+      });
+      this.finishTurnWithText(turn, "Synthetic todo list complete");
+    }, 0);
+    turn.timer.unref?.();
   }
 
   private failConfiguredRewind(): void {
@@ -1149,6 +1246,14 @@ export class MockLoadTestAgentSession implements AgentSession {
             detail: event.detail,
           }),
         );
+        return;
+      }
+      case "turn_changes": {
+        this.emitTimeline(turn.turnId, {
+          type: "turn_changes",
+          changeSummary: "Synthetic trailing tool run changed files",
+          changedFiles: event.changedFiles,
+        });
         return;
       }
       case "usage": {

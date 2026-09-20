@@ -93,7 +93,7 @@ export default defineConfig({
       // Vite alias resolution).
       {
         find: "react-native",
-        replacement: path.resolve(rootNodeModules, "react-native-web/dist/index.js"),
+        replacement: path.join(resolvePackageEntry("react-native-web"), "dist/index.js"),
       },
       {
         find: /^react-native-svg$/,

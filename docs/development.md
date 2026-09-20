@@ -3,7 +3,7 @@
 ## Prerequisites
 
 - Node.js 22 or newer from your active `PATH`; this repository does not pin an exact version.
-- npm workspaces (comes with Node)
+- pnpm (via `corepack enable` or standalone) — this is a pnpm workspace; `npm ci`/`npm install` do not work here
 
 ## Running the dev server
 
@@ -78,7 +78,7 @@ of commands. Both run sequentially.
 ```json
 {
   "worktree": {
-    "setup": "npm ci\ncp \"$CHISACODE_SOURCE_CHECKOUT_PATH/.env\" .env\nnpm run db:migrate",
+    "setup": "pnpm install --frozen-lockfile\ncp \"$CHISACODE_SOURCE_CHECKOUT_PATH/.env\" .env\nnpm run db:migrate",
     "teardown": "npm run db:drop || true"
   }
 }

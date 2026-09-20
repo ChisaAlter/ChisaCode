@@ -267,16 +267,78 @@ describe("MockLoadTestAgentClient", () => {
     ]);
 
     // The tool run is the last content: no assistant text after it and no
-    // repeated cycles (the app folds the run as badges once idle).
+    // repeated cycles (the app folds the run as badges once idle). The only
+    // timeline item after the tool run is the trailing turn_changes payload
+    // (T3 port M4) exercising the changed-files tree.
     const lastToolIndex = timelineItems.findLastIndex((item) => item.type === "tool_call");
     const afterToolItems = timelineItems.slice(lastToolIndex + 1);
     expect(afterToolItems.every((item) => item.type !== "assistant_message")).toBe(true);
-    expect(afterToolItems.length).toBe(0);
+    expect(afterToolItems).toHaveLength(1);
+    expect(afterToolItems[0]).toMatchObject({
+      type: "turn_changes",
+      changeSummary: "Synthetic trailing tool run changed files",
+    });
+    expect(
+      afterToolItems[0]?.type === "turn_changes" && afterToolItems[0].changedFiles,
+    ).toContainEqual(
+      expect.objectContaining({ path: "packages/app/src/hooks/use-scroll-anchor.ts" }),
+    );
     expect(events.some((event) => event.type === "turn_completed")).toBe(true);
     expect(result).toMatchObject({
       finalText: "Synthetic trailing tool run complete",
       canceled: false,
     });
+  });
+
+  test("todo-list mode emits a todo timeline item and finishes", async () => {
+    vi.useFakeTimers();
+    const client = new MockLoadTestAgentClient();
+    const session = await client.createSession({
+      provider: "mock",
+      cwd: process.cwd(),
+      model: "ten-second-stream",
+    });
+    const events: AgentStreamEvent[] = [];
+    const unsubscribe = session.subscribe((event) => events.push(event));
+
+    const resultPromise = session.run("Emit a todo list.");
+    await vi.advanceTimersByTimeAsync(1_000);
+    const result = await resultPromise;
+    unsubscribe();
+
+    const todoItems = events.flatMap((event): AgentTimelineItem[] =>
+      event.type === "timeline" && event.item.type === "todo" ? [event.item] : [],
+    );
+    expect(todoItems).toHaveLength(1);
+    expect(todoItems[0]?.items).toEqual([
+      { text: "扫描仓库结构", completed: true },
+      { text: "实现横幅系统", completed: true },
+      { text: "补齐桌面验证", completed: false },
+    ]);
+    expect(events.some((event) => event.type === "turn_completed")).toBe(true);
+    expect(result).toMatchObject({ finalText: "Synthetic todo list complete", canceled: false });
+  });
+
+  test("failing-turn mode emits turn_failed with the caller message and never completes", async () => {
+    vi.useFakeTimers();
+    const client = new MockLoadTestAgentClient();
+    const session = await client.createSession({
+      provider: "mock",
+      cwd: process.cwd(),
+      model: "ten-second-stream",
+    });
+    const events: AgentStreamEvent[] = [];
+    const unsubscribe = session.subscribe((event) => events.push(event));
+
+    const resultPromise = session.run("Fail the turn: 上游限流（HTTP 429）");
+    await vi.advanceTimersByTimeAsync(1_000);
+    const result = await resultPromise;
+    unsubscribe();
+
+    const failure = events.find((event) => event.type === "turn_failed");
+    expect(failure).toMatchObject({ error: "上游限流（HTTP 429）" });
+    expect(events.some((event) => event.type === "turn_completed")).toBe(false);
+    expect(result).toMatchObject({ finalText: "", canceled: false });
   });
 
   test("agent manager coalesces adjacent assistant tokens into fewer messages", async () => {

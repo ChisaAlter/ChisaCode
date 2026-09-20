@@ -152,20 +152,24 @@ const lightStatusColors = {
   statusSuccess: "#15803d", // green-700
   statusDanger: "#b91c1c", // red-700
   statusWarning: "#d97706", // amber-600
+  statusInfo: "#1d4ed8", // blue-700
   statusMerged: "#7c3aed", // purple-600
   statusSuccessBg: "rgba(21, 128, 61, 0.12)", // green-700 at 12%
   statusWarningBg: "rgba(217, 119, 6, 0.12)", // amber-600 at 12%
   statusDangerBg: "rgba(185, 28, 28, 0.14)", // red-700 at 14%
+  statusInfoBg: "rgba(29, 78, 216, 0.10)", // blue-700 at 10%
 };
 
 const darkStatusColors = {
   statusSuccess: "#16a34a", // green-600
   statusDanger: "#dc2626", // red-600
   statusWarning: "#f59e0b", // amber-500
+  statusInfo: "#3b82f6", // blue-500
   statusMerged: "#9333ea", // purple-600
   statusSuccessBg: "rgba(22, 163, 74, 0.12)", // green-600 at 12%
   statusWarningBg: "rgba(245, 158, 11, 0.12)", // amber-500 at 12%
   statusDangerBg: "rgba(220, 38, 38, 0.14)", // red-600 at 14%
+  statusInfoBg: "rgba(59, 130, 246, 0.14)", // blue-500 at 14%
 };
 
 // Semantic color tokens - Layer-based system
@@ -465,10 +469,12 @@ const liquidNeonLightColors = {
   statusSuccess: "#16a34a",
   statusDanger: "#dc2626",
   statusWarning: "#f59e0b",
+  statusInfo: "#63e6ff",
   statusMerged: "#9333ea",
   statusSuccessBg: "rgba(22, 163, 74, 0.12)",
   statusWarningBg: "rgba(245, 158, 11, 0.12)",
   statusDangerBg: "rgba(220, 38, 38, 0.14)",
+  statusInfoBg: "rgba(0, 163, 255, 0.16)",
   terminal: {
     background: "#06111f",
     foreground: "#F7FBFF",

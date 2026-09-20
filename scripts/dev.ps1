@@ -130,4 +130,4 @@ concurrently `
     --names "daemon,metro" `
     --prefix-colors "cyan,magenta" `
     "npm run dev:server" `
-    "cd packages/app && npx expo start"
+    "cd packages/app && pnpm exec expo start"

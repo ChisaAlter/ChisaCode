@@ -21,7 +21,7 @@
   "main": "dist/main.js",
   "scripts": {
     "build": "npm --prefix ../.. run build:server && npm run build:main && node scripts/build.js",
-    "build:x64": "npm --prefix ../.. run build:server && npm run build:main && cd ../app && cross-env CHISACODE_WEB_PLATFORM=electron npx expo export --platform web && cd ../desktop && node scripts/build-x64.js",
+    "build:x64": "npm --prefix ../.. run build:server && npm run build:main && node scripts/build-x64.js",
     "build:main": "tsc -p tsconfig.json",
     "dev": "./scripts/dev.sh",
     "dev:win": "powershell ./scripts/dev.ps1",
@@ -31,18 +31,21 @@
   "dependencies": {
     "@chisacode/cli": "workspace:*",
     "@chisacode/server": "workspace:*",
+    "buffer": "5.7.1",
     "electron-log": "^5.4.3",
     "electron-updater": "^6.6.2",
     "ws": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@electron/rebuild": "^4.2.0",
     "@types/node": "catalog:",
     "@types/ws": "^8.5.14",
     "app-builder-lib": "26.8.1",
     "builder-util-runtime": "9.5.1",
     "electron": "41.2.0",
     "electron-builder": "26.8.1",
+    "node-abi": "^4.35.0",
     "typescript": "catalog:",
     "unzip-crx-3": "^0.2.0",
     "vitest": "catalog:",

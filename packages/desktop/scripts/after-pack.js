@@ -99,6 +99,54 @@ function resolveResourcesDir(appOutDir, platform) {
     : path.join(appOutDir, "resources");
 }
 
+// The app's runtime dependency closure lives in the pnpm deploy staging dir
+// (release/.deploy/node_modules, materialized by build-x64.js). electron-builder's
+// node_modules collector cannot resolve a pnpm workspace layout, so copy the
+// closure into app.asar.unpacked/node_modules ourselves — Electron's module
+// resolution falls through the asar to app.asar.unpacked automatically.
+function stagedNodeModulesDir(appOutDir) {
+  return path.join(appOutDir, "..", ".deploy", "node_modules");
+}
+
+function copyDereferenced(src, dest) {
+  const real = fs.realpathSync(src);
+  const st = fs.statSync(real);
+  if (st.isDirectory()) {
+    fs.mkdirSync(dest, { recursive: true });
+    for (const entry of fs.readdirSync(real)) {
+      copyDereferenced(path.join(real, entry), path.join(dest, entry));
+    }
+    return;
+  }
+  fs.copyFileSync(real, dest);
+}
+
+function copyStagedProductionNodeModules(appOutDir) {
+  const stagedNm = stagedNodeModulesDir(appOutDir);
+  if (!fs.existsSync(stagedNm)) {
+    throw new Error(
+      `staged node_modules missing at ${stagedNm} — build-x64.js must run pnpm deploy first`,
+    );
+  }
+  const targetNm = path.join(
+    resolveResourcesDir(appOutDir, "win32"),
+    "app.asar.unpacked",
+    "node_modules",
+  );
+  fs.mkdirSync(targetNm, { recursive: true });
+  let copied = 0;
+  for (const entry of fs.readdirSync(stagedNm)) {
+    if (entry === ".pnpm" || entry === ".bin") continue;
+    const src = path.join(stagedNm, entry);
+    const st = fs.lstatSync(src);
+    if (!st.isDirectory() && !st.isSymbolicLink()) continue;
+    copyDereferenced(src, path.join(targetNm, entry));
+    copied += 1;
+  }
+  console.log(`Copied staged production node_modules: ${copied} top-level packages`);
+  return stagedNm;
+}
+
 async function rebuildElectronNativeModules(appOutDir, platform, arch) {
   const unpackedAppDir = path.join(resolveResourcesDir(appOutDir, platform), "app.asar.unpacked");
   const nodeModules = path.join(unpackedAppDir, "node_modules");
@@ -111,7 +159,9 @@ async function rebuildElectronNativeModules(appOutDir, platform, arch) {
   }
 
   for (const moduleName of modulesToRebuild) {
-    ensureNativeBuildInputs(moduleName, path.join(nodeModules, moduleName));
+    ensureNativeBuildInputs(moduleName, path.join(nodeModules, moduleName), [
+      stagedNodeModulesDir(appOutDir),
+    ]);
   }
 
   console.log(
@@ -146,8 +196,8 @@ async function rebuildElectronNativeModules(appOutDir, platform, arch) {
   }
 }
 
-function ensureNativeBuildInputs(moduleName, targetModuleDir) {
-  const sourceEntry = require.resolve(moduleName);
+function ensureNativeBuildInputs(moduleName, targetModuleDir, resolvePaths) {
+  const sourceEntry = require.resolve(moduleName, { paths: resolvePaths });
   const sourceModuleDir = path.dirname(path.dirname(sourceEntry));
   for (const relativePath of ["binding.gyp", "src", "deps"]) {
     const sourcePath = path.join(sourceModuleDir, relativePath);
@@ -202,6 +252,7 @@ exports.default = async function afterPack(context) {
   const platform = context.electronPlatformName;
   const arch = ARCH_MAP[context.arch] || process.arch;
 
+  copyStagedProductionNodeModules(context.appOutDir);
   await rebuildElectronNativeModules(context.appOutDir, platform, arch);
   pruneNativeModules(context.appOutDir, platform, arch);
 

@@ -52,6 +52,13 @@ const ThemedBlur = withUnistyles(BlurView);
 
 There is no escape hatch. If none of (1)–(3) fit, the problem is upstream — fix it there or file an issue. The hook is not on the table.
 
+### Known remaining call sites (sanctioned exceptions)
+
+Two pre-existing call sites are deliberately tolerated. Do not add a third; extend this list only via PR review with a written reason:
+
+- `packages/app/src/constants/layout.ts` — `useIsCompactFormFactor()` reads `rt.breakpoint`. Breakpoint-driven layout **requires** a runtime subscription; `UnistylesRuntime.breakpoint` reads are not reactive and there is no Babel-plugin path for JS-level layout branching. Centralizing the subscription in one hook keeps the rest of the tree off `useUnistyles()`.
+- `packages/app/src/components/context-window-meter.tsx` — reads `theme` to derive `stroke` colors on `react-native-svg` `<Circle>` (third-party prop, the `withUnistyles` case). The wrapper is possible but would need prop plumbing for two per-threshold stroke mappings; the component is a 28px meter whose re-render cost is negligible. If it ever grows, convert to `withUnistyles(Circle)` instead of copying the pattern elsewhere.
+
 ## How Updates Propagate
 
 For standard React Native components, the [Unistyles Babel plugin](https://www.unistyl.es/v3/other/babel-plugin) rewrites imports such as `View`, `Text`, `Pressable`, and `ScrollView` to Unistyles-aware component factories. On native, those factories borrow the component ref and register the `style` prop with the ShadowRegistry. The upstream ["Why my view doesn't update?"](https://www.unistyl.es/v3/guides/why-my-view-doesnt-update) guide describes this as the ShadowTree update path that avoids unnecessary React re-renders.

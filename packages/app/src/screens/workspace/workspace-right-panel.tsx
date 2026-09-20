@@ -9,6 +9,7 @@ import { FileExplorerPane } from "@/components/file-explorer-pane";
 import { TerminalPane } from "@/components/terminal-pane";
 import { GitDiffPane } from "@/git/diff-pane";
 import { DEFAULT_EXPLORER_SIDEBAR_WIDTH, type RightPanelSurface } from "@/stores/panel-store";
+import { useBrowserStore } from "@/stores/browser-store";
 import type { Theme } from "@/styles/theme";
 import { isWeb } from "@/constants/platform";
 import {
@@ -75,6 +76,26 @@ export function WorkspaceRightPanel({
 }: WorkspaceRightPanelProps) {
   const hasWorkspaceRoot = Boolean(workspaceRoot && workspaceRoot.trim().length > 0);
 
+  // T3 port M13: the browser surface's custom rail width, persisted per
+  // browser record after a left-edge drag.
+  const browserPaneWidth = useBrowserStore((state) =>
+    browserId ? (state.browsersById[browserId]?.paneWidth ?? null) : null,
+  );
+  const railStyle = useMemo(
+    () =>
+      activeSurface === "browser" && browserPaneWidth
+        ? [
+            styles.rail,
+            {
+              width: browserPaneWidth,
+              // keep in sync with BROWSER_PANE_MAX_VIEWPORT_RATIO
+              maxWidth: "70%" as const,
+            },
+          ]
+        : styles.rail,
+    [activeSurface, browserPaneWidth],
+  );
+
   const cards = useMemo<SurfaceCardSpec[]>(
     () => [
       {
@@ -114,7 +135,7 @@ export function WorkspaceRightPanel({
   }
 
   return (
-    <View style={styles.rail} testID="workspace-right-panel">
+    <View style={railStyle} testID="workspace-right-panel">
       {activeSurface == null ? (
         <RightPanelEmptyState cards={cards} onOpenSurface={onOpenSurface} />
       ) : (

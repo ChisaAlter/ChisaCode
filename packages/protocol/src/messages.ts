@@ -141,6 +141,31 @@ export const ProjectRenameResponseSchema = z.object({
   payload: ProjectRenameResponsePayloadSchema,
 });
 
+// COMPAT(discoveredPorts): added in v1.0.4. The daemon scans the host it runs
+// on for listening TCP ports and pushes the snapshot on its scan cadence;
+// clients subscribe by sending discovered_ports.subscribe and stop with
+// discovered_ports.unsubscribe. The list is intentionally unfiltered — the
+// daemon worker cannot probe loopback HTTP from its own runtime — so
+// consumers verify HTML-ness before display.
+export const DiscoveredPortSchema = z.object({
+  host: z.string(),
+  port: z.number().int().min(0).max(65535),
+  processName: z.string().optional(),
+});
+
+export const DiscoveredPortsNoticeSchema = z.object({
+  type: z.literal("discovered_ports"),
+  ports: z.array(DiscoveredPortSchema),
+});
+
+export const DiscoveredPortsSubscribeMessageSchema = z.object({
+  type: z.literal("discovered_ports.subscribe"),
+});
+
+export const DiscoveredPortsUnsubscribeMessageSchema = z.object({
+  type: z.literal("discovered_ports.unsubscribe"),
+});
+
 export const ClientHeartbeatMessageSchema = z.object({
   type: z.literal("client_heartbeat"),
   deviceType: z.enum(["web", "mobile"]),
@@ -184,6 +209,8 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   GenerativeUiActionRequestSchema,
   // COMPAT(generativeUiActionFlatRpc): added in v0.1.101; remove after 2027-01-11 once the client floor is >= v0.1.101.
   LegacyGenerativeUiActionRequestSchema,
+  DiscoveredPortsSubscribeMessageSchema,
+  DiscoveredPortsUnsubscribeMessageSchema,
 ]);
 
 export type SessionInboundMessage = z.infer<typeof SessionInboundMessageSchema>;
@@ -292,6 +319,8 @@ export const ServerInfoStatusPayloadSchema = z
         cindyModules: z.boolean().optional(),
         // COMPAT(modelGatewaySupplyScope): added in v0.1.103; remove the gate when daemon floor >= the version that persists supplyScope.
         modelGatewaySupplyScope: z.boolean().optional(),
+        // COMPAT(discoveredPorts): added in v1.0.4; remove the gate no earlier than 2027-09-08 when client/daemon floor >= v1.0.4.
+        discoveredPorts: z.boolean().optional(),
       })
       .optional(),
   })
@@ -449,6 +478,7 @@ type SessionOutboundMessageSchemaOptions = [
   ...typeof AutomationOutboundMessageSchemas,
   ...typeof CindyOutboundMessageSchemas,
   typeof GenerativeUiActionResponseSchema,
+  typeof DiscoveredPortsNoticeSchema,
 ];
 
 export const SessionOutboundMessageSchema: z.ZodDiscriminatedUnion<
@@ -477,7 +507,15 @@ export const SessionOutboundMessageSchema: z.ZodDiscriminatedUnion<
   ...AutomationOutboundMessageSchemas,
   ...CindyOutboundMessageSchemas,
   GenerativeUiActionResponseSchema,
+  DiscoveredPortsNoticeSchema,
 ]);
+
+export type DiscoveredPort = z.infer<typeof DiscoveredPortSchema>;
+export type DiscoveredPortsNotice = z.infer<typeof DiscoveredPortsNoticeSchema>;
+export type DiscoveredPortsSubscribeMessage = z.infer<typeof DiscoveredPortsSubscribeMessageSchema>;
+export type DiscoveredPortsUnsubscribeMessage = z.infer<
+  typeof DiscoveredPortsUnsubscribeMessageSchema
+>;
 
 export type SessionOutboundMessage = z.infer<typeof SessionOutboundMessageSchema>;
 

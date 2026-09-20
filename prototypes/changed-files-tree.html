@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>回合变更文件树（TurnChangesItem 渲染）— 原型</title>
+    <style>
+      :root {
+        --bg: #f4f5f8;
+        --surface0: #ffffff;
+        --surface-workspace: #f4f5f8;
+        --fg: #14171f;
+        --fg-muted: #6f7686;
+        --border: #e4e6ec;
+        --accent: #2a6cf0;
+        --addition: #1a9e55;
+        --deletion: #e0483d;
+        --mono: ui-monospace, "SF Mono", "Cascadia Code", "Segoe UI Mono", Consolas, monospace;
+        --system: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; }
+      body {
+        background: var(--bg);
+        color: var(--fg);
+        font-family: var(--system);
+        font-size: 14px;
+        line-height: 1.5;
+        padding: 28px 24px 80px;
+      }
+      h1 { font-size: 22px; font-weight: 700; margin: 0 0 4px; letter-spacing: -0.01em; }
+      .sub { color: var(--fg-muted); font-size: 13px; margin: 0 0 28px; }
+      .section {
+        max-width: 760px;
+        margin: 0 auto 44px;
+        background: var(--surface0);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        overflow: hidden;
+      }
+      .section h2 { font-size: 14px; font-weight: 600; margin: 0; padding: 14px 18px 10px; }
+      .note { color: var(--fg-muted); font-size: 12.5px; padding: 0 18px 14px; margin: 0; }
+
+      /* ===== 助手消息内的回合变更树（拟真对话底色） ===== */
+      .chat {
+        background: var(--surface-workspace);
+        padding: 18px 20px 22px;
+      }
+      .assistant-text {
+        font-size: 14px;
+        line-height: 1.625;
+        color: rgba(20, 23, 31, 0.8);
+        margin: 0 0 14px;
+      }
+
+      .turn-changes { border: 1px solid var(--border); border-radius: 10px; background: var(--surface0); overflow: hidden; }
+      .tc-header {
+        display: flex; align-items: center; gap: 8px;
+        padding: 9px 12px;
+        cursor: pointer; user-select: none;
+      }
+      .tc-header:hover { background: rgba(20, 23, 31, 0.03); }
+      .tc-chevron { color: var(--fg-muted); font-size: 11px; width: 12px; text-align: center; transition: transform 0.15s ease; }
+      .tc-chevron.collapsed { transform: rotate(-90deg); }
+      .tc-title { font-size: 12.5px; font-weight: 600; color: var(--fg); flex: 1; }
+      .tc-total { font-size: 12.5px; color: var(--fg-muted); font-family: var(--mono); white-space: nowrap; }
+
+      .tc-body { border-top: 1px solid var(--border); }
+      .dir-row {
+        display: flex; align-items: center; gap: 8px;
+        padding: 7px 12px 7px 26px;
+        cursor: pointer; user-select: none;
+      }
+      .dir-row:hover { background: rgba(20, 23, 31, 0.03); }
+      .dir-chevron { color: var(--fg-muted); font-size: 10px; width: 10px; text-align: center; transition: transform 0.15s ease; }
+      .dir-chevron.collapsed { transform: rotate(-90deg); }
+      .dir-name { font-size: 12.5px; color: var(--fg-muted); font-family: var(--mono); flex: 1; }
+      .file-row {
+        display: flex; align-items: center; gap: 8px;
+        padding: 7px 12px 7px 42px;
+        cursor: pointer;
+      }
+      .file-row:hover { background: rgba(42, 108, 240, 0.06); }
+      .file-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--border); flex-shrink: 0; }
+      .file-name { font-size: 12.5px; color: var(--fg); font-family: var(--mono); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .file-name .disambiguation { color: var(--fg-muted); }
+      .stat { display: inline-flex; gap: 4px; font-family: var(--mono); font-size: 12px; white-space: nowrap; }
+      .stat .add { color: var(--addition); }
+      .stat .del { color: var(--deletion); }
+      .stat .zero { color: var(--fg-muted); }
+
+      .collapsed-demo .tc-body { display: none; }
+      .dir-collapsed .dir-children { display: none; }
+    </style>
+  </head>
+  <body>
+    <h1>回合变更文件树 — 原型</h1>
+    <p class="sub">
+      M4：TurnChangesItem（回合完成的 changedFiles）渲染为 assistant 文本下方的可折叠文件树。
+      复用 DiffStat（+绿 -红）；目录聚合子项统计；点击文件行 → 打开文件预览 tab。
+    </p>
+
+    <div class="section">
+      <h2>完整形态（多目录 + 展开态）</h2>
+      <p class="note">助手回复下方紧贴渲染；树头一行：折叠箭头 + 标题 + 全回合总统计。目录行按路径分组聚合。</p>
+      <div class="chat">
+        <p class="assistant-text">
+          我完成了侧栏状态视图的字体校准，并修复了切换时的横向闪动。共改动 6 个文件。
+        </p>
+        <div class="turn-changes">
+          <div class="tc-header" onclick="this.parentElement.classList.toggle('collapsed-demo'); this.querySelector('.tc-chevron').classList.toggle('collapsed')">
+            <span class="tc-chevron">▼</span>
+            <span class="tc-title">变更文件</span>
+            <span class="tc-total">+86 −23</span>
+          </div>
+          <div class="tc-body">
+            <div class="dir-row" onclick="this.nextElementSibling.classList.toggle('dir-collapsed'); this.querySelector('.dir-chevron').classList.toggle('collapsed')">
+              <span class="dir-chevron">▼</span>
+              <span class="dir-name">packages/app/src/components/</span>
+              <span class="stat"><span class="add">+64</span><span class="del">−18</span></span>
+            </div>
+            <div class="dir-children">
+              <div class="file-row"><span class="file-dot"></span><span class="file-name">sidebar-status-view.tsx</span><span class="stat"><span class="add">+38</span><span class="del">−12</span></span></div>
+              <div class="file-row"><span class="file-dot"></span><span class="file-name">sidebar-session-list.tsx</span><span class="stat"><span class="add">+21</span><span class="del">−6</span></span></div>
+              <div class="file-row"><span class="file-dot"></span><span class="file-name">left-sidebar.tsx</span><span class="stat"><span class="add">+5</span><span class="del">−0</span></span></div>
+            </div>
+            <div class="dir-row" onclick="this.nextElementSibling.classList.toggle('dir-collapsed'); this.querySelector('.dir-chevron').classList.toggle('collapsed')">
+              <span class="dir-chevron">▼</span>
+              <span class="dir-name">packages/app/src/screens/workspace/</span>
+              <span class="stat"><span class="add">+22</span><span class="del">−5</span></span>
+            </div>
+            <div class="dir-children">
+              <div class="file-row"><span class="file-dot"></span><span class="file-name">workspace-pane-content.tsx</span><span class="stat"><span class="add">+14</span><span class="del">−5</span></span></div>
+              <div class="file-row"><span class="file-dot"></span><span class="file-name">workspace-center-column.tsx</span><span class="stat"><span class="add">+8</span><span class="del">−0</span></span></div>
+            </div>
+            <div class="file-row"><span class="file-dot"></span><span class="file-name">docs/refactors/roadmap.md</span><span class="stat"><span class="add"><span class="zero">+0</span></span><span class="del">−0</span></span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>折叠态（默认：回合完成即收起）</h2>
+      <p class="note">仅树头一行；点击展开。</p>
+      <div class="chat">
+        <p class="assistant-text">完成。所有门禁已通过。</p>
+        <div class="turn-changes collapsed-demo">
+          <div class="tc-header" onclick="this.parentElement.classList.toggle('collapsed-demo'); this.querySelector('.tc-chevron').classList.toggle('collapsed')">
+            <span class="tc-chevron collapsed">▼</span>
+            <span class="tc-title">变更文件</span>
+            <span class="tc-total">+12 −4</span>
+          </div>
+          <div class="tc-body">
+            <div class="file-row"><span class="file-dot"></span><span class="file-name">packages/app/src/composer/submit.ts</span><span class="stat"><span class="add">+12</span><span class="del">−4</span></span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>边界形态</h2>
+      <p class="note">左：同名文件多目录消歧（父路径前缀灰色）。右：零改动文件 + 大数字紧凑格式（1.2k）。</p>
+      <div class="chat" style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+        <div class="turn-changes">
+          <div class="tc-header"><span class="tc-chevron">▼</span><span class="tc-title">变更文件</span><span class="tc-total">+6 −2</span></div>
+          <div class="tc-body">
+            <div class="file-row"><span class="file-dot"></span><span class="file-name"><span class="disambiguation">app/…/</span>index.ts</span><span class="stat"><span class="add">+4</span><span class="del">−1</span></span></div>
+            <div class="file-row"><span class="file-dot"></span><span class="file-name"><span class="disambiguation">server/…/</span>index.ts</span><span class="stat"><span class="add">+2</span><span class="del">−1</span></span></div>
+          </div>
+        </div>
+        <div class="turn-changes">
+          <div class="tc-header"><span class="tc-chevron">▼</span><span class="tc-title">变更文件</span><span class="tc-total">+1.2k −35</span></div>
+          <div class="tc-body">
+            <div class="file-row"><span class="file-dot"></span><span class="file-name">generated/schema.gen.ts</span><span class="stat"><span class="add">+1.2k</span><span class="del"><span class="zero">−0</span></span></span></div>
+            <div class="file-row"><span class="file-dot"></span><span class="file-name">README.md</span><span class="stat"><span class="add"><span class="zero">+0</span></span><span class="del">−35</span></span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

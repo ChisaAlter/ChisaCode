@@ -15,7 +15,10 @@ import { Composer } from "@/composer";
 import { AgentModeControl } from "@/composer/agent-controls/mode-control";
 import { FileDropZone } from "@/components/file-drop-zone";
 import { RewindComposerRestoreProvider } from "@/components/rewind/composer-restore";
+import { ComposerInsertTextContext } from "@/composer/composer-insert-text-context";
+import { useStableEvent } from "@/hooks/use-stable-event";
 import type { ImageAttachment } from "@/composer/types";
+import type { ComposerBannerDescriptor } from "@/composer/banner/composer-banner-logic";
 import { getProviderIcon } from "@/components/provider-icons";
 import { ToastViewport, useToastHost } from "@/components/toast-host";
 import type { WorkspaceComposerAttachment } from "@/attachments/types";
@@ -28,6 +31,10 @@ import { isNative, isWeb } from "@/constants/platform";
 import { useAgentAttentionClear } from "@/hooks/use-agent-attention-clear";
 import { useAgentInitialization } from "@/hooks/use-agent-initialization";
 import { useAgentInputDraft, type AgentInputDraft } from "@/composer/draft/input-draft";
+import { useComposerPromptHistory } from "@/composer/use-composer-prompt-history";
+import { useComposerScrollCollapse } from "@/composer/use-composer-scroll-collapse";
+import { deriveComposerTasks } from "@/composer/tasks-badge";
+import { TasksBadge } from "@/composer/tasks-badge-view";
 import {
   type AgentScreenAgent,
   type AgentScreenContinuity,
@@ -424,6 +431,7 @@ export function useDraftPanelDescriptor(
 }
 
 const EMPTY_STREAM_ITEMS: StreamItem[] = [];
+const EMPTY_BANNERS: readonly ComposerBannerDescriptor[] = [];
 const EMPTY_PENDING_PERMISSIONS = new Map<string, PendingPermission>();
 const EMPTY_PENDING_PERMISSION_LIST: PendingPermission[] = [];
 
@@ -1210,6 +1218,13 @@ function ChatAgentReadyContent({
     }),
   });
 
+  // Selection toolbar (T3 port M11, web only): "Quote" appends the selected
+  // passage to the composer draft as a markdown blockquote.
+  const insertComposerText = useStableEvent((snippet: string) => {
+    const current = agentInputDraft.text;
+    agentInputDraft.setText(current.trim().length > 0 ? `${current}\n\n${snippet}` : snippet);
+  });
+
   // Anchor the just-sent row near the top so the reply grows below it. The
   // composer dispatches the optimistic user message id (stable across server
   // adoption), which avoids racing the daemon: the optimistic entry can be
@@ -1226,74 +1241,106 @@ function ChatAgentReadyContent({
     [agentId, streamViewRef],
   );
 
+  // Agent run failures surface in the composer banner stack (attached above the
+  // input) instead of a standalone strip. Dismissal memory is keyed by the error
+  // message, so the same failure stays hidden while a new one still appears.
+  const agentErrorBanners = useMemo<readonly ComposerBannerDescriptor[]>(() => {
+    if (agentState.status !== "error" || !agentState.lastError) {
+      return EMPTY_BANNERS;
+    }
+    return [
+      {
+        id: "agent-run-error",
+        variant: "error",
+        title: t("panels.agent.runFailed"),
+        body: agentState.lastError,
+        message: `agent-run-error:${agentState.lastError}`,
+        testID: "agent-run-error-banner",
+      },
+    ];
+  }, [agentState.lastError, agentState.status, t]);
+
+  // Scroll-collapse (T3 port M8, web only): reading scrollback folds the
+  // composer to a single line; any expand trigger restores it.
+  const [isStreamNearBottom, setIsStreamNearBottom] = useState(true);
+  const handleStreamNearBottomChange = useCallback((value: boolean) => {
+    setIsStreamNearBottom(value);
+  }, []);
+  const scrollCollapse = useComposerScrollCollapse({
+    isNearBottom: isStreamNearBottom,
+  });
+  const handleExpandFromScrollCollapse = useCallback(() => {
+    scrollCollapse.expand();
+  }, [scrollCollapse]);
+
   return (
-    <RewindComposerRestoreProvider text={agentInputDraft.text} setText={agentInputDraft.setText}>
-      <View style={styles.root} testID={agentId ? `agent-panel-${agentId}` : undefined}>
-        <FileDropZone onFilesDropped={handleFilesDropped} disabled={isArchivingCurrentAgent}>
-          {/* The centered ConversationAspectColumn lives on the center-column shell
+    <ComposerInsertTextContext.Provider value={insertComposerText}>
+      <RewindComposerRestoreProvider text={agentInputDraft.text} setText={agentInputDraft.setText}>
+        <View style={styles.root} testID={agentId ? `agent-panel-${agentId}` : undefined}>
+          <FileDropZone onFilesDropped={handleFilesDropped} disabled={isArchivingCurrentAgent}>
+            {/* The centered ConversationAspectColumn lives on the center-column shell
               (workspace-center-column.tsx), not here — it stays mounted across agent
               switches so the conversation width never re-measures and never flashes. */}
-          <View style={styles.contentContainer}>
-            <ReanimatedAnimated.View style={animatedContentStyle}>
-              <AgentStreamSection
-                streamViewRef={streamViewRef}
-                serverId={serverId}
-                agentId={agentId}
-                agent={effectiveAgent}
-                routeBottomAnchorRequest={routeBottomAnchorRequest}
-                hasAppliedAuthoritativeHistory={hasAppliedAuthoritativeHistory}
-                toast={panelToast.api}
-                onOpenWorkspaceFile={onOpenWorkspaceFile}
-              />
-            </ReanimatedAnimated.View>
+            <View style={styles.contentContainer}>
+              <ReanimatedAnimated.View style={animatedContentStyle}>
+                <AgentStreamSection
+                  streamViewRef={streamViewRef}
+                  serverId={serverId}
+                  agentId={agentId}
+                  agent={effectiveAgent}
+                  routeBottomAnchorRequest={routeBottomAnchorRequest}
+                  hasAppliedAuthoritativeHistory={hasAppliedAuthoritativeHistory}
+                  toast={panelToast.api}
+                  onOpenWorkspaceFile={onOpenWorkspaceFile}
+                  onNearBottomStateChange={handleStreamNearBottomChange}
+                />
+              </ReanimatedAnimated.View>
 
-            {showHistorySyncOverlay ? (
-              <HistorySyncProgressBanner
-                title={t("panels.agent.historySyncingTitle")}
-                subtitle={t("panels.agent.historySyncingSubtitle")}
+              {showHistorySyncOverlay ? (
+                <HistorySyncProgressBanner
+                  title={t("panels.agent.historySyncingTitle")}
+                  subtitle={t("panels.agent.historySyncingSubtitle")}
+                />
+              ) : null}
+            </View>
+
+            {historySyncErrorMessage ? (
+              <HistorySyncErrorBanner
+                title={t("panels.agent.historySyncFailed")}
+                message={historySyncErrorMessage}
               />
             ) : null}
-          </View>
 
-          {historySyncErrorMessage ? (
-            <HistorySyncErrorBanner
-              title={t("panels.agent.historySyncFailed")}
-              message={historySyncErrorMessage}
+            <AgentComposerSection
+              agentId={agentId}
+              serverId={serverId}
+              isPaneFocused={isPaneFocused}
+              isArchivingCurrentAgent={isArchivingCurrentAgent}
+              archivedAt={agentState.archivedAt}
+              cwd={cwd}
+              isSubmitLoading={false}
+              agentInputDraft={agentInputDraft}
+              banners={agentErrorBanners}
+              scrollCollapsed={scrollCollapse.collapsed}
+              onExpandFromScrollCollapse={handleExpandFromScrollCollapse}
+              onComposerInputActivity={scrollCollapse.noteInput}
+              onAttentionInputFocus={attentionController.clearOnInputFocus}
+              onAttentionPromptSend={attentionController.clearOnPromptSend}
+              onAddImages={handleAddImagesCallback}
+              onComposerHeightChange={handleComposerHeightChange}
+              onMessageSent={handleMessageSent}
+              onOptimisticMessageDispatched={handleOptimisticMessageDispatched}
             />
-          ) : null}
 
-          {agentState.status === "error" && agentState.lastError ? (
-            <HistorySyncErrorBanner
-              title={t("panels.agent.runFailed")}
-              message={agentState.lastError}
+            <ToastViewport
+              toasts={panelToast.toasts}
+              onDismiss={panelToast.dismiss}
+              placement="panel"
             />
-          ) : null}
-
-          <AgentComposerSection
-            agentId={agentId}
-            serverId={serverId}
-            isPaneFocused={isPaneFocused}
-            isArchivingCurrentAgent={isArchivingCurrentAgent}
-            archivedAt={agentState.archivedAt}
-            cwd={cwd}
-            isSubmitLoading={false}
-            agentInputDraft={agentInputDraft}
-            onAttentionInputFocus={attentionController.clearOnInputFocus}
-            onAttentionPromptSend={attentionController.clearOnPromptSend}
-            onAddImages={handleAddImagesCallback}
-            onComposerHeightChange={handleComposerHeightChange}
-            onMessageSent={handleMessageSent}
-            onOptimisticMessageDispatched={handleOptimisticMessageDispatched}
-          />
-
-          <ToastViewport
-            toasts={panelToast.toasts}
-            onDismiss={panelToast.dismiss}
-            placement="panel"
-          />
-        </FileDropZone>
-      </View>
-    </RewindComposerRestoreProvider>
+          </FileDropZone>
+        </View>
+      </RewindComposerRestoreProvider>
+    </ComposerInsertTextContext.Provider>
   );
 }
 
@@ -1337,6 +1384,7 @@ function AgentStreamSection({
   hasAppliedAuthoritativeHistory,
   toast,
   onOpenWorkspaceFile,
+  onNearBottomStateChange,
 }: {
   streamViewRef: React.RefObject<AgentStreamViewHandle | null>;
   serverId: string;
@@ -1346,6 +1394,7 @@ function AgentStreamSection({
   hasAppliedAuthoritativeHistory: boolean;
   toast: ReturnType<typeof useToastHost>["api"];
   onOpenWorkspaceFile?: (request: WorkspaceFileOpenRequest) => void;
+  onNearBottomStateChange?: (isNearBottom: boolean) => void;
 }) {
   const streamItemsRaw = useSessionStore((state) =>
     agentId ? state.sessions[serverId]?.agentStreamTail?.get(agentId) : undefined,
@@ -1390,6 +1439,7 @@ function AgentStreamSection({
       isAuthoritativeHistoryReady={hasAppliedAuthoritativeHistory}
       toast={toast}
       onOpenWorkspaceFile={onOpenWorkspaceFile}
+      onNearBottomStateChange={onNearBottomStateChange}
       isTurnAnchorEnabled={isWeb}
     />
   );
@@ -1404,6 +1454,10 @@ function AgentComposerSection({
   cwd,
   isSubmitLoading,
   agentInputDraft,
+  banners,
+  scrollCollapsed,
+  onExpandFromScrollCollapse,
+  onComposerInputActivity,
   onAttentionInputFocus,
   onAttentionPromptSend,
   onAddImages,
@@ -1419,6 +1473,10 @@ function AgentComposerSection({
   cwd: string;
   isSubmitLoading: boolean;
   agentInputDraft: AgentInputDraft;
+  banners?: readonly ComposerBannerDescriptor[];
+  scrollCollapsed: boolean;
+  onExpandFromScrollCollapse: () => void;
+  onComposerInputActivity: () => void;
   onAttentionInputFocus: () => void;
   onAttentionPromptSend: () => void;
   onAddImages: (addImages: (images: ImageAttachment[]) => void) => void;
@@ -1444,6 +1502,10 @@ function AgentComposerSection({
       cwd={cwd}
       isSubmitLoading={isSubmitLoading}
       agentInputDraft={agentInputDraft}
+      banners={banners}
+      scrollCollapsed={scrollCollapsed}
+      onExpandFromScrollCollapse={onExpandFromScrollCollapse}
+      onComposerInputActivity={onComposerInputActivity}
       onAttentionInputFocus={onAttentionInputFocus}
       onAttentionPromptSend={onAttentionPromptSend}
       onAddImages={onAddImages}
@@ -1461,6 +1523,10 @@ function ActiveAgentComposer({
   cwd,
   isSubmitLoading,
   agentInputDraft,
+  banners,
+  scrollCollapsed,
+  onExpandFromScrollCollapse,
+  onComposerInputActivity,
   onAttentionInputFocus,
   onAttentionPromptSend,
   onAddImages,
@@ -1474,6 +1540,10 @@ function ActiveAgentComposer({
   cwd: string;
   isSubmitLoading: boolean;
   agentInputDraft: AgentInputDraft;
+  banners?: readonly ComposerBannerDescriptor[];
+  scrollCollapsed: boolean;
+  onExpandFromScrollCollapse: () => void;
+  onComposerInputActivity: () => void;
   onAttentionInputFocus: () => void;
   onAttentionPromptSend: () => void;
   onAddImages: (addImages: (images: ImageAttachment[]) => void) => void;
@@ -1485,6 +1555,19 @@ function ActiveAgentComposer({
   const isCompact = useIsCompactFormFactor();
   const paneContext = usePaneContext();
   const { workspaceId } = paneContext;
+  const { onPromptHistoryStep } = useComposerPromptHistory({
+    serverId,
+    agentId,
+    currentText: agentInputDraft.text,
+    setText: agentInputDraft.setText,
+  });
+  const composerStreamTail = useSessionStore((state) =>
+    agentId ? state.sessions[serverId]?.agentStreamTail?.get(agentId) : undefined,
+  );
+  const tasksBadge = useMemo(
+    () => deriveComposerTasks(composerStreamTail ?? EMPTY_STREAM_ITEMS),
+    [composerStreamTail],
+  );
   const { archiveAgent } = useArchiveAgent();
   const unpinWorkspaceAgent = useWorkspaceLayoutStore((state) => state.unpinAgent);
   const subagentRows = useSubagentsForParent({
@@ -1578,6 +1661,11 @@ function ActiveAgentComposer({
           onOpenSubagent={handleOpenSubagent}
           onArchiveSubagent={handleArchiveSubagent}
         />
+        {tasksBadge ? (
+          <View style={styles.tasksBadgeRow}>
+            <TasksBadge badge={tasksBadge} />
+          </View>
+        ) : null}
         <Composer
           agentId={agentId}
           serverId={serverId}
@@ -1600,6 +1688,11 @@ function ActiveAgentComposer({
           onMessageSent={onMessageSent}
           onOptimisticMessageDispatched={onOptimisticMessageDispatched}
           onClientSlashCommand={handleClientSlashCommand}
+          onPromptHistoryStep={onPromptHistoryStep}
+          banners={banners}
+          scrollCollapsed={scrollCollapsed}
+          onExpandFromScrollCollapse={onExpandFromScrollCollapse}
+          onComposerInputActivity={onComposerInputActivity}
           footer={composerFooter}
           inputWrapperStyle={styles.composerInputWrapper}
         />
@@ -1674,6 +1767,10 @@ const foregroundMutedColorMapping = (theme: Theme) => ({
 });
 
 const styles = StyleSheet.create((theme) => ({
+  tasksBadgeRow: {
+    paddingHorizontal: 12,
+    paddingTop: 6,
+  },
   root: {
     flex: 1,
     minWidth: 0,

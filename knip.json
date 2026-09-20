@@ -4,7 +4,7 @@
     ".": {
       "entry": ["scripts/**/*.{js,mjs,cjs,ts}"],
       "project": ["scripts/**/*.{js,mjs,cjs,ts}"],
-      "ignoreDependencies": ["@babel/core", "@babel/core"]
+      "ignoreDependencies": ["@babel/core"]
     },
     "packages/server": {
       "entry": [
@@ -41,7 +41,7 @@
       "paths": {
         "@server/*": ["../server/src/*"]
       },
-      "ignoreDependencies": ["react-test-renderer", "electron", "electron"],
+      "ignoreDependencies": ["react-test-renderer", "electron"],
       "ignore": ["android/**", "ios/**", ".expo/**", "dist/**", "scripts/reset-project.js"]
     },
     "packages/cli": {
@@ -53,8 +53,8 @@
       "project": ["src/**/*.ts"]
     },
     "packages/desktop": {
-      "entry": ["src/main.ts", "src/preload.ts", "src/**/*.test.ts"],
-      "project": ["src/**/*.ts"]
+      "entry": ["src/main.ts", "src/preload.ts", "src/**/*.test.ts", "scripts/**/*.js"],
+      "project": ["src/**/*.ts", "scripts/**/*.js"]
     },
     "packages/highlight": {
       "entry": ["src/index.ts", "src/**/*.test.ts"],

@@ -123,6 +123,8 @@ import {
   type SessionContext,
 } from "./session-handlers/index.js";
 import { summarizeUntrustedLogIdentifier } from "./log-metadata.js";
+import { PortScannerController } from "./preview/port-scanner-controller.js";
+import { scanListeningPorts } from "./preview/port-scanner.js";
 import {
   isProviderVisibleToClient as isProviderVisibleToClientFunc,
   filterEditorsForClient as filterEditorsForClientFunc,
@@ -217,6 +219,8 @@ export interface SessionOptions {
       publicUseTls: boolean;
     } | null;
   };
+  /** COMPAT(discoveredPorts): shared daemon-wide scanner; defaults to a local one. */
+  portScannerController?: PortScannerController;
 }
 
 /** Lifecycle intent emitted by Session when the client requests a shutdown or restart. */
@@ -281,6 +285,10 @@ export class Session {
   private readonly terminalManager: TerminalManager | null;
   private readonly providerSnapshotManager: ProviderSnapshotManager;
   private readonly agentPresetStore: AgentPresetStore;
+  // COMPAT(discoveredPorts): added in v1.0.4; shared daemon-wide scanner.
+  private readonly portScannerController: PortScannerController;
+  private readonly discoveredPortsGate: boolean | undefined;
+  private discoveredPortsUnsubscribe: (() => void) | null = null;
   private readonly scriptRouteStore: ScriptRouteStore | null;
   private readonly scriptRuntimeStore: WorkspaceScriptRuntimeStore | null;
   private readonly getDaemonTcpPort: (() => number | null) | null;
@@ -376,10 +384,22 @@ export class Session {
       serverId,
       daemonVersion,
       daemonRuntimeConfig,
+      portScannerController,
     } = options;
     this.clientId = clientId;
     this.appVersion = appVersion ?? null;
     this.clientCapabilities = parseClientCapabilitiesFunc(clientCapabilities);
+    // COMPAT(discoveredPorts): the client declares the "discovered_ports"
+    // capability in its connect handshake; the daemon-side scanner only runs
+    // for sessions that do.
+    this.discoveredPortsGate = this.clientCapabilities.has(
+      CLIENT_CAPS.discoveredPorts as ClientCapability,
+    );
+    this.portScannerController =
+      portScannerController ??
+      new PortScannerController({
+        scanFn: () => scanListeningPorts(),
+      });
     this.sessionId = randomUUID();
     this.onMessage = onMessage;
     this.onBinaryMessage = onBinaryMessage ?? null;
@@ -1533,6 +1553,12 @@ export class Session {
       case "client_heartbeat":
         this.handleClientHeartbeat(msg);
         return;
+      case "discovered_ports.subscribe":
+        this.handleDiscoveredPortsSubscribe();
+        return;
+      case "discovered_ports.unsubscribe":
+        this.handleDiscoveredPortsUnsubscribe();
+        return;
       case "ping": {
         const now = Date.now();
         this.emit({
@@ -1721,6 +1747,32 @@ export class Session {
       appVisible: msg.appVisible,
       appVisibilityChangedAt,
     };
+  }
+
+  // COMPAT(discoveredPorts): added in v1.0.4. The daemon-side scan only runs
+  // while a client holds a subscription; the feature gate lives in
+  // server_info.features.discoveredPorts and is checked on connect.
+  private handleDiscoveredPortsSubscribe(): void {
+    if (this.discoveredPortsGate !== true) {
+      this.sessionLogger.debug(
+        { messageType: "discovered_ports.subscribe" },
+        "discovered_ports gate not declared by client; ignoring",
+      );
+      return;
+    }
+    if (!this.discoveredPortsUnsubscribe) {
+      this.discoveredPortsUnsubscribe = this.portScannerController.subscribe((ports) => {
+        this.emit({
+          type: "discovered_ports",
+          ports,
+        });
+      });
+    }
+  }
+
+  private handleDiscoveredPortsUnsubscribe(): void {
+    this.discoveredPortsUnsubscribe?.();
+    this.discoveredPortsUnsubscribe = null;
   }
 
   /**
@@ -2170,5 +2222,7 @@ export class Session {
 
     this.workspaceUpdateController.dispose();
     this.workspaceGitObserverController.dispose();
+
+    this.handleDiscoveredPortsUnsubscribe();
   }
 }

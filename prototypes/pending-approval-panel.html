@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>M12 审批操作面板原型</title>
+    <style>
+      :root {
+        --bg: #fbfbfc;
+        --panel: #ffffff;
+        --panel-soft: #f7f7f8;
+        --panel-hover: #f1f2f4;
+        --text: #1e232b;
+        --muted: #657081;
+        --faint: #a3abb8;
+        --border: #dfe3e8;
+        --primary: #1a1d26;
+        --primary-fg: #ffffff;
+        --destructive: #dc5a62;
+        --destructive-soft: #fdecec;
+        --warning: #a5761f;
+        --warning-soft: #fdf3dc;
+        --shadow: 0 16px 40px rgba(25, 32, 44, 0.14);
+        --radius-panel: 14px;
+        --radius-card: 10px;
+        font-family: ui-sans-serif, "Segoe UI", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; min-height: 100vh; color: var(--text); background: var(--bg); padding: 32px 24px 64px; }
+      h1 { font-size: 22px; font-weight: 700; margin: 0 0 4px; letter-spacing: -0.01em; }
+      .sub { color: var(--muted); font-size: 13px; margin: 0 0 24px; max-width: 860px; }
+      .stage { max-width: 780px; margin: 0 auto; }
+      /* --- fake stream --- */
+      .stream { display: flex; flex-direction: column; gap: 14px; margin-bottom: 18px; }
+      .msg { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-panel); padding: 14px 16px; font-size: 13.5px; line-height: 1.6; }
+      .msg .who { font-size: 11.5px; font-weight: 600; color: var(--faint); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
+      .ghost-card { border: 1px dashed var(--border); border-radius: var(--radius-panel); padding: 10px 16px; color: var(--faint); font-size: 12.5px; text-align: center; }
+      /* --- approval banner (the deliverable) --- */
+      .approval {
+        background: var(--panel);
+        border: 1px solid rgba(220, 90, 98, 0.35);
+        border-radius: var(--radius-panel);
+        box-shadow: var(--shadow);
+        overflow: hidden;
+      }
+      .approval-head {
+        display: flex; align-items: center; gap: 8px;
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--border);
+        background: var(--panel-soft);
+      }
+      .a-icon { width: 15px; height: 15px; color: var(--warning); flex: none; }
+      .a-title { font-size: 13px; font-weight: 600; }
+      .a-kind { font-size: 11px; font-weight: 600; color: var(--muted); background: var(--panel-hover); border: 1px solid var(--border); border-radius: 999px; padding: 1px 8px; }
+      .a-count { margin-left: auto; display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+      .a-count button {
+        width: 20px; height: 20px; border: none; background: none; color: var(--muted);
+        border-radius: 5px; cursor: pointer; font-size: 13px; line-height: 1; padding: 0;
+      }
+      .a-count button:hover:not(:disabled) { background: var(--panel-hover); color: var(--text); }
+      .a-count button:disabled { opacity: 0.35; cursor: default; }
+      .approval-body { padding: 12px 14px; }
+      .a-detail-label { font-size: 11px; font-weight: 600; color: var(--faint); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
+      .a-detail {
+        font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+        font-size: 12px; line-height: 1.55;
+        background: var(--panel-soft);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-card);
+        padding: 10px 12px;
+        max-height: 120px; overflow: auto;
+        white-space: pre-wrap; word-break: break-all;
+      }
+      .a-detail .hl-add { color: #2f9e62; }
+      .a-detail .hl-del { color: var(--destructive); }
+      .approval-actions { display: flex; align-items: center; gap: 8px; padding: 10px 14px 12px; }
+      .btn { font: inherit; font-size: 12.5px; font-weight: 600; border-radius: 8px; padding: 7px 14px; cursor: pointer; border: 1px solid transparent; }
+      .btn-approve { background: var(--primary); color: var(--primary-fg); }
+      .btn-approve:hover { background: #2a2e3a; }
+      .btn-reject { background: none; color: var(--destructive); border-color: rgba(220, 90, 98, 0.4); }
+      .btn-reject:hover { background: var(--destructive-soft); }
+      .btn-always { margin-left: auto; background: none; color: var(--warning); border-color: rgba(165, 118, 31, 0.35); position: relative; }
+      .btn-always:hover { background: var(--warning-soft); }
+      .btn-always::after {
+        content: "⚠ 本会话内不再询问该操作类型 — 撤销需重启会话";
+        position: absolute; bottom: calc(100% + 8px); right: 0;
+        background: var(--primary); color: #fff; font-size: 11.5px; font-weight: 500;
+        padding: 6px 10px; border-radius: 7px; white-space: nowrap;
+        opacity: 0; pointer-events: none; transition: opacity 0.15s;
+      }
+      .btn-always:hover::after { opacity: 1; }
+      /* --- composer footer --- */
+      .composer { margin-top: 14px; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-panel); padding: 12px 14px; }
+      .composer .fake-input { color: var(--faint); font-size: 13.5px; padding: 4px 2px 10px; }
+      .composer-row { display: flex; align-items: center; gap: 6px; }
+      .chip { width: 32px; height: 32px; border-radius: 10px; background: none; border: none; color: var(--faint); display: grid; place-items: center; }
+      .chip:hover { background: var(--panel-hover); color: var(--muted); }
+      .send { width: 34px; height: 34px; margin-left: auto; border-radius: 999px; background: var(--primary); color: #fff; display: grid; place-items: center; }
+      /* --- demo controls --- */
+      .demo { max-width: 780px; margin: 28px auto 0; display: flex; gap: 8px; flex-wrap: wrap; }
+      .demo button { font: inherit; font-size: 12.5px; padding: 6px 12px; border: 1px solid var(--border); background: var(--panel); border-radius: 8px; cursor: pointer; color: var(--muted); }
+      .demo button:hover { color: var(--text); border-color: var(--faint); }
+      .note { max-width: 780px; margin: 14px auto 0; font-size: 12px; color: var(--faint); line-height: 1.6; }
+      .resolved { opacity: 0.45; transition: opacity 0.3s; }
+    </style>
+  </head>
+  <body>
+    <h1>M12 审批操作面板</h1>
+    <p class="sub">
+      流内 permission 卡移除后，审批统一由 banner 位（bannerSlot priority=approval）承载：
+      可滚动详情 + 「n/m」多审批切换 + 拒绝 / 批准 / 本会话始终允许（危险 tooltip）。面板下方是 composer footer——审批不离开用户视线焦点。
+    </p>
+
+    <div class="stage">
+      <div class="stream">
+        <div class="msg"><div class="who">Agent</div>我来修改配置文件并重跑测试。先执行下面的命令：</div>
+        <div class="ghost-card">（此处原为流内 permission 卡 —— M12 移除，审批全部上移到下方 banner）</div>
+      </div>
+
+      <div class="approval" id="panel">
+        <div class="approval-head">
+          <svg class="a-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4m0 4h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg>
+          <span class="a-title" id="aTitle">执行命令</span>
+          <span class="a-kind" id="aKind">command</span>
+          <span class="a-count">
+            <button id="prev" aria-label="上一条">‹</button>
+            <span id="count">1/3</span>
+            <button id="next" aria-label="下一条">›</button>
+          </span>
+        </div>
+        <div class="approval-body">
+          <div class="a-detail-label" id="aDetailLabel">命令</div>
+          <div class="a-detail" id="aDetail"></div>
+        </div>
+        <div class="approval-actions">
+          <button class="btn btn-reject" onclick="respond('拒绝')">拒绝</button>
+          <button class="btn btn-approve" onclick="respond('批准')">批准</button>
+          <button class="btn btn-always" onclick="respond('本会话始终允许')">本会话始终允许</button>
+        </div>
+      </div>
+
+      <div class="composer">
+        <div class="fake-input">输入消息…</div>
+        <div class="composer-row">
+          <button class="chip">＋</button>
+          <button class="chip">🎙</button>
+          <span class="send">↑</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="demo">
+      <button onclick="respond('批准')">批准当前</button>
+      <button onclick="respond('拒绝')">拒绝当前</button>
+      <button onclick="reset()">重置 3 条审批</button>
+      <button onclick="empty()">全部处理完（面板消失）</button>
+    </div>
+    <p class="note">
+      演示点：①‹ › 在多条待审批间切换（kind/详情随条更新）；②三种 kind——command / file-read / file-change（diff 着色）；③「本会话始终允许」悬停出危险提示；④处理后面板在 banner 位即时移除，不回流内。
+    </p>
+
+    <script>
+      const approvals = [
+        {
+          kind: "command", title: "执行命令", label: "命令",
+          detail: "pnpm --filter @chisacode/server test:unit\n\n# 将在沙箱外运行\n# cwd: C:\\Ai\\ChisaCode",
+        },
+        {
+          kind: "file-read", title: "读取文件", label: "文件路径",
+          detail: "C:\\Ai\\ChisaCode\\packages\\server\\src\\server\\agent\\agent-manager.ts\n（只读，约 2,400 行）",
+        },
+        {
+          kind: "file-change", title: "修改文件", label: "变更预览",
+          detail: 'packages/app/src/config.ts\n@@ -12,7 +12,7 @@\n-  "timeout": 30000,\n+  "timeout": 120000,\n   "retries": 2,',
+        },
+      ];
+      let queue = [...approvals];
+      let idx = 0;
+
+      function render() {
+        const panel = document.getElementById("panel");
+        if (!queue.length) { panel.style.display = "none"; return; }
+        panel.style.display = "";
+        const a = queue[idx];
+        document.getElementById("aTitle").textContent = a.title;
+        document.getElementById("aKind").textContent = a.kind;
+        document.getElementById("aDetailLabel").textContent = a.label;
+        document.getElementById("count").textContent = `${idx + 1}/${queue.length}`;
+        document.getElementById("prev").disabled = idx === 0;
+        document.getElementById("next").disabled = idx >= queue.length - 1;
+        const el = document.getElementById("aDetail");
+        el.innerHTML = a.detail
+          .replace(/^[-]\s?(.*)$/gm, '<span class="hl-del">- $1</span>')
+          .replace(/^[+]\s?(.*)$/gm, '<span class="hl-add">+ $1</span>');
+        el.scrollTop = 0;
+      }
+      function respond(action) {
+        if (!queue.length) return;
+        queue.splice(idx, 1);
+        if (idx >= queue.length) idx = Math.max(0, queue.length - 1);
+        render();
+      }
+      function reset() { queue = [...approvals]; idx = 0; render(); }
+      function empty() { queue = []; render(); }
+      document.getElementById("prev").onclick = () => { if (idx > 0) { idx--; render(); } };
+      document.getElementById("next").onclick = () => { if (idx < queue.length - 1) { idx++; render(); } };
+      render();
+    </script>
+  </body>
+</html>

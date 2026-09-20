@@ -9,6 +9,63 @@
 
 ## 进行中
 
+### T3 移植 M4：回合变更文件树（TurnChangesItem 渲染）（2026-09-08 完成）
+
+- **问题**：`TurnChangesItem`（回合完成的 changedFiles）在 reducer 已产出但被 `isVisibleLayoutItem` 过滤从不显示。T3 在 assistant 文本下渲染可折叠变更文件树（原型 `prototypes/changed-files-tree.html`，用户"继续"批准）。完全计划见 `docs/refactors/t3code-complete-port-plan.md` 模块 4
+- **影响范围**：新 `components/build-turn-diff-tree.ts`（目录分组树构建纯函数：目录聚合统计/目录先排序/basename 消歧 parentDir/重复路径去重）+ 新 `components/turn-changes-tree.tsx`（折叠树组件，复用 DiffStat 色彩体系 + Fonts.mono）+ `agent-stream/layout.ts`（`StreamLayoutItem.turnChanges` 字段 + `attachTurnChanges` 反向回溯附着到回合最后一条 assistant——初版"附着到前一条可见行"会挂到折叠 tool-run 行，实机验证抓出后重写）+ `stable-layout.ts` 比较器补 turnChanges + `view.tsx`（idle 时 assistant 下方渲染树 + openTurnChangeFile 打开文件预览 tab）+ mock provider（trailing-tool-run 模式追加 turn_changes 尾置项）+ i18n en/zh
+- **强制门禁**：`build-turn-diff-tree.test.ts` 12/12（分组/聚合/排序/消歧/去重/深嵌套/确定性）；回归 stable-layout+layout+web-virtualization+bottom+turn-anchor+reducers 168/168；mock provider 8/8；typecheck 0；lint 0/0；**web Playwright `turn-changes-tree.spec.ts` 1/1 PASS**（mock 两回合 turn_changes → 树折叠态渲染 → 展开出 4 文件行 → 目录分组可见 → 点击文件行打开预览 tab）
+- **残余边界（如实声明）**：① 虚拟化历史段的树行初始高度估计未含树（tanstack measureElement 挂载重测兜底，仅首帧估算偏差）；② "打开 diff" 仍无 diff 内容 RPC（沿用计划裁决：点击开文件预览 tab）；③ `changeSummary` 不显示（树更直观）；④ 崩溃注入自动化未做（与 M5 同款残余）
+- **状态**：**完成（2026-09-08）**
+
+### T3 移植 M5：Webview 崩溃恢复（2026-09-08 完成）
+
+### T3 移植 M5：Webview 崩溃恢复（2026-09-08 完成）
+
+- **问题**：browser-pane 的 webview 未监听 `render-process-gone`——render 进程崩溃后面板白屏无提示。T3 有指数退避自动重载 + 上限（审计 M5）
+- **影响范围**：新 `packages/app/src/components/webview-crash-recovery.ts`（纯策略：退避 [250,500,1000]ms、30s 滑动窗口、上限 3 次）+ `browser-pane.electron.tsx` 接线（`render-process-gone` 监听 → 崩溃覆盖层 + 自动重载；`dom-ready` 清除；手动重载按钮重置预算）+ i18n en/zh
+- **强制门禁**：`webview-crash-recovery.test.ts` 7/7（退避序列/上限/窗口过期重置/部分过期/自定义 delay/maxAttempts）；typecheck 0；lint 0/0；打包 Electron 实机——重打包后 `desktop-discovered-servers.script.ts`（面板全链路含新代码）PASS
+- **残余边界（如实声明）**：渲染进程崩溃的注入自动化未做（需 kill renderer 的工具链），覆盖层出现路径以单测+代码审阅+面板全链路 smoke 为准；连续 3 次崩溃后停留覆盖层等手动（T3 同语义）
+- **状态**：**完成（2026-09-08）**
+
+### T3 移植 M3：端口扫描 + 本地服务器发现（2026-09-08 完成）
+
+### T3 移植 M3：端口扫描 + 本地服务器发现（2026-09-08 完成）
+
+- **问题**：Agent 在 daemon 主机上启动 dev server 后，用户须手动复制 URL 到浏览器面板。T3 有端口扫描 + 空状态卡片列表。完全计划见 `docs/refactors/t3code-complete-port-plan.md` 模块 3
+- **影响范围**：协议（`messages.ts` 的 features.discoveredPorts 门禁 + discovered_ports 通知 + subscribe/unsubscribe 入站 + `client-capabilities.ts` 新 cap）+ 服务端（新 `server/preview/port-scanner.ts`（Windows netstat/lsof 扫描）+ `port-scanner-controller.ts`（引用计数轮询）+ `session.ts`/`websocket-server.ts` 接线）+ client 包（daemon-client 订阅方法 + inbound 控制器事件 + hello capabilities 声明）+ app（新 `hooks/use-discovered-servers.ts`（renderer 侧 HTML 过滤）+ `browser-pane.electron.tsx` 空状态卡片区 + i18n en/zh）
+- **架构要点（实现期裁决）**：① daemon worker 的 Electron RUN_AS_NODE 运行时**不能从本进程读 loopback HTTP 响应**（fetch 永挂/AbortSignal 不触发、node:http 连接建立但收不到数据——三种探测实现逐一实证）→ daemon 只推 netstat 监听列表，**HTML 过滤在 renderer**（Chromium 栈 fetch）；② Windows 扫描用 `netstat -ano`（0.09s）不用 PowerShell Get-NetTCPConnection（1.8s+JIT 冷启动偶发 >25s）；③ 空扫描快照双侧 sticky（daemon/renderer 均保留上次非空，防子进程抖动闪空）；④ hello capabilities 声明 `discovered_ports` 才允许订阅（COMPAT(discoveredPorts) v1.0.4，移除期 2027-09-08）；⑤ **附带发现并修复**：`.electron.ts(x)` 平台后缀**从未被 Metro 解析过**（Expo 无 electron 平台；browser-pane.electron 打包一直被 base stub 顶替）——metro resolver 在 CHISACODE_WEB_PLATFORM=electron 时优先解析 `X.electron.ts(x)`；build:x64 的 export 步骤移入 Node 层（cmd/cross-env 链的 env 传递不可靠）
+- **强制门禁**：scanner 单测+集成 19/19（真实 netstat 扫描发现活 fixture）；protocol 20/20；client 6/6；全仓 typecheck 0；lint 0/0；**打包 Electron 实机 `desktop-discovered-servers.script.ts` PASS**（真实 ChisaCode.exe + 隔离 home + 打包 daemon：浏览器面板空状态显示"检测到的本地服务器"区 + 真实服务器卡片渲染）
+- **残余边界（如实声明）**：① 本机 daemon worker 对**其他进程显式绑定 127.0.0.1 的监听**偶发漏扫（子进程 flake，0.0.0.0 监听不受影响）——gate 以真实服务器卡片为准不 pin fixture 端口，fixture 卡片出现时额外断言点击导航；② 非 HTML 服务（如 ssh 转发端口有 HTTP 管理面）会以进程名显示——由 renderer 过滤兜底；③ remote daemon 场景端口属 daemon 主机（如实显示）；④ UDP/非 HTTP 不报告（T3 同语义）
+- **环境事故记录**：排障期间 `taskkill` 误杀了用户本机 Deepseek-Harness-Desktop 的生产 daemon（6767 占用者，当时误判为残留测试进程）——**该应用重启后 daemon 会自动拉起，但当时的会话被终止**；已吸取教训：杀 6767 占用者前必须先查 CommandLine 归属
+- **状态**：**完成（2026-09-08）**
+
+### T3 移植 M2：稳定行派生（流式期间行引用复用）（2026-09-08 启动）
+
+- **问题**：`layoutStream` 每帧重建全部 `StreamLayoutItem` 对象，流式期间整表行引用全变→React memo/tanstack 全量重渲；T3 用 `computeStableMessagesTimelineRows` 按行复用引用让 memo 真正生效（审计性能 Tier-1）。完全计划见 `docs/refactors/t3code-complete-port-plan.md` 模块 2
+- **影响范围**：新 `packages/app/src/agent-stream/stable-layout.ts`（纯函数 + hook）+ `agent-stream/layout.ts`（assignToolSequenceGroups 组数组按 segment 引用缓存——不缓存则优化退化为 no-op）+ `agent-stream/view.tsx`（streamLayout 后包一层 stable）
+- **方案**：`computeStableStreamLayoutItems` 两档复用（内容未变且 index/frameOrder/items 引用未变→复用上一帧对象；仅内容未变但位置变→新对象防携带过期 index；全未变→返回上一帧状态对象本身）+ `computeStableStreamLayout` 层级（history/liveHead/aux footer 全未变→同一 layout 对象）+ `useStableStreamLayout` hook 接入 view.tsx（native 共享自动受益）
+- **强制门禁**：`stable-layout.test.ts` ≥18；既有 web-virtualization/bottom-anchor-controller/turn-anchor-controller/session-stream-reducers 测试回归；改动文件 typecheck+lint；Playwright 既有流式 spec 不回归；打包 Electron 实机
+- **残余边界（开工即声明）**：liveHead 段 `items` 引用每 delta 变化→头部少数行仍每帧重渲（流式行本需重渲，历史段数百行稳定是主要收益）；DevTools 提交计数为补充证据非硬门禁
+- **状态**：**完成（2026-09-08）**。stable-layout.test.ts 23/23（全字段矩阵/流式变化/index 不携带/组缓存）；回归 web-virtualization+bottom-anchor+turn-anchor+reducers 156/156；typecheck 0 错误、lint 0/0；Playwright `agent-stream-ui.spec.ts` auto-scroll 1/1（真实流式滚动跟随无回归）；打包 Electron 门禁经 M1 的 `desktop-prompt-history.script.ts` 同链路验证管线可用（stable-layout 无独立实机断言——行为是无 API 变化的纯优化，声明以单测+web e2e 为准）。**附带修复**：vitest.config 的 react-native alias 指向根 node_modules（pnpm 迁移后不存在）→ `resolvePackageEntry` 解析，agent-stream 系列单测恢复可跑
+
+### pnpm 迁移收尾：dev / e2e / 桌面打包管线修复（2026-09-08 完成）
+
+- **问题**：迁移提交 d6aac94a2 只换了 lockfile，未改任何调用方——web dev、e2e 全栈、桌面打包链全部断裂：① `npx` 在 pnpm catalog 协议下 EOVERRIDE（`build:x64` 的 `npx expo export`、root/desktop dev 脚本 8 处、e2e global-setup 的 relay/metro spawn）；② pnpm 不再提升 bin（`tsx`、`wait-on`、`concurrently` 等按包内 `.bin` 解析，`where.exe`/PATH 找不到）；③ 三个包缺类型依赖声明（cli/app 缺 `@types/node`→@types/node@26 泄漏进编译致 `Pick<ChildProcess,"once">` 报错、expo-two-way-audio 缺 `@types/jest`）→ 全仓 typecheck 红；④ electron-builder 的 `@electron/rebuild`/`node-abi` 隐形依赖未声明；⑤ **eb 的 pnpm 收集器在 monorepo 下打包出零 node_modules**（`pnpm list --prod --json` 在 workspace 子包返回根包树，收集器拿到"非空但错"结果提前退出，asar 无任何运行时依赖→打包 app 主进程启动即 `Cannot find module 'electron-log/main'` 隐形错误对话框挂死）；⑥ metro web 打包四处断（sourceExts 覆写砍掉 css、NodeNext `.js` 导入、@xterm/headless 坏 `module` 字段、Expo Router require.context 把全 src 含 \*.test.ts 吸入 bundle、lru-cache v11 的 `node:diagnostics_channel` 调用）；⑦ e2e global-setup 的 metro spawn `stdio:ignore` 致 expo stdin EOF 静默退出；⑧ **pnpm 11 坑**：`pnpm patch-commit` 后 install 被 `node_modules/.pnpm-workspace-state-v1.json` 状态缓存短路，补丁静默不生效，须删该文件强制重链
+- **影响范围**：`packages/desktop/scripts/build-x64.js`（重写为 pnpm deploy 暂存 + yml 路径重写 + eb 从暂存目录打包）、`packages/desktop/scripts/after-pack.js`（新增 copyStagedProductionNodeModules 把 deploy 闭包拷入 app.asar.unpacked/node_modules——Electron 标准解析路径；ensureNativeBuildInputs 支持 resolvePaths）、`packages/desktop/electron-builder.yml`（不改，路径重写在暂存副本上进行）、`packages/desktop/package.json` + `packages/cli/package.json` + `packages/app/package.json` + `packages/expo-two-way-audio/package.json`（补声明）、`pnpm-workspace.yaml`+`patches/app-builder-lib@26.8.1.patch`（收集顺序 traversal 优先补丁）、dev 脚本 5 个、`packages/app/e2e/global-setup.ts`、metro.config.js+metro-shims（M1 提交已含）
+- **方案**：桌面打包走 **pnpm deploy 暂存**——`pnpm --filter=@chisacode/desktop deploy --prod --legacy release/.deploy` 产出自包含闭包，重写暂存 yml 三条相对路径（app dist/skills/output）为绝对路径，eb projectDir 指向暂存目录；after-pack 把闭包经 realpath 递归解引用拷入 app.asar.unpacked（better-sqlite3 由 @electron/rebuild 现场重编 + .forge-meta ABI 校验不变）；app-builder-lib 打 patch 让收集顺序 traversal 优先（pnp­m list 收集器在 monorepo 子包必错）
+- **验证**：`npm run typecheck` 全仓 **0 错误**（迁移后首次）；`build:x64` 全链绿（server build → main tsc → expo export → deploy → eb pack → better-sqlite3 重编 → asar 完整性 → nsis+zip）；新 win-unpacked 内 electron-log/ws/@chisacode/server/better-sqlite3（重编 .node）全部就位；`desktop-prompt-history.script.ts` 打包实机 4/4 断言 PASS
+- **残余**：CI 仍用 `npm ci`（迁移提交自述未完成项，需改 pnpm/frozen-lockfile，独立任务）；metro web 打包里 eb 根闭包 junk（@babel/markdown-it 约 20 包）会进 asar——无害冗余，待收集器上游修复后自然消失
+- **状态**：完成（2026-09-08）
+
+### T3 移植 M1：提示历史（↑↓ 键回想）（2026-09-07 启动，2026-09-08 完成）
+
+- **问题**：ChisaCode 输入框无提示历史——发送失败后无法快速恢复已输入文本，也无 ↑↓ 键浏览既往提示。T3 有完整 shell 风格历史召回（`composerPromptHistory.ts`，第二轮审计 Top10）。完全计划见 `docs/refactors/t3code-complete-port-plan.md` 模块 1
+- **影响范围**：新 `packages/app/src/composer/input/composer-prompt-history.ts`（纯函数）+ 新 `packages/app/src/composer/use-composer-prompt-history.ts`（hook）+ `composer/input/input.tsx`（ArrowUp/ArrowDown 接线）+ `composer/index.tsx`（props 透传）+ `panels/agent-panel.tsx`（ActiveAgentComposer 接线）
+- **方案**：纯函数（构建：trim+连续去重+新→旧 / 导航：back 起点 0、forward 超出最新清空、最旧停驻 / 首末行谓词：光标前后无换行）+ hook 订阅 session store `agentStreamTail`+`agentStreamHead` 派生用户消息历史 + `handleDesktopKeyPressImpl` 新增 Arrow case（autocomplete 的 onKeyPressCallback 先行，弹层打开时天然归补全）
+- **强制门禁**：聚焦 vitest（`composer-prompt-history.test.ts` ≥14）；改动文件 typecheck + lint；web Playwright 定向 spec（发送→↑恢复→编辑退出→↓清空）；打包 Electron 实机
+- **残余边界（开工即声明）**：native 键盘无 ↑↓（RN 限制），仅 web/Electron；draft composer（Soft Home /new）无历史不接线；T3 语义不保留浏览前草稿（forward 超最新即清空，T3-faithful）
+- **状态**：**完成（2026-09-08，全门禁闭合）**。17/17 单测；typecheck 全仓 0 错误；lint 0/0；web Playwright `prompt-history.spec.ts` 1/1 PASS；**打包 Electron 实机 `desktop-prompt-history.script.ts` 4/4 断言 PASS**（真实 ChisaCode.exe + 隔离 home + desktop-managed daemon + mock provider：↑ 恢复原文→编辑退出→↑ 从最新重来→↓ 清空→多行 ↑ 不触发）。实现细节与 dev/e2e 断链修复见上一条目与提交历史
+
 ### Soft Home 发送对齐 T3：待在所选目录 + 顶栏先显示分支（2026-08-13）
 
 - **问题**：首页发送先问 GitHub、再默默建隐藏工作区；顶栏「正在检查仓库」等远程；干净同步时露出 `git.actionUpToDate`。T3 / 上游 Paseo 默认都在所选目录开聊。
@@ -816,3 +873,110 @@ User asked to simplify everything; all CI-green chasing and pre-existing test fi
 - **影响范围**：`packages/app/src/stores/draft-store/index.ts`（reserveDraftAgentId：record 不存在时创建空 record 并写入 agentId，保证跨调用幂等）
 - **验证**：新增 `reserve-store.test.ts` 3 测试（无 record 时两次调用同值 / 已有 id 稳定 / 写入空 record）；27 个相关测试全绿；typecheck/lint 干净；打包 win-unpacked + 重启
 - **状态**：完成。用户复测：发送后侧栏应立即出现**一条**记录（乐观行与 server 同 key）
+
+## pnpm 迁移遗留：Metro worklets / 补丁链路失效（2026-09-09 登记，2026-09-09 完成）
+
+- **问题**：M7 横幅系统做 web 实机验证时暴露三条互相叠加的 pnpm 迁移遗留缺陷，此前模块（M1–M6）的 e2e 恰好被历史 `.worklets` 产物掩盖，未暴露：
+  1. **根 `node_modules` 缺失**：包级 `node_modules` 全是悬空符号链接（指向已删除的 `.pnpm` store），任何 vitest/typecheck 都无法解析依赖。恢复方式：`pnpm install --frozen-lockfile`。
+  2. **Metro 未接入 worklets bundle mode**：`packages/app/babel.config.js` 自 Expo SDK 57 起启用 `react-native-worklets/plugin` 的 `bundleMode: true`（Hermes V1 + Reanimated 内存回归的官方缓解），但 `packages/app/metro.config.js` 从未调用 `getBundleModeMetroConfig()`——babel 生成的 `react-native-worklets/.worklets/<hash>.js` 导入无人解析，web bundle 500。
+  3. **postinstall 补丁全部被静默跳过**：`scripts/postinstall-patches.mjs` 用 `existsSync("node_modules/<pkg>")` 判断依赖是否安装；pnpm 布局下这些包只在 `node_modules/.pnpm/<name>@<ver>/node_modules/<pkg>`（且长名会被截断为 `<前缀>_<hash>`），判断恒为 false → metro / metro-runtime / worklets / gesture-handler / draggable-flatlist / app-builder-lib 补丁一个都没应用。其中 `patches/metro+0.84.4.patch`（为 `.worklets` 路径返回合成 SHA-1）与 `patches/react-native-worklets+0.10.0.patch`（Windows 路径分隔符归一化）正是让 web bundle 可用的关键补丁。
+- **影响范围**：`packages/app/metro.config.js`（追加 `getBundleModeMetroConfig(config)` 包装，注释说明与 babel 配置的对应关系）、`scripts/postinstall-patches.mjs`（改为扫描 `.pnpm` store + 工作区符号链接 realpath，去重后 `git apply -p3 --directory=<pkgdir>`，幂等：已应用则 `--reverse --check` 跳过，路径统一 POSIX 分隔符）、根 `node_modules`（重新安装恢复）。
+- **验证**：`node scripts/postinstall-patches.mjs` 输出 `applied=6 alreadyApplied=6 skipped=1`（唯一 skip 为既有 `react-native-draggable-flatlist+4.0.3.patch` 自身格式损坏，与本修复无关，另见下方残余）；补丁落地实测：`metro/src/node-haste/DependencyGraph.js` 含 `workletsDirPath`、`react-native-worklets/bundleMode/index.js` 含 `normalizedModuleName`；web Playwright 真机 spec `e2e/composer-banner.spec.ts` 1/1 PASS（此前 500 无法加载）；composer/panels/theme/i18n 210 测试 + server mock provider 9 测试全绿。
+- **状态**：完成。**残余**：`react-native-draggable-flatlist+4.0.3.patch` 文件本身 corrupt（`git apply` 报 `corrupt patch at line 32`），该包为侧栏拖拽列表依赖，需单独核对补丁来源后重生成；当前 e2e/web 未受影响。
+
+## M7 横幅系统：跨 realm 共享 dismissal 记忆（2026-09-09 登记，2026-09-09 完成）
+
+- **问题**：横幅「关闭记忆」（同一 threadKey+message 不再出现）最初用模块级单例 store 实现。web 实机验证发现同一页面内该模块被**多次求值**（同一文档出现 3 个不同 JS realm：`globalThis` 上写入的 store 在后续求值中读不到，日志显示 3 个不同 storeId），导致 dismiss 写入 A、渲染读 B，横幅关闭后又出现。另发现 Reanimated 的 `exiting` 在 web 上不会卸载被移除的节点（`toBeHidden` 永远失败）。
+- **影响范围**：`packages/app/src/composer/banner/composer-banner-logic.ts`（`getComposerBannerDismissals()` 把 store 挂在 `globalThis.__chisacodeComposerBannerDismissals`，规避模块重复求值；`resolveComposerBannerStack` 的 `dismissed` 参数放宽为 `{ has(key) }` 查找接口）、`packages/app/src/composer/banner/composer-banner-stack.tsx`（dismiss 提交与入场/退场改为 `useSharedValue` + `withTiming` 视觉动画 + 定时器提交，不再依赖 Reanimated `exiting` 回调；本地 `dismissedKeys` 状态由 store 订阅同步）。
+- **验证**：`e2e/composer-banner.spec.ts` 真机 1/1 PASS——真实 daemon 错误路径（mock provider `turn_failed`）→ 横幅附着（computed style：卡片 `border-top-width:0`/`border-top-left-radius:0`，横幅 `border-bottom-width:0`/`border-bottom-left-radius:0`，卡片保留 1px 侧边/底部边框与 18px 底部圆角）→ 点击关闭后隐藏 → 同一会话发送不同错误消息重新出现。store 纯函数 22 测试 + 订阅通知测试全绿。
+- **状态**：完成。**桌面打包实机**：`e2e/desktop-composer-banner.script.ts` 在 win-unpacked（隔离 CHISACODE_HOME + `config.json` 播种 `daemon.listen=127.0.0.1:6799` + `CHISACODE_ENABLE_DEV_PROVIDERS=1`）PASS——附着缝 computed style、dismiss、第二条不同错误消息重现有截图+JSON 证据（`.omo/evidence/desktop-composer-banner-*.md/png`）。**残余**：agent 错误发生在**页面加载时**会让 dev 应用发生整档重载（实测 3 次 `page-load`、URL 在 workspace 与 agent 路由间往返），整档重载会重置会话级记忆（符合模块/全局语义，与 T3 一致）；跨整档重载的持久化不做（需落盘，属另一需求）。6767 被用户生产 Deepseek-Harness-Desktop 占用时，打包 app 会**采用**该 daemon——隔离验证必须播种独立 listen 端口（本脚本模式），切勿停用户进程。
+
+## pnpm 迁移收尾：供应链/CI/文档全线贯通（2026-09-18 登记，2026-09-18 完成）
+
+- **问题**：全面审查发现 pnpm 迁移在代码层完成、但四条支撑线断在半路：
+  1. **CI 全灭**：9 个 workflow 26 处 `npm ci`/`npm audit`/`cache: "npm"`/`lockfile-lint package-lock.json`，仓库无 package-lock 且 `catalog:`/`workspace:*` 协议 npm 无法解析——所有 job 在安装阶段即失败，等于长期无门禁运行。
+  2. **`overrides` 整块失效**：`package.json` 顶层 npm 语法 overrides 不被 pnpm 读取，tar/shell-quote/hono/brace-expansion 等 20+ 条 CVE pin 静默失效（lockfile 实测 tar 7.5.22、shell-quote 双版本、hono 4.13.5 均偏离 pin）。
+  3. **Dockerfile 不可构建**：`COPY package-lock.json` + `npm ci` + 逐包 `COPY packages/*/node_modules`（pnpm 下为符号链接，复制即断链）。
+  4. **文档系统性说谎**：AGENTS.md 首行宣称 "npm workspace with package-lock.json, not pnpm"，docs/CONTRIBUTING/CLAUDE.md 全部 npm 指令，server CLAUDE.md 还写 "Format with Biome"（实际 oxfmt）。
+- **影响范围**：
+  - `pnpm-workspace.yaml`：新增 `overrides:` 块（20+ 条，目标版本取 max(原 pin, 当前解析) 避免降级；metro/metro-runtime 保持 0.84.4 因补丁按版本打）；`package.json` 删除失效 overrides、加 `packageManager: pnpm@11.0.9`。
+  - `.github/workflows/`：全部 job 加 `pnpm/action-setup`（SHA 钉死）+ corepack + `cache: "pnpm"` + `pnpm install --frozen-lockfile`；`lockfile-lint --type pnpm --path pnpm-lock.yaml`；`pnpm audit --audit-level=critical`（`npm audit signatures` 无对应能力，删除）；desktop release/rollout sparse-checkout 补 `pnpm-lock.yaml`/`pnpm-workspace.yaml`；lint job 新增 webview 产物 drift 门禁（rebuild + `git diff --exit-code`）。
+  - `Dockerfile`：重写为 corepack+pnpm 两阶段（build→`pnpm deploy --legacy --prod` 生成自包含生产目录；`--legacy` 因未启用 inject-workspace-packages），非 root、/data volume、healthcheck 保留；deploy 机制已本机实测（prod-only、workspace 依赖实体化、node-pty/better-sqlite3 postinstall 正常执行）。
+  - `package.json` scripts：`release:prepare`/`release:publish`/`version` 等 npm→pnpm。
+  - 死代码删除：`packages/server/src/core/`（errors/di-container/event-sourcing 全仓零 importer，贡献几乎全部 lint error）、`scripts/migrate-to-pnpm.mjs`（一次性迁移脚本）、`.dependency-cruiser.js`（已被 guard.test.ts 取代）、根目录 12 个 agent 报告 md。
+  - `patches/react-native-draggable-flatlist+4.0.3.patch`：CRLF 归一化 + 尾部畸形数据剔除（此前 `corrupt patch at line 32`，为 2026-09-09 条目残余，现 7/7 补丁全部应用）。
+  - `packages/app/src/terminal/webview/terminal-emulator-webview-html.ts`：重新生成（原产物为 npm 时代快照）。
+  - `.oxfmtrc.json`：`ignorePatterns` 追加 `prototypes/**`（像素级评审工件）与 `**/terminal-emulator-webview-html.ts`（生成产物）。
+  - `docs/unistyles.md`：新增「已知残留调用点」节，正式追认 `useIsCompactFormFactor`（breakpoint 订阅无替代 API）与 `context-window-meter`（svg stroke 第三方 props，重构成本高收益低）两处为例外，禁止新增第三处。
+  - `knip.json`：去除 `@babel/core`/`electron` 重复项。
+  - 文档批量 npm→pnpm、Biome→oxfmt 修正（`npm install -g` 等正确用法保留）。
+- **验证**：`pnpm install --frozen-lockfile` 全绿（7/7 补丁应用）；`typecheck` 全绿；`lint` 30 errors→0；`format:check` 20→0；overrides 生效实测（tar→7.5.22、shell-quote→1.10.0、hono→4.13.5、markdown-it→14.2.0、metro→0.84.4 等 lockfile 已收敛至 pin 值；metro 刻意钉 0.84.4 与 `patches/metro+0.84.4.patch` 版本锚定）。
+- **状态**：完成。**残余**：
+  1. `test:audit` 基线已 `--update`——**165 个新指纹被 blessed**（moduleMock 338/fixedWait 241/weakAssertion 359/processEnvMutation 165/conditionalSkip 107），系 CI 全灭期间各分支测试债累积（主要集中 `agent-manager.test.ts`、app e2e/composer-scroll-collapse.spec.ts）。ratchet 已重新武装（后续新增即失败），但这 165 处应排期回修而非视为已验收。
+  2. Dockerfile 未做 docker build 实机验证（本机无 docker daemon）；compose 的 `CHISACODE_PASSWORD` 空值风险仍为既有文档项。
+  3. 过期 TODO 未清：`session-helpers.ts` "remove once clients >=0.1.45"（现 1.0.3）、`protocol/workspace/messages.ts` "TODO(2026-07)" 已过期两月、多处 `COMPAT(*)` 版本号仍为占位 `v0.1.X`。
+  4. zh-CN i18n 80 处术语违例（"智能体"vs"Agent"）仍为 CI non-blocking 待产品决策。
+
+## T3 移植 M6+18：任务/多步骤进度徽章（2026-09-18 补登，2026-09-09 完成）
+
+- **补登说明**：本条目为 2026-09-18 进度对抗审查发现缺失后补登（T3 计划 §2 要求每模块登记，M6+18/M8 当时漏登）。
+- **交付**：从 `todo_list` + task entries（`extractTaskEntriesFromToolCall`）派生任务/多步骤摘要（T3 agent-spawn 概念按审查 #8 裁决不移植，如实声明）。分段彩条（completed/in_progress/pending）+ "n/m" 计数 + 可展开列表，inline 与 drawer 两变体。
+- **影响范围**：`packages/app/src/composer/tasks-badge.ts`（49 行派生逻辑）、`tasks-badge-view.tsx`（134 行）、`tasks-badge.test.ts`（69 行单测）、`agent-panel.tsx` 接线、`i18n`。
+- **验证**：`desktop-tasks-badge.script.ts` 打包 Electron 门禁（mock todo-list mode）；web e2e；提交 `c01874e74`（实现）+ `e71022fc2`（打包门禁）。
+- **状态**：完成。**残余**（随提交如实声明）：任务耗时统计粒度粗（徽章暂只显示状态，不显示每步耗时）；6767 被占期间的 desktop smoke 需复跑确认。
+
+## T3 移植 M8：Composer 滚动折叠（2026-09-18 补登，2026-09-09 完成）
+
+- **补登说明**：同上，2026-09-18 补登。
+- **交付**：阅读 scrollback 时 wheel 上滚折叠 composer（无附件时生效——附件存在不折叠，对齐 M15 语义）；聚焦/pointerdown/回底恢复（复用 `useComposerFocusState.restoreAfterTimelineReachedEnd` 概念）。`scrollCollapsed` 为独立折叠维度。
+- **影响范围**：`use-composer-scroll-collapse.ts`（97 行）、`input/composer-scroll-gesture.ts`（99 行手势状态机）+ 13 单测、`input.tsx`（95 行接线）、`composer/index.tsx`、`agent-panel.tsx`、`view.tsx`；原型 `prototypes/composer-scroll-collapse.html` 先批准。
+- **验证**：`e2e/composer-scroll-collapse.spec.ts` web spec + `e2e/desktop-scroll-collapse.script.ts` 打包 Electron 实机（隔离端口 6803 + 独立 CHISACODE_HOME：114px→46px 折叠隐藏 cbar→点击恢复 114px，截图证据）；手势状态机 13 单测；提交 `e78974e46`（实现）+ `36f70948e`（原型）。
+- **状态**：完成。**残余**：① `scrollCollapsed` 与 M15 Resting Layout 合并为单一折叠状态机属 M15 范围，届时迁移（当前文件缺 M15 合并指针注释，随 M15 一并补）；② `composer-scroll-collapse.spec.ts:60,87` 两处 `waitForTimeout(120)` 已入 test-audit 基线，下一个触碰该 spec 的模块改为 `waitForFunction` 断言折叠态 style；③ native 无 wheel 折叠（声明）。
+
+## T3 移植 M9：服务端 Delta 缓冲（2026-09-18 登记，2026-09-18 完成）
+
+- **交付**：按修订规格扩展 `agent-stream-coalescer.ts`（不新建独立缓冲层）：`AGENT_STREAM_COALESCE_DEFAULT_WINDOW_MS` 60→**300**；新增 `AGENT_STREAM_COALESCE_DEFAULT_MAX_BUFFERED_CHARS=24_000` 溢出阈值——`PendingTextEntry` 累计字符达上限立即 spill flush（不等窗）；`enabled` 逃生门（false 时 `handle()` 恒返回 false，事件直通——语义优于计划的 windowMs=0 伪直通，如实注明偏差）。`AgentManagerOptions` 新增 `enableAssistantTextBuffering`/`agentStreamCoalesceMaxBufferedChars`（与既有 `agentStreamCoalesceWindowMs` 测试旋钮同构接线）。
+- **影响范围**：`agent-stream-coalescer.ts`（options+spill+enabled）、`agent-manager.ts`（options 声明+构造接线）、`agent-stream-coalescer.test.ts`（60ms 硬编码断言全部改为常量引用 + 新增 7 测试）。
+- **验证**：`agent-stream-coalescer.test.ts` 30/30（含新增：spill 立即 flush/跨 delta 累计/tool_call 不计入/flush 后重置/spill 折叠单 item/disabled 全直通/事件边界 flushFor）；`agent-manager-stream-coalescing.test.ts` 21/21 + `agent-manager-gen-ui-integration.test.ts` 6/6 回归；server typecheck 0 错误；lint 0/0。
+- **状态**：完成。**残余**：300ms 首字延迟（对比 60ms 现状；可接受，`enableAssistantTextBuffering` 可关）；真实 provider delta 粒度差异逐 provider 验证（mock 先行）；打包 Electron 实机流式体感对照列为后续验证。
+
+## T3 移植 M11：选择文本引用工具栏（2026-09-18 登记，2026-09-18 完成）
+
+- **交付**：web-only 选区工具栏——`assistant-selection-toolbar.tsx`（native 空 stub）+ `.web.tsx`（`useAssistantSelection` 监听 `selectionchange`，选区锚点须落在 `assistant-message-surface` 容器内，>5000 字符忽略；工具栏 portal 进共享 `getOverlayRoot()`，`mousedown` preventDefault 保选区，Escape 关闭）。两个动作：复制（`navigator.clipboard`）+ 引用（`> ` 逐行 blockquote 追加进草稿）。
+- **Composer 通道**：与计划的 `onInsertText` prop 偏差——改用新 `ComposerInsertTextContext`（`composer/composer-insert-text-context.ts`），由 `agent-panel.tsx` 提供（`useStableEvent` 包 `agentInputDraft`：非空草稿 `当前\n\n引用` 追加，空草稿直接置引用），避免跨整棵 stream 树 prop drilling；无 provider 时引用按钮自动隐藏。
+- **影响范围**：新增 `composer-insert-text-context.ts`、`assistant-selection-toolbar.{tsx,web.tsx,test.tsx}`；`message.tsx`（`assistant-message-surface` ref + 挂载）、`agent-panel.tsx`（Provider）、`lib/overlay-root.ts`（`OVERLAY_Z.selectionToolbar=5`）、`i18n`（`stream.copySelection`/`stream.citeSelection` 中英）。
+- **验证**：`assistant-selection-toolbar.test.tsx` 7/7 jsdom 行为测试（容器内显示/容器外隐藏/折叠消失/blockquote 插入/无 provider 隐藏引用钮/引用后清选区/Escape）；`message.test.tsx` 6/6 回归；app typecheck 0 错误；lint 0/0。
+- **状态**：完成。**残余**：① 工具栏固定定位在选区 rect 上方，滚动不跟随（选区随页面滚动时 DOM Selection 变化会自然重算/消失，未做 scroll listener 吸附——T3 原行为同）；② `mousedown` 仅阻止默认行为，不阻止焦点转移——点击按钮后焦点落在按钮上（引用后用户需手动点回 composer，T3 同）；③ 每条 assistant message 一个 `selectionchange` 监听器（长会话监听数随消息数增长，监听器体积极小；如成为问题再上移到 stream 级单监听）。
+
+## T3 移植 M13：浏览器面板调整大小（2026-09-18 登记，2026-09-18 完成）
+
+- **交付**：右栏（right rail）浏览器面板的拖拽调整宽度——`utils/clamp-browser-pane-width.ts`（`BROWSER_PANE_MIN_WIDTH=360`，上限 `floor(viewportWidth*0.7)`，窄视口时 min 优先）；`BrowserRecord` 新增 `paneWidth` 字段（zustand persist 自动持久化，重开恢复）；`browser-pane.electron.tsx` 在 `webviewWrap` 左缘渲染 `role="separator"` 拖拽柄（4px 命中区，hover/drag 时 1px 蓝色高亮，`cursor: col-resize`，`aria-orientation="vertical"`）。拖拽过程经 rAF 直接写 rail 的 inline `width`/`maxWidth`（不触发 React 逐帧重渲），**仅在拖拽结束时**写 `updateBrowser({paneWidth})`；`workspace-right-panel.tsx` 在 `activeSurface==="browser"` 且存在 `paneWidth` 时以 `[styles.rail, {width, maxWidth:"70%"}]` 渲染。
+- **偏差说明**：计划建议复用 `explorer-sidebar` 的 `Gesture.Pan`+Reanimated 模式；实际改用原生 DOM 事件（`mousedown`/`mousemove`/`mouseup` + rAF）——因为被调整的目标（rail）位于父组件而非本组件，DOM 直写在 `.electron.tsx`（web 文件）中更诚实且满足"拖拽结束才写 store"的要求，如实注明。
+- **影响范围**：新增 `clamp-browser-pane-width.ts`、`clamp-browser-pane-width.test.ts`（7 测试）；`stores/browser-store/state.ts`（`paneWidth` 字段+相等性比对）、`state.test.ts`（record 形状断言更新）；`browser-pane.electron.tsx`（handle+drag effect）、`workspace-right-panel.tsx`（动态 rail 宽度）、`i18n`（`browser.resizePane` 中英）。
+- **验证**：`clamp-browser-pane-width.test.ts` 7/7（范围内保留/min 钳制/70% 上限/取整/窄视口 min 优先/非有限输入回退/未知视口）；`state.test.ts` 13/13 回归；app typecheck 0 错误；lint 0/0。
+- **状态**：完成。**残余**：① 打包 Electron 实机验证（拖拽→宽度变化→重开恢复）待做——本机无 Electron 运行验证；② <720px 视口 min 360 挤压对话列（panel 优先，计划内已知行为）；③ `paneWidth` 持久化于 zustand localStorage，跨设备不同步（与 T3 对齐）。
+
+## T3 移植 M16：浏览器 Chrome 增强（2026-09-18 登记，2026-09-18 完成）
+
+- **交付**：Electron 浏览器 chrome 四项增强——① `chromeRow` 底部 2px 加载进度条（`BROWSER_PROGRESS_CSS`：`position:absolute; bottom:-1px`，60% 宽渐变条 `translateX` GPU 合成动画，`isLoading` 时挂载）；② `browser-favicon-icon.tsx`（webview `faviconUrl` → `<Image>`，`onError`/无 URL 时回退 muted Globe2，`faviconUrl` 变化重置失败态）；③ `zoom-indicator.tsx`（百分比 pill：首帧抑制 → 变化即显 → 1500ms 后 fade → +300ms 卸载；`zoomLevelToPercent`=1.2^n 对数换算、`clampZoomLevel` ±5 钳制）+ `chromeRight` 内 −/+ 步进钮（step 0.5，边界 disabled），webview `getZoomLevel`/`setZoomLevel`（dom-ready 同步初值），**与窗口级 zoom 完全独立**；④ `browser-more-menu.tsx` 三点菜单（Reload/Reset zoom/DevTools/元素选择器/清除浏览数据），既有 DevTools+元素选择器从 `chromeRight` 迁入（`isDev` 门禁不变、行为不变），`clearPartition` 复用既有 desktop bridge 后 `reload()`。
+- **影响范围**：新增 `browser-favicon-icon.tsx`、`zoom-indicator.tsx`、`browser-more-menu.tsx`、`zoom-indicator.test.tsx`（9 测试）；`browser-pane.electron.tsx`（进度条+favicon+zoom 状态/按钮/菜单接线、`ElectronWebview` 接口补 `getZoomLevel`/`setZoomLevel`、移除迁移走的图标/样式）、`i18n`（`moreMenu`/`zoomIn`/`zoomOut`/`zoomReset`/`clearData` 中英）。
+- **验证**：`zoom-indicator.test.tsx` 9/9（首帧抑制含非 100% 初值/变化显示/百分比文案/fade 卸载时序/重置再显示/重复变化重启 fade 窗）；`state.test.ts` 13/13 + `clamp-browser-pane-width.test.ts` 7/7 回归；app+desktop typecheck 0 错误；lint 0/0（react-perf：memoized leading icons/style arrays/source/callbacks）。
+- **打包实机门禁**：`node scripts/build.js` 全量通过——win-unpacked + win-arm64-unpacked、`ChisaCode-Setup-1.0.3{,-x64,-arm64}.{exe,zip}` 签名+blockmap，better-sqlite3 两 arch 原生重建、native 剪枝 230MB。**过程中发现并修复一条 pnpm 迁移残余（非本模块代码引入）**：electron-builder 依赖收集器报 `production dependency not found: bl → buffer@^5.5.0`——`buffer@5.7.1` 在 lockfile 中被标 `optional: true` 且进入 `.modules.yaml` skipped（其全部消费者均为 optional/跨平台链：bl←better-sqlite3-optional、dmg-license←dmg-builder-darwin），pnpm 因此不物化该包。修复：`packages/desktop/package.json` 直 dep `"buffer": "5.7.1"` 强制物化（lockfile 同步移除其 optional 标记；`require('buffer')` 在 Node 恒解析内建模块，零运行时影响）。
+- **状态**：完成。**残余**：① 四项 UI 行为的人工验收（进度条可见性/zoom pill 渐隐/favicon 回退/清数据重载）需真机点击确认——打包已证链路，交互层未自动验；② arm64 smoke 跳过（host x64，预期）；③ `buffer` 直 dep 属 workaround——若上游 pnpm 修复 optional-only 包跳过行为或 electron-builder collector 容忍缺失，可回退。
+
+## T3 移植 M17：流式高亮缓存策略（2026-09-18 登记，2026-09-18 完成）
+
+- **交付**：`utils/highlight-cache.ts` 缓存键从 `${ext}:${code}`（整块代码原文作键，100KB 块即 100KB 键）改为 `${ext}:${hashHighlightContent(code)}`——fnv-1a 32 + 长度前缀（`{len36}.{hash36}`），不同长度输入不可能同键。LRU 升级为**双上限**：`MAX_CACHE_ENTRIES=500` + `MAX_CACHE_MEMORY_BYTES=50MB`（`estimateHighlightedSize` 按 token text×2 + 固定开销估算），超限按 LRU 序驱逐至双约束均满足；单条超限直接不缓存。`LRUCache` 泛型导出（构造注入 entries/bytes/sizeOf 三参数）使上限行为可确定性单测。流式 `cacheable:false` 语义不变（读不写，命中仅当内容与已完成块完全一致）。
+- **偏差说明**：计划键形 `{fnv1a}:{language}:{theme}` 含 theme——本实现 tokenize 结果存的是样式类别名（`HighlightStyle`），颜色在渲染层映射，**缓存值与主题无关**，加 theme 只会无谓分裂命中率；如实降维为 `{ext}:{hash}`（language 位即 ext 语法选择器）。
+- **影响范围**：`highlight-cache.ts`（hash/estimator/双上限 LRU/键替换）、`highlight-cache.test.ts`（+12 测试）。
+- **验证**：`highlight-cache.test.ts` 28/28（新增：确定性/同长异内容异键/长度前缀/unicode/hash 键命中/跨 ext 不命中/entries 驱逐/字节驱逐/读刷新续命/单条超限拒存/覆盖重写不双计/双上限同时生效/默认常量=M17 预算）；既有 16 测试全回归（含流式不写/完成命中）；app typecheck 0 错误；lint 0/0。
+- **状态**：完成。**残余**：跨语言不命中（键含 ext，预期）；实机长块流式→完成→重开命中抽检属人工项（哈希键单元证据已足）。
+
+## T3 移植 M19：工具栏控件基元（2026-09-18 登记，2026-09-18 完成）
+
+- **交付**：`composer-control.tsx` 控件基元族——`composerControlStyle`（共享 style 解析器：`size xs|sm|md`（28/32/34px）、`variant ghost|default|primary`、`shape rounded|circle`、`active`（destructive 背景，录制态）、`disabled`（0.5 透明度）；ghost hover→surface1，active/disabled 抑制 hover，primary 保留填充）+ `ComposerControl`/`ComposerControlIcon`（`tone auto|onPrimary|onDestructive`，WeakMap 缓存 `withUnistyles` 包裹的 lucide 组件）/`ComposerControlChevron`/`ComposerControlSeparator`/`ComposerSelectControl`。基元可直传给拥有自有 Pressable 的 trigger（DropdownMenuTrigger/TooltipTrigger）——同套 hover/disabled 语义，不嵌套 pressable。
+- **迁移**：`input.tsx` 三个按钮切到基元——attach（sm ghost）、voice（sm ghost + active=dictating→destructive）、send（md primary circle + 独立 `sendButtonMargin` 保留 4px 间距）；`ComposerControlIcon` 替换 AttachButtonIcon/VoiceButtonIcon/SendButtonContent 内的 Themed\* 图标（dictating 的 Square `fill="white"` 为既有特例保留）；删除死样式 `attachButton`/`voiceButton`/`voiceButtonRecording`/`sendButton`/`iconButtonHovered`/`buttonDisabled`/`iconForeground`/`iconForegroundMuted` 与死 `ThemedPlus/Mic/MicOff/ArrowUp/CornerDownLeft` 包裹。
+- **M15 前置纯函数**：`resting-composer-controls-measurement.ts`——接收控件规格（id/宽度/minWidth/flexible/pinned），返回 `visibleIds`/`overflowIds`/`flexibleWidths`/`needsOverflowButton`；右向左溢出、flexible 先缩后溢、预留 overflow 按钮位、剩余 slack 回补可见 flexible（不逾自然宽）、pinned 恒可见。
+- **验证**：`composer-control.test.tsx` 12/12（sm/xs/md 尺寸契约、variant/hover/active/disabled 层、icon tone、chevron、separator、select 内构——本地 unistyles mock 以真实 theme fixture 求值 factory；lucide 走既有 mock 惯例——真实 `lucide-react-native` 在 vitest 下加载失败，message.test.tsx 同款处理）；`resting-composer-controls-measurement.test.ts` 11/11；composer 回归 `composer-prompt-history`/`composer-scroll-gesture`/`state` 37/37 + `workbench-fidelity-style-boundaries`/`reanimated-unistyles-boundary` 33/33；app typecheck 0 错误；lint 0/0。
+- **连带修复**：`reanimated-unistyles-boundary.test.ts` 源码文本断言在 HEAD 上已失败（`<View ref={inputWrapperRef} …>` 单行 snippet 早被 oxfmt 折行）——改为断言 `ref={inputWrapperRef}`/`style={inputWrapperSurfaceStyle}` 两独立 contains，不变量不变、格式无关（非本次迁移引入，如实注明）；`resting-composer-controls-measurement.ts` 两处 `[...c].reverse()` → `toReversed()`（unicorn 规则）；`composer-control.tsx` 三处类型修正（`interface`→`type` 消除 disabled 冲突、`withUnistyles` WeakMap 具体组件类型、`no-nested-ternary`）。
+- **状态**：完成。**残余**：① M15 落地时 `resting-composer-controls-measurement` 需接 `useComposerHeightMirror` 实测宽度而非仅样式契约；② `ComposerSelectControl`/`ComposerControlSeparator` 当前无消费者（为 M15 resting 控件预留，如 M15 规格变更应随之调整）；③ dictating Square 的 `fill` 是基元 API 之外的既有特例，未来若再加实心图标态需扩 tone。

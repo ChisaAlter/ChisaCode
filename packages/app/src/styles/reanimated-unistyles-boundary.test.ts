@@ -98,6 +98,7 @@ describe("Reanimated and Unistyles style boundaries", () => {
     const source = readSource("../composer/input/input.tsx");
 
     expect(source).toContain("<Animated.View style={inputAnimatedStyle}>");
-    expect(source).toContain("<View ref={inputWrapperRef} style={inputWrapperSurfaceStyle}>");
+    expect(source).toContain("ref={inputWrapperRef}");
+    expect(source).toContain("style={inputWrapperSurfaceStyle}");
   });
 });

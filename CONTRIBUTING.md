@@ -4,13 +4,14 @@ Thanks for your interest in contributing. This guide covers the essentials.
 
 ## Development Setup
 
-**Prerequisites**: Node.js >= 22, npm workspaces, Git.
+**Prerequisites**: Node.js >= 22, pnpm (via corepack or standalone), Git.
 
 ```bash
 git clone https://github.com/ChisaAlter/ChisaCode.git
 cd ChisaCode
 git checkout cn-main
-npm ci
+corepack enable   # activates the pnpm version pinned by the packageManager field
+pnpm install --frozen-lockfile
 ```
 
 Start all surfaces:

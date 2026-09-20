@@ -66,6 +66,12 @@ import { resolveSoftComposerCardElevation } from "@/composer/draft/soft-home-lay
 import { COMPOSER_VOICE_UI_VISIBLE } from "@/composer/voice-visibility";
 import { useComposerHeightMirror } from "./height-mirror";
 import { computeCanStartDictation } from "./state";
+import { ComposerControlIcon, composerControlStyle } from "./composer-control";
+import {
+  type PromptHistoryDirection,
+  isCursorOnFirstLine,
+  isCursorOnLastLine,
+} from "./composer-prompt-history";
 import { useTranslation } from "react-i18next";
 
 export interface AttachmentMenuItem {
@@ -124,12 +130,31 @@ export interface MessageInputProps {
   onSubmitLoadingPress?: () => void;
   /** Intercept key press events before default handling. Return true to prevent default. */
   onKeyPress?: (event: { key: string; preventDefault: () => void }) => boolean;
+  /**
+   * Steps through prompt history (ArrowUp/ArrowDown, web only). Returns true
+   * when a history entry was recalled so the key press can be prevented.
+   */
+  onPromptHistoryStep?: (direction: PromptHistoryDirection) => boolean;
   /** Reports cursor selection updates from the underlying input. */
   onSelectionChange?: (selection: { start: number; end: number }) => void;
   onFocusChange?: (focused: boolean) => void;
   onHeightChange?: (height: number) => void;
   /** Extra styles merged onto the input wrapper (e.g. elevated background). */
   inputWrapperStyle?: import("react-native").ViewStyle;
+  /**
+   * Renders the card as the bottom half of a shared surface: squares the top
+   * edge, drops the top border and its own elevation, and ignores
+   * `inputWrapperStyle` so a banner can attach above it with no seam.
+   */
+  attachedToBanner?: boolean;
+  /**
+   * Scroll-collapse (T3 port M8, web only): renders the card as a single-line
+   * pill — cbar hidden, text truncated — while the user reads scrollback.
+   * Pointer-down on the card expands it again.
+   */
+  scrollCollapsed?: boolean;
+  /** Called when the user pointer-downs the collapsed card (expand request). */
+  onExpandFromScrollCollapse?: () => void;
   /** Content rendered inside the bordered input surface, above the text input (e.g. attachment pills). */
   attachmentSlot?: React.ReactNode;
 }
@@ -186,10 +211,7 @@ function AttachButtonIcon({
 }) {
   return (
     <View ref={onAttachButtonRef} collapsable={false} style={styles.attachButtonAnchor}>
-      <ThemedPlus
-        size={buttonIconSize}
-        style={hovered ? styles.iconForeground : styles.iconForegroundMuted}
-      />
+      <ComposerControlIcon icon={Plus} size={buttonIconSize} hovered={hovered} />
     </View>
   );
 }
@@ -274,11 +296,13 @@ function VoiceButtonIcon({
   if (isDictating) {
     return <Square size={buttonIconSize} color="white" fill="white" />;
   }
-  const iconStyle = hovered ? styles.iconForeground : styles.iconForegroundMuted;
-  if (isMutedRealtime) {
-    return <ThemedMicOff size={buttonIconSize} style={iconStyle} />;
-  }
-  return <ThemedMic size={buttonIconSize} style={iconStyle} />;
+  return (
+    <ComposerControlIcon
+      icon={isMutedRealtime ? MicOff : Mic}
+      size={buttonIconSize}
+      hovered={hovered}
+    />
+  );
 }
 
 type ShortcutChord = NonNullable<React.ComponentProps<typeof Shortcut>["chord"]>;
@@ -327,9 +351,9 @@ function SendButtonContent({
     return <ThemedActivityIndicator size="small" style={styles.iconPrimaryForeground} />;
   }
   if (submitIcon === "return") {
-    return <ThemedCornerDownLeft size={buttonIconSize} style={styles.iconPrimaryForeground} />;
+    return <ComposerControlIcon icon={CornerDownLeft} size={buttonIconSize} tone="onPrimary" />;
   }
-  return <ThemedArrowUp size={buttonIconSize} style={styles.iconPrimaryForeground} />;
+  return <ComposerControlIcon icon={ArrowUp} size={buttonIconSize} tone="onPrimary" />;
 }
 
 function resolveSubmitAccessibilityLabel(input: {
@@ -406,6 +430,31 @@ interface DesktopKeyPressContext {
   disabled: boolean;
   handleAlternateSendAction: () => void;
   handleDefaultSendAction: () => void;
+  onPromptHistoryStep: ((direction: PromptHistoryDirection) => boolean) | undefined;
+  getValue: () => string;
+  getSelection: () => { start: number; end: number };
+}
+
+/**
+ * Recalls prompt history when ArrowUp/ArrowDown sit on the first/last line.
+ * The autocomplete popover's onKeyPressCallback runs first in
+ * handleDesktopKeyPressImpl, so an open popover always wins over history.
+ */
+function handlePromptHistoryArrowKey(
+  event: WebTextInputKeyPressEvent,
+  ctx: DesktopKeyPressContext,
+): void {
+  const step = ctx.onPromptHistoryStep;
+  if (!step) return;
+  const direction: PromptHistoryDirection =
+    event.nativeEvent.key === "ArrowUp" ? "back" : "forward";
+  const value = ctx.getValue();
+  const selection = ctx.getSelection();
+  if (direction === "back" && !isCursorOnFirstLine(value, selection.start)) return;
+  if (direction === "forward" && !isCursorOnLastLine(value, selection.end)) return;
+  if (step(direction)) {
+    event.preventDefault();
+  }
 }
 
 function handleDesktopKeyPressImpl(
@@ -423,8 +472,14 @@ function handleDesktopKeyPressImpl(
   }
 
   const { shiftKey, metaKey, ctrlKey } = event.nativeEvent;
+  const key = event.nativeEvent.key;
 
-  if (event.nativeEvent.key !== "Enter") return;
+  if (key === "ArrowUp" || key === "ArrowDown") {
+    handlePromptHistoryArrowKey(event, ctx);
+    return;
+  }
+
+  if (key !== "Enter") return;
   if (!ctx.submitOnEnter) return;
   if (shiftKey) return;
 
@@ -1184,10 +1239,14 @@ interface ResolvedMessageInputProps {
   onQueue: ((payload: MessagePayload) => void) | undefined;
   onSubmitLoadingPress: (() => void) | undefined;
   onKeyPressCallback: ((event: { key: string; preventDefault: () => void }) => boolean) | undefined;
+  onPromptHistoryStep: ((direction: PromptHistoryDirection) => boolean) | undefined;
   onSelectionChangeCallback: ((selection: { start: number; end: number }) => void) | undefined;
   onFocusChange: ((focused: boolean) => void) | undefined;
   onHeightChange: ((height: number) => void) | undefined;
   inputWrapperStyle: import("react-native").ViewStyle | undefined;
+  attachedToBanner: boolean;
+  scrollCollapsed: boolean;
+  onExpandFromScrollCollapse: (() => void) | undefined;
   attachmentSlot: React.ReactNode;
 }
 
@@ -1224,10 +1283,14 @@ function resolveMessageInputProps(props: MessageInputProps): ResolvedMessageInpu
     onQueue: props.onQueue,
     onSubmitLoadingPress: props.onSubmitLoadingPress,
     onKeyPressCallback: props.onKeyPress,
+    onPromptHistoryStep: props.onPromptHistoryStep,
     onSelectionChangeCallback: props.onSelectionChange,
     onFocusChange: props.onFocusChange,
     onHeightChange: props.onHeightChange,
     inputWrapperStyle: props.inputWrapperStyle,
+    attachedToBanner: props.attachedToBanner ?? false,
+    scrollCollapsed: props.scrollCollapsed ?? false,
+    onExpandFromScrollCollapse: props.onExpandFromScrollCollapse,
     attachmentSlot: props.attachmentSlot,
   };
 }
@@ -1236,6 +1299,37 @@ function extractErrorMessage(error: unknown): string | null {
   if (error instanceof Error) return error.message;
   if (typeof error === "string") return error;
   return null;
+}
+
+/**
+ * Resolves the collapsed-card pointer-down handler: only attached while
+ * collapsed on web, so taps expand the pill.
+ */
+function resolveCardPointerDownHandler(
+  isCollapsed: boolean,
+  expand: (() => void) | undefined,
+): (() => void) | undefined {
+  return isWeb && isCollapsed && expand ? expand : undefined;
+}
+
+/**
+ * Resolves the bordered card surface per layout mode. Declared at module level
+ * so `MessageInput` stays under the complexity lint budget.
+ */
+function resolveInputWrapperSurfaceStyle(input: {
+  attachedToBanner: boolean;
+  scrollCollapsed: boolean;
+  inputWrapperStyle: import("react-native").ViewStyle | undefined;
+}) {
+  if (input.attachedToBanner) {
+    return input.scrollCollapsed
+      ? [styles.inputWrapperAttached, styles.inputWrapperScrollCollapsed]
+      : styles.inputWrapperAttached;
+  }
+  if (input.scrollCollapsed) {
+    return [styles.inputWrapper, input.inputWrapperStyle, styles.inputWrapperScrollCollapsed];
+  }
+  return [styles.inputWrapper, input.inputWrapperStyle];
 }
 
 export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
@@ -1272,10 +1366,14 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       onQueue,
       onSubmitLoadingPress,
       onKeyPressCallback,
+      onPromptHistoryStep,
       onSelectionChangeCallback,
       onFocusChange,
       onHeightChange,
       inputWrapperStyle,
+      attachedToBanner,
+      scrollCollapsed,
+      onExpandFromScrollCollapse,
       attachmentSlot,
     } = resolveMessageInputProps(props);
     const { t } = useTranslation();
@@ -1325,6 +1423,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
     const overlayTransition = useSharedValue(0);
     const sendAfterTranscriptRef = useRef(false);
     const valueRef = useRef(value);
+    const selectionRef = useRef({ start: 0, end: 0 });
     const serverInfo = useSessionStore(
       useCallback(
         (state) => {
@@ -1692,6 +1791,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       (event: NativeSyntheticEvent<TextInputSelectionChangeEventData>) => {
         const start = event.nativeEvent.selection?.start ?? 0;
         const end = event.nativeEvent.selection?.end ?? start;
+        selectionRef.current = { start, end };
         onSelectionChangeCallback?.({ start, end });
       },
       [onSelectionChangeCallback],
@@ -1713,6 +1813,9 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
           disabled,
           handleAlternateSendAction,
           handleDefaultSendAction,
+          onPromptHistoryStep,
+          getValue: () => valueRef.current,
+          getSelection: () => selectionRef.current,
         });
       },
       [
@@ -1726,6 +1829,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
         disabled,
         handleAlternateSendAction,
         handleDefaultSendAction,
+        onPromptHistoryStep,
       ],
     );
 
@@ -1741,6 +1845,9 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
           disabled,
           handleAlternateSendAction,
           handleDefaultSendAction,
+          onPromptHistoryStep,
+          getValue: () => valueRef.current,
+          getSelection: () => selectionRef.current,
         };
         handleNativeKeyPress(event, ctx);
       },
@@ -1754,6 +1861,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
         disabled,
         handleAlternateSendAction,
         handleDefaultSendAction,
+        onPromptHistoryStep,
       ],
     );
 
@@ -1847,22 +1955,20 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       onFocusChange?.(false);
     }, [onFocusChange]);
 
-    const attachButtonStyle = useCallback(
-      ({ hovered }: { hovered?: boolean }) => [
-        styles.attachButton,
-        Boolean(hovered) && styles.iconButtonHovered,
-        (!isConnected || disabled) && styles.buttonDisabled,
-      ],
+    const attachButtonStyle = useMemo(
+      () =>
+        composerControlStyle({ size: "sm", variant: "ghost", disabled: !isConnected || disabled }),
       [isConnected, disabled],
     );
 
-    const voiceButtonStyle = useCallback(
-      ({ hovered }: { hovered?: boolean }) => [
-        styles.voiceButton,
-        Boolean(hovered) && !isDictating && styles.iconButtonHovered,
-        !isDictationStartEnabled && styles.buttonDisabled,
-        isDictating && styles.voiceButtonRecording,
-      ],
+    const voiceButtonStyle = useMemo(
+      () =>
+        composerControlStyle({
+          size: "sm",
+          variant: "ghost",
+          active: isDictating,
+          disabled: !isDictationStartEnabled,
+        }),
       [isDictating, isDictationStartEnabled],
     );
 
@@ -1871,17 +1977,34 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
     }, [handleStopRealtimeVoice]);
 
     const inputWrapperSurfaceStyle = useMemo(
-      () => [styles.inputWrapper, inputWrapperStyle],
-      [inputWrapperStyle],
+      () =>
+        resolveInputWrapperSurfaceStyle({
+          attachedToBanner,
+          scrollCollapsed,
+          inputWrapperStyle,
+        }),
+      [attachedToBanner, inputWrapperStyle, scrollCollapsed],
     );
-    const textInputStyle = useMemo(
-      () => [styles.textInput, computeTextInputHeightStyle(inputHeight, maxInputHeight)],
-      [inputHeight, maxInputHeight],
+    const textInputSurfaceStyle = useMemo(
+      () =>
+        scrollCollapsed
+          ? [styles.textInput, styles.textInputScrollCollapsed]
+          : [styles.textInput, computeTextInputHeightStyle(inputHeight, maxInputHeight)],
+      [inputHeight, maxInputHeight, scrollCollapsed],
     );
-    const sendButtonCombinedStyle = useMemo(
-      () => [styles.sendButton, isSendButtonDisabled && styles.buttonDisabled],
-      [isSendButtonDisabled],
+    const handleCardPointerDown = useMemo(
+      () => resolveCardPointerDownHandler(scrollCollapsed, onExpandFromScrollCollapse),
+      [onExpandFromScrollCollapse, scrollCollapsed],
     );
+    const sendButtonCombinedStyle = useMemo(() => {
+      const resolve = composerControlStyle({
+        size: "md",
+        variant: "primary",
+        shape: "circle",
+        disabled: isSendButtonDisabled,
+      });
+      return (state: { hovered?: boolean }) => [resolve(state), styles.sendButtonMargin];
+    }, [isSendButtonDisabled]);
     const overlayContainerStyle = useMemo(
       () => [staticStyles.overlayContainer, overlayAnimatedStyle],
       [overlayAnimatedStyle],
@@ -1913,7 +2036,12 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       <View ref={rootRef} style={styles.container} testID="message-input-root">
         {/* Regular input */}
         <Animated.View style={inputAnimatedStyle}>
-          <View ref={inputWrapperRef} style={inputWrapperSurfaceStyle}>
+          <View
+            ref={inputWrapperRef}
+            style={inputWrapperSurfaceStyle}
+            testID="composer-input-card"
+            onPointerDown={handleCardPointerDown}
+          >
             {attachmentSlot}
             {/* Text input */}
             <View style={styles.textInputScrollWrapper}>
@@ -1926,7 +2054,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
                 accessibilityLabel={t("composer.messageAgent")}
                 onFocus={handleInputFocus}
                 onBlur={handleInputBlur}
-                style={textInputStyle}
+                style={textInputSurfaceStyle}
                 multiline
                 scrollEnabled={isWeb ? inputHeight >= maxInputHeight : true}
                 onContentSizeChange={handleContentSizeChange}
@@ -1944,7 +2072,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
             </View>
 
             {/* Button row */}
-            <View style={styles.buttonRow}>
+            <View style={scrollCollapsed ? styles.buttonRowScrollCollapsed : styles.buttonRow}>
               {/* Toolbar left: attachment button + agent controls */}
               <View style={styles.leftButtonGroup}>
                 <AttachmentDropdown
@@ -2047,6 +2175,50 @@ const styles = StyleSheet.create((theme: Theme) => ({
         }
       : {}),
   },
+  // Bottom half of a shared banner+input surface (T3 port M7): the banner owns
+  // the top edge, so this card declares no top border or top radius. On web the
+  // composite elevation moves to the wrapper that owns both halves.
+  inputWrapperAttached: {
+    flexDirection: "column",
+    gap: 0,
+    backgroundColor: theme.colors.surface0,
+    borderTopWidth: 0,
+    borderRightWidth: theme.borderWidth[1],
+    borderBottomWidth: theme.borderWidth[1],
+    borderLeftWidth: theme.borderWidth[1],
+    borderColor: theme.colors.border,
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 0,
+    borderBottomLeftRadius: 18,
+    borderBottomRightRadius: 18,
+    minHeight: {
+      xs: 108,
+      md: 108,
+    },
+    paddingTop: 0,
+    paddingRight: 0,
+    paddingBottom: 0,
+    paddingLeft: 0,
+    ...(isWeb ? {} : resolveSoftComposerCardElevation()),
+  },
+  // Scroll-collapse pill (T3 port M8): single line, tighter radius; the cbar
+  // below is hidden via the buttonRow style swap.
+  inputWrapperScrollCollapsed: {
+    borderRadius: 13,
+    minHeight: 0,
+  },
+  textInputScrollCollapsed: {
+    // Single visible line; overflow hidden via the wrapper.
+    height: 24,
+    overflow: "hidden",
+  },
+  buttonRowScrollCollapsed: {
+    height: 0,
+    paddingTop: 0,
+    paddingBottom: 0,
+    overflow: "hidden",
+    opacity: 0,
+  },
   textInputScrollWrapper: {
     position: "relative",
     // Soft .composer textarea: padding 14px 16px 6px
@@ -2103,42 +2275,15 @@ const styles = StyleSheet.create((theme: Theme) => ({
     gap: 4,
     marginLeft: "auto",
   },
-  // Soft .t-icon: 32 r10 pen-bar chip.
-  attachButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-  },
   attachButtonAnchor: {
     width: 32,
     height: 32,
     alignItems: "center",
     justifyContent: "center",
   },
-  voiceButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  voiceButtonRecording: {
-    backgroundColor: theme.colors.destructive,
-  },
   // Soft .send — design --send #1a1d26 (primary), not accent blue.
-  sendButton: {
-    width: 34,
-    height: 34,
-    borderRadius: theme.borderRadius.full,
-    backgroundColor: theme.colors.primary,
-    alignItems: "center",
-    justifyContent: "center",
+  sendButtonMargin: {
     marginLeft: theme.spacing[1],
-  },
-  iconButtonHovered: {
-    backgroundColor: theme.colors.surface1,
   },
   tooltipRow: {
     flexDirection: "row",
@@ -2149,15 +2294,6 @@ const styles = StyleSheet.create((theme: Theme) => ({
     fontSize: 12.5,
     lineHeight: 16,
     color: theme.colors.popoverForeground,
-  },
-  buttonDisabled: {
-    opacity: 0.5,
-  },
-  iconForeground: {
-    color: theme.colors.foreground,
-  },
-  iconForegroundMuted: {
-    color: theme.colors.foregroundMuted,
   },
   iconAccentForeground: {
     color: theme.colors.accentForeground,
@@ -2182,11 +2318,6 @@ const staticStyles = RNStyleSheet.create({
   },
 });
 
-const ThemedPlus = withUnistyles(Plus);
-const ThemedMic = withUnistyles(Mic);
-const ThemedMicOff = withUnistyles(MicOff);
-const ThemedArrowUp = withUnistyles(ArrowUp);
-const ThemedCornerDownLeft = withUnistyles(CornerDownLeft);
 const ThemedActivityIndicator = withUnistyles(ActivityIndicator);
 const ThemedTextInput = withUnistyles(TextInput);
 

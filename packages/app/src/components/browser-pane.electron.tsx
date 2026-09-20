@@ -8,7 +8,7 @@ import {
   createElement,
 } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
-import { ArrowLeft, ArrowRight, MousePointer2, PencilRuler, RotateCw } from "lucide-react-native";
+import { ArrowLeft, ArrowRight, Minus, Plus, RotateCw } from "lucide-react-native";
 import {
   StyleSheet,
   UnistyleDependency,
@@ -17,6 +17,8 @@ import {
 } from "react-native-unistyles";
 import { type Theme } from "@/styles/theme";
 import { useTranslation } from "react-i18next";
+import { useDiscoveredServers } from "@/hooks/use-discovered-servers";
+import { createWebviewCrashRecovery } from "@/components/webview-crash-recovery";
 import {
   buildWorkspaceAttachmentScopeKey,
   useWorkspaceAttachments,
@@ -31,22 +33,31 @@ import {
 } from "@/desktop/host";
 import { isDev } from "@/constants/platform";
 import { useBrowserStore, normalizeWorkspaceBrowserUrl } from "@/stores/browser-store";
+import {
+  BROWSER_PANE_MAX_VIEWPORT_RATIO,
+  clampBrowserPaneWidth,
+} from "@/utils/clamp-browser-pane-width";
+import { BrowserFaviconIcon } from "@/components/browser-favicon-icon";
+import { BrowserMoreMenu } from "@/components/browser-more-menu";
+import {
+  ZOOM_LEVEL_MAX,
+  ZOOM_LEVEL_MIN,
+  ZoomIndicator,
+  clampZoomLevel,
+  zoomLevelToPercent,
+} from "@/components/zoom-indicator";
 
 const ThemedArrowLeft = withUnistyles(ArrowLeft);
 const ThemedArrowRight = withUnistyles(ArrowRight);
 const ThemedRotateCw = withUnistyles(RotateCw);
-const ThemedPencilRuler = withUnistyles(PencilRuler);
-const ThemedMousePointer2 = withUnistyles(MousePointer2);
+const ThemedMinus = withUnistyles(Minus);
+const ThemedPlus = withUnistyles(Plus);
 const ThemedTextInput = withUnistyles(TextInput);
 
 const foregroundMutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
-const accentColorMapping = (theme: Theme) => ({ color: theme.colors.accent });
 const placeholderColorMapping = (theme: Theme) => ({
   placeholderTextColor: theme.colors.foregroundMuted,
 });
-const selectorIconColorMapping = (active: boolean) =>
-  active ? accentColorMapping : foregroundMutedColorMapping;
-
 type ElectronWebview = HTMLElement & {
   canGoBack?: () => boolean;
   canGoForward?: () => boolean;
@@ -57,6 +68,8 @@ type ElectronWebview = HTMLElement & {
   loadURL?: (url: string) => Promise<void>;
   getURL?: () => string;
   executeJavaScript?: (code: string) => Promise<unknown>;
+  getZoomLevel?: () => number;
+  setZoomLevel?: (level: number) => void;
   focus?: () => void;
   addEventListener: (type: string, listener: EventListenerOrEventListenerObject) => void;
   removeEventListener: (type: string, listener: EventListenerOrEventListenerObject) => void;
@@ -72,6 +85,17 @@ type BrowserElementSelection = Omit<BrowserElementAttachment, "formatted"> & {
 
 const ERR_ABORTED = -3;
 const ALLOWED_BROWSER_PROTOCOLS = new Set(["http:", "https:"]);
+
+// Loading progress bar (T3 port M16): a 2px GPU-composited transform sweep at
+// the bottom of the chrome row, rendered only while the webview is loading.
+const BROWSER_PROGRESS_CSS = [
+  "@keyframes chisacodeBrowserProgress {",
+  "  0% { transform: translateX(-100%); }",
+  "  100% { transform: translateX(170%); }",
+  "}",
+  ".chisacode-browser-progress { position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; overflow: hidden; pointer-events: none; }",
+  ".chisacode-browser-progress__bar { height: 100%; width: 60%; will-change: transform; background: linear-gradient(90deg, rgba(59,130,246,0) 0%, rgba(59,130,246,0.85) 55%, rgba(59,130,246,0) 100%); animation: chisacodeBrowserProgress 1.1s ease-in-out infinite; }",
+].join("\n");
 
 function truncateText(value: string, maxLength: number): string {
   return value.length > maxLength ? `${value.slice(0, maxLength).trim()}...` : value;
@@ -288,6 +312,39 @@ function startSelectorResultPolling(input: {
   return poll;
 }
 
+function DiscoveredServerCard({
+  host,
+  port,
+  processName,
+  onOpen,
+}: {
+  host: string;
+  port: number;
+  processName: string | null;
+  onOpen: (url: string) => void;
+}) {
+  const { t } = useTranslation();
+  const url = `http://${host}:${port}`;
+  const handleOpen = useCallback(() => {
+    onOpen(url);
+  }, [onOpen, url]);
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${t("browser.discoveredServersOpen")} ${url}`}
+      onPress={handleOpen}
+      style={styles.discoveredServerCard}
+    >
+      <Text numberOfLines={1} style={styles.discoveredServerName}>
+        {processName ?? t("browser.discoveredServersUnknownProcess")}
+      </Text>
+      <Text numberOfLines={1} style={styles.discoveredServerUrl}>
+        {host}:{port}
+      </Text>
+    </Pressable>
+  );
+}
+
 // eslint-disable-next-line complexity
 export function BrowserPane({
   browserId,
@@ -305,12 +362,26 @@ export function BrowserPane({
   onFocusPane?: () => void;
 }) {
   const { t } = useTranslation();
+  const discoveredServers = useDiscoveredServers(serverId);
   const browser = useBrowserStore((state) => state.browsersById[browserId] ?? null);
   const updateBrowser = useBrowserStore((state) => state.updateBrowser);
   const webviewRef = useRef<ElectronWebview | null>(null);
   const webviewHostRef = useRef<HTMLDivElement | null>(null);
   const urlInputRef = useRef<WebTextInput | null>(null);
   const initialUrlRef = useRef(browser?.url ?? "https://example.com");
+  // Empty-state affordance: example.com is the untouched default URL, so the
+  // discovered-servers card list only shows before the first real navigation.
+  // The store URL is normalized (may carry a trailing slash), so compare by
+  // hostname rather than the exact string.
+  const storeUrl = browser?.url ?? initialUrlRef.current;
+  const storeUrlHost = (() => {
+    try {
+      return new URL(storeUrl).hostname;
+    } catch {
+      return storeUrl;
+    }
+  })();
+  const showDiscoveredServers = discoveredServers.length > 0 && storeUrlHost === "example.com";
   const browserIdRef = useRef(browserId);
   browserIdRef.current = browserId;
   const browserRef = useRef(browser);
@@ -319,6 +390,10 @@ export function BrowserPane({
   const domReadyRef = useRef(false);
   const [selectorActive, setSelectorActive] = useState(false);
   const [draftUrl, setDraftUrl] = useState(browser?.url ?? "https://example.com");
+  // Zoom (T3 port M16): Electron <webview> zoom is logarithmic
+  // (level n → factor 1.2^n) and scoped to this webview — it does NOT affect
+  // the app window-level zoom.
+  const [zoomLevel, setZoomLevel] = useState(0);
   const workspaceAttachmentScopeKey = useMemo(
     () => buildBrowserAttachmentScopeKey({ cwd, serverId, workspaceId }),
     [cwd, serverId, workspaceId],
@@ -331,6 +406,9 @@ export function BrowserPane({
   const subtitleStyle = styles.unavailableSubtitle;
   const urlInputStyle = styles.urlInput;
   const errorTextStyle = styles.metaError;
+  const discoveredServersTitleStyle = styles.discoveredServersTitle;
+  const crashTitleStyle = styles.crashTitle;
+  const crashBodyStyle = styles.crashBody;
 
   useEffect(() => {
     const nextUrl = browser?.url ?? "https://example.com";
@@ -339,6 +417,139 @@ export function BrowserPane({
 
   const updateBrowserRef = useRef(updateBrowser);
   updateBrowserRef.current = updateBrowser;
+
+  // Resizable pane (T3 port M13): a left-edge drag handle resizes the right
+  // rail. During the drag the rail's inline width updates via rAF (no React
+  // re-render per frame); the final clamped width is persisted to the store
+  // only when the drag ends.
+  const resizeHandleRef = useRef<HTMLDivElement | null>(null);
+  const [resizeHover, setResizeHover] = useState(false);
+  const [resizeActive, setResizeActive] = useState(false);
+
+  useEffect(() => {
+    const handle = resizeHandleRef.current;
+    if (!handle) {
+      return;
+    }
+    let dragging = false;
+    let startX = 0;
+    let startWidth = 0;
+    let rafId = 0;
+    let railEl: HTMLElement | null = null;
+
+    const computeNextWidth = (clientX: number) =>
+      clampBrowserPaneWidth(startWidth + (startX - clientX), window.innerWidth);
+
+    const onMouseMove = (event: MouseEvent) => {
+      if (!dragging || !railEl) {
+        return;
+      }
+      const clientX = event.clientX;
+      cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(() => {
+        if (!railEl) {
+          return;
+        }
+        railEl.style.width = `${computeNextWidth(clientX)}px`;
+        railEl.style.maxWidth = `${Math.floor(BROWSER_PANE_MAX_VIEWPORT_RATIO * 100)}%`;
+      });
+    };
+
+    const onMouseUp = (event: MouseEvent) => {
+      if (!dragging) {
+        return;
+      }
+      dragging = false;
+      setResizeActive(false);
+      document.removeEventListener("mousemove", onMouseMove);
+      document.removeEventListener("mouseup", onMouseUp);
+      cancelAnimationFrame(rafId);
+      updateBrowserRef.current(browserIdRef.current, {
+        paneWidth: computeNextWidth(event.clientX),
+      });
+    };
+
+    const onMouseDown = (event: MouseEvent) => {
+      railEl = handle.closest<HTMLElement>('[data-testid="workspace-right-panel"]');
+      if (!railEl) {
+        return;
+      }
+      dragging = true;
+      setResizeActive(true);
+      startX = event.clientX;
+      startWidth = railEl.getBoundingClientRect().width;
+      event.preventDefault();
+      document.addEventListener("mousemove", onMouseMove);
+      document.addEventListener("mouseup", onMouseUp);
+    };
+
+    handle.addEventListener("mousedown", onMouseDown);
+    return () => {
+      handle.removeEventListener("mousedown", onMouseDown);
+      document.removeEventListener("mousemove", onMouseMove);
+      document.removeEventListener("mouseup", onMouseUp);
+      cancelAnimationFrame(rafId);
+    };
+  }, []);
+
+  const resizeHandleStyle = useMemo<CSSProperties>(
+    () => ({
+      position: "absolute",
+      left: -1,
+      top: 0,
+      bottom: 0,
+      // 4px hit target; the 1px accent line only appears on hover/drag.
+      width: 4,
+      zIndex: 30,
+      cursor: "col-resize",
+      touchAction: "none",
+      background: "transparent",
+      borderLeft:
+        resizeHover || resizeActive ? "1px solid rgba(59, 130, 246, 0.9)" : "1px solid transparent",
+    }),
+    [resizeHover, resizeActive],
+  );
+
+  // Renderer-crash recovery: exponential backoff auto-reload, capped per
+  // window; the overlay takes over when the budget is exhausted.
+  const crashRecoveryRef = useRef<{
+    policy: ReturnType<typeof createWebviewCrashRecovery>;
+    setCrashed: (crashed: boolean) => void;
+  } | null>(null);
+  const [isWebviewCrashed, setIsWebviewCrashed] = useState(false);
+  if (!crashRecoveryRef.current) {
+    let notifyCrashed: ((crashed: boolean) => void) | null = null;
+    crashRecoveryRef.current = {
+      policy: createWebviewCrashRecovery(),
+      setCrashed: (crashed) => {
+        notifyCrashed?.(crashed);
+      },
+    };
+    notifyCrashed = setIsWebviewCrashed;
+  }
+
+  useEffect(() => {
+    if (!isWebviewCrashed) {
+      return;
+    }
+    const verdict = crashRecoveryRef.current?.policy.onCrash();
+    if (!verdict) {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      crashRecoveryRef.current?.setCrashed(false);
+      webviewRef.current?.reload?.();
+    }, verdict.reloadAfterMs);
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [isWebviewCrashed]);
+
+  const handleManualCrashReload = useCallback(() => {
+    crashRecoveryRef.current?.policy.reset();
+    crashRecoveryRef.current?.setCrashed(false);
+    webviewRef.current?.reload?.();
+  }, []);
 
   const selectUrlBar = useCallback(() => {
     window.setTimeout(() => {
@@ -472,8 +683,18 @@ export function BrowserPane({
         lastError: message,
       });
     };
+    const handleRenderProcessGone = (event: Event) => {
+      const details = (event as Event & { details?: { reason?: string } }).details;
+      console.warn("[browser-pane] render process gone:", details?.reason ?? "unknown");
+      crashRecoveryRef.current?.setCrashed(true);
+      updateBrowserRef.current(browserIdRef.current, { isLoading: false });
+    };
     const handleDomReady = () => {
       domReadyRef.current = true;
+      crashRecoveryRef.current?.setCrashed(false);
+      if (typeof webview.getZoomLevel === "function") {
+        setZoomLevel(clampZoomLevel(webview.getZoomLevel()));
+      }
       syncNavigationState();
     };
     const handleWebviewFocus = () => {
@@ -488,6 +709,7 @@ export function BrowserPane({
     webview.addEventListener("page-title-updated", handleTitleUpdated);
     webview.addEventListener("page-favicon-updated", handleFaviconUpdated);
     webview.addEventListener("did-fail-load", handleLoadFailed);
+    webview.addEventListener("render-process-gone", handleRenderProcessGone);
     webview.addEventListener("dom-ready", handleDomReady);
     webview.addEventListener("focus", handleWebviewFocus);
     webview.addEventListener("mousedown", handleWebviewFocus);
@@ -509,6 +731,7 @@ export function BrowserPane({
       webview.removeEventListener("page-title-updated", handleTitleUpdated);
       webview.removeEventListener("page-favicon-updated", handleFaviconUpdated);
       webview.removeEventListener("did-fail-load", handleLoadFailed);
+      webview.removeEventListener("render-process-gone", handleRenderProcessGone);
       webview.removeEventListener("dom-ready", handleDomReady);
       webview.removeEventListener("focus", handleWebviewFocus);
       webview.removeEventListener("mousedown", handleWebviewFocus);
@@ -886,6 +1109,61 @@ export function BrowserPane({
       });
   }, []);
 
+  const zoomPercent = zoomLevelToPercent(zoomLevel);
+
+  const applyZoomLevel = useCallback((nextLevel: number) => {
+    const clamped = clampZoomLevel(nextLevel);
+    const webview = webviewRef.current;
+    if (webview && typeof webview.setZoomLevel === "function") {
+      webview.setZoomLevel(clamped);
+    }
+    setZoomLevel(clamped);
+  }, []);
+
+  const handleZoomIn = useCallback(() => {
+    setZoomLevel((current) => {
+      const clamped = clampZoomLevel(current + 0.5);
+      const webview = webviewRef.current;
+      if (webview && typeof webview.setZoomLevel === "function") {
+        webview.setZoomLevel(clamped);
+      }
+      return clamped;
+    });
+  }, []);
+
+  const handleZoomOut = useCallback(() => {
+    setZoomLevel((current) => {
+      const clamped = clampZoomLevel(current - 0.5);
+      const webview = webviewRef.current;
+      if (webview && typeof webview.setZoomLevel === "function") {
+        webview.setZoomLevel(clamped);
+      }
+      return clamped;
+    });
+  }, []);
+
+  const handleZoomReset = useCallback(() => {
+    applyZoomLevel(0);
+  }, [applyZoomLevel]);
+
+  const handleClearData = useCallback(() => {
+    const currentBrowserId = browserIdRef.current;
+    const clearPartition = getDesktopHost()?.browser?.clearPartition;
+    if (typeof clearPartition === "function") {
+      void clearPartition(currentBrowserId).catch((error: unknown) => {
+        console.warn("[browser-pane] clearPartition failed", {
+          browserId: currentBrowserId,
+          error,
+        });
+      });
+    } else {
+      console.warn("[browser-pane] clearPartition bridge missing", {
+        browserId: currentBrowserId,
+      });
+    }
+    webviewRef.current?.reload?.();
+  }, []);
+
   const baseIconButtonStyle = useCallback(
     ({ hovered, pressed }: { hovered?: boolean; pressed?: boolean }) => [
       styles.iconButton,
@@ -909,13 +1187,21 @@ export function BrowserPane({
     ],
     [browser?.canGoForward],
   );
-  const selectorIconButtonStyle = useCallback(
+  const zoomOutButtonStyle = useCallback(
     ({ hovered, pressed }: { hovered?: boolean; pressed?: boolean }) => [
       styles.iconButton,
-      selectorActive && styles.selectorActiveButton,
       (hovered || pressed) && styles.iconButtonHovered,
+      zoomLevel <= ZOOM_LEVEL_MIN && styles.iconButtonDisabled,
     ],
-    [selectorActive],
+    [zoomLevel],
+  );
+  const zoomInButtonStyle = useCallback(
+    ({ hovered, pressed }: { hovered?: boolean; pressed?: boolean }) => [
+      styles.iconButton,
+      (hovered || pressed) && styles.iconButtonHovered,
+      zoomLevel >= ZOOM_LEVEL_MAX && styles.iconButtonDisabled,
+    ],
+    [zoomLevel],
   );
 
   const [webviewHostBackground, setWebviewHostBackground] = useState(() => {
@@ -998,6 +1284,7 @@ export function BrowserPane({
           </Pressable>
         </View>
         <View style={styles.urlBarWrap}>
+          <BrowserFaviconIcon faviconUrl={browser?.faviconUrl ?? null} size={14} />
           <ThemedTextInput
             accessibilityLabel={t("browser.urlLabel")}
             autoCapitalize="none"
@@ -1013,32 +1300,50 @@ export function BrowserPane({
           />
         </View>
         <View style={styles.chromeRight}>
-          {isDev ? (
-            <>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={t("browser.openDevTools")}
-                onPress={handleOpenDevTools}
-                style={baseIconButtonStyle}
-              >
-                <ThemedPencilRuler size={16} uniProps={foregroundMutedColorMapping} />
-              </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={
-                  selectorActive ? t("browser.cancelElementSelector") : t("browser.selectElement")
-                }
-                onPress={handleToggleElementSelector}
-                style={selectorIconButtonStyle}
-              >
-                <ThemedMousePointer2
-                  size={16}
-                  uniProps={selectorIconColorMapping(selectorActive)}
-                />
-              </Pressable>
-            </>
-          ) : null}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t("browser.zoomOut")}
+            disabled={zoomLevel <= ZOOM_LEVEL_MIN}
+            onPress={handleZoomOut}
+            style={zoomOutButtonStyle}
+            testID="browser-zoom-out"
+          >
+            <ThemedMinus size={15} uniProps={foregroundMutedColorMapping} />
+          </Pressable>
+          <ZoomIndicator percent={zoomPercent} />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t("browser.zoomIn")}
+            disabled={zoomLevel >= ZOOM_LEVEL_MAX}
+            onPress={handleZoomIn}
+            style={zoomInButtonStyle}
+            testID="browser-zoom-in"
+          >
+            <ThemedPlus size={15} uniProps={foregroundMutedColorMapping} />
+          </Pressable>
+          <BrowserMoreMenu
+            zoomPercent={zoomPercent}
+            selectorActive={selectorActive}
+            showDevItems={isDev}
+            onReload={handleRefresh}
+            onZoomReset={handleZoomReset}
+            onOpenDevTools={handleOpenDevTools}
+            onToggleElementSelector={handleToggleElementSelector}
+            onClearData={handleClearData}
+          />
         </View>
+        {browser?.isLoading ? (
+          <>
+            {createElement("style", {
+              dangerouslySetInnerHTML: { __html: BROWSER_PROGRESS_CSS },
+            })}
+            {createElement(
+              "div",
+              { className: "chisacode-browser-progress" },
+              createElement("div", { className: "chisacode-browser-progress__bar" }),
+            )}
+          </>
+        ) : null}
       </View>
       {browser?.lastError ? (
         <View style={styles.errorRow}>
@@ -1047,13 +1352,55 @@ export function BrowserPane({
           </Text>
         </View>
       ) : null}
+      {showDiscoveredServers ? (
+        <View style={styles.discoveredServersRow} testID="discovered-servers-section">
+          <Text style={discoveredServersTitleStyle}>{t("browser.discoveredServersTitle")}</Text>
+          <View style={styles.discoveredServersList}>
+            {discoveredServers.slice(0, 6).map((server) => (
+              <DiscoveredServerCard
+                key={`${server.host}:${server.port}`}
+                host={server.host}
+                port={server.port}
+                processName={server.processName ?? null}
+                onOpen={navigate}
+              />
+            ))}
+          </View>
+        </View>
+      ) : null}
       <View style={styles.webviewWrap}>
+        {createElement("div", {
+          ref: (node: HTMLDivElement | null) => {
+            resizeHandleRef.current = node;
+          },
+          role: "separator",
+          "aria-orientation": "vertical",
+          "aria-label": t("browser.resizePane"),
+          "data-testid": "browser-pane-resize-handle",
+          onMouseEnter: () => setResizeHover(true),
+          onMouseLeave: () => setResizeHover(false),
+          style: resizeHandleStyle,
+        })}
         {createElement("div", {
           ref: (node: HTMLDivElement | null) => {
             webviewHostRef.current = node;
           },
           style: webviewHostStyle,
         })}
+        {isWebviewCrashed ? (
+          <View style={styles.crashOverlay} testID="browser-crash-overlay">
+            <Text style={crashTitleStyle}>{t("browser.crashedTitle")}</Text>
+            <Text style={crashBodyStyle}>{t("browser.crashedBody")}</Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t("browser.crashedReload")}
+              onPress={handleManualCrashReload}
+              style={styles.crashReloadButton}
+            >
+              <Text style={styles.crashReloadText}>{t("browser.crashedReload")}</Text>
+            </Pressable>
+          </View>
+        ) : null}
       </View>
     </View>
   );
@@ -1067,6 +1414,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   chromeRow: {
     height: WORKSPACE_SECONDARY_HEADER_HEIGHT,
+    position: "relative",
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[2],
@@ -1094,9 +1442,6 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     justifyContent: "center",
   },
-  selectorActiveButton: {
-    backgroundColor: `${String(theme.colors.accent)}20`,
-  },
   iconButtonHovered: {
     backgroundColor: theme.colors.surface1,
   },
@@ -1112,6 +1457,7 @@ const styles = StyleSheet.create((theme) => ({
     paddingHorizontal: 10,
     flexDirection: "row",
     alignItems: "center",
+    gap: 6,
     backgroundColor: theme.colors.surfaceWorkspace,
     borderWidth: 1,
     borderColor: theme.colors.border,
@@ -1144,6 +1490,7 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
     minHeight: 0,
     overflow: "hidden",
+    position: "relative",
   },
   unavailableState: {
     flex: 1,
@@ -1163,5 +1510,80 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: 12.5,
     lineHeight: 18,
     color: theme.colors.foregroundMuted,
+  },
+  discoveredServersRow: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
+  },
+  discoveredServersList: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+  discoveredServerCard: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: theme.colors.surfaceWorkspace,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    maxWidth: 220,
+  },
+  discoveredServersTitle: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: "500",
+    color: theme.colors.foregroundMuted,
+  },
+  discoveredServerName: {
+    fontSize: 12.5,
+    lineHeight: 17,
+    fontWeight: "500",
+    color: theme.colors.foreground,
+  },
+  discoveredServerUrl: {
+    fontSize: 11.5,
+    lineHeight: 16,
+    color: theme.colors.foregroundMuted,
+  },
+  crashOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    padding: 24,
+    backgroundColor: theme.colors.surface0,
+  },
+  crashTitle: {
+    fontSize: 14.5,
+    lineHeight: 20,
+    fontWeight: "500",
+    color: theme.colors.foreground,
+    textAlign: "center",
+  },
+  crashBody: {
+    fontSize: 12.5,
+    lineHeight: 18,
+    color: theme.colors.foregroundMuted,
+    textAlign: "center",
+  },
+  crashReloadButton: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 8,
+    backgroundColor: theme.colors.primary,
+  },
+  crashReloadText: {
+    fontSize: 12.5,
+    lineHeight: 17,
+    fontWeight: "500",
+    color: "#ffffff",
   },
 }));
