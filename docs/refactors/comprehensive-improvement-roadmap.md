@@ -9,6 +9,42 @@
 
 ## 进行中
 
+### T3 移植完全计划文档对齐（2026-10-13）
+
+- **问题**：`t3code-complete-port-plan.md` 文首仍写「待开工 / `feature/t3-port`」，与约 14/26 已合入 `cn-main` 的事实矛盾；模块规格多处落后于现码（M7 层模型、M6 接线、M11/M13/M17 API）；审计 §12 仍列 PendingUserInput / agent-spawn。
+- **动作**：修订 complete-port-plan + 审计 §12（及 §6.3/§7.3 冲突段）；执行序改为 **M14 → M15 →（横幅契约）→ M12 → M21**；严闸 M23/M26；债清单写入计划 §5。
+- **状态**：文档对齐进行中（本条目）；产品代码未改。详见 `docs/refactors/t3code-complete-port-plan.md`。
+
+### T3 移植 M14：Mini Player（浮动预览）（2026-10-13 启动）
+
+- **问题**：关闭右侧浏览器面板后无法边对话边看页面；T3 可将预览弹出为浮动 Mini Player（会话内几何，不持久化）。完全计划见 `docs/refactors/t3code-complete-port-plan.md` 模块 14。
+- **影响范围**：`browser-mini-player-layout.ts`（clamp/default）+ `browser-webview-registry.ts`（imperative webview 在 panel/mini host 间 appendChild）+ `browser-mini-player.electron.tsx`（拖拽/缩放/控制条）+ `browser-pane.electron.tsx`（弹出按钮 + 占位恢复）+ `browser-store` `miniPlayer` 会话字段（sanitize 剥离）+ `workspace-screen` 层挂载 + i18n en/zh
+- **强制门禁**：layout ≥10 vitest；registry vitest；store miniPlayer 剥离单测；改动文件 typecheck；打包 Electron 实机：弹出→拖拽/缩放→移回→会话保持（登录态/滚动）——实机门禁本轮尽量跑，未跑如实声明
+- **残余边界**：PiP 独立窗口不做；native/web 无 Mini Player；BrowserPane 卸载后 webview 事件监听需依赖仍挂载的面板或后续补 headless controller（本轮要求面板占位路径保持 BrowserPane 存活）
+- **状态**：**完成（2026-10-13）**。layout 12 + registry 8 + store miniPlayer 3 vitest 绿；改动文件无新增 tsc 报错。**打包 Electron 实机弹出/拖拽门禁未在本环境跑**（无 Windows win-unpacked 管线），列入残余。
+
+### T3 移植 M15：静止布局 Resting Layout（2026-10-13）
+
+- **问题**：阅读态失焦时 composer 仍占大块高度；T3 折叠为 resting bar（提示回显 + 紧凑控件 + 溢出菜单），FLIP 过渡。完全计划见 `docs/refactors/t3code-complete-port-plan.md` 模块 15。
+- **影响范围**：新 `composer/resting/`（state / multiline / useComposerResting 统一 M8 scrollCollapsed / FLIP transition / CompactComposerControlsMenu）+ MessageInput `isResting` + agent-panel 接线 + M8 指针注释 + scroll-collapse e2e `waitForFunction` + i18n en/zh。测量复用 M19 `resting-composer-controls-measurement`。
+- **强制门禁**：resting state/multiline/FLIP/menu vitest；改动文件 lint/format；打包 Electron 实机（失焦折叠→聚焦展开；reduced-motion）——本环境未跑如实声明
+- **残余**：compact 视口禁用未单独闸；overflow 菜单未接满工具栏全部控件（组件已交付，控件表可后续接 layoutRestingComposerControls）；native 无 FLIP
+- **状态**：**完成（2026-10-13）**
+
+### T3 移植：横幅优先级契约 + M12 审批面板（2026-10-13）
+
+- **问题**：M7 层秩为 activity>error，审批无法最高附着；流内 permission 卡与 banner 双渲染违反 T3-faithful。
+- **影响范围**：`composer-banner-logic` 新增 `approval` 层（approval>activity>urgent>notice）；`composer/pending-approval/` 面板 + banner 接线；`agent-stream/view.tsx` 移除流内 permission 卡；permission e2e helpers 保留 testID 并指向 banner。
+- **强制门禁**：banner 叠放 vitest；pending-approval model/panel vitest；改动文件 lint/format；打包 Electron 实机（mock permission → 面板 → 批准）——本环境未跑如实声明
+- **状态**：完成（实机门禁软）
+
+### T3 移植 M21：textContent 计时器（2026-10-13）
+
+- **问题**：`RunningElapsed` 每秒 `setState` 触发 turn footer 重渲；`LiveElapsed`（100ms）为死代码。
+- **影响范围**：抽取 `running-elapsed(.web)` + logic ticker；web `textContent` 直写；native 保留 state；删除 `message.tsx` `LiveElapsed`。
+- **强制门禁**：logic/web vitest；改动文件 lint/format；Electron DevTools 提交计数——本环境未跑如实声明
+- **状态**：完成（实机门禁软）
+
 ### T3 移植 M4：回合变更文件树（TurnChangesItem 渲染）（2026-09-08 完成）
 
 - **问题**：`TurnChangesItem`（回合完成的 changedFiles）在 reducer 已产出但被 `isVisibleLayoutItem` 过滤从不显示。T3 在 assistant 文本下渲染可折叠变更文件树（原型 `prototypes/changed-files-tree.html`，用户"继续"批准）。完全计划见 `docs/refactors/t3code-complete-port-plan.md` 模块 4
@@ -993,7 +1029,7 @@ User asked to simplify everything; all CI-green chasing and pre-existing test fi
 - **交付**：阅读 scrollback 时 wheel 上滚折叠 composer（无附件时生效——附件存在不折叠，对齐 M15 语义）；聚焦/pointerdown/回底恢复（复用 `useComposerFocusState.restoreAfterTimelineReachedEnd` 概念）。`scrollCollapsed` 为独立折叠维度。
 - **影响范围**：`use-composer-scroll-collapse.ts`（97 行）、`input/composer-scroll-gesture.ts`（99 行手势状态机）+ 13 单测、`input.tsx`（95 行接线）、`composer/index.tsx`、`agent-panel.tsx`、`view.tsx`；原型 `prototypes/composer-scroll-collapse.html` 先批准。
 - **验证**：`e2e/composer-scroll-collapse.spec.ts` web spec + `e2e/desktop-scroll-collapse.script.ts` 打包 Electron 实机（隔离端口 6803 + 独立 CHISACODE_HOME：114px→46px 折叠隐藏 cbar→点击恢复 114px，截图证据）；手势状态机 13 单测；提交 `e78974e46`（实现）+ `36f70948e`（原型）。
-- **状态**：完成。**残余**：① `scrollCollapsed` 与 M15 Resting Layout 合并为单一折叠状态机属 M15 范围，届时迁移（当前文件缺 M15 合并指针注释，随 M15 一并补）；② `composer-scroll-collapse.spec.ts:60,87` 两处 `waitForTimeout(120)` 已入 test-audit 基线，下一个触碰该 spec 的模块改为 `waitForFunction` 断言折叠态 style；③ native 无 wheel 折叠（声明）。
+- **状态**：完成。**残余**：① `scrollCollapsed` 已由 M15 `useComposerResting` / `resolveComposerLayoutMode` 并入统一折叠状态机（见 `use-composer-scroll-collapse.ts` M15 指针注释）；② `composer-scroll-collapse.spec.ts` 两处 `waitForTimeout(120)` 已于 M15 改为 `waitForFunction`；③ native 无 wheel 折叠（声明）。
 
 ## T3 移植 M9：服务端 Delta 缓冲（2026-09-18 登记，2026-09-18 完成）
 

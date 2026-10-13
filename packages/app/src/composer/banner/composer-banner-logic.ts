@@ -7,10 +7,19 @@ export type ComposerBannerVariant =
   | "info"
   | "success"
   | "warning"
-  | "activity";
+  | "activity"
+  | "approval";
 
-/** Stack layer a banner competes in. `activity` always wins, `notice` always yields. */
-export type ComposerBannerLayer = "activity" | "urgent" | "notice";
+/**
+ * Stack layer a banner competes in.
+ * Lower {@link COMPOSER_BANNER_LAYER_RANK} attaches first.
+ *
+ * Migration (M12, 2026-10-13): historically `activity` outranked `urgent`
+ * (error/warning). Approval panels need the highest attach priority, so the
+ * layer table is now **approval > activity > urgent > notice**. Activity still
+ * outranks ordinary errors; only the new `approval` layer sits above it.
+ */
+export type ComposerBannerLayer = "approval" | "activity" | "urgent" | "notice";
 
 /** Vertical rhythm of a banner: `default` is two lines, `compact` is one. */
 export type ComposerBannerDensity = "default" | "compact";
@@ -45,6 +54,7 @@ export interface ComposerBannerDescriptor {
 }
 
 const LAYER_BY_VARIANT: Record<ComposerBannerVariant, ComposerBannerLayer> = {
+  approval: "approval",
   activity: "activity",
   error: "urgent",
   warning: "urgent",
@@ -55,9 +65,10 @@ const LAYER_BY_VARIANT: Record<ComposerBannerVariant, ComposerBannerLayer> = {
 
 /** Lower rank attaches; higher rank collapses into the peek row. */
 export const COMPOSER_BANNER_LAYER_RANK: Record<ComposerBannerLayer, number> = {
-  activity: 0,
-  urgent: 1,
-  notice: 2,
+  approval: 0,
+  activity: 1,
+  urgent: 2,
+  notice: 3,
 };
 
 /** Minimal read-only view of the dismissal memory (a `Set` satisfies it). */
@@ -100,8 +111,8 @@ export interface ComposerBannerStackResult {
 /**
  * Resolves which banner attaches and which collapse into the peek row.
  * Dismissed banners are filtered first, then the remainder is stably sorted by
- * layer rank so an activity banner always outranks an error and insertion order
- * breaks ties.
+ * layer rank so approval > activity > urgent (error) > notice; insertion order
+ * breaks ties within a layer.
  * @param input Banners, thread identity, and dismissed keys
  * @returns The attached banner and the ordered peek list
  */

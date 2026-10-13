@@ -58,6 +58,7 @@ describe("createBrowserRecord", () => {
       faviconUrl: null,
       lastError: null,
       paneWidth: null,
+      miniPlayer: null,
       createdAt: 1000,
     });
   });
@@ -145,5 +146,56 @@ describe("sanitizeBrowsersForPersist", () => {
 
     expect(persisted.browsersById.b1?.isLoading).toBe(false);
     expect(persisted.browsersById.b1?.lastError).toBe(null);
+  });
+});
+
+describe("miniPlayer session field", () => {
+  it("patches miniPlayer geometry without touching other fields", () => {
+    const initial = withRecords([
+      createBrowserRecord({ browserId: "b1", initialUrl: "https://a.test", now: 0 }),
+    ]);
+    const miniPlayer = {
+      enabled: true,
+      position: { x: 12, y: 24 },
+      size: { w: 320, h: 200 },
+    };
+    const next = applyBrowserPatch(initial, "b1", { miniPlayer });
+    expect(next.browsersById.b1?.miniPlayer).toEqual(miniPlayer);
+    expect(next.browsersById.b1?.url).toBe("https://a.test");
+  });
+
+  it("strips miniPlayer when sanitizing for persist", () => {
+    const initial = withRecords([
+      {
+        ...createBrowserRecord({ browserId: "b1", initialUrl: "https://a.test", now: 0 }),
+        isLoading: true,
+        lastError: "boom",
+        miniPlayer: {
+          enabled: true,
+          position: { x: 1, y: 2 },
+          size: { w: 320, h: 200 },
+        },
+      },
+    ]);
+    const persisted = sanitizeBrowsersForPersist(initial);
+    expect(persisted.browsersById.b1?.miniPlayer).toBeNull();
+    expect(persisted.browsersById.b1?.isLoading).toBe(false);
+    expect(persisted.browsersById.b1?.lastError).toBeNull();
+  });
+
+  it("returns same state when miniPlayer patch is identical", () => {
+    const miniPlayer = {
+      enabled: true,
+      position: { x: 10, y: 20 },
+      size: { w: 320, h: 200 },
+    };
+    const initial = withRecords([
+      {
+        ...createBrowserRecord({ browserId: "b1", initialUrl: "https://a.test", now: 0 }),
+        miniPlayer,
+      },
+    ]);
+    const next = applyBrowserPatch(initial, "b1", { miniPlayer: { ...miniPlayer } });
+    expect(next).toBe(initial);
   });
 });

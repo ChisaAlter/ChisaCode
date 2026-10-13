@@ -1,3 +1,9 @@
+export interface BrowserMiniPlayerGeometry {
+  enabled: boolean;
+  position: { x: number; y: number };
+  size: { w: number; h: number };
+}
+
 export interface BrowserRecord {
   browserId: string;
   url: string;
@@ -9,6 +15,11 @@ export interface BrowserRecord {
   lastError: string | null;
   /** Custom right-rail width chosen by dragging the pane's left-edge handle (px). */
   paneWidth: number | null;
+  /**
+   * Floating Mini Player geometry (T3 port M14). Session-scoped only —
+   * stripped by `sanitizeBrowsersForPersist` and never written to AsyncStorage.
+   */
+  miniPlayer: BrowserMiniPlayerGeometry | null;
   createdAt: number;
 }
 
@@ -58,8 +69,28 @@ export function createBrowserRecord(input: {
     faviconUrl: null,
     lastError: null,
     paneWidth: null,
+    miniPlayer: null,
     createdAt: input.now,
   };
+}
+
+function miniPlayerEquals(
+  left: BrowserMiniPlayerGeometry | null | undefined,
+  right: BrowserMiniPlayerGeometry | null | undefined,
+): boolean {
+  if (left === right) {
+    return true;
+  }
+  if (!left || !right) {
+    return left == null && right == null;
+  }
+  return (
+    left.enabled === right.enabled &&
+    left.position.x === right.position.x &&
+    left.position.y === right.position.y &&
+    left.size.w === right.size.w &&
+    left.size.h === right.size.h
+  );
 }
 
 export function applyBrowserPatch<S extends BrowserIndexState>(
@@ -90,7 +121,8 @@ export function applyBrowserPatch<S extends BrowserIndexState>(
     nextRecord.canGoForward === existing.canGoForward &&
     nextRecord.faviconUrl === existing.faviconUrl &&
     nextRecord.lastError === existing.lastError &&
-    nextRecord.paneWidth === existing.paneWidth
+    nextRecord.paneWidth === existing.paneWidth &&
+    miniPlayerEquals(nextRecord.miniPlayer, existing.miniPlayer)
   ) {
     return state;
   }
@@ -127,7 +159,7 @@ export function sanitizeBrowsersForPersist(state: BrowserIndexState): {
     browsersById: Object.fromEntries(
       Object.entries(state.browsersById).map(([browserId, browser]) => [
         browserId,
-        { ...browser, isLoading: false, lastError: null },
+        { ...browser, isLoading: false, lastError: null, miniPlayer: null },
       ]),
     ),
   };

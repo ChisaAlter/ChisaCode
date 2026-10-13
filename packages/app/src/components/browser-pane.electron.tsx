@@ -8,7 +8,14 @@ import {
   createElement,
 } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
-import { ArrowLeft, ArrowRight, Minus, Plus, RotateCw } from "lucide-react-native";
+import {
+  ArrowLeft,
+  ArrowRight,
+  Minus,
+  PictureInPicture2,
+  Plus,
+  RotateCw,
+} from "lucide-react-native";
 import {
   StyleSheet,
   UnistyleDependency,
@@ -39,6 +46,14 @@ import {
 } from "@/utils/clamp-browser-pane-width";
 import { BrowserFaviconIcon } from "@/components/browser-favicon-icon";
 import { BrowserMoreMenu } from "@/components/browser-more-menu";
+import { defaultMiniPlayerGeometry } from "@/components/browser-mini-player-layout";
+import {
+  ensureBrowserWebview,
+  releaseBrowserWebviewIfOrphaned,
+  setBrowserWebviewPanelHost,
+  setBrowserWebviewPreferredSlot,
+  type BrowserWebviewElement,
+} from "@/components/browser-webview-registry";
 import {
   ZOOM_LEVEL_MAX,
   ZOOM_LEVEL_MIN,
@@ -52,6 +67,7 @@ const ThemedArrowRight = withUnistyles(ArrowRight);
 const ThemedRotateCw = withUnistyles(RotateCw);
 const ThemedMinus = withUnistyles(Minus);
 const ThemedPlus = withUnistyles(Plus);
+const ThemedPictureInPicture2 = withUnistyles(PictureInPicture2);
 const ThemedTextInput = withUnistyles(TextInput);
 
 const foregroundMutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
@@ -597,25 +613,25 @@ export function BrowserPane({
       return;
     }
 
-    host.replaceChildren();
-
     const initialUnsafeNavigationMessage = getUnsafeNavigationMessage(initialUrlRef.current);
-    const webview = document.createElement("webview") as ElectronWebview;
+    const webview = ensureBrowserWebview(browserId, () => {
+      const created = document.createElement("webview") as BrowserWebviewElement & ElectronWebview;
+      created.setAttribute("partition", `persist:chisacode-browser-${browserId}`);
+      created.setAttribute("allowpopups", "true");
+      created.setAttribute("spellcheck", "false");
+      created.setAttribute("autosize", "on");
+      created.setAttribute(
+        "src",
+        initialUnsafeNavigationMessage ? "about:blank" : initialUrlRef.current,
+      );
+      return created;
+    }) as ElectronWebview;
     webviewRef.current = webview;
-    webview.setAttribute("partition", `persist:chisacode-browser-${browserId}`);
-    webview.setAttribute("allowpopups", "true");
-    webview.setAttribute("spellcheck", "false");
-    webview.setAttribute("autosize", "on");
-    webview.setAttribute(
-      "src",
-      initialUnsafeNavigationMessage ? "about:blank" : initialUrlRef.current,
+    setBrowserWebviewPanelHost(browserId, host);
+    const miniEnabled = Boolean(
+      useBrowserStore.getState().browsersById[browserId]?.miniPlayer?.enabled,
     );
-    webview.style.display = "flex";
-    webview.style.flex = "1";
-    webview.style.width = "100%";
-    webview.style.height = "100%";
-    webview.style.border = "0";
-    webview.style.background = "transparent";
+    setBrowserWebviewPreferredSlot(browserId, miniEnabled ? "mini" : "panel");
 
     const handleStartLoading = () => {
       updateBrowser(browserId, { isLoading: true, lastError: null });
@@ -714,7 +730,7 @@ export function BrowserPane({
     webview.addEventListener("focus", handleWebviewFocus);
     webview.addEventListener("mousedown", handleWebviewFocus);
 
-    host.appendChild(webview);
+    // Host attachment is owned by browser-webview-registry (panel vs mini).
     if (initialUnsafeNavigationMessage) {
       updateBrowserRef.current(browserIdRef.current, {
         isLoading: false,
@@ -735,9 +751,8 @@ export function BrowserPane({
       webview.removeEventListener("dom-ready", handleDomReady);
       webview.removeEventListener("focus", handleWebviewFocus);
       webview.removeEventListener("mousedown", handleWebviewFocus);
-      if (host.contains(webview)) {
-        host.removeChild(webview);
-      }
+      setBrowserWebviewPanelHost(browserId, null);
+      releaseBrowserWebviewIfOrphaned(browserId);
       if (webviewRef.current === webview) {
         webviewRef.current = null;
       }
@@ -1243,6 +1258,40 @@ export function BrowserPane({
     [webviewHostBackground],
   );
 
+  const miniPlayerEnabled = Boolean(browser?.miniPlayer?.enabled);
+
+  useEffect(() => {
+    if (!isElectronRuntime()) {
+      return;
+    }
+    setBrowserWebviewPreferredSlot(browserId, miniPlayerEnabled ? "mini" : "panel");
+  }, [browserId, miniPlayerEnabled]);
+
+  const handleRestoreMiniPlayer = useCallback(() => {
+    updateBrowser(browserId, { miniPlayer: null });
+  }, [browserId, updateBrowser]);
+
+  const handlePopOutMiniPlayer = useCallback(() => {
+    const rail =
+      webviewHostRef.current?.closest('[data-testid="workspace-right-panel"]') ??
+      webviewHostRef.current?.parentElement;
+    const workspaceRow =
+      rail?.closest('[data-testid="workspace-three-pane-row"]') ?? rail?.parentElement;
+    const rect = (workspaceRow as HTMLElement | null)?.getBoundingClientRect();
+    const container = {
+      w: Math.round(rect?.width ?? window.innerWidth),
+      h: Math.round(rect?.height ?? window.innerHeight),
+    };
+    const geometry = defaultMiniPlayerGeometry(container, 0);
+    updateBrowser(browserId, {
+      miniPlayer: {
+        enabled: true,
+        position: geometry.position,
+        size: geometry.size,
+      },
+    });
+  }, [browserId, updateBrowser]);
+
   if (!isElectronRuntime()) {
     return (
       <View style={styles.unavailableState}>
@@ -1321,6 +1370,16 @@ export function BrowserPane({
           >
             <ThemedPlus size={15} uniProps={foregroundMutedColorMapping} />
           </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t("browser.miniPlayerPopOut")}
+            disabled={miniPlayerEnabled}
+            onPress={handlePopOutMiniPlayer}
+            style={baseIconButtonStyle}
+            testID="browser-mini-player-popout"
+          >
+            <ThemedPictureInPicture2 size={15} uniProps={foregroundMutedColorMapping} />
+          </Pressable>
           <BrowserMoreMenu
             zoomPercent={zoomPercent}
             selectorActive={selectorActive}
@@ -1385,9 +1444,26 @@ export function BrowserPane({
           ref: (node: HTMLDivElement | null) => {
             webviewHostRef.current = node;
           },
-          style: webviewHostStyle,
+          style: {
+            ...webviewHostStyle,
+            visibility: miniPlayerEnabled ? "hidden" : "visible",
+          },
         })}
-        {isWebviewCrashed ? (
+        {miniPlayerEnabled ? (
+          <View style={styles.miniPlayerPlaceholder} testID="browser-mini-player-placeholder">
+            <Text style={subtitleStyle}>{t("browser.miniPlayerPoppedOut")}</Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t("browser.miniPlayerRestore")}
+              onPress={handleRestoreMiniPlayer}
+              style={styles.crashReloadButton}
+              testID="browser-mini-player-restore-from-pane"
+            >
+              <Text style={styles.crashReloadText}>{t("browser.miniPlayerRestore")}</Text>
+            </Pressable>
+          </View>
+        ) : null}
+        {isWebviewCrashed && !miniPlayerEnabled ? (
           <View style={styles.crashOverlay} testID="browser-crash-overlay">
             <Text style={crashTitleStyle}>{t("browser.crashedTitle")}</Text>
             <Text style={crashBodyStyle}>{t("browser.crashedBody")}</Text>
@@ -1485,6 +1561,19 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: 12.5,
     lineHeight: 18,
     color: theme.colors.palette.red[500],
+  },
+  miniPlayerPlaceholder: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: theme.spacing[3],
+    padding: theme.spacing[4],
+    backgroundColor: theme.colors.surface0,
+    zIndex: 5,
   },
   webviewWrap: {
     flex: 1,

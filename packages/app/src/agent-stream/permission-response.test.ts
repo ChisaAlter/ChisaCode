@@ -27,7 +27,7 @@ describe("submitPermissionResponse", () => {
       response: { behavior: "allow", selectedActionId: "accept" },
     });
     expect(logError).toHaveBeenCalledWith(
-      "[PermissionRequestCard] Failed to respond to permission",
+      "[PendingApprovalPanel] Failed to respond to permission",
       error,
     );
     expect(presentError).toHaveBeenCalledWith("Unable to respond to the permission request");

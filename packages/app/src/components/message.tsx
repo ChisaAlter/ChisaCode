@@ -66,7 +66,7 @@ import { GenerativeHtmlPreview } from "@/components/generative-html-preview";
 import { GenerativeUiRenderer } from "@/generative-ui/generative-ui-renderer";
 import { splitMarkdownBlocks } from "@/utils/split-markdown-blocks";
 import { getGenerativeHtmlFence, getGenerativeUiFence } from "@/utils/generative-ui-html";
-import { formatDuration, formatMessageTimestamp } from "@/utils/time";
+import { formatMessageTimestamp } from "@/utils/time";
 import { writeMarkdownToRichClipboard } from "@/utils/rich-clipboard";
 import { getDefaultMarkdownClipboardEnvironment } from "@/utils/rich-clipboard-default-environment";
 import {
@@ -511,39 +511,6 @@ export const AssistantTurnFooter = memo(function AssistantTurnFooter({
         containerStyle={assistantTurnFooterStylesheet.copyButton}
       />
     </View>
-  );
-});
-
-interface LiveElapsedProps {
-  startedAt: Date;
-  style?: StyleProp<TextStyle>;
-  testID?: string;
-}
-
-/**
- * Ticks every 100ms to render an elapsed duration. Isolated from parents so
- * only this component re-renders on each tick.
- */
-export const LiveElapsed = memo(function LiveElapsed({
-  startedAt,
-  style,
-  testID,
-}: LiveElapsedProps) {
-  const startedAtMs = startedAt.getTime();
-  const [elapsedMs, setElapsedMs] = useState(() => Math.max(0, Date.now() - startedAtMs));
-
-  useEffect(() => {
-    setElapsedMs(Math.max(0, Date.now() - startedAtMs));
-    const handle = setInterval(() => {
-      setElapsedMs(Math.max(0, Date.now() - startedAtMs));
-    }, 100);
-    return () => clearInterval(handle);
-  }, [startedAtMs]);
-
-  return (
-    <Text style={style} testID={testID}>
-      {formatDuration(elapsedMs)}
-    </Text>
   );
 });
 

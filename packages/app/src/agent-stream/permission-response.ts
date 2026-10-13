@@ -33,7 +33,7 @@ export async function submitPermissionResponse(
     return true;
   } catch (error) {
     reportPresentedError({
-      logLabel: "[PermissionRequestCard] Failed to respond to permission",
+      logLabel: "[PendingApprovalPanel] Failed to respond to permission",
       error,
       fallbackMessage: input.fallbackMessage,
       present: input.presentError,

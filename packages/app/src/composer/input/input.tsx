@@ -61,6 +61,7 @@ import { getShortcutOs } from "@/utils/shortcut-platform";
 import type { MessageInputKeyboardActionKind } from "@/keyboard/actions";
 import { isImeComposingKeyboardEvent } from "@/utils/keyboard-ime";
 import { isNative, isWeb } from "@/constants/platform";
+import { useRestingFlipOnCollapseChange } from "@/composer/resting/use-resting-flip-on-collapse-change";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { resolveSoftComposerCardElevation } from "@/composer/draft/soft-home-layout";
 import { COMPOSER_VOICE_UI_VISIBLE } from "@/composer/voice-visibility";
@@ -153,6 +154,8 @@ export interface MessageInputProps {
    * Pointer-down on the card expands it again.
    */
   scrollCollapsed?: boolean;
+  /** Resting layout (T3 port M15): collapsed chrome with compact controls still visible. */
+  isResting?: boolean;
   /** Called when the user pointer-downs the collapsed card (expand request). */
   onExpandFromScrollCollapse?: () => void;
   /** Content rendered inside the bordered input surface, above the text input (e.g. attachment pills). */
@@ -1246,6 +1249,7 @@ interface ResolvedMessageInputProps {
   inputWrapperStyle: import("react-native").ViewStyle | undefined;
   attachedToBanner: boolean;
   scrollCollapsed: boolean;
+  isResting: boolean;
   onExpandFromScrollCollapse: (() => void) | undefined;
   attachmentSlot: React.ReactNode;
 }
@@ -1290,6 +1294,7 @@ function resolveMessageInputProps(props: MessageInputProps): ResolvedMessageInpu
     inputWrapperStyle: props.inputWrapperStyle,
     attachedToBanner: props.attachedToBanner ?? false,
     scrollCollapsed: props.scrollCollapsed ?? false,
+    isResting: props.isResting ?? false,
     onExpandFromScrollCollapse: props.onExpandFromScrollCollapse,
     attachmentSlot: props.attachmentSlot,
   };
@@ -1330,6 +1335,24 @@ function resolveInputWrapperSurfaceStyle(input: {
     return [styles.inputWrapper, input.inputWrapperStyle, styles.inputWrapperScrollCollapsed];
   }
   return [styles.inputWrapper, input.inputWrapperStyle];
+}
+
+/**
+ * Picks the cbar row style for expanded / resting / scroll-collapsed modes.
+ * Module-level so MessageInput stays under the complexity lint budget.
+ */
+function resolveButtonRowStyle(input: { scrollCollapsed: boolean; isResting: boolean }) {
+  if (input.scrollCollapsed) {
+    return styles.buttonRowScrollCollapsed;
+  }
+  if (input.isResting) {
+    return styles.buttonRowResting;
+  }
+  return styles.buttonRow;
+}
+
+function resolveRestingControlsTestId(isResting: boolean): string | undefined {
+  return isResting ? "composer-resting-controls" : undefined;
 }
 
 export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
@@ -1373,6 +1396,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       inputWrapperStyle,
       attachedToBanner,
       scrollCollapsed,
+      isResting,
       onExpandFromScrollCollapse,
       attachmentSlot,
     } = resolveMessageInputProps(props);
@@ -1976,25 +2000,27 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       void handleStopRealtimeVoice();
     }, [handleStopRealtimeVoice]);
 
+    const layoutCollapsed = scrollCollapsed || isResting;
+    useRestingFlipOnCollapseChange(layoutCollapsed, inputWrapperRef);
     const inputWrapperSurfaceStyle = useMemo(
       () =>
         resolveInputWrapperSurfaceStyle({
           attachedToBanner,
-          scrollCollapsed,
+          scrollCollapsed: layoutCollapsed,
           inputWrapperStyle,
         }),
-      [attachedToBanner, inputWrapperStyle, scrollCollapsed],
+      [attachedToBanner, inputWrapperStyle, layoutCollapsed],
     );
     const textInputSurfaceStyle = useMemo(
       () =>
-        scrollCollapsed
+        layoutCollapsed
           ? [styles.textInput, styles.textInputScrollCollapsed]
           : [styles.textInput, computeTextInputHeightStyle(inputHeight, maxInputHeight)],
-      [inputHeight, maxInputHeight, scrollCollapsed],
+      [inputHeight, maxInputHeight, layoutCollapsed],
     );
     const handleCardPointerDown = useMemo(
-      () => resolveCardPointerDownHandler(scrollCollapsed, onExpandFromScrollCollapse),
-      [onExpandFromScrollCollapse, scrollCollapsed],
+      () => resolveCardPointerDownHandler(layoutCollapsed, onExpandFromScrollCollapse),
+      [onExpandFromScrollCollapse, layoutCollapsed],
     );
     const sendButtonCombinedStyle = useMemo(() => {
       const resolve = composerControlStyle({
@@ -2072,7 +2098,10 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
             </View>
 
             {/* Button row */}
-            <View style={scrollCollapsed ? styles.buttonRowScrollCollapsed : styles.buttonRow}>
+            <View
+              style={resolveButtonRowStyle({ scrollCollapsed, isResting })}
+              testID={resolveRestingControlsTestId(isResting)}
+            >
               {/* Toolbar left: attachment button + agent controls */}
               <View style={styles.leftButtonGroup}>
                 <AttachmentDropdown
@@ -2218,6 +2247,15 @@ const styles = StyleSheet.create((theme: Theme) => ({
     paddingBottom: 0,
     overflow: "hidden",
     opacity: 0,
+  },
+  buttonRowResting: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[1],
+    paddingTop: 4,
+    paddingBottom: 6,
+    paddingHorizontal: 8,
+    minHeight: 36,
   },
   textInputScrollWrapper: {
     position: "relative",

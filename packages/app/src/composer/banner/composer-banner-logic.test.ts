@@ -18,7 +18,11 @@ function banner(
 }
 
 describe("resolveComposerBannerLayer", () => {
-  it("maps activity to the top layer", () => {
+  it("maps approval to the top layer", () => {
+    expect(resolveComposerBannerLayer("approval")).toBe("approval");
+  });
+
+  it("maps activity to the activity layer", () => {
     expect(resolveComposerBannerLayer("activity")).toBe("activity");
   });
 
@@ -33,7 +37,8 @@ describe("resolveComposerBannerLayer", () => {
     expect(resolveComposerBannerLayer("default")).toBe("notice");
   });
 
-  it("keeps layer ranks strictly ordered", () => {
+  it("keeps layer ranks strictly ordered: approval > activity > urgent > notice", () => {
+    expect(COMPOSER_BANNER_LAYER_RANK.approval).toBeLessThan(COMPOSER_BANNER_LAYER_RANK.activity);
     expect(COMPOSER_BANNER_LAYER_RANK.activity).toBeLessThan(COMPOSER_BANNER_LAYER_RANK.urgent);
     expect(COMPOSER_BANNER_LAYER_RANK.urgent).toBeLessThan(COMPOSER_BANNER_LAYER_RANK.notice);
   });
@@ -72,6 +77,26 @@ describe("resolveComposerBannerStack", () => {
       dismissed: new Set(),
     });
     expect(result.attached?.id).toBe("act");
+    expect(result.peeks.map((item) => item.id)).toEqual(["err"]);
+  });
+
+  it("lets approval outrank activity and error", () => {
+    const result = resolveComposerBannerStack({
+      banners: [banner("err", "error"), banner("act", "activity"), banner("apr", "approval")],
+      threadKey,
+      dismissed: new Set(),
+    });
+    expect(result.attached?.id).toBe("apr");
+    expect(result.peeks.map((item) => item.id)).toEqual(["act", "err"]);
+  });
+
+  it("lets approval outrank a lone error", () => {
+    const result = resolveComposerBannerStack({
+      banners: [banner("err", "error"), banner("apr", "approval")],
+      threadKey,
+      dismissed: new Set(),
+    });
+    expect(result.attached?.id).toBe("apr");
     expect(result.peeks.map((item) => item.id)).toEqual(["err"]);
   });
 
@@ -143,12 +168,13 @@ describe("resolveComposerBannerStack", () => {
         banner("warn", "warning"),
         banner("act", "activity"),
         banner("err", "error"),
+        banner("apr", "approval"),
       ],
       threadKey,
       dismissed: new Set(),
     });
-    expect(result.attached?.id).toBe("act");
-    expect(result.peeks.map((item) => item.id)).toEqual(["warn", "err", "notice"]);
+    expect(result.attached?.id).toBe("apr");
+    expect(result.peeks.map((item) => item.id)).toEqual(["act", "warn", "err", "notice"]);
   });
 });
 
