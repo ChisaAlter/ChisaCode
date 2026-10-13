@@ -32,7 +32,7 @@ import { useAgentAttentionClear } from "@/hooks/use-agent-attention-clear";
 import { useAgentInitialization } from "@/hooks/use-agent-initialization";
 import { useAgentInputDraft, type AgentInputDraft } from "@/composer/draft/input-draft";
 import { useComposerPromptHistory } from "@/composer/use-composer-prompt-history";
-import { useComposerScrollCollapse } from "@/composer/use-composer-scroll-collapse";
+import { useComposerResting } from "@/composer/resting";
 import { deriveComposerTasks } from "@/composer/tasks-badge";
 import { TasksBadge } from "@/composer/tasks-badge-view";
 import {
@@ -1260,18 +1260,34 @@ function ChatAgentReadyContent({
     ];
   }, [agentState.lastError, agentState.status, t]);
 
-  // Scroll-collapse (T3 port M8, web only): reading scrollback folds the
-  // composer to a single line; any expand trigger restores it.
+  // Unified composer layout (T3 port M15): resting + M8 scroll-collapse.
   const [isStreamNearBottom, setIsStreamNearBottom] = useState(true);
   const handleStreamNearBottomChange = useCallback((value: boolean) => {
     setIsStreamNearBottom(value);
   }, []);
-  const scrollCollapse = useComposerScrollCollapse({
+  const [composerFocused, setComposerFocused] = useState(false);
+  const timelineHasContent = useSessionStore((state) => {
+    const streamItems = state.sessions[serverId]?.agentStreamTail?.get(agentId);
+    return Boolean(streamItems && streamItems.length > 0);
+  });
+  const composerResting = useComposerResting({
+    timelineHasContent,
+    isFocused: composerFocused,
+    hasAttachments: agentInputDraft.attachments.length > 0,
+    value: agentInputDraft.text,
     isNearBottom: isStreamNearBottom,
+    enabled: Boolean(agentId),
   });
   const handleExpandFromScrollCollapse = useCallback(() => {
-    scrollCollapse.expand();
-  }, [scrollCollapse]);
+    composerResting.expand();
+  }, [composerResting]);
+  const handleComposerFocusChange = useCallback(
+    (focused: boolean) => {
+      setComposerFocused(focused);
+      composerResting.setFocused(focused);
+    },
+    [composerResting],
+  );
 
   return (
     <ComposerInsertTextContext.Provider value={insertComposerText}>
@@ -1321,9 +1337,11 @@ function ChatAgentReadyContent({
               isSubmitLoading={false}
               agentInputDraft={agentInputDraft}
               banners={agentErrorBanners}
-              scrollCollapsed={scrollCollapse.collapsed}
+              scrollCollapsed={composerResting.layoutCollapsed && !composerResting.isResting}
+              isResting={composerResting.isResting}
               onExpandFromScrollCollapse={handleExpandFromScrollCollapse}
-              onComposerInputActivity={scrollCollapse.noteInput}
+              onComposerInputActivity={composerResting.noteInput}
+              onComposerFocusChange={handleComposerFocusChange}
               onAttentionInputFocus={attentionController.clearOnInputFocus}
               onAttentionPromptSend={attentionController.clearOnPromptSend}
               onAddImages={handleAddImagesCallback}
@@ -1456,8 +1474,10 @@ function AgentComposerSection({
   agentInputDraft,
   banners,
   scrollCollapsed,
+  isResting,
   onExpandFromScrollCollapse,
   onComposerInputActivity,
+  onComposerFocusChange,
   onAttentionInputFocus,
   onAttentionPromptSend,
   onAddImages,
@@ -1475,8 +1495,10 @@ function AgentComposerSection({
   agentInputDraft: AgentInputDraft;
   banners?: readonly ComposerBannerDescriptor[];
   scrollCollapsed: boolean;
+  isResting: boolean;
   onExpandFromScrollCollapse: () => void;
   onComposerInputActivity: () => void;
+  onComposerFocusChange: (focused: boolean) => void;
   onAttentionInputFocus: () => void;
   onAttentionPromptSend: () => void;
   onAddImages: (addImages: (images: ImageAttachment[]) => void) => void;
@@ -1504,8 +1526,10 @@ function AgentComposerSection({
       agentInputDraft={agentInputDraft}
       banners={banners}
       scrollCollapsed={scrollCollapsed}
+      isResting={isResting}
       onExpandFromScrollCollapse={onExpandFromScrollCollapse}
       onComposerInputActivity={onComposerInputActivity}
+      onComposerFocusChange={onComposerFocusChange}
       onAttentionInputFocus={onAttentionInputFocus}
       onAttentionPromptSend={onAttentionPromptSend}
       onAddImages={onAddImages}
@@ -1525,8 +1549,10 @@ function ActiveAgentComposer({
   agentInputDraft,
   banners,
   scrollCollapsed,
+  isResting,
   onExpandFromScrollCollapse,
   onComposerInputActivity,
+  onComposerFocusChange,
   onAttentionInputFocus,
   onAttentionPromptSend,
   onAddImages,
@@ -1542,8 +1568,10 @@ function ActiveAgentComposer({
   agentInputDraft: AgentInputDraft;
   banners?: readonly ComposerBannerDescriptor[];
   scrollCollapsed: boolean;
+  isResting: boolean;
   onExpandFromScrollCollapse: () => void;
   onComposerInputActivity: () => void;
+  onComposerFocusChange: (focused: boolean) => void;
   onAttentionInputFocus: () => void;
   onAttentionPromptSend: () => void;
   onAddImages: (addImages: (images: ImageAttachment[]) => void) => void;
@@ -1691,8 +1719,10 @@ function ActiveAgentComposer({
           onPromptHistoryStep={onPromptHistoryStep}
           banners={banners}
           scrollCollapsed={scrollCollapsed}
+          isResting={isResting}
           onExpandFromScrollCollapse={onExpandFromScrollCollapse}
           onComposerInputActivity={onComposerInputActivity}
+          onComposerFocusChange={onComposerFocusChange}
           footer={composerFooter}
           inputWrapperStyle={styles.composerInputWrapper}
         />

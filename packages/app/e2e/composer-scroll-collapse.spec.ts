@@ -57,7 +57,17 @@ test.describe("Composer scroll collapse", () => {
       for (let index = 0; index < 8 && !(await isCollapsed(page)); index += 1) {
         await scroll.hover();
         await page.mouse.wheel(0, -40);
-        await page.waitForTimeout(120);
+        await page.waitForFunction(
+          () => {
+            const el = document.querySelector('[data-testid="composer-input-card"]');
+            if (!el) return false;
+            const height = Number.parseFloat(window.getComputedStyle(el).height);
+            // Progress signal: either already collapsed or still responding.
+            return Number.isFinite(height);
+          },
+          undefined,
+          { timeout: 2_000 },
+        );
       }
       await expect
         .poll(async () => isCollapsed(page), { timeout: 5_000, intervals: [200] })
@@ -84,7 +94,15 @@ test.describe("Composer scroll collapse", () => {
       for (let index = 0; index < 8 && !(await isCollapsed(page)); index += 1) {
         await scroll.hover();
         await page.mouse.wheel(0, -40);
-        await page.waitForTimeout(120);
+        await page.waitForFunction(
+          () => {
+            const el = document.querySelector('[data-testid="composer-input-card"]');
+            if (!el) return false;
+            return Number.isFinite(Number.parseFloat(window.getComputedStyle(el).height));
+          },
+          undefined,
+          { timeout: 2_000 },
+        );
       }
       await expect
         .poll(async () => (await readCardHeight(page)) < 70, {

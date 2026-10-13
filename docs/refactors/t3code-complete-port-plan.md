@@ -1,10 +1,10 @@
 # T3 移植完全计划（对抗审查修订版）
 
 > 状态：**进行中**（2026-10-13 文档对齐修订）  
-> 进度：约 **14/26** 已合入 `cn-main`；部分完成 M22/M25；主缺口 **M14 Mini Player / M15 静止布局 / M12 审批面板**；M10 已移除  
+> 进度：约 **16/26** 已合入（含 M14/M15）；部分完成 M22/M25；主缺口 **横幅契约 + M12 审批面板**；M10 已移除  
 > 依据：`docs/research/t3code-comprehensive-audit-2026-09-07.md`（两轮审计）+ 本文件 §1 实证核查 + 2026-10-13 计划审查（对照 `cn-main` 源码）  
 > 工作方式：直接在 **`cn-main`** 按模块 conventional commit（原 `feature/t3-port` 已合入主线，**勿再检出该分支名**）  
-> 下一执行序：**M14 → M15 →（横幅契约修订）→ M12 → M21**；延后/严闸见 §4
+> 下一执行序：**（横幅契约修订）→ M12 → M21**；延后/严闸见 §4
 
 ### 已完成的相关 T3 体验切片（勿当作从零移植）
 
@@ -528,7 +528,7 @@ export function clampMiniPlayerSize(size: { w; h }, container: { w; h }): { w; h
 
 ### 模块 15：静止布局（Resting Layout）— P2
 
-**状态**：**未开工**（M19✅ / M8 合并指针注释仍缺；执行序紧随 M14）。**原型**：`prototypes/composer-resting-layout.html`（FLIP 过渡示意）→ 用户批准
+**状态**：**已完成（2026-10-13）**；打包 Electron 实机/满控件溢出接线仍债。**原型**：`prototypes/composer-resting-layout.html`（FLIP 过渡示意）→ 用户批准
 
 **新目录** `packages/app/src/composer/resting/`：
 
@@ -734,9 +734,9 @@ M13 面板 resize ✅（DOM+rAF；打包拖拽实机仍债）
 M16 Chrome ✅    M17 高亮缓存 ✅（键 {ext}:{hash}）    M19 控件基元 ✅
 M10 用户输入面板 —— 已移除（无协议数据源）
 
-剩余执行序（2026-10-13 对齐后）
-M14 Mini Player ✅ 2026-10-13（打包实机门禁待闭合）
-M15 静止布局（依赖 M19✅；合并 M8 scrollCollapsed + 补指针注释 + 收口 waitForTimeout）
+剩余执行序（2026-10-13）
+M14 Mini Player ✅
+M15 静止布局 ✅
 → 横幅契约修订（approval 最高；回写 M7 层表）
 → M12 审批面板（契约后；禁止流内+banner 双渲染；e2e 全迁）
 → M21 textContent 计时器（删 LiveElapsed 死代码）
@@ -751,7 +751,7 @@ M23 计划卡片 —— 无 fence/数据源证据不立项
 M26 图片全屏 —— 先 Lightbox 差距表；够用则砍整页 Dialog
 ```
 
-**进度快照（2026-10-13 文档对齐）**：硬完成约 **14/26**；**部分完成 2**（M22/M25）；**未开工主缺口** M14/M15/M12（+廉价 M21）；严闸 M23/M26；已移除 M10。工作在 **`cn-main`**，无独立 `feature/t3-port`。
+**进度快照（2026-10-13）**：硬完成约 **16/26**（含 M14/M15）；**部分完成 2**（M22/M25）；**未开工主缺口** 横幅契约 + M12（+廉价 M21）；严闸 M23/M26；已移除 M10。工作在 **`cn-main`** / 线性 `feat/t3-m*` 分支，无独立 `feature/t3-port`。
 
 ## 5. 跨模块门禁
 
@@ -763,13 +763,13 @@ M26 图片全屏 —— 先 Lightbox 差距表；够用则砍整页 Dialog
 
 ### 债清单（硬跟踪；下次触碰相关模块必须收口）
 
-| 债                             | 要求                                                                                                 |
-| ------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| **M13 打包拖拽实机**           | 打包 Electron 验证左缘拖拽改宽 + 重开恢复；不得长期停留在「单测-only」                               |
-| **M5 崩溃注入自动化**          | 补 renderer kill / 注入路径，或明确声明永久以单测+smoke 为准并写入 roadmap 残余                      |
-| **M8 `waitForTimeout(120)`×2** | `composer-scroll-collapse.spec.ts` 改为 `waitForFunction` 断言折叠态；**M15 触碰该 spec 时强制收口** |
-| **M7→M12 优先级契约**          | 开 M12 前落地 approval 最高层/分档并回写模块 7；禁止双渲染                                           |
-| **M8→M15 指针注释**            | `use-composer-scroll-collapse.ts` 补 M15 合并指针（随 M15）                                          |
+| 债                             | 要求                                                                            |
+| ------------------------------ | ------------------------------------------------------------------------------- |
+| **M13 打包拖拽实机**           | 打包 Electron 验证左缘拖拽改宽 + 重开恢复；不得长期停留在「单测-only」          |
+| **M5 崩溃注入自动化**          | 补 renderer kill / 注入路径，或明确声明永久以单测+smoke 为准并写入 roadmap 残余 |
+| **M8 `waitForTimeout(120)`×2** | ✅ M15 已改为 `waitForFunction` / `expect.poll`                                 |
+| **M7→M12 优先级契约**          | 开 M12 前落地 approval 最高层/分档并回写模块 7；禁止双渲染                      |
+| **M8→M15 指针注释**            | ✅ M15 已在 `use-composer-scroll-collapse.ts` 补合并指针                        |
 
 ## 6. 进度对抗审查与修订（2026-09-18）
 
@@ -779,11 +779,11 @@ M26 图片全屏 —— 先 Lightbox 差距表；够用则砍整页 Dialog
 | --- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1   | **M9 前提已过期** —— 计划开新缓冲层，但 `agent-stream-coalescer.ts` 已实现三 flush 路径中的两条 | `AGENT_STREAM_COALESCE_DEFAULT_WINDOW_MS=60`（可配置，agent-manager.ts:561）；非文本事件边界 flush 已在 pipeline-controller.ts:163（`flushFor`）                                                                                                                                                                                                                    | **M9 重定范围**：扩展 coalescer（window 60→300 + `maxBufferedChars` 溢出 + flag 逃生门），不再新建 `AssistantTextBuffer`。改造量 ~40 行 vs 双缓冲层并存 |
 | 2   | **流程违规：M6+18 与 M8 无 roadmap 完成登记**                                                   | roadmap 仅有 M1–M5/M7 条目；§2 铁律"每模块登记"                                                                                                                                                                                                                                                                                                                     | 已补登（roadmap 2026-09-18 条目）。后续模块不得以"已提交"代替登记                                                                                       |
-| 3   | **M8 缺 M15 合并指针注释**                                                                      | `use-composer-scroll-collapse.ts` 无任何 M15/resting 字样；M15 规格要求"M8 注释指明"                                                                                                                                                                                                                                                                                | 登记残余；M15 落地时合并并补注释，不单独返工                                                                                                            |
+| 3   | **M8 缺 M15 合并指针注释**                                                                      | ~~缺注释~~ → ✅ M15 已补；`scrollCollapsed` 已并入 `resolveComposerLayoutMode`                                                                                                                                                                                                                                                                                      | 关闭                                                                                                                                                    |
 | 4   | **行号引用漂移**（低风险）                                                                      | `running-turn-footer.tsx` 已移至 `agent-stream/`；`stream.ts` → `types/stream.ts`                                                                                                                                                                                                                                                                                   | 计划内行号视为"符号锚点"，实现时以 grep 符号为准；已核对 TurnCopyButton(message.tsx:985)/LiveElapsed(:526)/view.tsx:128 权限卡仍命中                    |
 | 5   | **已完成模块证据核验通过**                                                                      | M1 `use-composer-prompt-history.ts`；M2 `stable-layout.test.ts`+组缓存；M3 `use-discovered-servers.ts`+COMPAT v1.0.4 门禁；M4 `build-turn-diff-tree.ts`+TurnChanges；M5 `webview-crash-recovery.ts`；M6+18 `tasks-badge-view.tsx`（Composer 上方独立行）；M7 `composer-banner-stack.tsx`+`banners`/`ComposerBannerDescriptor`；M8 `use-composer-scroll-collapse.ts` | 无注水；API 漂移见模块正文回写                                                                                                                          |
 | 6   | **排序偏差无害** —— M6+18 提前于 M9 交付                                                        | 任务徽章实际挂 Composer 上方独立行（非 banner）；与 M9 无依赖                                                                                                                                                                                                                                                                                                       | 追认；接线偏差已于 2026-10-13 回写模块 6                                                                                                                |
-| 7   | **T3 分支自身新增测试债**                                                                       | `composer-scroll-collapse.spec.ts:60,87` 两处 `waitForTimeout(120)` 已入 test-audit 新基线                                                                                                                                                                                                                                                                          | 登记残余：下一个触碰该 spec 的模块负责改为 `waitForFunction`（断言折叠态 style），不顺延                                                                |
+| 7   | **T3 分支自身新增测试债**                                                                       | ~~`waitForTimeout(120)`×2~~ → ✅ M15 已改为 `waitForFunction` / `expect.poll`                                                                                                                                                                                                                                                                                       | 关闭                                                                                                                                                    |
 | 8   | **M21 前提复核**                                                                                | `LiveElapsed`（100ms setInterval+setState）全仓零使用，确为死代码                                                                                                                                                                                                                                                                                                   | 计划维持（删除前再 grep 一次）                                                                                                                          |
 | 9   | **外部环境已变（利好）**                                                                        | pnpm 迁移收尾完成（CI/lockfile/补丁链全通），M7 期间暴露的 worklets/补丁缺陷已修                                                                                                                                                                                                                                                                                    | "打包 Electron 实机"验证路径恢复可靠——M12/M14/M15 原型+实机门禁按原计划执行，无需降级                                                                   |
 

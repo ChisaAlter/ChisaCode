@@ -188,6 +188,8 @@ interface ComposerProps {
   onOptimisticMessageDispatched?: (messageId: string) => void;
   onComposerHeightChange?: (height: number) => void;
   onAttentionInputFocus?: () => void;
+  /** Notified when the message input gains/loses focus (T3 port M15 resting). */
+  onComposerFocusChange?: (focused: boolean) => void;
   onAttentionPromptSend?: () => void;
   /**
    * Steps through prompt history (ArrowUp/ArrowDown, web only). Returns true
@@ -221,6 +223,8 @@ interface ComposerProps {
    * reads scrollback. Rendering only — the gesture lives in the parent.
    */
   scrollCollapsed?: boolean;
+  /** Resting layout (T3 port M15) — compact controls remain visible. */
+  isResting?: boolean;
   /** Called when the user pointer-downs the collapsed card (expand request). */
   onExpandFromScrollCollapse?: () => void;
   /** Notified on every text edit so typing suppresses scroll-collapse. */
@@ -258,6 +262,7 @@ export function Composer({
   onOptimisticMessageDispatched,
   onComposerHeightChange,
   onAttentionInputFocus,
+  onComposerFocusChange,
   onAttentionPromptSend,
   /** Steps through prompt history (ArrowUp/ArrowDown, web only). */
   onPromptHistoryStep,
@@ -270,6 +275,7 @@ export function Composer({
   banners: externalBanners,
   bannerSlot,
   scrollCollapsed,
+  isResting,
   onExpandFromScrollCollapse,
   onComposerInputActivity,
 }: ComposerProps) {
@@ -616,6 +622,15 @@ export function Composer({
     handleCancelAgent,
     onAttentionInputFocus,
   });
+
+  const handleFocusChangeWithResting = useCallback(
+    (focused: boolean) => {
+      handleFocusChange(focused);
+      onComposerFocusChange?.(focused);
+    },
+    [handleFocusChange, onComposerFocusChange],
+  );
+
   const { style: keyboardAnimatedStyle } = useKeyboardShiftStyle({
     mode: "translate",
     enabled: !externalKeyboardShift,
@@ -835,11 +850,12 @@ export function Composer({
                   onKeyPress={handleCommandKeyPress}
                   onPromptHistoryStep={onPromptHistoryStep}
                   onSelectionChange={handleSelectionChange}
-                  onFocusChange={handleFocusChange}
+                  onFocusChange={handleFocusChangeWithResting}
                   onHeightChange={onComposerHeightChange}
                   inputWrapperStyle={inputWrapperStyle}
                   attachedToBanner={bannerAttached}
                   scrollCollapsed={scrollCollapsed}
+                  isResting={isResting}
                   onExpandFromScrollCollapse={onExpandFromScrollCollapse}
                   attachmentSlot={attachmentTray}
                 />

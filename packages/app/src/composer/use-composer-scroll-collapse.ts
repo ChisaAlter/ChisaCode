@@ -35,6 +35,13 @@ function findStreamScrollContainer(): HTMLElement | null {
  * Accumulated upward wheel on the stream container past 24px collapses the
  * composer; downward wheel, keyboard input within 120ms, or the stream
  * returning to bottom expands it again.
+ *
+ * M15 merge pointer: `useComposerResting` (`composer/resting/use-composer-resting.ts`)
+ * owns the unified layout state machine and consumes this hook as the
+ * `scrollCollapsed` dimension. Resting and scroll-collapse are mutually
+ * exclusive (`resolveComposerLayoutMode`); do not drive MessageInput from
+ * both hooks in parallel — prefer `useComposerResting` at call sites.
+ *
  * @param options Bottom state and enable flag
  * @returns The collapsed flag plus input-note and expand callbacks
  */
