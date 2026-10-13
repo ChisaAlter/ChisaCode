@@ -31,6 +31,13 @@
 - **残余**：compact 视口禁用未单独闸；overflow 菜单未接满工具栏全部控件（组件已交付，控件表可后续接 layoutRestingComposerControls）；native 无 FLIP
 - **状态**：**完成（2026-10-13）**
 
+### T3 移植：横幅优先级契约 + M12 审批面板（2026-10-13）
+
+- **问题**：M7 层秩为 activity>error，审批无法最高附着；流内 permission 卡与 banner 双渲染违反 T3-faithful。
+- **影响范围**：`composer-banner-logic` 新增 `approval` 层（approval>activity>urgent>notice）；`composer/pending-approval/` 面板 + banner 接线；`agent-stream/view.tsx` 移除流内 permission 卡；permission e2e helpers 保留 testID 并指向 banner。
+- **强制门禁**：banner 叠放 vitest；pending-approval model/panel vitest；改动文件 lint/format；打包 Electron 实机（mock permission → 面板 → 批准）——本环境未跑如实声明
+- **状态**：完成（实机门禁软）
+
 ### T3 移植 M4：回合变更文件树（TurnChangesItem 渲染）（2026-09-08 完成）
 
 - **问题**：`TurnChangesItem`（回合完成的 changedFiles）在 reducer 已产出但被 `isVisibleLayoutItem` 过滤从不显示。T3 在 assistant 文本下渲染可折叠变更文件树（原型 `prototypes/changed-files-tree.html`，用户"继续"批准）。完全计划见 `docs/refactors/t3code-complete-port-plan.md` 模块 4

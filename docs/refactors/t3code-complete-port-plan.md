@@ -1,10 +1,10 @@
 # T3 移植完全计划（对抗审查修订版）
 
 > 状态：**进行中**（2026-10-13 文档对齐修订）  
-> 进度：约 **16/26** 已合入（含 M14/M15）；部分完成 M22/M25；主缺口 **横幅契约 + M12 审批面板**；M10 已移除  
+> 进度：约 **17/26** 已合入（含 M14/M15/M12 + 横幅契约）；部分完成 M22/M25；主缺口 **M21**；M10 已移除  
 > 依据：`docs/research/t3code-comprehensive-audit-2026-09-07.md`（两轮审计）+ 本文件 §1 实证核查 + 2026-10-13 计划审查（对照 `cn-main` 源码）  
 > 工作方式：直接在 **`cn-main`** 按模块 conventional commit（原 `feature/t3-port` 已合入主线，**勿再检出该分支名**）  
-> 下一执行序：**（横幅契约修订）→ M12 → M21**；延后/严闸见 §4
+> 下一执行序：**M21**；延后/严闸见 §4
 
 ### 已完成的相关 T3 体验切片（勿当作从零移植）
 
@@ -302,10 +302,13 @@ export type ComposerBannerVariant =
   | "info"
   | "success"
   | "warning"
-  | "activity";
-export type ComposerBannerLayer = "activity" | "urgent" | "notice";
-// 现码层秩（数值越小越优先附着）：activity=0 > urgent=1 > notice=2
-// 即 **activity 恒压过 error/warning（urgent）** —— 与早期计划 approval>error>…>activity 相反
+  | "activity"
+  | "approval"; // M12
+export type ComposerBannerLayer = "approval" | "activity" | "urgent" | "notice";
+// 层秩（数值越小越优先附着）：approval=0 > activity=1 > urgent=2 > notice=3
+// **迁移（2026-10-13 / M12 前置契约）**：旧码 activity 恒压过 error；现改为 approval 最高，
+// activity 仍压过普通 error/warning（urgent），notice 最低。禁止照搬更早的 approval>error>…>activity
+// 枚举却漏掉 activity 层——现模型是四层。
 export const COMPOSER_BANNER_LAYER_RANK: Record<ComposerBannerLayer, number>;
 
 export interface ComposerBannerDescriptor {
@@ -341,11 +344,11 @@ export function buildComposerBannerDismissalKey(threadKey: string, message: stri
 - `agent-panel.tsx`：`agentErrorBanners` 等经 `mergeComposerBanners` 注入；history-sync 分支可仍独立 Banner
 - 渲染位置：queueList 上方、输入框上方
 
-**开 M12 前的契约决策（强制）**：
+**M12 前置契约（已落地，方案 A）**：
 
-现码 activity>error。审批面板需要「approval 最高附着」。选定方案 **A（推荐）**：为 approval 增加高于 activity 的层（或 `urgent` 内再分档且审批优先于普通 error），并补 activity/error/approval 叠放单测；方案 B（审批完全不经 banner、独立挂 Composer）偏离 T3-faithful，仅在 A 成本不可接受时启用。**选定后必须回写本模块层表与模块 12，再开工实现。**
+新增 `approval` 层/variant，层秩 **approval > activity > urgent > notice**；叠放单测覆盖 approval/activity/error。审批经 `banners` 的 `approval` 描述符附着，不走独立挂载（方案 B 未采用）。
 
-**残余**：玻璃态模糊 native 无（平铺）；`clip-path` web 回退；优先级契约修订属 M12 前置债（见 §5）
+**残余**：玻璃态模糊 native 无（平铺）；`clip-path` web 回退
 
 ---
 
@@ -452,17 +455,13 @@ export function useAssistantSelection(opts: {
 
 ### 模块 12：审批操作面板 — P2
 
-**状态**：**未开工**。原型：`prototypes/pending-approval-panel.html` → 用户批准
+**状态**：**已完成（2026-10-13）**；打包 Electron 实机门禁仍债。原型：`prototypes/pending-approval-panel.html`
 
-**前置（强制，先于实现）——与模块 7 层模型对齐**：
+**前置契约**：已落地方案 A（见模块 7）——`approval` 层最高；叠放单测含 approval/activity/error。
 
-1. 选定并落地层契约，使 **approval 附着最高**（推荐方案 A：新层或 urgent 内分档；见模块 7）。
-2. 回写模块 7 层表 + 本模块接线说明 + 叠放单测（activity / error / approval）。
-3. 未完成契约修订前 **禁止** 开工 UI。
+**裁决**（审查 #10）：**T3-faithful 全移**——流内 permission 卡已移除（`view.tsx` `renderPendingPermissionsNode` 恒 null），横幅审批面板接管。**禁止**流内卡与 banner 面板双渲染。`permission-response` e2e helpers 保留原 testID（挂在 banner 面板上）并增补 `waitForApprovalBanner`。
 
-**裁决**（审查 #10）：**T3-faithful 全移**——流内 permission 卡移除，横幅/审批面板接管审批 UI。**禁止**流内卡与 banner 面板双渲染。既有 `permission-response` 相关 e2e 同步迁移为该模块**强制门禁**（非可选）。
-
-**新文件** `packages/app/src/composer/pending-approval-panel.tsx`
+**目录** `packages/app/src/composer/pending-approval/`
 
 ```typescript
 export interface PendingApprovalView {
@@ -728,7 +727,7 @@ export function buildTraitsTriggerDisplay(options: TraitOptionDescriptor[]): str
 已合入 cn-main（约 14/26）
 M1 提示历史 ✅    M2 稳定行 ✅    M3 端口扫描 ✅    M4 变更树 ✅    M5 崩溃恢复 ✅
 M6+18 任务徽章 ✅（Composer 上方独立行，非 banner）
-M7 横幅系统 ✅（现 API=banners/layer；activity>error —— 开 M12 前改契约）
+M7 横幅系统 ✅（banners/layer；**approval>activity>urgent>notice**，M12 契约已回写）
 M8 滚动折叠 ✅    M9 Delta 缓冲 ✅    M11 引用工具栏 ✅（ComposerInsertTextContext）
 M13 面板 resize ✅（DOM+rAF；打包拖拽实机仍债）
 M16 Chrome ✅    M17 高亮缓存 ✅（键 {ext}:{hash}）    M19 控件基元 ✅
@@ -737,8 +736,8 @@ M10 用户输入面板 —— 已移除（无协议数据源）
 剩余执行序（2026-10-13）
 M14 Mini Player ✅
 M15 静止布局 ✅
-→ 横幅契约修订（approval 最高；回写 M7 层表）
-→ M12 审批面板（契约后；禁止流内+banner 双渲染；e2e 全迁）
+横幅契约修订 ✅（approval 最高）
+M12 审批面板 ✅（禁止流内+banner 双渲染；e2e testID 迁至 banner）
 → M21 textContent 计时器（删 LiveElapsed 死代码）
 → 闭合软门禁：M13 打包拖拽实机；视需要 M5 崩溃注入
 
@@ -751,7 +750,7 @@ M23 计划卡片 —— 无 fence/数据源证据不立项
 M26 图片全屏 —— 先 Lightbox 差距表；够用则砍整页 Dialog
 ```
 
-**进度快照（2026-10-13）**：硬完成约 **16/26**（含 M14/M15）；**部分完成 2**（M22/M25）；**未开工主缺口** 横幅契约 + M12（+廉价 M21）；严闸 M23/M26；已移除 M10。工作在 **`cn-main`** / 线性 `feat/t3-m*` 分支，无独立 `feature/t3-port`。
+**进度快照（2026-10-13）**：硬完成约 **17/26**（含 M14/M15/M12 + 横幅契约）；**部分完成 2**（M22/M25）；**未开工主缺口** M21；严闸 M23/M26；已移除 M10。工作在 **`cn-main`** / 线性 `feat/t3-m*` 分支，无独立 `feature/t3-port`。
 
 ## 5. 跨模块门禁
 
@@ -768,7 +767,7 @@ M26 图片全屏 —— 先 Lightbox 差距表；够用则砍整页 Dialog
 | **M13 打包拖拽实机**           | 打包 Electron 验证左缘拖拽改宽 + 重开恢复；不得长期停留在「单测-only」          |
 | **M5 崩溃注入自动化**          | 补 renderer kill / 注入路径，或明确声明永久以单测+smoke 为准并写入 roadmap 残余 |
 | **M8 `waitForTimeout(120)`×2** | ✅ M15 已改为 `waitForFunction` / `expect.poll`                                 |
-| **M7→M12 优先级契约**          | 开 M12 前落地 approval 最高层/分档并回写模块 7；禁止双渲染                      |
+| **M7→M12 优先级契约**          | ✅ approval 层最高；模块 7 已回写；禁止双渲染已落实                             |
 | **M8→M15 指针注释**            | ✅ M15 已在 `use-composer-scroll-collapse.ts` 补合并指针                        |
 
 ## 6. 进度对抗审查与修订（2026-09-18）
@@ -808,7 +807,7 @@ M14 Mini Player → M15 静止布局 →（横幅契约：approval 最高）→ 
 - M9 修订：300ms 首字延迟可接受；真实 provider delta 粒度逐 provider 验证；默认开启请在文档提醒逃生门
 - M8→M15：scrollCollapsed 状态机合并 + 指针注释补登；scroll-collapse `waitForTimeout`×2 随 M15 收口
 - M6+18：接线为 Composer 上方独立行（非 banner activity）——已回写模块 6
-- M7：现码 activity>error；开 M12 前改为 approval 最高（契约债）
+- M7/M12：approval>activity>urgent>notice 已落地；流内 permission 卡已移除
 - M11/M13/M17：Context / DOM+rAF / `{ext}:{hash}` —— 已回写
 - 审计文档 §12：PendingUserInput / agent-spawn 与计划冲突行已同步
 - 并行线：`t3code-first-send-startup-optimization-plan.md` 可独立评审（体感权重可能 ≥ Mini Player）

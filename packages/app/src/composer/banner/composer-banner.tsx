@@ -66,12 +66,13 @@ const VARIANT_ICON = {
   success: ThemedCheckCircle2,
   warning: ThemedAlertTriangle,
   error: ThemedXCircle,
+  approval: ThemedAlertTriangle,
 } as const;
 
 function resolveIconMapping(variant: ComposerBannerVariant) {
   if (variant === "info") return infoIconMapping;
   if (variant === "success") return successIconMapping;
-  if (variant === "warning") return warningIconMapping;
+  if (variant === "warning" || variant === "approval") return warningIconMapping;
   if (variant === "error") return errorIconMapping;
   return neutralIconMapping;
 }
@@ -84,7 +85,7 @@ function resolveIconMapping(variant: ComposerBannerVariant) {
  */
 function resolveToneStyle(variant: ComposerBannerVariant) {
   if (variant === "error") return styles.toneError;
-  if (variant === "warning") return styles.toneWarning;
+  if (variant === "warning" || variant === "approval") return styles.toneWarning;
   if (variant === "success") return styles.toneSuccess;
   if (variant === "info") return styles.toneInfo;
   if (variant === "activity") return styles.toneInfo;
@@ -102,7 +103,7 @@ function resolveGeometryStyle(attached: boolean, density: ComposerBannerDensity)
 function resolveActionToneStyle(variant: ComposerBannerVariant, tone: "neutral" | "signal") {
   if (tone === "neutral") return styles.actionNeutral;
   if (variant === "error") return styles.actionError;
-  if (variant === "warning") return styles.actionWarning;
+  if (variant === "warning" || variant === "approval") return styles.actionWarning;
   return styles.actionSignal;
 }
 
@@ -121,7 +122,7 @@ export function ComposerBannerRoot({
   style,
   testID,
 }: ComposerBannerRootProps) {
-  const isSignal = variant === "error" || variant === "warning";
+  const isSignal = variant === "error" || variant === "warning" || variant === "approval";
   const containerStyle = useMemo(
     () => [
       styles.root,
@@ -314,6 +315,24 @@ export function ComposerBannerItem({
     }
     return <ComposerBannerBody numberOfLines={isCompact ? 1 : 2}>{banner.body}</ComposerBannerBody>;
   }, [banner.body, banner.bodySlot, isCompact]);
+  // Approval panels own their chrome (prototype pending-approval-panel); bodySlot
+  // replaces the standard icon/title/actions row so we never double-render controls.
+  if (banner.variant === "approval" && banner.bodySlot) {
+    return (
+      <ComposerBannerRoot
+        variant={banner.variant}
+        density={density}
+        width={banner.width ?? "full"}
+        attached={attached}
+        testID={banner.testID}
+        style={styles.approvalRoot}
+      >
+        {banner.bodySlot}
+        {trailingSlot}
+      </ComposerBannerRoot>
+    );
+  }
+
   return (
     <ComposerBannerRoot
       variant={banner.variant}
@@ -371,6 +390,16 @@ const styles = StyleSheet.create((theme: Theme) => ({
     paddingBottom: 9,
     paddingLeft: 12,
     paddingRight: 8,
+  },
+  // Approval bodySlot panels fill the banner; drop the default icon-row padding.
+  approvalRoot: {
+    flexDirection: "column",
+    alignItems: "stretch",
+    gap: 0,
+    paddingTop: 0,
+    paddingBottom: 0,
+    paddingLeft: 0,
+    paddingRight: 0,
   },
   rootCompact: {
     alignItems: "center",

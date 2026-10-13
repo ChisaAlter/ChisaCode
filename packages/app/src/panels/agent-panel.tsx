@@ -18,7 +18,11 @@ import { RewindComposerRestoreProvider } from "@/components/rewind/composer-rest
 import { ComposerInsertTextContext } from "@/composer/composer-insert-text-context";
 import { useStableEvent } from "@/hooks/use-stable-event";
 import type { ImageAttachment } from "@/composer/types";
-import type { ComposerBannerDescriptor } from "@/composer/banner/composer-banner-logic";
+import {
+  mergeComposerBanners,
+  type ComposerBannerDescriptor,
+} from "@/composer/banner/composer-banner-logic";
+import { buildPendingApprovalBanners } from "@/composer/pending-approval";
 import { getProviderIcon } from "@/components/provider-icons";
 import { ToastViewport, useToastHost } from "@/components/toast-host";
 import type { WorkspaceComposerAttachment } from "@/attachments/types";
@@ -1260,6 +1264,41 @@ function ChatAgentReadyContent({
     ];
   }, [agentState.lastError, agentState.status, t]);
 
+  // M12: pending approvals attach as the highest banner layer (approval > activity >
+  // error). The stream no longer renders permission cards — dual UI is forbidden.
+  const daemonClient = useSessionStore((state) => state.sessions[serverId]?.client ?? null);
+  const pendingApprovalList = useStoreWithEqualityFn(
+    useSessionStore,
+    (state) => {
+      const allPendingPermissions = state.sessions[serverId]?.pendingPermissions;
+      if (!allPendingPermissions) {
+        return EMPTY_PENDING_PERMISSION_LIST;
+      }
+      const filtered: PendingPermission[] = [];
+      for (const permission of allPendingPermissions.values()) {
+        if (permission.agentId === agentId) {
+          filtered.push(permission);
+        }
+      }
+      return filtered.length > 0 ? filtered : EMPTY_PENDING_PERMISSION_LIST;
+    },
+    shallow,
+  );
+  const approvalBanners = useMemo(
+    () =>
+      buildPendingApprovalBanners({
+        permissions: pendingApprovalList,
+        client: daemonClient,
+        toast: panelToast.api,
+        title: t("permissions.required"),
+      }),
+    [daemonClient, panelToast.api, pendingApprovalList, t],
+  );
+  const composerBanners = useMemo(
+    () => mergeComposerBanners(agentErrorBanners, approvalBanners),
+    [agentErrorBanners, approvalBanners],
+  );
+
   // Unified composer layout (T3 port M15): resting + M8 scroll-collapse.
   const [isStreamNearBottom, setIsStreamNearBottom] = useState(true);
   const handleStreamNearBottomChange = useCallback((value: boolean) => {
@@ -1336,7 +1375,7 @@ function ChatAgentReadyContent({
               cwd={cwd}
               isSubmitLoading={false}
               agentInputDraft={agentInputDraft}
-              banners={agentErrorBanners}
+              banners={composerBanners}
               scrollCollapsed={composerResting.layoutCollapsed && !composerResting.isResting}
               isResting={composerResting.isResting}
               onExpandFromScrollCollapse={handleExpandFromScrollCollapse}

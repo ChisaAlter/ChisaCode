@@ -16,22 +16,19 @@ import {
   Pressable,
   StyleSheet as RNStyleSheet,
   Platform,
-  ActivityIndicator,
-  type PressableStateCallbackType,
   type StyleProp,
   type TextStyle,
   type ViewStyle,
 } from "react-native";
-import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import { StyleSheet } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
 import {
   WORKBENCH_ASSISTANT_MESSAGE_MAX_WIDTH,
   WORKBENCH_FRAME_HAIRLINE_OFFSET,
   useIsCompactFormFactor,
 } from "@/constants/layout";
-import { useMutation } from "@tanstack/react-query";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
-import { Check, ChevronDown, X } from "lucide-react-native";
+import { ChevronDown } from "lucide-react-native";
 import { usePanelStore } from "@/stores/panel-store";
 import {
   AssistantMessage,
@@ -45,22 +42,15 @@ import {
   type InlinePathTarget,
 } from "@/components/message";
 import { ThoughtMessage } from "@/components/thought-message";
-import { PlanCard } from "@/components/plan-card";
 import type { StreamItem } from "@/types/stream";
 import type { PendingPermission } from "@/types/shared";
-import type {
-  AgentPermissionAction,
-  AgentPermissionResponse,
-} from "@chisacode/protocol/agent-types";
 import type { AgentScreenAgent } from "@/hooks/use-agent-screen-state-machine";
 import { useSessionStore } from "@/stores/session-store";
 import { useFileExplorerActions } from "@/hooks/use-file-explorer-actions";
 import { useLoadOlderAgentHistory } from "@/hooks/use-load-older-agent-history";
 import type { ToastApi } from "@/components/toast-host";
 import type { DaemonClient } from "@chisacode/client/internal/daemon-client";
-import { ToolCallDetailsContent } from "@/components/tool-call-details";
 import { GenerativeUiRenderer } from "@/generative-ui/generative-ui-renderer";
-import { QuestionFormCard } from "@/components/question-form-card";
 import { ToolCallSheetProvider } from "@/components/tool-call-sheet";
 import { type AgentStreamRenderModel, buildAgentStreamRenderModel } from "./model";
 import { resolveStreamRenderStrategy } from "./strategy-resolver";
@@ -77,7 +67,6 @@ import {
   type BottomAnchorLocalRequest,
   type BottomAnchorRouteRequest,
 } from "./bottom-anchor-controller";
-import { submitPermissionResponse } from "./permission-response";
 import { deriveWorkLogCollapse } from "./turn-fold";
 import {
   AssistantFileLinkResolverProvider,
@@ -95,7 +84,6 @@ import { useStableEvent } from "@/hooks/use-stable-event";
 import { isWeb } from "@/constants/platform";
 import { useAppSettings } from "@/hooks/use-settings";
 import { resolveThemeWorkbenchSurfaceRoles } from "@/styles/workbench-surface-roles";
-import type { Theme } from "@/styles/theme";
 
 function renderLiveAuxiliaryNode(input: {
   pendingPermissions: ReactNode;
@@ -116,26 +104,16 @@ function renderLiveAuxiliaryNode(input: {
   );
 }
 
-function renderPendingPermissionsNode(input: {
+/**
+ * M12: in-stream permission cards were removed. Approvals attach via the
+ * composer banner (`buildPendingApprovalBanners`) so they never dual-render.
+ */
+function renderPendingPermissionsNode(_input: {
   pendingPermissions: PendingPermission[];
   client: DaemonClient | null;
   toast?: ToastApi | null;
 }): ReactNode {
-  if (input.pendingPermissions.length === 0) {
-    return null;
-  }
-  return (
-    <View style={stylesheet.permissionsContainer}>
-      {input.pendingPermissions.map((permission) => (
-        <PermissionRequestCard
-          key={permission.key}
-          permission={permission}
-          client={input.client}
-          toast={input.toast}
-        />
-      ))}
-    </View>
-  );
+  return null;
 }
 
 function renderStreamItemWithTurnFooter(input: {
@@ -787,6 +765,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
     );
 
     const showRunningTurnFooter = agent.status === "running";
+    // M12: approvals render in the composer banner, never in the stream.
     const pendingPermissionsNode = useMemo(
       () =>
         renderPendingPermissionsNode({
@@ -794,6 +773,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
           client,
           toast,
         }),
+      // Intentionally stable null; keep deps so a future re-enable stays honest.
       [client, pendingPermissionItems, toast],
     );
     const turnFooterNode = useMemo(
@@ -979,62 +959,6 @@ function ToolCallSlot({
   return <ToolCall {...rest} onInlineDetailsExpandedChange={handleExpandedChange} />;
 }
 
-const ThemedActivityIndicator = withUnistyles(ActivityIndicator);
-const ThemedCheckIcon = withUnistyles(Check);
-const ThemedXIcon = withUnistyles(X);
-
-const primaryColorMapping = (theme: Theme) => ({
-  color: theme.colors.foreground,
-});
-const mutedColorMapping = (theme: Theme) => ({
-  color: theme.colors.foregroundMuted,
-});
-
-const pressableStyle = ({
-  pressed,
-  hovered = false,
-}: PressableStateCallbackType & { hovered?: boolean }) => [
-  permissionStyles.optionButton,
-  hovered ? permissionStyles.optionButtonHovered : null,
-  pressed ? permissionStyles.optionButtonPressed : null,
-];
-
-interface PermissionActionButtonProps {
-  action: AgentPermissionAction;
-  isRespondingAction: boolean;
-  isResponding: boolean;
-  isPrimary: boolean;
-  Icon: typeof ThemedCheckIcon;
-  testID: string;
-  onPress: (action: AgentPermissionAction) => void;
-}
-
-function PermissionActionButton({
-  action,
-  isRespondingAction,
-  isResponding,
-  isPrimary,
-  Icon,
-  testID,
-  onPress,
-}: PermissionActionButtonProps) {
-  const handlePress = useCallback(() => onPress(action), [onPress, action]);
-  const optionTextStyle = isPrimary ? optionTextPrimaryStyle : permissionStyles.optionText;
-  const colorMapping = isPrimary ? primaryColorMapping : mutedColorMapping;
-  return (
-    <Pressable testID={testID} style={pressableStyle} onPress={handlePress} disabled={isResponding}>
-      {isRespondingAction ? (
-        <ThemedActivityIndicator size="small" uniProps={colorMapping} />
-      ) : (
-        <View style={permissionStyles.optionContent}>
-          <Icon size={14} uniProps={colorMapping} />
-          <Text style={optionTextStyle}>{action.label}</Text>
-        </View>
-      )}
-    </Pressable>
-  );
-}
-
 interface WorkLogMoreButtonProps {
   groupId: string;
   hiddenCount: number;
@@ -1082,224 +1006,6 @@ function WorkLogMoreButton({
         <Text style={moreBadgeTextStyle}>{label}</Text>
       </View>
     </Pressable>
-  );
-}
-
-function PermissionRequestCard({
-  permission,
-  client,
-  toast,
-}: {
-  permission: PendingPermission;
-  client: DaemonClient | null;
-  toast?: ToastApi | null;
-}) {
-  const { t } = useTranslation();
-  const isMobile = useIsCompactFormFactor();
-
-  const { request } = permission;
-  const isPlanRequest = request.kind === "plan";
-  const title = isPlanRequest
-    ? t("plan.title")
-    : (request.title ?? request.name ?? t("permissions.required"));
-  const description = request.description ?? "";
-  const resolvedToolCallDetail = useMemo(
-    () =>
-      request.detail ?? {
-        type: "unknown" as const,
-        input: request.input ?? null,
-        output: null,
-      },
-    [request.detail, request.input],
-  );
-  const resolvedActions = useMemo((): AgentPermissionAction[] => {
-    if (request.kind === "question") {
-      return [];
-    }
-    if (Array.isArray(request.actions) && request.actions.length > 0) {
-      return request.actions;
-    }
-    return [
-      {
-        id: "reject",
-        label: t("permissions.reject"),
-        behavior: "deny",
-        variant: "danger",
-        intent: "dismiss",
-      },
-      {
-        id: "accept",
-        label: isPlanRequest ? t("permissions.execute") : t("permissions.accept"),
-        behavior: "allow",
-        variant: "primary",
-      },
-    ];
-  }, [isPlanRequest, request, t]);
-
-  const planMarkdown = useMemo(() => {
-    if (!request) {
-      return undefined;
-    }
-    const planFromMetadata =
-      typeof request.metadata?.planText === "string" ? request.metadata.planText : undefined;
-    if (planFromMetadata) {
-      return planFromMetadata;
-    }
-    const candidate = request.input?.["plan"];
-    if (typeof candidate === "string") {
-      return candidate;
-    }
-    return undefined;
-  }, [request]);
-
-  const permissionMutation = useMutation({
-    mutationFn: async (input: {
-      agentId: string;
-      requestId: string;
-      response: AgentPermissionResponse;
-    }) => {
-      if (!client) {
-        throw new Error(t("permissions.daemonClientUnavailable"));
-      }
-      return client.respondToPermissionAndWait(
-        input.agentId,
-        input.requestId,
-        input.response,
-        15000,
-      );
-    },
-  });
-  const {
-    reset: resetPermissionMutation,
-    mutateAsync: respondToPermission,
-    isPending: isResponding,
-  } = permissionMutation;
-
-  const [respondingActionId, setRespondingActionId] = useState<string | null>(null);
-
-  useEffect(() => {
-    resetPermissionMutation();
-    setRespondingActionId(null);
-  }, [permission.request.id, resetPermissionMutation]);
-  const handleResponse = useCallback(
-    (response: AgentPermissionResponse) => {
-      void submitPermissionResponse({
-        agentId: permission.agentId,
-        requestId: permission.request.id,
-        response,
-        respond: respondToPermission,
-        presentError: (message) => toast?.error(message),
-        fallbackMessage: t("permissions.responseFailed"),
-        onFailure: () => setRespondingActionId(null),
-      });
-    },
-    [permission.agentId, permission.request.id, respondToPermission, t, toast],
-  );
-  const handleActionPress = useCallback(
-    (action: AgentPermissionAction) => {
-      setRespondingActionId(action.id);
-      if (action.behavior === "allow") {
-        handleResponse({
-          behavior: "allow",
-          selectedActionId: action.id,
-        });
-        return;
-      }
-      handleResponse({
-        behavior: "deny",
-        selectedActionId: action.id,
-        message: t("permissions.deniedByUser"),
-      });
-    },
-    [handleResponse, t],
-  );
-
-  const optionsContainerStyle = useMemo(
-    () => [
-      permissionStyles.optionsContainer,
-      !isMobile && permissionStyles.optionsContainerDesktop,
-    ],
-    [isMobile],
-  );
-
-  if (request.kind === "question") {
-    return (
-      <QuestionFormCard
-        permission={permission}
-        onRespond={handleResponse}
-        isResponding={isResponding}
-      />
-    );
-  }
-
-  const footer = (
-    <>
-      <Text testID="permission-request-question" style={permissionStyles.question}>
-        {t("permissions.question")}
-      </Text>
-
-      <View style={optionsContainerStyle}>
-        {resolvedActions.map((action) => {
-          const isPrimary = action.variant === "primary";
-          const isRespondingAction = respondingActionId === action.id;
-          const Icon = action.behavior === "allow" ? ThemedCheckIcon : ThemedXIcon;
-          let testID: string;
-          if (action.behavior === "deny") testID = "permission-request-deny";
-          else if (action.id === "accept" || action.id === "implement")
-            testID = "permission-request-accept";
-          else testID = `permission-request-action-${action.id}`;
-
-          return (
-            <PermissionActionButton
-              key={action.id}
-              action={action}
-              isRespondingAction={isRespondingAction}
-              isResponding={isResponding}
-              isPrimary={isPrimary}
-              Icon={Icon}
-              testID={testID}
-              onPress={handleActionPress}
-            />
-          );
-        })}
-      </View>
-    </>
-  );
-
-  if (isPlanRequest && planMarkdown) {
-    return (
-      <PlanCard
-        title={title}
-        description={description}
-        text={planMarkdown}
-        footer={footer}
-        testID="permission-plan-card"
-        disableOuterSpacing
-      />
-    );
-  }
-
-  return (
-    <View style={permissionStyles.container}>
-      <Text style={permissionStyles.title}>{title}</Text>
-
-      {description ? <Text style={permissionStyles.description}>{description}</Text> : null}
-
-      {planMarkdown ? (
-        <PlanCard
-          title={t("plan.suggested")}
-          text={planMarkdown}
-          testID="permission-plan-card"
-          disableOuterSpacing
-        />
-      ) : null}
-
-      {!isPlanRequest ? (
-        <ToolCallDetailsContent detail={resolvedToolCallDetail} maxHeight={200} />
-      ) : null}
-
-      {footer}
-    </View>
   );
 }
 
@@ -1451,86 +1157,6 @@ const staticStyles = RNStyleSheet.create({
     pointerEvents: "box-none",
   },
 });
-
-const permissionStyles = StyleSheet.create((theme) => ({
-  container: {
-    marginVertical: theme.spacing[3],
-    padding: theme.spacing[3],
-    borderRadius: 14,
-    borderWidth: 1,
-    gap: theme.spacing[2],
-    backgroundColor: theme.colors.surface0,
-    borderColor: theme.colors.border,
-    ...theme.shadow.sm,
-  },
-  title: {
-    fontSize: 14.5,
-    lineHeight: 20,
-    color: theme.colors.foreground,
-  },
-  description: {
-    fontSize: 12.5,
-    lineHeight: 16,
-    color: theme.colors.foregroundMuted,
-  },
-  section: {
-    gap: theme.spacing[2],
-  },
-  sectionTitle: {
-    fontSize: 12.5,
-    lineHeight: 16,
-    fontWeight: theme.fontWeight.medium,
-  },
-  question: {
-    // Soft stream chrome: 12.5 meta.
-    fontSize: 12.5,
-    lineHeight: 18,
-    marginTop: theme.spacing[1],
-    marginBottom: theme.spacing[1],
-    color: theme.colors.foregroundMuted,
-  },
-  optionsContainer: {
-    gap: theme.spacing[2],
-  },
-  optionsContainerDesktop: {
-    flexDirection: "row",
-    justifyContent: "flex-start",
-    alignItems: "center",
-    width: "100%",
-  },
-  optionButton: {
-    paddingVertical: theme.spacing[2],
-    paddingHorizontal: theme.spacing[3],
-    borderRadius: theme.borderRadius.full,
-    alignItems: "center",
-    borderWidth: theme.borderWidth[1],
-    backgroundColor: theme.colors.surface0,
-    borderColor: theme.colors.border,
-  },
-  optionButtonHovered: {
-    backgroundColor: theme.colors.surface1,
-  },
-  optionButtonPressed: {
-    opacity: 0.9,
-  },
-  optionContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing[2],
-  },
-  optionText: {
-    // Soft stream chrome: 12.5 meta.
-    fontSize: 12.5,
-    lineHeight: 18,
-    fontWeight: theme.fontWeight.normal,
-    color: theme.colors.foregroundMuted,
-  },
-  optionTextPrimary: {
-    color: theme.colors.foreground,
-  },
-}));
-
-const optionTextPrimaryStyle = [permissionStyles.optionText, permissionStyles.optionTextPrimary];
 
 interface StreamItemWrapperProps {
   gapBelow: number;
