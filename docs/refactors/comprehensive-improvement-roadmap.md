@@ -38,6 +38,13 @@
 - **强制门禁**：banner 叠放 vitest；pending-approval model/panel vitest；改动文件 lint/format；打包 Electron 实机（mock permission → 面板 → 批准）——本环境未跑如实声明
 - **状态**：完成（实机门禁软）
 
+### T3 移植 M21：textContent 计时器（2026-10-13）
+
+- **问题**：`RunningElapsed` 每秒 `setState` 触发 turn footer 重渲；`LiveElapsed`（100ms）为死代码。
+- **影响范围**：抽取 `running-elapsed(.web)` + logic ticker；web `textContent` 直写；native 保留 state；删除 `message.tsx` `LiveElapsed`。
+- **强制门禁**：logic/web vitest；改动文件 lint/format；Electron DevTools 提交计数——本环境未跑如实声明
+- **状态**：完成（实机门禁软）
+
 ### T3 移植 M4：回合变更文件树（TurnChangesItem 渲染）（2026-09-08 完成）
 
 - **问题**：`TurnChangesItem`（回合完成的 changedFiles）在 reducer 已产出但被 `isVisibleLayoutItem` 过滤从不显示。T3 在 assistant 文本下渲染可折叠变更文件树（原型 `prototypes/changed-files-tree.html`，用户"继续"批准）。完全计划见 `docs/refactors/t3code-complete-port-plan.md` 模块 4

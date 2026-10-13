@@ -1,10 +1,10 @@
 # T3 移植完全计划（对抗审查修订版）
 
 > 状态：**进行中**（2026-10-13 文档对齐修订）  
-> 进度：约 **17/26** 已合入（含 M14/M15/M12 + 横幅契约）；部分完成 M22/M25；主缺口 **M21**；M10 已移除  
+> 进度：约 **18/26** 已合入（含 M14/M15/M12/M21 + 横幅契约）；部分完成 M22/M25；主缺口见 §4；M10 已移除  
 > 依据：`docs/research/t3code-comprehensive-audit-2026-09-07.md`（两轮审计）+ 本文件 §1 实证核查 + 2026-10-13 计划审查（对照 `cn-main` 源码）  
 > 工作方式：直接在 **`cn-main`** 按模块 conventional commit（原 `feature/t3-port` 已合入主线，**勿再检出该分支名**）  
-> 下一执行序：**M21**；延后/严闸见 §4
+> 下一执行序：按 §4（M22 余量 / M16–M20 / 严闸 M23/M26 等）；延后/严闸见 §4
 
 ### 已完成的相关 T3 体验切片（勿当作从零移植）
 
@@ -618,11 +618,19 @@ export interface PromptStashEntry {
 
 ### 模块 21：textContent 计时器 — P3
 
-**状态**：**未开工**（低成本流畅度收益；契约后的 M12 之后可穿插）。**修改** `running-turn-footer.tsx` `RunningElapsed`（line 41）：web 改 `useRef<HTMLSpanElement>` + `setInterval(1000)` 直写 `textContent`（不 setState）；native 保留现有 state 路径（声明）；`tabular-nums` 保留
-**删除** `message.tsx:526` `LiveElapsed`（100ms 死代码）——删除前 grep 引用确认
-**测试** ≥4（jsdom 断言 DOM 文本更新/interval 清理）
-**验证**：打包 Electron 实机（流式期间 React DevTools 提交计数不随秒增长）
-**残余**：native 行为不变
+**状态**：**已完成（2026-10-13）**；打包 Electron DevTools 提交计数门禁仍债。
+
+**落地**：
+
+- `running-elapsed-logic.ts`：`formatRunningElapsedLabel` + `startRunningElapsedTicker`（1s）
+- `running-elapsed.web.tsx`：ref + `textContent` 直写，不 setState
+- `running-elapsed.tsx`：native 保留 state 路径（声明）
+- `running-turn-footer.tsx` 消费抽取后的 `RunningElapsed`；`tabular-nums` 保留
+- **删除** `message.tsx` `LiveElapsed`（全仓零引用，删除前已 grep）
+
+**测试**：`running-elapsed-logic.test.ts` + `running-elapsed.web.test.tsx` ≥8
+**验证**：打包 Electron 实机（流式期间 React DevTools 提交计数不随秒增长）——本环境未跑
+**残余**：native 行为不变；Electron 提交计数门禁软
 
 ---
 
@@ -738,7 +746,7 @@ M14 Mini Player ✅
 M15 静止布局 ✅
 横幅契约修订 ✅（approval 最高）
 M12 审批面板 ✅（禁止流内+banner 双渲染；e2e testID 迁至 banner）
-→ M21 textContent 计时器（删 LiveElapsed 死代码）
+M21 textContent 计时器 ✅（删 LiveElapsed）
 → 闭合软门禁：M13 打包拖拽实机；视需要 M5 崩溃注入
 
 延后（非流畅主路径）
@@ -750,7 +758,7 @@ M23 计划卡片 —— 无 fence/数据源证据不立项
 M26 图片全屏 —— 先 Lightbox 差距表；够用则砍整页 Dialog
 ```
 
-**进度快照（2026-10-13）**：硬完成约 **17/26**（含 M14/M15/M12 + 横幅契约）；**部分完成 2**（M22/M25）；**未开工主缺口** M21；严闸 M23/M26；已移除 M10。工作在 **`cn-main`** / 线性 `feat/t3-m*` 分支，无独立 `feature/t3-port`。
+**进度快照（2026-10-13）**：硬完成约 **18/26**（含 M14/M15/M12/M21 + 横幅契约）；**部分完成 2**（M22/M25）；严闸 M23/M26；已移除 M10。工作在 **`cn-main`** / 线性 `feat/t3-m*` 分支，无独立 `feature/t3-port`。
 
 ## 5. 跨模块门禁
 
@@ -783,7 +791,7 @@ M26 图片全屏 —— 先 Lightbox 差距表；够用则砍整页 Dialog
 | 5   | **已完成模块证据核验通过**                                                                      | M1 `use-composer-prompt-history.ts`；M2 `stable-layout.test.ts`+组缓存；M3 `use-discovered-servers.ts`+COMPAT v1.0.4 门禁；M4 `build-turn-diff-tree.ts`+TurnChanges；M5 `webview-crash-recovery.ts`；M6+18 `tasks-badge-view.tsx`（Composer 上方独立行）；M7 `composer-banner-stack.tsx`+`banners`/`ComposerBannerDescriptor`；M8 `use-composer-scroll-collapse.ts` | 无注水；API 漂移见模块正文回写                                                                                                                          |
 | 6   | **排序偏差无害** —— M6+18 提前于 M9 交付                                                        | 任务徽章实际挂 Composer 上方独立行（非 banner）；与 M9 无依赖                                                                                                                                                                                                                                                                                                       | 追认；接线偏差已于 2026-10-13 回写模块 6                                                                                                                |
 | 7   | **T3 分支自身新增测试债**                                                                       | ~~`waitForTimeout(120)`×2~~ → ✅ M15 已改为 `waitForFunction` / `expect.poll`                                                                                                                                                                                                                                                                                       | 关闭                                                                                                                                                    |
-| 8   | **M21 前提复核**                                                                                | `LiveElapsed`（100ms setInterval+setState）全仓零使用，确为死代码                                                                                                                                                                                                                                                                                                   | 计划维持（删除前再 grep 一次）                                                                                                                          |
+| 8   | **M21 前提复核**                                                                                | `LiveElapsed` 全仓零使用 → ✅ M21 已删除                                                                                                                                                                                                                                                                                                                            | 关闭                                                                                                                                                    |
 | 9   | **外部环境已变（利好）**                                                                        | pnpm 迁移收尾完成（CI/lockfile/补丁链全通），M7 期间暴露的 worklets/补丁缺陷已修                                                                                                                                                                                                                                                                                    | "打包 Electron 实机"验证路径恢复可靠——M12/M14/M15 原型+实机门禁按原计划执行，无需降级                                                                   |
 
 **2026-09-18 修订后执行序**（历史；M9/M11/M13/M16/M17/M19 已合入）：

@@ -1,9 +1,9 @@
-import React, { memo, useEffect, useState } from "react";
-import { Text, View } from "react-native";
+import React, { memo } from "react";
+import { View } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { SyncedLoader } from "@/components/synced-loader";
 import type { Theme } from "@/styles/theme";
-import { formatDuration } from "@/utils/time";
+import { RunningElapsed } from "./running-elapsed";
 
 const STREAM_METADATA_FONT_SIZE = 13;
 
@@ -31,35 +31,14 @@ export const RunningTurnFooter = memo(function RunningTurnFooter({
           <ThemedSyncedLoader size={14} uniProps={loaderColorMapping} />
         </View>
         {inFlightTurnStartedAt ? (
-          <RunningElapsed startedAt={inFlightTurnStartedAt} testID="turn-working-elapsed" />
+          <RunningElapsed
+            startedAt={inFlightTurnStartedAt}
+            style={stylesheet.workingElapsed}
+            testID="turn-working-elapsed"
+          />
         ) : null}
       </View>
     </View>
-  );
-});
-
-const RunningElapsed = memo(function RunningElapsed({
-  startedAt,
-  testID,
-}: {
-  startedAt: Date;
-  testID?: string;
-}) {
-  const startedAtMs = startedAt.getTime();
-  const [elapsedMs, setElapsedMs] = useState(() => Math.max(0, Date.now() - startedAtMs));
-
-  useEffect(() => {
-    setElapsedMs(Math.max(0, Date.now() - startedAtMs));
-    const handle = setInterval(() => {
-      setElapsedMs(Math.max(0, Date.now() - startedAtMs));
-    }, 1000);
-    return () => clearInterval(handle);
-  }, [startedAtMs]);
-
-  return (
-    <Text style={stylesheet.workingElapsed} testID={testID}>
-      {formatDuration(elapsedMs)}
-    </Text>
   );
 });
 
