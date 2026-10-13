@@ -15,6 +15,14 @@
 - **动作**：修订 complete-port-plan + 审计 §12（及 §6.3/§7.3 冲突段）；执行序改为 **M14 → M15 →（横幅契约）→ M12 → M21**；严闸 M23/M26；债清单写入计划 §5。
 - **状态**：文档对齐进行中（本条目）；产品代码未改。详见 `docs/refactors/t3code-complete-port-plan.md`。
 
+### T3 移植 M14：Mini Player（浮动预览）（2026-10-13 启动）
+
+- **问题**：关闭右侧浏览器面板后无法边对话边看页面；T3 可将预览弹出为浮动 Mini Player（会话内几何，不持久化）。完全计划见 `docs/refactors/t3code-complete-port-plan.md` 模块 14。
+- **影响范围**：`browser-mini-player-layout.ts`（clamp/default）+ `browser-webview-registry.ts`（imperative webview 在 panel/mini host 间 appendChild）+ `browser-mini-player.electron.tsx`（拖拽/缩放/控制条）+ `browser-pane.electron.tsx`（弹出按钮 + 占位恢复）+ `browser-store` `miniPlayer` 会话字段（sanitize 剥离）+ `workspace-screen` 层挂载 + i18n en/zh
+- **强制门禁**：layout ≥10 vitest；registry vitest；store miniPlayer 剥离单测；改动文件 typecheck；打包 Electron 实机：弹出→拖拽/缩放→移回→会话保持（登录态/滚动）——实机门禁本轮尽量跑，未跑如实声明
+- **残余边界**：PiP 独立窗口不做；native/web 无 Mini Player；BrowserPane 卸载后 webview 事件监听需依赖仍挂载的面板或后续补 headless controller（本轮要求面板占位路径保持 BrowserPane 存活）
+- **状态**：**完成（2026-10-13）**。layout 12 + registry 8 + store miniPlayer 3 vitest 绿；改动文件无新增 tsc 报错。**打包 Electron 实机弹出/拖拽门禁未在本环境跑**（无 Windows win-unpacked 管线），列入残余。
+
 ### T3 移植 M4：回合变更文件树（TurnChangesItem 渲染）（2026-09-08 完成）
 
 - **问题**：`TurnChangesItem`（回合完成的 changedFiles）在 reducer 已产出但被 `isVisibleLayoutItem` 过滤从不显示。T3 在 assistant 文本下渲染可折叠变更文件树（原型 `prototypes/changed-files-tree.html`，用户"继续"批准）。完全计划见 `docs/refactors/t3code-complete-port-plan.md` 模块 4

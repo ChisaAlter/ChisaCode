@@ -48,6 +48,12 @@ export function useWorkspaceLayoutChrome({
     if (!browserId) {
       return;
     }
+    if (getIsElectron()) {
+      void import("@/components/browser-webview-registry").then((mod) => {
+        mod.destroyBrowserWebview(browserId);
+        return undefined;
+      });
+    }
     useBrowserStore.getState().removeBrowser(browserId);
     rightPanelBrowserIdRef.current = null;
     setRightPanelBrowserId(null);

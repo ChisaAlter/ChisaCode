@@ -781,6 +781,11 @@ export const resources = {
         zoomOut: "缩小",
         zoomReset: "重置缩放",
         clearData: "清除浏览数据",
+        miniPlayerPopOut: "弹出 Mini Player",
+        miniPlayerRestore: "移回面板",
+        miniPlayerClose: "关闭 Mini Player",
+        miniPlayerPoppedOut: "页面已弹出到 Mini Player",
+        miniPlayerTitle: "浏览器",
       },
       terminal: {
         title: "终端",
@@ -2840,6 +2845,11 @@ export const resources = {
         zoomOut: "Zoom out",
         zoomReset: "Reset zoom",
         clearData: "Clear browsing data",
+        miniPlayerPopOut: "Pop out Mini Player",
+        miniPlayerRestore: "Restore to panel",
+        miniPlayerClose: "Close Mini Player",
+        miniPlayerPoppedOut: "Page is open in Mini Player",
+        miniPlayerTitle: "Browser",
       },
       message: {
         copyMessage: "Copy message",

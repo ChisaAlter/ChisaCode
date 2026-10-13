@@ -13,7 +13,7 @@ import {
   trimNonEmpty,
 } from "./state";
 
-export type { BrowserRecord } from "./state";
+export type { BrowserMiniPlayerGeometry, BrowserRecord } from "./state";
 
 interface BrowserStoreState extends BrowserIndexState {
   createBrowser: (input?: { initialUrl?: string }) => string;

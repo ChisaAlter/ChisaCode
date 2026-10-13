@@ -19,6 +19,7 @@ import { useToast } from "@/contexts/toast-context";
 import { usePanelStore } from "@/stores/panel-store";
 import { useWorkspaceLayoutChrome } from "@/screens/workspace/use-workspace-layout-chrome";
 import { WorkspaceRightPanel } from "@/screens/workspace/workspace-right-panel";
+import { BrowserMiniPlayerLayer } from "@/components/browser-mini-player";
 import { WorkspaceTerminalDrawer } from "@/screens/workspace/workspace-terminal-drawer";
 import { WorkspaceDesktopSoftTopbar } from "@/screens/workspace/workspace-header";
 import { useSessionStore, type WorkspaceDescriptor } from "@/stores/session-store";
@@ -1234,7 +1235,7 @@ function WorkspaceScreenContent({
             isRouteFocused={isRouteFocused}
           />
           {desktopSoftTopbar}
-          <View style={styles.threePaneRow}>
+          <View style={styles.threePaneRow} testID="workspace-three-pane-row">
             <FloatingPanelPortalHostNameProvider hostName={workspaceFloatingPanelPortalHostName}>
               <WorkspaceCenterColumn
                 isMobile={isMobile}
@@ -1287,6 +1288,7 @@ function WorkspaceScreenContent({
                 onOpenFile={handleOpenFileFromExplorer}
               />
             ) : null}
+            {getIsElectron() ? <BrowserMiniPlayerLayer /> : null}
           </View>
           <ImportSessionSheet
             visible={isImportSheetVisible}
