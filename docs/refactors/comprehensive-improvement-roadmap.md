@@ -9,6 +9,12 @@
 
 ## 进行中
 
+### T3 移植完全计划文档对齐（2026-10-13）
+
+- **问题**：`t3code-complete-port-plan.md` 文首仍写「待开工 / `feature/t3-port`」，与约 14/26 已合入 `cn-main` 的事实矛盾；模块规格多处落后于现码（M7 层模型、M6 接线、M11/M13/M17 API）；审计 §12 仍列 PendingUserInput / agent-spawn。
+- **动作**：修订 complete-port-plan + 审计 §12（及 §6.3/§7.3 冲突段）；执行序改为 **M14 → M15 →（横幅契约）→ M12 → M21**；严闸 M23/M26；债清单写入计划 §5。
+- **状态**：文档对齐进行中（本条目）；产品代码未改。详见 `docs/refactors/t3code-complete-port-plan.md`。
+
 ### T3 移植 M4：回合变更文件树（TurnChangesItem 渲染）（2026-09-08 完成）
 
 - **问题**：`TurnChangesItem`（回合完成的 changedFiles）在 reducer 已产出但被 `isVisibleLayoutItem` 过滤从不显示。T3 在 assistant 文本下渲染可折叠变更文件树（原型 `prototypes/changed-files-tree.html`，用户"继续"批准）。完全计划见 `docs/refactors/t3code-complete-port-plan.md` 模块 4

@@ -506,6 +506,7 @@ ChisaCode 有权限请求系统（`permission-response.ts`），但审批 UI 嵌
    - 进度指示器（"1/3"）
    - 可关闭问题，乐观选择状态
    - **这是第二轮审计中最令人印象深刻的组件**
+   - **2026-10-13**：因 ChisaCode 协议无对应事件，**已从移植浪潮移除**（见 §12 / complete-port-plan M10）
 
 2. **ComposerPendingApprovalActions（76 行）**—— 审批操作按钮
    - 取消、拒绝、本会话始终允许、批准
@@ -527,23 +528,15 @@ ChisaCode 有权限请求系统（`permission-response.ts`），但审批 UI 嵌
 
 ### 6.3 迁移优先级
 
-#### P1 — ComposerPendingUserInputPanel
+#### ~~P1 — ComposerPendingUserInputPanel~~（已从本期移除）
 
-**体感收益**：高。Agent 提问时直接在输入框区域交互，无需滚动到消息流中。
-**ChisaCode 适配**：独立组件，从 `agent_stream` 的 `user-input.requested` 事件驱动。需要会话级折叠状态持久化。
-**风险**：中。295 行，需与现有 `permission-response` 系统协调。
-
-**建议切片**：
-
-- A：`ComposerPendingUserInputPanel` 纯 CSS 原型
-- B：组件移植（单选/多选/键盘导航/进度/折叠）
-- C：接入 `agent_stream` 的 `user-input.requested` 事件
-- D：桌面端验证
+**2026-10-13**：协议层无 `user-input` / `userInput` 事件（complete-port-plan 审查 #1 / M10）。**本期不做**；登记为独立协议前置项后再议。切片 A–D 仅作届时参考，**勿按 P1 开工**。
 
 #### P2 — ComposerPendingApprovalActions + Panel
 
 **体感收益**：中。审批操作直接显示在输入框上方。
 **风险**：低。主要是 UI 组件。
+**2026-10-13**：对应 complete-port-plan **M12**（未开工）。开干前须先修订横幅层契约使 approval 最高，并禁止与流内 permission 卡双渲染。
 
 ---
 
@@ -591,6 +584,7 @@ ChisaCode 的消息渲染（`message.tsx`）聚焦于 markdown 文本和代码�
    - 计数 working/failed/idle/stopped agents
    - 生成引导文本（"Kicked off 3 subagents"）和状态文本
    - 语调检测（working/failed/completed/inactive）
+   - **2026-10-13**：**不单独移植**；无子代理事件。进度类 UI 见 complete-port-plan M6+18 TasksBadge
 
 5. **ProposedPlanCard（257 行）**—— 计划卡片
    - 展开/折叠（折叠时渐变淡出）
@@ -619,10 +613,11 @@ ChisaCode 的消息渲染（`message.tsx`）聚焦于 markdown 文本和代码�
 **ChisaCode 适配**：DiffStatLabel 零依赖移植。AssistantSelectionToolbar 需要 `observeSelectionActions` 移植 + 输入框 `insertTextAtEnd` 接口。
 **风险**：低（DiffStatLabel）/ 中（SelectionToolbar）。
 
-#### P2 — ChangedFilesTree + agentSpawnSummary
+#### P2 — ChangedFilesTree + ~~agentSpawnSummary~~
 
-**体感收益**：中。Agent 修改文件时展示变更树，多 agent 时展示摘要。
-**风险**：中（ChangedFilesTree 251 行）/ 低（agentSpawnSummary 65 行纯函数）。
+**体感收益**：中。Agent 修改文件时展示变更树；多 agent 摘要原设想不成立。
+**风险**：中（ChangedFilesTree）/ ~~低（agentSpawnSummary）~~。
+**2026-10-13**：ChangedFilesTree ✅ 已合入（计划 M4）。**agentSpawnSummary 不单独移植**——ChisaCode 无子代理 spawn 事件；进度摘要已并入计划 M6+18 TasksBadge（todo_list 派生）。勿复活 spawn UI。
 
 #### P3 — ProposedPlanCard + SkillInlineText + ExpandedImageDialog + MessageCopyButton
 
@@ -772,50 +767,52 @@ ChisaCode 的消息渲染（`message.tsx`）聚焦于 markdown 文本和代码�
 
 ## 12. 更新后的优先级迁移路线图
 
+> **2026-10-13 同步**：执行真相源已迁至 [`docs/refactors/t3code-complete-port-plan.md`](../refactors/t3code-complete-port-plan.md)（约 14/26 已合入 `cn-main`）。下表保留审计当时的优先级快照，但 **冲突项已标注**——勿按本表复活已裁模块。
+
 ### 阶段一：快速可见收益（2-3 周）
 
-| 优先级 | 项                                           | 切片    | 风险 |
-| ------ | -------------------------------------------- | ------- | ---- |
-| 🔴 P0  | 提示历史（↑↓ 键）                            | A/B/C   | 低   |
-| 🔴 P0  | 稳定行派生                                   | A/B/C/D | 低   |
-| 🔴 P0  | 端口扫描 + 本地服务器发现                    | A/B/C/D | 低   |
-| 🔴 P0  | DiffStatLabel（+X -Y 差异统计）              | A       | 极低 |
-| 🟡 P1  | 横幅基础系统（ComposerBanner + BannerStack） | A/B/C/D | 中高 |
+| 优先级 | 项                                           | 切片    | 风险 | 2026-10 状态 |
+| ------ | -------------------------------------------- | ------- | ---- | ------------ |
+| 🔴 P0  | 提示历史（↑↓ 键）                            | A/B/C   | 低   | ✅ 已合入（计划 M1） |
+| 🔴 P0  | 稳定行派生                                   | A/B/C/D | 低   | ✅ 已合入（计划 M2） |
+| 🔴 P0  | 端口扫描 + 本地服务器发现                    | A/B/C/D | 低   | ✅ 已合入（计划 M3） |
+| 🔴 P0  | DiffStatLabel（+X -Y 差异统计）              | A       | 极低 | ✅ 随变更树/DiffStat 复用 |
+| 🟡 P1  | 横幅基础系统（ComposerBanner + BannerStack） | A/B/C/D | 中高 | ✅ 已合入（计划 M7；现 API=`banners`/layer，activity>error） |
 
 ### 阶段二：体感增强（3-4 周）
 
-| 优先级 | 项                                              | 切片      | 风险 |
-| ------ | ----------------------------------------------- | --------- | ---- |
-| 🟡 P1  | 滚动折叠                                        | A/B/C     | 中   |
-| 🟡 P1  | Mini Player（浮动预览）                         | A/B/C/D/E | 中高 |
-| 🟡 P1  | 服务端 Delta 缓冲                               | A/B/C/D   | 中   |
-| 🟡 P1  | 交互式用户输入面板（PendingUserInputPanel）     | A/B/C/D   | 中   |
-| 🟡 P1  | 选择文本引用工具栏（AssistantSelectionToolbar） | A/B/C     | 中   |
-| 🟡 P1  | 变更文件树（ChangedFilesTree）                  | A/B       | 中   |
-| 🟡 P1  | Webview 崩溃恢复（webviewCrashRecovery）        | A         | 极低 |
-| 🟢 P2  | 审批操作面板（PendingApprovalActions+Panel）    | A/B       | 低   |
-| 🟢 P2  | Agent 状态摘要（agentSpawnSummary）             | A         | 极低 |
-| 🟢 P2  | 右侧面板调整大小手柄                            | A         | 低   |
+| 优先级 | 项                                              | 切片      | 风险 | 2026-10 状态 |
+| ------ | ----------------------------------------------- | --------- | ---- | ------------ |
+| 🟡 P1  | 滚动折叠                                        | A/B/C     | 中   | ✅ 已合入（计划 M8） |
+| 🟡 P1  | Mini Player（浮动预览）                         | A/B/C/D/E | 中高 | ⏳ 未开工（计划 M14，现行下一优先） |
+| 🟡 P1  | 服务端 Delta 缓冲                               | A/B/C/D   | 中   | ✅ 已合入（计划 M9，扩展 coalescer） |
+| 🟡 P1  | ~~交互式用户输入面板（PendingUserInputPanel）~~ | —         | —    | ❌ **已从本期移除**（协议无 `user-input` 事件；见 complete-port-plan M10）。勿再按 P1 开工 |
+| 🟡 P1  | 选择文本引用工具栏（AssistantSelectionToolbar） | A/B/C     | 中   | ✅ 已合入（计划 M11，`ComposerInsertTextContext`） |
+| 🟡 P1  | 变更文件树（ChangedFilesTree）                  | A/B       | 中   | ✅ 已合入（计划 M4） |
+| 🟡 P1  | Webview 崩溃恢复（webviewCrashRecovery）        | A         | 极低 | ✅ 已合入（计划 M5；崩溃注入自动化仍债） |
+| 🟢 P2  | 审批操作面板（PendingApprovalActions+Panel）    | A/B       | 低   | ⏳ 未开工（计划 M12；**先改横幅契约使 approval 最高**） |
+| 🟢 P2  | ~~Agent 状态摘要（agentSpawnSummary）~~         | —         | —    | ❌ **不单独移植**（无子代理事件；已并入计划 M6+18 TasksBadge，从 todo_list 派生）。勿复活 spawn UI |
+| 🟢 P2  | 右侧面板调整大小手柄                            | A         | 低   | ✅ 已合入（计划 M13，DOM+rAF；打包拖拽实机仍债） |
 
 ### 阶段三：打磨与完善（2-3 周）
 
-| 优先级 | 项                                                     | 切片    | 风险 |
-| ------ | ------------------------------------------------------ | ------- | ---- |
-| 🟢 P2  | 静止布局                                               | A/B/C/D | 中高 |
-| 🟢 P2  | 浏览器 Chrome 增强（地址栏/加载条/favicon）            | A/B/C/D | 低   |
-| 🟢 P2  | 流式高亮缓存策略（哈希键 + LRU 驱逐）                  | A/B/C   | 低   |
-| 🟢 P2  | 任务进度徽章（TasksBadge）+ 活动状态（ActivityStatus） | A/B     | 低   |
-| 🟢 P2  | 工具栏控件基元（ComposerControl + 测量 + 多行检测）    | A/B/C   | 低   |
-| 🟢 P3  | 提示暂存（Cmd+S）+ 暂存菜单 UI                         | A/B     | 低   |
-| 🟢 P3  | textContent 计时器（不触发 React 渲染）                | A       | 极低 |
-| 🟢 P3  | 横幅通知（ThreadErrorBanner + ProviderStatusBanner）   | A/B     | 低   |
-| 🟢 P3  | 计划卡片（ProposedPlanCard）                           | A/B     | 中   |
-| 🟢 P3  | 技能内联芯片（SkillInlineText）                        | A       | 低   |
-| 🟢 P3  | 增强复制按钮（MessageCopyButton）                      | A       | 极低 |
-| 🟢 P3  | 图片/视频全屏预览（ExpandedImageDialog）               | A/B     | 低   |
-| 🟢 P3  | 特性选择器（TraitsPicker）                             | A/B     | 中高 |
-| 🟢 P4  | will-change 动态管理（GPU 内存优化）                   | A       | 极低 |
-| 🟢 P4  | 缩放指示器（ZoomIndicator）+ Favicon 回退              | A       | 极低 |
+| 优先级 | 项                                                     | 切片    | 风险 | 2026-10 状态 |
+| ------ | ------------------------------------------------------ | ------- | ---- | ------------ |
+| 🟢 P2  | 静止布局                                               | A/B/C/D | 中高 | ⏳ M15（M14 之后） |
+| 🟢 P2  | 浏览器 Chrome 增强（地址栏/加载条/favicon）            | A/B/C/D | 低   | ✅ M16 |
+| 🟢 P2  | 流式高亮缓存策略（哈希键 + LRU 驱逐）                  | A/B/C   | 低   | ✅ M17（键 `{ext}:{hash}`） |
+| 🟢 P2  | 任务进度徽章（TasksBadge）+ 活动状态（ActivityStatus） | A/B     | 低   | ✅ M6+18（Composer 上方独立行） |
+| 🟢 P2  | 工具栏控件基元（ComposerControl + 测量 + 多行检测）    | A/B/C   | 低   | ✅ M19 |
+| 🟢 P3  | 提示暂存（Cmd+S）+ 暂存菜单 UI                         | A/B     | 低   | 延后 M20 |
+| 🟢 P3  | textContent 计时器（不触发 React 渲染）                | A       | 极低 | ⏳ M21（廉价，契约后穿插） |
+| 🟢 P3  | 横幅通知（ThreadErrorBanner + ProviderStatusBanner）   | A/B     | 低   | 部分完成 M22（agent error 已由 M7 消费；剩 provider-status） |
+| 🟢 P3  | 计划卡片（ProposedPlanCard）                           | A/B     | 中   | 严闸 M23（无数据源不立项） |
+| 🟢 P3  | 技能内联芯片（SkillInlineText）                        | A       | 低   | 延后 M24 |
+| 🟢 P3  | 增强复制按钮（MessageCopyButton）                      | A       | 极低 | 部分完成 M25（勾号已有；剩 toast） |
+| 🟢 P3  | 图片/视频全屏预览（ExpandedImageDialog）               | A/B     | 低   | 严闸 M26（先 Lightbox 差距表） |
+| 🟢 P3  | 特性选择器（TraitsPicker）                             | A/B     | 中高 | 延后 M27 |
+| 🟢 P4  | will-change 动态管理（GPU 内存优化）                   | A       | 极低 | 最后 M28 |
+| 🟢 P4  | 缩放指示器（ZoomIndicator）+ Favicon 回退              | A       | 极低 | ✅ 已随 M16 |
 
 ### 明确不移植（共 16 项）
 

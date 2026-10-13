@@ -1,8 +1,19 @@
 # T3 移植完全计划（对抗审查修订版）
 
-> 状态：已审查修订，待开工
-> 依据：`docs/research/t3code-comprehensive-audit-2026-09-07.md`（两轮审计）+ 本文件 §1 实证核查
-> 分支：`feature/t3-port`（已建），每模块独立 conventional commit
+> 状态：**进行中**（2026-10-13 文档对齐修订）  
+> 进度：约 **14/26** 已合入 `cn-main`；部分完成 M22/M25；主缺口 **M14 Mini Player / M15 静止布局 / M12 审批面板**；M10 已移除  
+> 依据：`docs/research/t3code-comprehensive-audit-2026-09-07.md`（两轮审计）+ 本文件 §1 实证核查 + 2026-10-13 计划审查（对照 `cn-main` 源码）  
+> 工作方式：直接在 **`cn-main`** 按模块 conventional commit（原 `feature/t3-port` 已合入主线，**勿再检出该分支名**）  
+> 下一执行序：**M14 → M15 →（横幅契约修订）→ M12 → M21**；延后/严闸见 §4
+
+### 已完成的相关 T3 体验切片（勿当作从零移植）
+
+本文件是「剩余/补齐」手册；下列切片已在主线落地，阅读本计划前先当已知收益：
+
+- 消息渲染 UX（turn-anchor / projection-ack busy / work-log 折叠等）：[`t3code-message-render-ux-optimization-plan.md`](t3code-message-render-ux-optimization-plan.md)
+- Sidebar V2 左侧栏：roadmap「T3 Sidebar V2 左侧栏全量移植」
+- 会话切换列宽 + 正文阅读 token：roadmap「会话切换横向闪 + AI 输出对齐 T3code」
+- 首次发送启动优化（可与本计划并行）：[`t3code-first-send-startup-optimization-plan.md`](t3code-first-send-startup-optimization-plan.md)
 
 ---
 
@@ -20,7 +31,7 @@
 | 6   | **M4 自相矛盾**                              | 计划同时写"移除 turn_changes 过滤"（→独立行）与"关联到 assistant 不新增行"                                                                                                                                                              | 裁决：**保持过滤**（不产生独立行），在 `layoutSegment` 遍历时捕获 turn_changes 附着到前一条 assistant 的 `StreamLayoutItem.turnChanges` 字段（纯派生）                                                                                                     |
 | 7   | **M4 "Open diff" 无数据源**                  | `grep diff packages/protocol/src/workspace,agent` 零命中——协议没有 diff 内容 RPC；`DiffViewer` 需要 `DiffLine[]`                                                                                                                        | 点击行为降级为**打开文件预览 tab**（既有 file tab 通道）；"打开 diff" 登记残余（需先增 diff 内容 RPC，独立项，roadmap 记录）                                                                                                                               |
 | 8   | **M6 数据源不存在**                          | 协议无 spawn 事件；ChisaCode 无子代理概念；多步骤数据源是 `todo_list`（reducer 产自 tool-call 解析，stream.ts:803/812）                                                                                                                 | **M6 与 M18 合并**：任务/多步骤摘要从 todo_list + task entries（`extractTaskEntriesFromToolCall`）派生。T3 agent-spawn 概念不移植（如实声明）                                                                                                              |
-| 9   | **M7 内部/外部横幅未分离**                   | `sendError` 是 Composer 内部 state（index.tsx:277），bannerSlot 是外部 ReactNode——不能混一条通路                                                                                                                                        | `ComposerBannerStack` 接收 items 数组：Composer 合并内部 sendError（transient：输入即清，语义同现状）+ 外部 bannerSlot items（session 持久 dismiss，键 `threadKey:message`）。优先级明确定义：approval > error > warning > provider-status > activity      |
+| 9   | **M7 内部/外部横幅未分离**                   | `sendError` 是 Composer 内部 state（index.tsx:277），bannerSlot 是外部 ReactNode——不能混一条通路                                                                                                                                        | 结构化 descriptors + 内外部合并方向正确。**落地后**主通道为 `banners: ComposerBannerDescriptor[]`（遗留 `bannerSlot?: ReactNode`）；层秩以现码为准（**activity>urgent/error**，见审查 #17）。原文 `approval > error > … > activity` **已过时**，开 M12 前按 #17 改契约                                                                 |
 | 10  | **M12 双渲染决策缺失**                       | 现审批卡片在流内（permission 流卡）；banner 再加一份 = 重复 UI（用户长期反对）                                                                                                                                                          | **T3-faithful 全移**：流内 permission 卡移除，banner 面板接管审批；既有 `permission-response` 相关 e2e 同步迁移——列为该模块强制门禁，不是可选项                                                                                                            |
 | 11  | **M14 React 节点 reparent 会崩**             | webview host div 由 RNW 渲染（`createElement("div",{ref})`）；手动移动 React 拥有的节点破坏 reconciliation                                                                                                                              | 修订：移动的是 **imperative 创建的 `<webview>` 元素**（document.createElement，非 React 管理），在两个 React 渲染的 host div（面板宿主/mini player 宿主）间迁移；React 节点永不手动移动。位置/尺寸会话内有效（对齐 T3，不持久化）                          |
 | 12  | **M1 谓词不可计算 + 剥离逻辑照搬错误**       | ChisaCode 无 Lexical token——`dispatchComposerAgentMessage` 存的 text 就是用户原文，T3 的"剥离发送时上下文"在此是 no-op                                                                                                                  | ① 首行/末行判定改纯函数：`value.slice(0,selectionStart)` 无 `\n` → 首行；`value.slice(selectionEnd)` 无 `\n` → 末行。② 历史构建简化为 trim + 连续去重 + 新到旧。③ 重建时机：仅用户消息数/最新 id 变化时（订阅 selector 签名，非每 delta）                  |
@@ -28,6 +39,7 @@
 | 14  | **每模块 roadmap 登记缺失**                  | repo 规则要求开工置 in-progress、完成置 done；计划只在收尾提一次                                                                                                                                                                        | 修订为每模块固定步骤：开工登记 → 完成（含残余）更新                                                                                                                                                                                                        |
 | 15  | **M13 clamp 签名错误**                       | 返回 `{min,max}` 不是钳制值                                                                                                                                                                                                             | 改为 `clampBrowserPaneWidth(width, viewportWidth): number`                                                                                                                                                                                                 |
 | 16  | **M2 验证口径过软**                          | "React DevTools 提交计数"是手工抽检                                                                                                                                                                                                     | 软化为补充证据；硬门禁 = 既有回归测试（bottom-anchor/web-virtualization/turn-anchor/reducers）+ Playwright 流式 spec 不回归                                                                                                                                |
+| 17  | **M7 落地优先级与原文相反**                  | 现码 `COMPOSER_BANNER_LAYER_RANK`：`activity=0`（附着优先）、`urgent=1`、`notice=2`；注释写明 **activity 恒压过 error**。原文/审查 #9 写 `approval > error > … > activity`                                                                 | **以现码为真**回写模块 7。开 **M12 前必须改契约**：新增更高层或 `urgent` 内分档，使 **approval 附着最高**（决策见模块 12 前置）；禁止照搬旧 priority 枚举硬撞现层模型                                                                                                                                                      |
 
 ---
 
@@ -263,59 +275,72 @@ export function deriveComposerTasks(items: readonly StreamItem[]): ComposerTask[
 // 从最新 todo_list + task entries 派生；无任务返回 null
 ```
 
-组件：分段彩条（completed=成功色/in_progress=主色/pending=静音）+ "3/7" 计数 + 可展开列表（状态图标/每步耗时）；inline 与 drawer（附着）两变体
-**接线**：`ComposerProps.bannerSlot`（activity 层优先级最低）；数据订阅 `ActiveAgentComposer` 以 selector 拿 tail 最新 todo_list
+组件：分段彩条（completed=成功色/in_progress=主色/pending=静音）+ "3/7" 计数 + 可展开列表（状态图标/每步耗时）；inline 与 drawer 两变体
+**接线（落地实况）**：渲染在 **Composer 上方独立行**（`agent-panel.tsx` 内 `deriveComposerTasks` + `<TasksBadge />`），**不经** banner `banners` / activity 层。原计划「经 bannerSlot activity」已废弃——任务徽章与横幅系统解耦，避免与 M7 层模型纠缠。
 **测试** `tasks-badge.test.tsx` ≥12（派生/分段/展开/耗时/空态）
 **验证**：打包 Electron 实机（mock 多阶段 todo → 徽章推进 → 展开）；i18n `composer.tasks`
-**残余**：任务时长口径 = 首事件到 completed 的差（非精确逐秒）
+**残余**：任务时长口径 = 首事件到 completed 的差（非精确逐秒）；状态：**已完成（接线偏差已回写）**
 
 ---
 
 ### 模块 7：横幅系统 — P1
 
-**原型**：`prototypes/composer-banner.html` → 用户批准
+**状态**：**已完成（规格漂移已回写）**。原型：`prototypes/composer-banner.html`
 
-**新目录** `packages/app/src/composer/banner/`：
+**现 API（以源码为准，勿再写旧 `bannerSlot: ComposerBannerItem[]` 为主通道）**：
 
-- `composer-banner.tsx`：复合组件 `Root`（变体 default/error/info/success/warning；density compact/default；width full/content）→ `Row`/`Icon`/`Content`/`Actions`/`Dismiss`；Unistyles；附着模式背景衔接（web CSS 连续表面；native 平铺半透明）
-- `composer-banner-logic.ts`
+目录 `packages/app/src/composer/banner/`：
+
+- `composer-banner-logic.ts`：描述符 + 层模型 + 合并/解析
+- `composer-banner.tsx`：复合 UI（变体 / density / width / dismiss）
+- `composer-banner-stack.tsx`：附着 + peek；消费 `banners: ComposerBannerDescriptor[]`
 
 ```typescript
-export type ComposerBannerPriority =
-  | "approval"
-  | "error"
-  | "warning"
-  | "provider-status"
-  | "activity";
-export interface ComposerBannerItem {
-  key: string;
-  priority: ComposerBannerPriority;
-  variant: "default" | "error" | "info" | "success" | "warning";
-  message: string;
-  icon?: ComponentType;
-  actions?: ComposerBannerAction[];
-  dismissal: "transient" | "session"; // transient 输入即清；session 按 key 持久 dismiss
+export type ComposerBannerVariant =
+  | "default" | "error" | "info" | "success" | "warning" | "activity";
+export type ComposerBannerLayer = "activity" | "urgent" | "notice";
+// 现码层秩（数值越小越优先附着）：activity=0 > urgent=1 > notice=2
+// 即 **activity 恒压过 error/warning（urgent）** —— 与早期计划 approval>error>…>activity 相反
+export const COMPOSER_BANNER_LAYER_RANK: Record<ComposerBannerLayer, number>;
+
+export interface ComposerBannerDescriptor {
+  id: string;
+  variant: ComposerBannerVariant;
+  title: string;
+  body?: string;
+  message?: string;       // dismiss 身份，默认 title
+  dismissible?: boolean;
+  density?: "default" | "compact";
+  width?: "full" | "content";
+  actions?: readonly ComposerBannerActionDescriptor[];
+  bodySlot?: ReactNode;
+  testID?: string;
 }
-export function resolveBannerStackVisible(
-  items: readonly ComposerBannerItem[],
-  dismissals: ReadonlySet<string>,
-): { attached: ComposerBannerItem; peekItems: ComposerBannerItem[] };
-// 最高优先级附着，其余 peek；同优先级取最新
-export function bannerDismissalKey(threadKey: string, message: string): string;
+
+export function resolveComposerBannerLayer(variant): ComposerBannerLayer;
+export function resolveComposerBannerStack(input: {
+  banners: readonly ComposerBannerDescriptor[];
+  threadKey: string;
+  dismissed: ComposerBannerDismissalLookup;
+}): { attached: ComposerBannerDescriptor | null; peeks: ComposerBannerDescriptor[] };
+export function mergeComposerBanners(
+  ...groups: readonly (readonly ComposerBannerDescriptor[])[]
+): ComposerBannerDescriptor[];
+export function buildComposerBannerDismissalKey(threadKey: string, message: string): string;
 ```
 
-- `composer-banner-stack.tsx`：附着 + peek 标签（"还有 N 条"）；hover 展开（web）/点击（native）；Escape 收起；关闭动画 220ms；session dismiss 存 module 级 `Set`（重挂载保留、不同 key 再现——T3 ThreadErrorBanner 语义）
+**接线（落地实况）**：
 
-**接线（审查 #9）**：
-
-- `ComposerProps` 新 `bannerSlot?: ComposerBannerItem[]`（结构化 items，非裸 ReactNode）
-- Composer 内部合并：内部 sendError → transient error item（`onChangeText` 清除，语义同现状）；外部 items 经 stack
-- `agent-panel.tsx`：agent error（原 HistorySyncErrorBanner 的 agent 分支）迁移为外部 item；history-sync 分支保留原位
+- `ComposerProps.banners?: ComposerBannerDescriptor[]` 为主通道；Composer 内部合并 sendError → transient error descriptor（输入即清）
+- 遗留 `bannerSlot?: ReactNode` 仍可存在，**不是**结构化 items 主通道——新模块一律走 `banners`
+- `agent-panel.tsx`：`agentErrorBanners` 等经 `mergeComposerBanners` 注入；history-sync 分支可仍独立 Banner
 - 渲染位置：queueList 上方、输入框上方
 
-**测试**：`composer-banner-logic.test.ts` ≥10（优先级/peek/dismiss key/同优先级最新）；`composer-banner.test.tsx` ≥12（变体/dismiss/attach）；`composer-banner-stack.test.tsx` ≥14（展开收起/Escape/transient vs session）
-**验证**：原型批准 → 打包 Electron 实机：错误注入 → 堆叠 → dismiss → 不同错误再现 → 同错误不再现；sendError 输入即清
-**残余**：玻璃态模糊 native 无（平铺）；`clip-path` web 回退
+**开 M12 前的契约决策（强制）**：
+
+现码 activity>error。审批面板需要「approval 最高附着」。选定方案 **A（推荐）**：为 approval 增加高于 activity 的层（或 `urgent` 内再分档且审批优先于普通 error），并补 activity/error/approval 叠放单测；方案 B（审批完全不经 banner、独立挂 Composer）偏离 T3-faithful，仅在 A 成本不可接受时启用。**选定后必须回写本模块层表与模块 12，再开工实现。**
+
+**残余**：玻璃态模糊 native 无（平铺）；`clip-path` web 回退；优先级契约修订属 M12 前置债（见 §5）
 
 ---
 
@@ -413,18 +438,24 @@ export function useAssistantSelection(opts: {
 ```
 
 组件：portal 浮动按钮（复制/引用）；Escape/外部点击关闭；焦点不夺取（`preventDefault` on mousedown）
-**接线**：`ComposerProps` 新 `onInsertText?: (text: string) => void`；`agent-panel.tsx` 接 `agentInputDraft.setText(prev => prev + "\n" + quoted)`；`message.tsx` `AssistantMessage` 容器挂 hook（`Platform.OS === "web"` 分支）；i18n `stream.citeSelection/copySelection`
+**接线（落地实况）**：经 **`ComposerInsertTextContext`**（`composer-insert-text-context.ts`）注入插入回调，而非计划原文的 `ComposerProps.onInsertText` prop。`agent-panel.tsx` 提供 Provider；`assistant-selection-toolbar.web.tsx` 消费 Context；`message.tsx` Assistant 容器挂载工具栏（web）。i18n `stream.citeSelection/copySelection`
 **测试** `assistant-selection-toolbar.test.tsx` ≥10（注入 selection/长度门限/容器外不触发/关闭）
 **验证**：web Playwright（双击选中 → 工具栏 → 引用 → 输入框出现文本）；打包 Electron 实机
-**残余**：native 系统选择菜单（声明）；跨块选择引用原文本（不做富文本重排）
+**残余**：native 系统选择菜单（声明）；跨块选择引用原文本（不做富文本重排）；状态：**已完成（API 偏差已回写）**
 
 ---
 
 ### 模块 12：审批操作面板 — P2
 
-**原型**：`prototypes/pending-approval-panel.html` → 用户批准
+**状态**：**未开工**。原型：`prototypes/pending-approval-panel.html` → 用户批准
 
-**裁决**（审查 #10）：**T3-faithly 全移**——流内 permission 卡移除，banner 接管审批 UI。既有 `permission-response` 相关 e2e 单测同步迁移为该模块**强制门禁**（非可选）。
+**前置（强制，先于实现）——与模块 7 层模型对齐**：
+
+1. 选定并落地层契约，使 **approval 附着最高**（推荐方案 A：新层或 urgent 内分档；见模块 7）。  
+2. 回写模块 7 层表 + 本模块接线说明 + 叠放单测（activity / error / approval）。  
+3. 未完成契约修订前 **禁止** 开工 UI。
+
+**裁决**（审查 #10）：**T3-faithful 全移**——流内 permission 卡移除，横幅/审批面板接管审批 UI。**禁止**流内卡与 banner 面板双渲染。既有 `permission-response` 相关 e2e 同步迁移为该模块**强制门禁**（非可选）。
 
 **新文件** `packages/app/src/composer/pending-approval-panel.tsx`
 
@@ -439,9 +470,9 @@ export interface PendingApprovalView {
 ```
 
 组件：详情（应用/命令/文件，可滚动 code 块）+ 计数徽章 + 操作行：拒绝（destructive 色）/批准（主色）/本会话始终允许（危险 tooltip `permission.alwaysAllowWarning`）
-**接线**：数据既有 `pendingPermissions`；响应复用 `permission-response.ts` 既有 respond 通道；`bannerSlot`（priority "approval"，最高）；**同模块内移除流内 permission 卡渲染** + 迁移其 e2e
-**测试** `pending-approval-panel.test.tsx` ≥10（渲染/计数/操作回调/多审批切换）；迁移后的 permission e2e 全绿
-**验证**：原型批准 → 打包 Electron 实机：mock 发 permission → 面板 → 批准 → 流继续；拒绝路径
+**接线**：数据既有 `pendingPermissions`；响应复用 `permission-response.ts` 既有 respond 通道；经 **`banners: ComposerBannerDescriptor[]`**（approval 层/分档，契约修订后最高）；同模块内 **删除** `view.tsx` 流内 `renderPendingPermissionsNode` / permission 卡 + 迁移其 e2e
+**测试** `pending-approval-panel.test.tsx` ≥10（渲染/计数/操作回调/多审批切换）；迁移后的 permission e2e 全绿；层叠放单测
+**验证**：原型批准 → 打包 Electron 实机：mock 发 permission → 面板 → 批准 → 流继续；拒绝路径；与 activity/error 横幅叠放抽检
 **残余**：mcp-elicitation 类无事件形态（不做）
 
 ---
@@ -456,16 +487,16 @@ export function clampBrowserPaneWidth(width: number, viewportWidth: number): num
 // clamp(width, 360, Math.floor(viewportWidth * 0.7))
 ```
 
-**接线**：`browser-pane.electron.tsx` `webviewWrap` 左缘 handle：复用 `explorer-sidebar.tsx:258` 模式（`Gesture.Pan()` + `useSharedValue` + `useAnimatedStyle`；web `cursor: col-resize`）；拖拽结束才写 `browserStore` 新字段 `paneWidth`（非每帧）；rAF 合并；命中 4px/视觉 1px hover 亮起；`role="separator"` aria
-**测试** `clamp-browser-pane-width.test.ts` ≥6；拖拽实机验证
+**接线（落地实况）**：`browser-pane.electron.tsx` 左缘 handle 用 **DOM pointer 事件 + rAF** 拖拽（非计划原文 `Gesture.Pan()`）；拖拽结束才写 `browserStore.paneWidth`；命中区/hover/`role="separator"` aria 按落地实现。钳制函数 `clampBrowserPaneWidth(width, viewportWidth): number`（min 360 / max 70% 视口）。
+**测试** `clamp-browser-pane-width.test.ts` ≥6
 **验证**：打包 Electron：拖拽 → 宽度变化 → 重开恢复
-**残余**：<720px 视口 min 360 挤压对话列（面板优先，已知行为）
+**残余 / 债**：① <720px 视口 min 360 挤压对话列（已知）；② **打包 Electron 实机拖拽门禁仍待闭合**（见 §5 债清单）；状态：**已完成（验证门禁软）**
 
 ---
 
 ### 模块 14：Mini Player — P1
 
-**原型**：`prototypes/mini-player.html` → 用户批准
+**状态**：**未开工**（预览流畅度最大缺口之一；执行序下一项优先）。**原型**：`prototypes/mini-player.html` → 用户批准
 
 **架构裁决**（审查 #11）：不搬 T3 Surface Leasing。**移动 imperative `<webview>` 元素**（document.createElement 创建、非 React 管理）在两个 React 渲染 host div 间迁移——React 节点永不手动 reparent。同 browserId 同 partition → session 保持。
 
@@ -492,7 +523,7 @@ export function clampMiniPlayerSize(size: { w; h }, container: { w; h }): { w; h
 
 ### 模块 15：静止布局（Resting Layout）— P2
 
-**原型**：`prototypes/composer-resting-layout.html`（FLIP 过渡示意）→ 用户批准
+**状态**：**未开工**（M19✅ / M8 合并指针注释仍缺；执行序紧随 M14）。**原型**：`prototypes/composer-resting-layout.html`（FLIP 过渡示意）→ 用户批准
 
 **新目录** `packages/app/src/composer/resting/`：
 
@@ -526,12 +557,12 @@ export function clampMiniPlayerSize(size: { w; h }, container: { w; h }): { w; h
 
 **实现时先核对**路径（`highlight-cache.ts` 位置——app utils 或 `@chisacode/highlight`），按实际位置改：
 
-- 缓存键改 `{fnv1a32(content)}:{language}:{theme}`（新 `hashHighlightContent` 纯函数，含长度字段防碰撞）
-- LRU 双上限驱逐：`MAX_ENTRIES=500` + `MAX_MEMORY_BYTES=50MB`（`estimateHighlightedSize` 估算）
-- 流式 `cacheable:false` 不变（既有）；完成后写哈希键
-  **测试** `highlight-cache.test.ts` 新增 ≥12（哈希键/双上限驱逐/流式不写/完成后命中/碰撞长度字段）
-  **验证**：vitest + 打包 Electron 实机（长代码块流式→完成→重开会话缓存命中，DevTools 计时抽检）
-  **残余**：跨主题/语言不命中（键含二者）
+- 缓存键落地为 **`{ext}:{hash}`**（`hashHighlightContent`；缓存值与主题无关，故键不含 theme/language——roadmap 裁决）
+- LRU 双上限驱逐：`MAX_CACHE_ENTRIES=500` + `MAX_CACHE_MEMORY_BYTES=50MB`
+- 流式 `cacheable:false` 不变；完成后写哈希键
+  **测试** `highlight-cache.test.ts`（哈希键/双上限/流式不写/完成后命中）
+  **验证**：vitest + 打包 Electron 实机抽检
+  **残余**：跨扩展名不命中；状态：**已完成（键公式偏差已回写）**
 
 ---
 
@@ -557,7 +588,7 @@ export function ComposerSelectControl(props: {...}): ReactElement
 
 ### 模块 20：提示暂存（Cmd+S）— P3
 
-**新文件**：
+**状态**：**未开工 · 延后**（效率向，非流畅主路径）。**新文件**：
 
 - `packages/app/src/stores/prompt-stash-store.ts`（Zustand + AsyncStorage）
 
@@ -583,7 +614,7 @@ export interface PromptStashEntry {
 
 ### 模块 21：textContent 计时器 — P3
 
-**修改** `running-turn-footer.tsx` `RunningElapsed`（line 41）：web 改 `useRef<HTMLSpanElement>` + `setInterval(1000)` 直写 `textContent`（不 setState）；native 保留现有 state 路径（声明）；`tabular-nums` 保留
+**状态**：**未开工**（低成本流畅度收益；契约后的 M12 之后可穿插）。**修改** `running-turn-footer.tsx` `RunningElapsed`（line 41）：web 改 `useRef<HTMLSpanElement>` + `setInterval(1000)` 直写 `textContent`（不 setState）；native 保留现有 state 路径（声明）；`tabular-nums` 保留
 **删除** `message.tsx:526` `LiveElapsed`（100ms 死代码）——删除前 grep 引用确认
 **测试** ≥4（jsdom 断言 DOM 文本更新/interval 清理）
 **验证**：打包 Electron 实机（流式期间 React DevTools 提交计数不随秒增长）
@@ -593,30 +624,33 @@ export interface PromptStashEntry {
 
 ### 模块 22：错误横幅 — P3
 
-**新文件** `packages/app/src/composer/banner/` 下：
+**状态**：**部分完成**。Agent error 已由 M7 路径消费为 `ComposerBannerDescriptor`（`agentErrorBanners`）；**勿重做** agent error 横幅。
 
-- `thread-error-banner.tsx`（~70 行）：`agentState.status === "error"` → error item；session dismiss 键 `agentId:errorMessage`（module Set，不同错误再现）
-- `provider-status-banner.tsx`（~130 行）：`getProviderStatusMessage(providerState)` 纯函数——未认证/不可用/警告 → **中文可操作文案**（遵循既有反馈：never "不是你本地选错了模型"）；"打开提供者设置"操作
-  **替换** `agent-panel.tsx` agent error 分支（M7 已建 stack，本模块把 error item 生产迁入）；history-sync 分支保留
-  **测试**：`thread-error-banner.test.tsx` ≥6（dismiss 键语义）、`provider-status-banner.test.ts` ≥10（消息派生矩阵）
-  **验证**：打包 Electron 实机（断网 provider → 横幅 → 关闭 → 同错不再现 → 异错误再现）
-  **残余**：探测层沿用现状（风暴已治理），仅消费层变更
+**本模块剩余范围**（降级后）：
+
+- `provider-status-banner.tsx` + `getProviderStatusMessage(providerState)` —— 未认证/不可用/警告 → **中文可操作文案**；"打开提供者设置"操作
+- 可选：将 agent error 生产逻辑抽到独立 `thread-error-banner.tsx`（非必须，若现 `agentErrorBanners` 已够则跳过）
+- history-sync 分支保持独立 Banner（不并入本模块强求）
+
+**测试**：`provider-status-banner.test.ts` ≥10（消息派生矩阵）；若抽 thread-error 则补 dismiss 键语义
+**验证**：打包 Electron 实机（断网 provider → 横幅 → dismiss 语义）
+**残余**：探测层沿用现状；延后于 M14/M15/M12/M21 主路径
 
 ---
 
 ### 模块 23：计划卡片 — P3
 
-**新文件** `packages/app/src/components/proposed-plan-card.tsx`（~260 行）：折叠态渐变淡出 + 展开；操作：复制（复用 `TurnCopyButton` 模式）/下载 .md（web Blob；native 无存盘通道则隐藏按钮）/保存到工作区（cwd 路径输入对话框，复用 workspace 附件写文件通道）；渲染复用 `MarkdownRenderer`
-**数据源核对（实现时第一步）**：`generative_ui`/assistant fence 中是否存在计划标记——若无计划数据源，本模块交付卡片组件 + 接口，接线列残余
-**测试** `proposed-plan-card.test.tsx` ≥10（折叠/操作回调）
-**验证**：mock 产出计划 fence → 卡片 → 复制/下载
-**残余**：数据源可能缺失（实现时裁决）；native 下载按钮隐藏
+**状态**：**未开工 · 严闸**。无确认的计划 fence/数据源前 **禁止** 交付「仅组件、无接线」空转。
+
+**门禁**：实现第一步必须产出数据源证据表（`generative_ui` / assistant fence / 其它事件）。**无证据 → 砍模块或冻结到独立 roadmap**，不进本浪潮主路径。
+
+有证据后再做：`proposed-plan-card.tsx`（折叠/复制/下载 .md/保存工作区）；测试 ≥10；native 下载按钮可隐藏。
 
 ---
 
 ### 模块 24：技能内联芯片 — P3
 
-**新文件** `packages/app/src/components/markdown/skill-inline-text.tsx`（~100 行）：
+**状态**：**未开工 · 延后**（纯视觉，对流畅度贡献弱）。**新文件** `packages/app/src/components/markdown/skill-inline-text.tsx`（~100 行）：
 
 ```typescript
 export function findSkillTokens(text: string): { start: number; end: number; name: string }[]
@@ -633,26 +667,26 @@ export function SkillInlineMarkdownChildren(props: {...}): ReactElement  // 递�
 
 ### 模块 25：复制按钮增强 — P3
 
-**修改** `message.tsx` `TurnCopyButton`（line 985）：复制成功 → 图标 1.5s 变勾号 → 锚定 toast（按钮上方 8px 绝对定位）；失败 → error toast；超时恢复原图标。i18n `common.copied/copyFailed`
-**测试** `turn-copy-button.test.tsx` ≥6
-**验证**：打包 Electron 实机（复制→勾号→toast→恢复）
-**残余**：native Clipboard API 同构，toast 锚定逻辑一致
+**状态**：**部分完成**。`TurnCopyButton` 已有成功勾号 1.5s + `common.copied`。
+
+**剩余**：锚定 toast（按钮上方 ~8px）+ 失败路径 `copyFailed` toast；超时恢复原图标。
+**测试** `turn-copy-button.test.tsx` 补 toast/失败用例
+**验证**：打包 Electron 实机（复制→勾号→toast→恢复；失败 toast）
+**残余**：延后于流畅度主路径；native toast 锚定同构
 
 ---
 
 ### 模块 26：图片全屏预览对话框 — P3
 
-**实现时决策**：比对既有 `AttachmentLightbox` 覆盖度——若已覆盖全屏/导航，本模块降级为**增量**（键盘 ←→/Escape/焦点恢复）；否则新 `expanded-image-dialog.tsx`（~210 行：portal 遮罩/图片+视频/键盘/焦点恢复记住 opener/错误态）
-**接线**：`UserMessageImagePreviews` 点击打开
-**测试** ≥10（导航/键盘/错误态）
-**验证**：打包 Electron 实机（多图→全屏→键盘导航→Escape 焦点回位）
-**残余**：与 Lightbox 关系实现时裁决并记录
+**状态**：**未开工 · 严闸**。强制第一步：写出 **AttachmentLightbox 覆盖度差距表**（Escape / ←→ / 焦点恢复 / 视频）。若 Escape+基本全屏已够 → **砍整页 Dialog**，只补键盘/焦点增量；差距明确后再立项整页 `expanded-image-dialog`。
+
+无差距表 → 不开工。既有审计亦将 T3 `ExpandedImagePreview`（asset URL）列为明确不移植项——勿与之混淆。
 
 ---
 
 ### 模块 27：特性选择器（TraitsPicker）— P3
 
-**新文件** `packages/app/src/composer/agent-controls/traits-picker.tsx`（~600 行分批）：
+**状态**：**未开工 · 延后**（与 mode-control 冲突风险高；先纯逻辑+单测，UI 另期）。**新文件** `packages/app/src/composer/agent-controls/traits-picker.tsx`（~600 行分批）：
 
 ```typescript
 export interface TraitOptionDescriptor {
@@ -675,7 +709,7 @@ export function buildTraitsTriggerDisplay(options: TraitOptionDescriptor[]): str
 
 ### 模块 28：will-change 动态管理 — P4
 
-**新文件** `packages/app/src/hooks/use-visible-animation.ts`（~40 行）：IntersectionObserver + `document.visibilityState` + `prefers-reduced-motion` → CSS 变量 `--visible-animation-state: running|paused`、`--visible-animation-will-change: transform|auto`
+**状态**：**未开工 · 最后**。**新文件** `packages/app/src/hooks/use-visible-animation.ts`（~40 行）：IntersectionObserver + `document.visibilityState` + `prefers-reduced-motion` → CSS 变量 `--visible-animation-state: running|paused`、`--visible-animation-will-change: transform|auto`
 **接线**：`RunningTurnFooter` spinner/shimmer + `tasks-badge` 动画消费变量（web）；native 无此机制（声明）；IO 不支持回退恒 running
 **测试** ≥6（jsdom + IO mock：可见/隐藏/标签页/reduced-motion）
 **验证**：打包 Electron 实机（DevTools 层数：动画离屏无 GPU 层）
@@ -686,35 +720,51 @@ export function buildTraitsTriggerDisplay(options: TraitOptionDescriptor[]): str
 ## 4. 模块顺序与依赖
 
 ```
-M1 提示历史 ──┐ ✅ 2026-09-08
-M2 稳定行 ────┼─ ✅ 2026-09-08
-M5 崩溃恢复 ──┤ ✅ 2026-09-08
-M3 端口扫描 ──┘ ✅ 2026-09-08
-M4 变更树 ✅ 2026-09-08（依赖 M2 的比较器接入点）
-M7 横幅系统 ✅ 2026-09-09（M12/M22 的宿主已就位：bannerSlot prop）
-M8 滚动折叠 ✅ 2026-09-09（M15 会并走其状态机——合并指针注释缺失，见 §6）
-M9 Delta 缓冲 ✅ 2026-09-18（已重定范围：扩展 coalescer，见模块 9 修订）
-M6+18 任务徽章 ✅ 2026-09-09（依赖 M7 bannerSlot；提前于 M9 交付，依赖已满足）
-M11 引用工具栏 ✅ 2026-09-18（ComposerInsertTextContext 代替 onInsertText prop，见 roadmap 条目）
-M12 审批面板 ⬅ 下一个（依赖 M7；含流内卡移除+e2e 迁移——流内卡实证仍在 view.tsx:128）
-M13 面板 resize ✅ 2026-09-18（DOM 事件+rAF 代替 Gesture.Pan，见 roadmap 条目）
-M14 Mini Player
-M19 控件基元 ✅ 2026-09-18（composerControlStyle+迁移 input.tsx+测量纯函数，见 roadmap 条目）
-M15 静止布局（依赖 M19 + M8 合并）
-M16 Chrome 增强 ✅ 2026-09-18（打包门禁顺手修复 pnpm buffer@5.7.1 skipped 残余，见 roadmap 条目）
-M17 高亮缓存 ✅ 2026-09-18（键降维 {ext}:{hash}——缓存值与主题无关，见 roadmap 条目）
-M20-M28 按序打磨
+已合入 cn-main（约 14/26）
+M1 提示历史 ✅    M2 稳定行 ✅    M3 端口扫描 ✅    M4 变更树 ✅    M5 崩溃恢复 ✅
+M6+18 任务徽章 ✅（Composer 上方独立行，非 banner）
+M7 横幅系统 ✅（现 API=banners/layer；activity>error —— 开 M12 前改契约）
+M8 滚动折叠 ✅    M9 Delta 缓冲 ✅    M11 引用工具栏 ✅（ComposerInsertTextContext）
+M13 面板 resize ✅（DOM+rAF；打包拖拽实机仍债）
+M16 Chrome ✅    M17 高亮缓存 ✅（键 {ext}:{hash}）    M19 控件基元 ✅
+M10 用户输入面板 —— 已移除（无协议数据源）
+
+剩余执行序（2026-10-13 对齐后）
+M14 Mini Player ⬅ 下一个（预览流畅度；与 M12 无硬依赖，可先做）
+M15 静止布局（依赖 M19✅；合并 M8 scrollCollapsed + 补指针注释 + 收口 waitForTimeout）
+→ 横幅契约修订（approval 最高；回写 M7 层表）
+→ M12 审批面板（契约后；禁止流内+banner 双渲染；e2e 全迁）
+→ M21 textContent 计时器（删 LiveElapsed 死代码）
+→ 闭合软门禁：M13 打包拖拽实机；视需要 M5 崩溃注入
+
+延后（非流畅主路径）
+M20 stash · M22 剩余（provider-status）· M25 toast 增量 · M24 技能芯片
+M27 TraitsPicker（逻辑先行）· M28 will-change（最后）
+
+严闸（条件项）
+M23 计划卡片 —— 无 fence/数据源证据不立项
+M26 图片全屏 —— 先 Lightbox 差距表；够用则砍整页 Dialog
 ```
 
-**进度快照（2026-09-18 二复核）**：14/26 完成。P0 全清（M1–M5）；P1 完成 M6+18/M7/M8/M9/M11，剩 M14；P2 完成 M13/M16/M17/M19，剩 M12/M15；P3 未动（M20–M27）；P4 未动（M28）。M10 已按审查 #1 移除。
+**进度快照（2026-10-13 文档对齐）**：硬完成约 **14/26**；**部分完成 2**（M22/M25）；**未开工主缺口** M14/M15/M12（+廉价 M21）；严闸 M23/M26；已移除 M10。工作在 **`cn-main`**，无独立 `feature/t3-port`。
 
 ## 5. 跨模块门禁
 
 - 每模块：roadmap 登记 → 实现 → 聚焦 vitest → typecheck → lint → **对抗审查** → roadmap 更新 → 下一模块
-- 原型门禁模块：M4/M7/M12/M14/M15（先原型后实现）
+- 原型门禁模块：M4/M7/M12/M14/M15（先原型后实现；M4/M7 已过）
 - 核心回归：M2/M4/M7/M8/M12 触碰 agent-stream/composer 核心 → 全量跑既有相关测试
 - 桌面验证：停运行中 app → `expo export` → desktop `tsc` → electron-builder → win-unpacked 实机
 - 收尾：整体对抗审查 → roadmap 全量登记 → 命名残余汇总
+
+### 债清单（硬跟踪；下次触碰相关模块必须收口）
+
+| 债 | 要求 |
+| --- | --- |
+| **M13 打包拖拽实机** | 打包 Electron 验证左缘拖拽改宽 + 重开恢复；不得长期停留在「单测-only」 |
+| **M5 崩溃注入自动化** | 补 renderer kill / 注入路径，或明确声明永久以单测+smoke 为准并写入 roadmap 残余 |
+| **M8 `waitForTimeout(120)`×2** | `composer-scroll-collapse.spec.ts` 改为 `waitForFunction` 断言折叠态；**M15 触碰该 spec 时强制收口** |
+| **M7→M12 优先级契约** | 开 M12 前落地 approval 最高层/分档并回写模块 7；禁止双渲染 |
+| **M8→M15 指针注释** | `use-composer-scroll-collapse.ts` 补 M15 合并指针（随 M15） |
 
 ## 6. 进度对抗审查与修订（2026-09-18）
 
@@ -726,28 +776,34 @@ M20-M28 按序打磨
 | 2   | **流程违规：M6+18 与 M8 无 roadmap 完成登记**                                                   | roadmap 仅有 M1–M5/M7 条目；§2 铁律"每模块登记"                                                                                                                                                                                                                                                                    | 已补登（roadmap 2026-09-18 条目）。后续模块不得以"已提交"代替登记                                                                                       |
 | 3   | **M8 缺 M15 合并指针注释**                                                                      | `use-composer-scroll-collapse.ts` 无任何 M15/resting 字样；M15 规格要求"M8 注释指明"                                                                                                                                                                                                                               | 登记残余；M15 落地时合并并补注释，不单独返工                                                                                                            |
 | 4   | **行号引用漂移**（低风险）                                                                      | `running-turn-footer.tsx` 已移至 `agent-stream/`；`stream.ts` → `types/stream.ts`                                                                                                                                                                                                                                  | 计划内行号视为"符号锚点"，实现时以 grep 符号为准；已核对 TurnCopyButton(message.tsx:985)/LiveElapsed(:526)/view.tsx:128 权限卡仍命中                    |
-| 5   | **已完成模块证据核验通过**                                                                      | M1 `use-composer-prompt-history.ts`；M2 `stable-layout.test.ts`+组缓存；M3 `use-discovered-servers.ts`+COMPAT v1.0.4 门禁；M4 `build-turn-diff-tree.ts`+TurnChanges；M5 `webview-crash-recovery.ts`；M6+18 `tasks-badge-view.tsx`；M7 `composer-banner-stack.tsx`+bannerSlot；M8 `use-composer-scroll-collapse.ts` | 无注水，全部真实落地                                                                                                                                    |
-| 6   | **排序偏差无害** —— M6+18 提前于 M9 交付                                                        | 其唯一依赖 M7 bannerSlot 已满足                                                                                                                                                                                                                                                                                    | 追认；修订后顺序以 §4 快照为准                                                                                                                          |
+| 5   | **已完成模块证据核验通过**                                                                      | M1 `use-composer-prompt-history.ts`；M2 `stable-layout.test.ts`+组缓存；M3 `use-discovered-servers.ts`+COMPAT v1.0.4 门禁；M4 `build-turn-diff-tree.ts`+TurnChanges；M5 `webview-crash-recovery.ts`；M6+18 `tasks-badge-view.tsx`（Composer 上方独立行）；M7 `composer-banner-stack.tsx`+`banners`/`ComposerBannerDescriptor`；M8 `use-composer-scroll-collapse.ts` | 无注水；API 漂移见模块正文回写                                                                                                                          |
+| 6   | **排序偏差无害** —— M6+18 提前于 M9 交付                                                        | 任务徽章实际挂 Composer 上方独立行（非 banner）；与 M9 无依赖                                                                                                                                                                                                                                                         | 追认；接线偏差已于 2026-10-13 回写模块 6                                                                                                               |
 | 7   | **T3 分支自身新增测试债**                                                                       | `composer-scroll-collapse.spec.ts:60,87` 两处 `waitForTimeout(120)` 已入 test-audit 新基线                                                                                                                                                                                                                         | 登记残余：下一个触碰该 spec 的模块负责改为 `waitForFunction`（断言折叠态 style），不顺延                                                                |
 | 8   | **M21 前提复核**                                                                                | `LiveElapsed`（100ms setInterval+setState）全仓零使用，确为死代码                                                                                                                                                                                                                                                  | 计划维持（删除前再 grep 一次）                                                                                                                          |
 | 9   | **外部环境已变（利好）**                                                                        | pnpm 迁移收尾完成（CI/lockfile/补丁链全通），M7 期间暴露的 worklets/补丁缺陷已修                                                                                                                                                                                                                                   | "打包 Electron 实机"验证路径恢复可靠——M12/M14/M15 原型+实机门禁按原计划执行，无需降级                                                                   |
 
-**修订后执行序**（更新 §4）：
+**2026-09-18 修订后执行序**（历史；M9/M11/M13/M16/M17/M19 已合入）：
 
 ```
-M9（已重定范围：扩展 coalescer ~40 行，先做，P1 性能收益性价比最高）
-→ M11 引用工具栏（P1，纯 app 层，无依赖）
-→ M12 审批面板（P2，最大 UX 变更：原型 → 流内卡移除 → e2e 迁移；依赖 M7 ✅）
-→ M13 面板 resize → M14 Mini Player（原型门禁）→ M19 控件基元
-→ M15 静止布局（合并 M8 scrollCollapsed + 补指针注释）
-→ M16 Chrome 增强 → M17 高亮缓存 → M20–M28 按序
+M9（扩展 coalescer）→ M11 → M12…  （当时「下一个=M12」——已被 2026-10-13 对齐取代）
+→ M13 → M14 → M19 → M15 → M16 → M17 → M20–M28
+```
+
+**2026-10-13 对齐后执行序**（现行，见 §4）：
+
+```
+M14 Mini Player → M15 静止布局 →（横幅契约：approval 最高）→ M12 审批面板 → M21
+→ 闭合 M13/M5/M8 债 → 延后 M20/M22余/M25/M24/M27/M28 → 严闸 M23/M26
 ```
 
 **命名残余汇总（随本期滚动更新）**：
 
-- M10：需协议层 `user-input.requested` 事件（独立项）
+- M10：需协议层 `user-input.requested` 事件（独立项；审计 §12 已同步为「已移除」）
 - M4："打开 diff" 需 diff 内容 RPC（独立项）；点击走文件预览 tab
-- M9 修订：300ms 首字延迟可接受；真实 provider delta 粒度逐 provider 验证
-- M8→M15：scrollCollapsed 状态机合并 + 指针注释补登
-- M6+18/M8：roadmap 登记已于 2026-09-18 补（见 comprehensive-improvement-roadmap）
-- scroll-collapse spec fixedWait×2：下个触碰模块修掉
+- M9 修订：300ms 首字延迟可接受；真实 provider delta 粒度逐 provider 验证；默认开启请在文档提醒逃生门
+- M8→M15：scrollCollapsed 状态机合并 + 指针注释补登；scroll-collapse `waitForTimeout`×2 随 M15 收口
+- M6+18：接线为 Composer 上方独立行（非 banner activity）——已回写模块 6
+- M7：现码 activity>error；开 M12 前改为 approval 最高（契约债）
+- M11/M13/M17：Context / DOM+rAF / `{ext}:{hash}` —— 已回写
+- 审计文档 §12：PendingUserInput / agent-spawn 与计划冲突行已同步
+- 并行线：`t3code-first-send-startup-optimization-plan.md` 可独立评审（体感权重可能 ≥ Mini Player）
