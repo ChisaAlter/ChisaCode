@@ -68,7 +68,7 @@ describe("startRunningElapsedTicker", () => {
       setIntervalFn: setIntervalFn as unknown as typeof setInterval,
       clearIntervalFn: () => undefined,
     });
-    expect(setIntervalFn.mock.calls[0]?.[1]).toBe(1000);
+    expect(setIntervalFn).toHaveBeenCalledWith(expect.any(Function), 1000);
     ticker.stop();
   });
 });
